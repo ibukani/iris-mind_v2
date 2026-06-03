@@ -1,3 +1,5 @@
+"""ポリシー契約の不変性と型階層のテスト。"""
+
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
@@ -9,6 +11,7 @@ from iris.cognitive.workspace.frame import ActionPreference, PolicyConstraint
 
 
 def test_policy_contracts_are_immutable_and_typed() -> None:
+    """ポリシー契約がfrozenでありPipelineStepResultを継承していることを確認する。"""
     constraint = PolicyConstraint(
         name="calm_response",
         reason="high arousal with negative valence",

@@ -1,11 +1,26 @@
+"""プロアクティブ発話のポリシー制約・プリファレンスロジック。"""
+
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from iris.contracts.observations import IdleTickObservation
 from iris.contracts.policy import ActionPreference, PolicyConstraint
-from iris.features.proactive_talk.models import ProactiveFrameContext
+
+_LOW_FAMILIARITY_THRESHOLD = 0.2
+_HIGH_AROUSAL_THRESHOLD = 0.75
+_NEGATIVE_VALENCE_THRESHOLD = -0.55
+
+if TYPE_CHECKING:
+    from iris.features.proactive_talk.models import ProactiveFrameContext
 
 
 def proactive_policy_constraints(frame: ProactiveFrameContext) -> tuple[PolicyConstraint, ...]:
+    """フレームからプロアクティブ発話固有のポリシー制約を生成する。
+
+    Returns:
+        tuple[PolicyConstraint, ...]: 生成されたポリシー制約のタプル。
+    """
     if not isinstance(frame.observation, IdleTickObservation):
         return ()
 
@@ -20,7 +35,10 @@ def proactive_policy_constraints(frame: ProactiveFrameContext) -> tuple[PolicyCo
             )
         )
 
-    if frame.relationship.user_label is not None and frame.relationship.familiarity < 0.2:
+    if (
+        frame.relationship.user_label is not None
+        and frame.relationship.familiarity < _LOW_FAMILIARITY_THRESHOLD
+    ):
         constraints.append(
             PolicyConstraint(
                 name="proactive_low_familiarity",
@@ -29,7 +47,10 @@ def proactive_policy_constraints(frame: ProactiveFrameContext) -> tuple[PolicyCo
             )
         )
 
-    if frame.affect.arousal > 0.75 and frame.affect.valence < -0.55:
+    if (
+        frame.affect.arousal > _HIGH_AROUSAL_THRESHOLD
+        and frame.affect.valence < _NEGATIVE_VALENCE_THRESHOLD
+    ):
         constraints.append(
             PolicyConstraint(
                 name="proactive_calm_response",
@@ -44,6 +65,11 @@ def proactive_policy_constraints(frame: ProactiveFrameContext) -> tuple[PolicyCo
 def proactive_action_preferences(
     constraints: tuple[PolicyConstraint, ...],
 ) -> tuple[ActionPreference, ...]:
+    """プロアクティブポリシー制約に基づいてアクション優先度を生成する。
+
+    Returns:
+        tuple[ActionPreference, ...]: 生成されたアクション優先度のタプル。
+    """
     if any(constraint.name == "proactive_calm_response" for constraint in constraints):
         return (
             ActionPreference(
@@ -56,6 +82,11 @@ def proactive_action_preferences(
 
 
 def policy_summary(constraints: tuple[PolicyConstraint, ...]) -> str | None:
+    """アクティブなポリシー制約を文字列に要約する。空の場合はNone。
+
+    Returns:
+        str | None: 制約のサマリー文字列。空の場合は None。
+    """
     if not constraints:
         return None
     return "; ".join(constraint.name for constraint in constraints)

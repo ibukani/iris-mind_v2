@@ -1,3 +1,7 @@
+"""Iris契約全体で使用するNewType ID定義。"""
+
+from __future__ import annotations
+
 from typing import NewType
 
 ObservationId = NewType("ObservationId", str)

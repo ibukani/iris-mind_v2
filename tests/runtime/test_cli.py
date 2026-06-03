@@ -18,12 +18,14 @@ from iris.runtime.wiring.app import wire_default_app
 
 @pytest.mark.anyio
 async def test_run_one_turn_returns_deterministic_output() -> None:
+    """Verify run_one_turn returns deterministic fake LLM output."""
     output = await run_one_turn("hello", llm="fake")
     assert output == "fake response: hello"
 
 
 @pytest.mark.anyio
 async def test_run_one_turn_japanese_input() -> None:
+    """Verify run_one_turn handles Japanese input correctly."""
     output = await run_one_turn("こんにちは", llm="fake")
     assert output is not None
     assert "こんにちは" in output
@@ -31,12 +33,14 @@ async def test_run_one_turn_japanese_input() -> None:
 
 @pytest.mark.anyio
 async def test_run_one_turn_empty_input() -> None:
+    """Verify run_one_turn handles empty input gracefully."""
     output = await run_one_turn("", llm="fake")
     assert output == "fake response: "
 
 
 @pytest.mark.anyio
 async def test_wire_default_app_runs_turn() -> None:
+    """Verify wire_default_app creates a functional IrisApp."""
     app = wire_default_app()
     obs = build_observation("test message")
     output = await app.process_observation(obs)
@@ -45,6 +49,7 @@ async def test_wire_default_app_runs_turn() -> None:
 
 @pytest.mark.anyio
 async def test_build_app_fake_creates_app() -> None:
+    """Verify build_app returns an IrisApp using fake LLM."""
     app = build_app("fake")
     obs = UserMessageObservation(
         observation_id=ObservationId("test"),
@@ -58,8 +63,8 @@ async def test_build_app_fake_creates_app() -> None:
     assert output.text == "fake response: hi"
 
 
-@pytest.mark.anyio
-async def test_build_observation_structure() -> None:
+def test_build_observation_structure() -> None:
+    """Verify build_observation creates a properly structured UserMessageObservation."""
     obs = build_observation("hello world")
     assert obs.text == "hello world"
     assert obs.kind == ObservationKind.USER_MESSAGE
@@ -69,6 +74,7 @@ async def test_build_observation_structure() -> None:
 
 @pytest.mark.anyio
 async def test_fake_llm_requests_are_recorded() -> None:
+    """Verify FakeLLMClient inside default app records the LLM request."""
     llm = FakeLLMClient()
     app = wire_default_app(llm)
     obs = build_observation("record me")

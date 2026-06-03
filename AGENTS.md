@@ -127,6 +127,31 @@ Use these task contracts:
 - Refactoring: `.agents/workflows/refactor.md`
 - Reviews: `.agents/workflows/review.md`
 - Documentation updates: `.agents/workflows/docs-update.md`
+- Strict gate repairs: `.agents/workflows/test-fix.md`
+- Architecture boundary changes: `.agents/workflows/architecture.md`
+- AI harness maintenance: `.agents/workflows/ai-harness.md`
+
+## AI Harness Operation
+
+Use repository commands instead of ad-hoc tool behavior. `AGENTS.md` remains the shared source of truth for Codex, OpenCode, Claude Code, and other agents. Tool-specific config may add convenience commands, but must not contradict these rules.
+
+Additional mandatory rules for harness work:
+
+- `.agents/rules/ai-harness.md`
+- `.agents/rules/verification.md`
+
+AI-oriented command aliases:
+
+```bash
+make ai-context
+make ai-test-target TARGET=tests/path_or_file.py
+make ai-arch
+make ai-quick
+make ai-check
+make ai-report
+```
+
+Use `make ai-context` to show the active harness paths. Use `make ai-report` to generate the Japanese completion report skeleton.
 
 ## Strict AI Coding Quality Gate
 
@@ -137,6 +162,18 @@ Do not weaken lint, type, pyright, pytest, or coverage settings to make work pas
 - pyright runs in strict mode across the same repository surfaces.
 - pytest treats config, markers, xfail, and warnings strictly.
 - Coverage is part of the full gate and fails below 90%.
+## Suppression Policy
+
+Do not silence quality gates just to make checks pass.
+
+Suppressions are allowed only when they are local, rule-specific, and documented with a reason. Prefer fixing the design, adding a typed boundary, or improving tests before adding a suppression.
+
+Allowed examples:
+
+```python
+import subprocess  # noqa: S404 -- subprocess is isolated in the audited process runner boundary
+value = external_api.value  # type: ignore[attr-defined] -- third-party package lacks complete stubs
+result = client.call()  # pyright: ignore[reportUnknownMemberType] -- external API returns dynamically typed object
 
 ## Verification
 
@@ -156,6 +193,8 @@ make check
 6. `uv run pytest tests/`
 
 Use `make quick` while iterating when the full suite is too broad for the current edit. It still runs lint, format, mypy, pyright, and architecture checks.
+
+Use `make ai-quick` and `make ai-check` for agent sessions that should keep running after the first failure and produce a fuller failure list. These are diagnostics wrappers around the same strict checks, not weaker gates.
 
 If the environment cannot run a command, report the command, the failure reason, and what you verified instead.
 

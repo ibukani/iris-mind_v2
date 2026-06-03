@@ -7,11 +7,14 @@ single command (`make check` or `make verify`) before reporting completion.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
+import subprocess  # noqa: S404  # needed for running shell commands
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,6 +23,8 @@ MYPY_TARGETS: tuple[str, ...] = ("iris", "tests", "scripts", "main.py")
 
 @dataclass(frozen=True)
 class Check:
+    """A single verification check with name, command, and scope."""
+
     name: str
     command: tuple[str, ...]
     full_only: bool = False
@@ -36,11 +41,22 @@ CHECKS: tuple[Check, ...] = (
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    """Parse command-line arguments for the verification script.
+
+    Args:
+        argv: Command-line argument sequence.
+
+    Returns:
+        Parsed argument namespace.
+    """
     parser = argparse.ArgumentParser(description="Run Iris verification checks.")
     parser.add_argument(
         "--quick",
         action="store_true",
-        help="Skip the full test suite and coverage gate. Still runs lint, format, mypy, pyright, and architecture tests.",
+        help=(
+            "Skip the full test suite and coverage gate. "
+            "Still runs lint, format, mypy, pyright, and architecture tests."
+        ),
     )
     parser.add_argument(
         "--keep-going",
@@ -51,23 +67,49 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def selected_checks(*, quick: bool) -> tuple[Check, ...]:
+    """Filter checks based on the quick flag.
+
+    Args:
+        quick: If True, skip full-only checks (tests+coverage).
+
+    Returns:
+        Tuple of checks to run.
+    """
     if quick:
         return tuple(check for check in CHECKS if not check.full_only)
     return CHECKS
 
 
 def run_check(check: Check) -> int:
+    """Execute a single verification check via subprocess.
+
+    Args:
+        check: The check to run.
+
+    Returns:
+        Exit code from the check (0 for success).
+    """
     command_text = " ".join(check.command)
-    print(f"\n==> {check.name}: {command_text}", flush=True)
+    sys.stdout.write(f"\n==> {check.name}: {command_text}\n")
+    sys.stdout.flush()
     completed = subprocess.run(check.command, cwd=REPO_ROOT, check=False)
     if completed.returncode == 0:
-        print(f"==> {check.name}: passed", flush=True)
+        sys.stdout.write(f"==> {check.name}: passed\n")
     else:
-        print(f"==> {check.name}: failed with exit code {completed.returncode}", flush=True)
+        sys.stdout.write(f"==> {check.name}: failed with exit code {completed.returncode}\n")
+    sys.stdout.flush()
     return completed.returncode
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run all verification checks and report results.
+
+    Args:
+        argv: Optional argument sequence; defaults to sys.argv[1:].
+
+    Returns:
+        0 if all checks passed, 1 otherwise.
+    """
     args = parse_args(sys.argv[1:] if argv is None else argv)
     failures: list[tuple[str, int]] = []
 
@@ -79,12 +121,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 break
 
     if failures:
-        print("\nVerification failed:", flush=True)
+        sys.stdout.write("\nVerification failed:\n")
         for name, exit_code in failures:
-            print(f"- {name}: exit code {exit_code}", flush=True)
+            sys.stdout.write(f"- {name}: exit code {exit_code}\n")
+        sys.stdout.flush()
         return 1
 
-    print("\nVerification passed.", flush=True)
+    sys.stdout.write("\nVerification passed.\n")
+    sys.stdout.flush()
     return 0
 
 

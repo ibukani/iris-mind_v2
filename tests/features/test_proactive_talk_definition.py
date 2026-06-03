@@ -1,3 +1,5 @@
+"""Tests for proactive talk feature definition and observation contracts."""
+
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
@@ -13,6 +15,7 @@ from iris.features.proactive_talk import define_proactive_talk_feature
 
 
 def test_proactive_talk_feature_definition_is_explicit_and_provider_neutral() -> None:
+    """Verify the proactive_talk feature definition is explicit and provider-neutral."""
     feature = define_proactive_talk_feature()
 
     assert isinstance(feature, FeatureDefinition)
@@ -26,6 +29,7 @@ def test_proactive_talk_feature_definition_is_explicit_and_provider_neutral() ->
 
 
 def test_idle_tick_observation_is_typed_and_provider_neutral() -> None:
+    """Verify IdleTickObservation is a frozen dataclass and provider-neutral."""
     observation = IdleTickObservation(
         observation_id=ObservationId("obs-idle"),
         session_id=SessionId("session-idle"),
@@ -37,13 +41,14 @@ def test_idle_tick_observation_is_typed_and_provider_neutral() -> None:
     )
 
     assert observation.reason == "quiet_room"
-    assert observation.idle_seconds == 120.0
+    assert observation.idle_seconds == pytest.approx(120.0)
 
     with pytest.raises(FrozenInstanceError):
         observation.idle_seconds = 0.0
 
 
 def test_proactive_talk_feature_no_forbidden_imports() -> None:
+    """Verify proactive_talk feature files do not import deleted packages."""
     feature_dir = Path("iris/features/proactive_talk")
     source = "\n".join(path.read_text(encoding="utf-8") for path in feature_dir.glob("*.py"))
 

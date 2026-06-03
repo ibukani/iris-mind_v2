@@ -1,3 +1,6 @@
+# Copyright 2025 Iris Mind
+"""Tests for policy-aware one-turn cognitive flow with constraints."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -11,10 +14,13 @@ from iris.contracts.memory import MemoryId, MemoryRecord
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
 from iris.runtime.app import IrisApp
-from iris.runtime.wiring.cognitive import wire_policy_affect_memory_aware_text_response_cognitive_cycle
+from iris.runtime.wiring.cognitive import (
+    wire_policy_affect_memory_aware_text_response_cognitive_cycle,
+)
 
 
 def _user_message(text: str) -> UserMessageObservation:
+    """Return a UserMessageObservation with the given text and a test identity."""
     return UserMessageObservation(
         observation_id=ObservationId("obs-policy-runtime"),
         session_id=SessionId("session-policy-runtime"),
@@ -32,6 +38,7 @@ def _user_message(text: str) -> UserMessageObservation:
 
 @pytest.mark.anyio
 async def test_policy_aware_one_turn_flow_includes_policy_context() -> None:
+    """Verify policy-aware flow includes policy constraints in the LLM prompt."""
     memory_store = FakeMemoryStore(
         records=(
             MemoryRecord(

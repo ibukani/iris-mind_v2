@@ -1,3 +1,5 @@
+"""感情モジュール：Irisのアプレイザル、ムード、関係追跡。"""
+
 from __future__ import annotations
 
 from iris.cognitive.affect.appraisal import AppraisalStep, classify_appraisal

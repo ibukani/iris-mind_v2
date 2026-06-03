@@ -1,12 +1,12 @@
-"""Permanent target architecture guards.
+"""恒久的なターゲットアーキテクチャガード。
 
-Enforces:
-  1. Deleted packages must not exist on disk or be importable.
-  2. No forbidden concepts in active source code.
-  3. Layer dependency direction (contracts -> core -> cognitive -> runtime).
-  4. Runtime entrypoint rules (main.py, cli.py, wiring/).
-  5. Public __init__.py must not import heavy/deleted modules.
-  6. No service locator / hidden registry in target modules.
+適用事項:
+  1. 削除されたパッケージがディスク上に存在したりインポート可能であってはならない。
+  2. アクティブなソースコードに禁止概念があってはならない。
+  3. 層の依存方向（contracts → core → cognitive → runtime）。
+  4. ランタイムエントリポイントルール（main.py、cli.py、wiring/）。
+  5. 公開__init__.pyは重い/削除されたモジュールをインポートしてはならない。
+  6. ターゲットモジュールにサービスロケータ/隠れレジストリがないこと。
 """
 
 from __future__ import annotations
@@ -163,7 +163,11 @@ def _all_imports(tree: ast.Module) -> list[str]:
 def _runtime_imports(tree: ast.Module) -> list[str]:
     imports: list[str] = []
     for node in tree.body:
-        if isinstance(node, ast.If) and isinstance(node.test, ast.Name) and node.test.id == "TYPE_CHECKING":
+        if (
+            isinstance(node, ast.If)
+            and isinstance(node.test, ast.Name)
+            and node.test.id == "TYPE_CHECKING"
+        ):
             continue
         if isinstance(node, ast.Import):
             imports.extend(alias.name for alias in node.names)
@@ -179,12 +183,14 @@ def _runtime_imports(tree: ast.Module) -> list[str]:
 
 @pytest.mark.parametrize("pkg_dir", sorted(DELETED_PACKAGES))
 def test_deleted_packages_do_not_exist(pkg_dir: str) -> None:
+    """削除されたパッケージがディスク上に存在しないことを確認する。"""
     pkg_path = PROJECT_ROOT / pkg_dir
     assert not pkg_path.exists(), f"Deleted package '{pkg_dir}' still exists"
 
 
 @pytest.mark.parametrize("pkg_name", sorted(DELETED_IMPORTS))
 def test_deleted_packages_not_importable(pkg_name: str) -> None:
+    """削除されたパッケージがインポート時にModuleNotFoundErrorを発生させることを確認する。"""
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module(pkg_name)
 
@@ -226,7 +232,7 @@ def _iter_source_files() -> list[Path]:
 
 @pytest.mark.parametrize("symbol", sorted(FORBIDDEN_SYMBOLS))
 def test_no_forbidden_concepts_in_source_code(symbol: str) -> None:
-    """Forbidden concepts must not appear in active source code."""
+    """禁止概念がアクティブなソースコードに出現してはならない。"""
     violations: list[str] = []
     for filepath in _iter_source_files():
         try:
@@ -240,7 +246,7 @@ def test_no_forbidden_concepts_in_source_code(symbol: str) -> None:
 
 
 def test_no_deleted_imports_in_source_code() -> None:
-    """Active source files must not import deleted packages."""
+    """アクティブなソースファイルは削除されたパッケージをインポートしてはならない。"""
     violations: list[str] = []
     for filepath in _iter_source_files():
         try:
@@ -260,7 +266,7 @@ def test_no_deleted_imports_in_source_code() -> None:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _check_layer_imports(
+def _check_layer_imports(  # noqa: C901
     layer_dir: str,
     forbidden: set[str],
     exceptions: list[tuple[str, str, str, str]],
@@ -283,7 +289,11 @@ def _check_layer_imports(
                     continue
                 allowed = False
                 for exc_layer, exc_file, exc_prefix, _ in exceptions:
-                    if exc_layer == layer_dir and exc_file == rel_path and imp.startswith(exc_prefix):
+                    if (
+                        exc_layer == layer_dir
+                        and exc_file == rel_path
+                        and imp.startswith(exc_prefix)
+                    ):
                         allowed = True
                         break
                 if not allowed:
@@ -293,10 +303,12 @@ def _check_layer_imports(
 
 @pytest.mark.parametrize(("layer_dir", "forbidden"), sorted(LAYER_RULES.items()))
 def test_layer_dependency_direction(layer_dir: str, forbidden: set[str]) -> None:
-    """Each layer must not import from higher/sibling layers outside allowed direction."""
+    """各層は許可された方向以外の上位/兄弟層からインポートしてはならない。"""
     _skip_if_missing(layer_dir)
     violations = _check_layer_imports(layer_dir, forbidden, LAYER_EXCEPTIONS)
-    assert not violations, f"Layer '{layer_dir}' imports from forbidden layers:\n" + "\n".join(violations)
+    assert not violations, f"Layer '{layer_dir}' imports from forbidden layers:\n" + "\n".join(
+        violations
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -306,7 +318,7 @@ def test_layer_dependency_direction(layer_dir: str, forbidden: set[str]) -> None
 
 @pytest.mark.parametrize("rel_path", sorted(ENTRYPOINT_FILES | WIRING_FILES))
 def test_entrypoint_no_deleted_imports(rel_path: str) -> None:
-    """Entrypoint and wiring files must not import deleted packages."""
+    """エントリポイントと配線ファイルは削除されたパッケージをインポートしてはならない。"""
     file_path = PROJECT_ROOT / rel_path
     if not file_path.is_file():
         pytest.skip(f"Guard file missing (expected for phased rollout): {rel_path}")
@@ -320,11 +332,13 @@ def test_entrypoint_no_deleted_imports(rel_path: str) -> None:
 
 
 def test_main_py_delegates_to_target_runtime() -> None:
+    """main.pyがiris.runtimeからインポートすることを確認する。"""
     text = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
     assert "iris.runtime" in text, "main.py must import from iris.runtime"
 
 
 def test_cli_exports_run_one_turn_and_main() -> None:
+    """cli.pyがrun_one_turnとmain関数をエクスポートすることを確認する。"""
     cli_path = PROJECT_ROOT / "iris" / "runtime" / "cli.py"
     assert cli_path.is_file()
     text = cli_path.read_text(encoding="utf-8")
@@ -332,8 +346,8 @@ def test_cli_exports_run_one_turn_and_main() -> None:
     assert "def main()" in text
 
 
-def test_wiring_uses_constructor_injection() -> None:
-    """Wiring functions must not call resolve(), get_service(), or locate()."""
+def test_wiring_uses_constructor_injection() -> None:  # noqa: C901
+    """配線関数はresolve()、get_service()、locate()を呼び出してはならない。"""
     violations: list[str] = []
     for rel in WIRING_FILES:
         fp = PROJECT_ROOT / rel
@@ -353,9 +367,11 @@ def test_wiring_uses_constructor_injection() -> None:
                     cur = cur.value
                 if isinstance(cur, ast.Name):
                     name_parts.insert(0, cur.id)
-                if any(fn in name_parts for fn in {"resolve", "get_service", "locate"}):
+                if any(fn in name_parts for fn in ("resolve", "get_service", "locate")):
                     violations.append(f"  {rel}:{node.lineno} calls '{'.'.join(name_parts)}'")
-    assert not violations, "Wiring must use constructor injection, not service locator:\n" + "\n".join(violations)
+    assert not violations, (
+        "Wiring must use constructor injection, not service locator:\n" + "\n".join(violations)
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -380,7 +396,7 @@ HEAVY_INIT_FORBIDDEN: set[str] = {
 
 
 def test_init_files_no_heavy_imports() -> None:
-    """Target package __init__.py must not import heavy/deleted modules."""
+    """ターゲットパッケージの__init__.pyは重い/削除されたモジュールをインポートしてはならない。"""
     violations: list[str] = []
     for init_path in _get_top_level_init_files():
         try:
@@ -392,7 +408,9 @@ def test_init_files_no_heavy_imports() -> None:
                 if imp.startswith(forbidden):
                     rel = init_path.relative_to(PROJECT_ROOT).as_posix()
                     violations.append(f"  {rel}: imports '{imp}'")
-    assert not violations, "__init__.py files must not import heavy or deleted modules:\n" + "\n".join(violations)
+    assert not violations, (
+        "__init__.py files must not import heavy or deleted modules:\n" + "\n".join(violations)
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -413,7 +431,7 @@ SERVICE_LOCATOR_PATTERNS: list[str] = [
 
 @pytest.mark.parametrize("target_dir", sorted(SOURCE_DIRECTORIES))
 def test_no_service_locator_patterns(target_dir: str) -> None:
-    """Target modules must not reintroduce service locator or hidden registry patterns."""
+    """ターゲットモジュールはサービスロケータや隠れレジストリパターンを再導入してはならない。"""
     _skip_if_missing(target_dir)
     violations: list[str] = []
     base = PROJECT_ROOT / target_dir
@@ -423,14 +441,18 @@ def test_no_service_locator_patterns(target_dir: str) -> None:
         except (OSError, UnicodeDecodeError):
             continue
         rel = filepath.relative_to(PROJECT_ROOT).as_posix()
-        for pattern in SERVICE_LOCATOR_PATTERNS:
-            if pattern in text:
-                violations.append(f"  {rel}: contains '{pattern}'")
-    assert not violations, f"Service locator patterns found in {target_dir}:\n" + "\n".join(violations)
+        violations.extend(
+            f"  {rel}: contains '{pattern}'"
+            for pattern in SERVICE_LOCATOR_PATTERNS
+            if pattern in text
+        )
+    assert not violations, f"Service locator patterns found in {target_dir}:\n" + "\n".join(
+        violations
+    )
 
 
-def test_no_global_mutable_registries() -> None:
-    """Target modules must not have module-level mutable registries."""
+def test_no_global_mutable_registries() -> None:  # noqa: C901
+    """ターゲットモジュールにモジュールレベルの可変レジストリがあってはならない。"""
     violations: list[str] = []
     for filepath in _iter_source_files():
         try:
@@ -440,13 +462,13 @@ def test_no_global_mutable_registries() -> None:
         rel = filepath.relative_to(PROJECT_ROOT).as_posix()
         for node in ast.iter_child_nodes(tree):
             if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if (
-                        isinstance(target, ast.Name)
-                        and target.id.isupper()
-                        and isinstance(node.value, (ast.Dict, ast.List, ast.Set))
-                    ):
-                        violations.append(f"  {rel}: global mutable '{target.id}'")
+                violations.extend(
+                    f"  {rel}: global mutable '{target.id}'"
+                    for target in node.targets
+                    if isinstance(target, ast.Name)
+                    and target.id.isupper()
+                    and isinstance(node.value, (ast.Dict, ast.List, ast.Set))
+                )
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
                 func = node.value.func
                 name = ""
@@ -454,7 +476,7 @@ def test_no_global_mutable_registries() -> None:
                     name = ast.unparse(func)
                 elif isinstance(func, ast.Name):
                     name = func.id
-                if name in ("register", "subscribe", "add_hook"):
+                if name in {"register", "subscribe", "add_hook"}:
                     violations.append(f"  {rel}: module-level call '{name}()'")
     assert not violations, "Global mutable registries found:\n" + "\n".join(violations)
 
@@ -465,7 +487,7 @@ def test_no_global_mutable_registries() -> None:
 
 
 def test_contracts_has_no_ports_file() -> None:
-    """contracts/ports.py must not exist. Ports belong in consuming modules."""
+    """contracts/ports.pyは存在してはならない。ポートは消費モジュールに属する。"""
     ports_path = PROJECT_ROOT / "iris" / "contracts" / "ports.py"
     assert not ports_path.is_file(), (
         "contracts/ports.py exists — ports should be defined in consuming modules "
@@ -488,9 +510,6 @@ WIRING_FILES_EXPECTED: set[str] = {
 
 
 def test_required_wiring_files_exist() -> None:
-    """Required wiring files must exist on disk."""
-    missing: list[str] = []
-    for rel in WIRING_FILES_EXPECTED:
-        if not (PROJECT_ROOT / rel).is_file():
-            missing.append(rel)
+    """必要な配線ファイルがディスク上に存在しなければならない。"""
+    missing = [rel for rel in WIRING_FILES_EXPECTED if not (PROJECT_ROOT / rel).is_file()]
     assert not missing, "Required wiring files missing:\n" + "\n".join(missing)

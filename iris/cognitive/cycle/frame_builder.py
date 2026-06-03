@@ -1,3 +1,5 @@
+"""FrameBuilderはパイプラインステップ結果を適用し、更新済みWorkspaceFrameを生成する。"""
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -23,10 +25,21 @@ from iris.cognitive.workspace.frame import (
 
 
 class FrameBuilder:
-    def apply(self, frame: WorkspaceFrame, result: PipelineStepResult) -> WorkspaceFrame:
+    """構造マッチングにより型付きPipelineStepResultをWorkspaceFrameに適用する。"""
+
+    @staticmethod
+    def apply(frame: WorkspaceFrame, result: PipelineStepResult) -> WorkspaceFrame:
+        """パイプラインステップ結果をフレームに適用し、更新されたコピーを返す。
+
+        Returns:
+            WorkspaceFrame: パイプラインステップの結果が適用された更新済みフレーム。
+
+        Raises:
+            TypeError: 未知の PipelineStepResult 型の場合。
+        """
         match result:
             case PerceptionResult():
-                return replace(
+                updated = replace(
                     frame,
                     interpreted_input=InterpretedInput(
                         text=result.text,
@@ -35,12 +48,12 @@ class FrameBuilder:
                     ),
                 )
             case MemoryRetrievalResult():
-                return replace(
+                updated = replace(
                     frame,
                     memory_summary=MemorySummary(retrieved_memories=result.memories),
                 )
             case AppraisalResult():
-                return replace(
+                updated = replace(
                     frame,
                     affect=AffectSnapshot(
                         mood_label=result.mood_label,
@@ -51,7 +64,7 @@ class FrameBuilder:
                     ),
                 )
             case RelationshipResult():
-                return replace(
+                updated = replace(
                     frame,
                     relationship=RelationshipSnapshot(
                         user_label=result.user_label,
@@ -62,7 +75,7 @@ class FrameBuilder:
                     ),
                 )
             case MotivationResult():
-                return replace(
+                updated = replace(
                     frame,
                     goals=tuple(
                         GoalCandidate(name=goal, reason="pipeline", priority=index)
@@ -70,13 +83,15 @@ class FrameBuilder:
                     ),
                 )
             case PolicyResult():
-                return replace(
+                updated = replace(
                     frame,
                     constraints=result.constraints,
                     action_preferences=result.action_preferences,
                     policy_summary=result.policy_summary,
                 )
             case ActionSelectionResult():
-                return replace(frame, candidate_action_plans=result.action_plans)
+                updated = replace(frame, candidate_action_plans=result.action_plans)
             case _:
-                raise TypeError(f"Unsupported step result: {type(result).__name__}")
+                err = f"Unsupported step result: {type(result).__name__}"
+                raise TypeError(err)
+        return updated

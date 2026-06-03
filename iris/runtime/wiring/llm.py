@@ -1,4 +1,8 @@
+"""LLM client wiring and response generator implementation."""
+
 from __future__ import annotations
+
+from typing import override
 
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
@@ -7,11 +11,28 @@ from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator,
 
 
 class LLMResponseGenerator(ResponseGenerator):
+    """ResponseGenerator backed by an LLM client."""
+
     def __init__(self, client: LLMClient, *, model: str = "fake-llm") -> None:
+        """Initialize the generator with an LLM client.
+
+        Args:
+            client: The LLM client to use for generation.
+            model: Model identifier string.
+        """
         self._client = client
         self._model = model
 
+    @override
     async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
+        """Generate a response from the LLM for the given prompt.
+
+        Args:
+            prompt: The response prompt with context sections.
+
+        Returns:
+            The generated response text and model info.
+        """
         request = LLMRequest(
             model=self._model,
             messages=(
@@ -25,16 +46,40 @@ class LLMResponseGenerator(ResponseGenerator):
 
 
 def wire_fake_llm_client(responses: tuple[str, ...] | None = None) -> FakeLLMClient:
+    """Wire a fake (deterministic) LLM client.
+
+    Args:
+        responses: Optional canned response strings.
+
+    Returns:
+        A FakeLLMClient instance.
+    """
     return FakeLLMClient(responses=responses)
 
 
 def wire_response_generator(client: LLMClient | None = None) -> LLMResponseGenerator:
+    """Wire a response generator, defaulting to a fake LLM client.
+
+    Args:
+        client: Optional LLM client override.
+
+    Returns:
+        An LLMResponseGenerator instance.
+    """
     if client is None:
         client = wire_fake_llm_client()
     return LLMResponseGenerator(client)
 
 
 def wire_openai_llm_client(config: OpenAIConfig) -> LLMClient:
+    """Wire an OpenAI LLM client.
+
+    Args:
+        config: OpenAI configuration.
+
+    Returns:
+        An OpenAILLMClient instance.
+    """
     return OpenAILLMClient(config)
 
 

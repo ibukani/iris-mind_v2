@@ -1,3 +1,5 @@
+"""応答生成パイプラインステップとプロンプト構築のテスト。"""
+
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
@@ -20,16 +22,25 @@ from iris.core.ids import ObservationId, SessionId
 
 
 class StubResponseGenerator:
+    """プロンプトを記録して固定応答を返すスタブ応答生成器。"""
+
     def __init__(self, response_text: str) -> None:
+        """固定応答テキストで初期化する。"""
         self.prompts: list[ResponsePrompt] = []
         self._response_text = response_text
 
     async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
+        """プロンプトを記録して固定応答を返す。
+
+        Returns:
+            GeneratedResponse: 事前定義された固定応答。
+        """
         self.prompts.append(prompt)
         return GeneratedResponse(text=self._response_text, model="stub")
 
 
 def user_message(text: str = "hello") -> UserMessageObservation:
+    """指定されたテキストを持つUserMessageObservationを返す。"""
     return UserMessageObservation(
         observation_id=ObservationId("obs-response"),
         session_id=SessionId("session-response"),
@@ -42,6 +53,7 @@ def user_message(text: str = "hello") -> UserMessageObservation:
 
 @pytest.mark.anyio
 async def test_response_generation_step_converts_frame_text_into_action_plan() -> None:
+    """ResponseGenerationStepが解釈テキストからActionPlanを生成することを確認する。"""
     frame_builder = FrameBuilder()
     frame = WorkspaceFrame(observation=user_message("what is new?"))
     perceived = await SimplePerceptionStep().run(frame)
@@ -65,6 +77,7 @@ async def test_response_generation_step_converts_frame_text_into_action_plan() -
 
 @pytest.mark.anyio
 async def test_response_generation_skips_when_frame_has_no_interpreted_text() -> None:
+    """フレームに解釈テキストがない場合にResponseGenerationStepがスキップすることを確認する。"""
     frame = WorkspaceFrame(observation=user_message())
     generator = StubResponseGenerator("unused")
 
@@ -76,6 +89,7 @@ async def test_response_generation_skips_when_frame_has_no_interpreted_text() ->
 
 
 def test_response_generation_does_not_mutate_workspace_frame_directly() -> None:
+    """WorkspaceFrame.candidate_action_plansがその場で変更できないことを確認する。"""
     frame = WorkspaceFrame(observation=user_message())
 
     with pytest.raises(FrozenInstanceError):

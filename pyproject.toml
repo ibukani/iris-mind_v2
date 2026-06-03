@@ -28,6 +28,12 @@ ignore = [
     # Ruff formatter conflicts / recommendations.
     "COM812",
     "ISC001",
+    # D415: Japanese docstrings use 。 which is not recognized.
+    "D415",
+    # RUF002: Japanese docstrings legitimately use fullwidth chars.
+    "RUF002",
+    # Copyright notices are not used in this project.
+    "CPY001",
 ]
 fixable = ["ALL"]
 unfixable = [
@@ -46,6 +52,14 @@ preview = true
 "scripts/**/*.py" = [
     # Scripts may invoke subprocesses as part of the local harness.
     "S603",
+]
+"tests/architecture/test_cognitive_runtime_anti_patterns.py" = [
+    # Architecture tests are intentionally deeply nested for exhaustive checks.
+    "PLR1702",
+]
+"tests/architecture/test_cognitive_runtime_contracts.py" = [
+    # Architecture tests are intentionally deeply nested for exhaustive checks.
+    "PLR1702",
 ]
 
 [tool.ruff.lint.flake8-annotations]

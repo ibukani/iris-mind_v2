@@ -1,3 +1,5 @@
+"""ニュートラルへの指数減衰を伴うムード更新関数。"""
+
 from __future__ import annotations
 
 import math
@@ -5,6 +7,7 @@ import math
 from iris.cognitive.workspace.frame import AffectSnapshot
 
 _HALF_LIFE_SECONDS = 600.0
+_VAD_THRESHOLD = 0.2
 
 
 def update_mood(
@@ -14,6 +17,11 @@ def update_mood(
     elapsed_seconds: float,
     half_life_seconds: float = _HALF_LIFE_SECONDS,
 ) -> AffectSnapshot:
+    """現在の状態と新しいアプレイザルをブレンドし、減衰を適用してムードを更新する。
+
+    Returns:
+        AffectSnapshot: 減衰と新しい評価を反映した更新後の感情スナップショット。
+    """
     decay = _decay_factor(elapsed_seconds, half_life_seconds)
     valence = _clamp(current.valence * decay + appraisal.valence * (1.0 - decay + 0.35))
     arousal = _clamp(current.arousal * decay + appraisal.arousal * (1.0 - decay + 0.35))
@@ -24,7 +32,9 @@ def update_mood(
         arousal=arousal,
         valence=valence,
         dominance=dominance,
-        affect_summary=f"{mood_label or 'neutral'} VAD(v={valence:.2f}, a={arousal:.2f}, d={dominance:.2f})",
+        affect_summary=(
+            f"{mood_label or 'neutral'} VAD(v={valence:.2f}, a={arousal:.2f}, d={dominance:.2f})"
+        ),
     )
 
 
@@ -37,17 +47,13 @@ def _decay_factor(elapsed_seconds: float, half_life_seconds: float) -> float:
 
 
 def _label_for(valence: float, arousal: float, dominance: float) -> str | None:
-    if valence >= 0.2:
+    if valence >= _VAD_THRESHOLD:
         return "positive"
-    if valence <= -0.2 and arousal >= 0.2:
-        return "distressed"
-    if valence <= -0.2:
-        return "negative"
-    if dominance <= -0.2:
+    if valence <= -_VAD_THRESHOLD:
+        return "distressed" if arousal >= _VAD_THRESHOLD else "negative"
+    if dominance <= -_VAD_THRESHOLD:
         return "uncertain"
-    if arousal >= 0.2:
-        return "alert"
-    return None
+    return "alert" if arousal >= _VAD_THRESHOLD else None
 
 
 def _clamp(value: float, *, lower: float = -1.0, upper: float = 1.0) -> float:

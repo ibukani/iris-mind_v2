@@ -1,1 +1,1 @@
-"""Provider-neutral cognitive memory steps."""
+"""プロバイダ非依存の認知メモリステップ。"""

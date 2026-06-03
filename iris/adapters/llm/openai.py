@@ -1,21 +1,27 @@
+"""OpenAI LLMプロバイダアダプタ。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
 import os
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
-_openai: Any | None
+if TYPE_CHECKING:
+    import openai  # noqa: F401
+
 try:
     import openai as _openai
 except ImportError:  # pragma: no cover - exercised by monkeypatching module state
-    _openai = None
+    _openai = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)
 class OpenAIConfig:
+    """OpenAI LLMクライアントの設定。"""
+
     model: str
     api_key: str | None = None
     timeout_seconds: float | None = None
@@ -30,6 +36,11 @@ class OpenAIConfig:
         timeout_seconds: float | None = None,
         max_output_tokens: int | None = None,
     ) -> OpenAIConfig:
+        """環境変数から設定を生成する。
+
+        Returns:
+            OpenAIConfig: 環境変数から生成された設定。
+        """
         return cls(
             model=model,
             api_key=os.environ.get(api_key_name),
@@ -39,36 +50,63 @@ class OpenAIConfig:
 
 
 class OpenAIAdapterError(RuntimeError):
-    pass
+    """OpenAIアダプタ障害時に送出されるエラー。"""
 
 
 class OpenAIResponsesClient(Protocol):
+    """OpenAI Responses APIクライアントのプロトコル。"""
+
     @property
-    def responses(self) -> OpenAIResponsesResource: ...
+    def responses(self) -> OpenAIResponsesResource:
+        """responsesリソースハンドルを返す。"""
 
 
 class OpenAIResponsesResource(Protocol):
-    async def create(self, **kwargs: object) -> object: ...
+    """OpenAI Responses APIリソースのプロトコル。"""
+
+    async def create(self, **kwargs: object) -> object:
+        """指定されたパラメータで応答を生成する。"""
+
+
+_ERR_OPENAI_NOT_INSTALLED = "OpenAI SDK is not installed. Install the 'openai' package."
+_ERR_API_KEY_REQUIRED = "OpenAI API key is required when no OpenAI client is injected."
 
 
 class OpenAILLMClient:
+    """OpenAI Responses APIをバックエンドとするLLMクライアント。"""
+
     def __init__(self, config: OpenAIConfig, client: OpenAIResponsesClient | None = None) -> None:
+        """設定とオプションの注入クライアントで初期化する。
+
+        Args:
+            config: The OpenAI configuration.
+            client: An optional injected client instance. When omitted, the client is
+                constructed from the config's API key.
+
+        Raises:
+            OpenAIAdapterError: openai パッケージがインストールされていない場合。
+        """
         self._config = config
         if client is not None:
             self._client = client
             return
 
         if _openai is None:
-            raise OpenAIAdapterError("OpenAI SDK is not installed. Install the 'openai' package.")
+            raise OpenAIAdapterError(_ERR_OPENAI_NOT_INSTALLED)
         if config.api_key is None:
-            raise OpenAIAdapterError("OpenAI API key is required when no OpenAI client is injected.")
+            raise OpenAIAdapterError(_ERR_API_KEY_REQUIRED)
 
         self._client = cast(
-            OpenAIResponsesClient,
+            "OpenAIResponsesClient",
             _openai.AsyncOpenAI(api_key=config.api_key, timeout=config.timeout_seconds),
         )
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
+        """リクエストからLLM応答を生成する。
+
+        Returns:
+            LLMResponse: 生成された応答テキストとメタデータ。
+        """
         response = await self._client.responses.create(**self._to_provider_request(request))
         return LLMResponse(
             text=_extract_output_text(response),

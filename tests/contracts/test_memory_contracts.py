@@ -1,3 +1,5 @@
+"""メモリ契約の不変性と型のテスト。"""
+
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
@@ -9,6 +11,7 @@ from iris.core.ids import UserId
 
 
 def test_memory_contracts_are_frozen_and_typed() -> None:
+    """MemoryRecord、MemoryQuery、MemorySearchResultがfrozen dataclassであることを確認する。"""
     record = MemoryRecord(
         id=MemoryId("memory-1"),
         text="Iris remembers tea preferences.",

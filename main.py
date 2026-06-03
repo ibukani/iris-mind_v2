@@ -30,10 +30,11 @@ def _parse_args() -> argparse.Namespace:
 
 
 def run() -> None:
+    """Parse CLI arguments, run one turn, and print the response."""
     args = _parse_args()
     output_text = asyncio.run(run_one_turn(args.text, llm=args.llm))
     if output_text:
-        print(output_text)
+        sys.stdout.write(output_text + "\n")
     sys.exit(0)
 
 

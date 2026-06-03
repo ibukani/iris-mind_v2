@@ -1,3 +1,5 @@
+"""ポリシー抑制パイプラインステップと制約生成のテスト。"""
+
 from __future__ import annotations
 
 from dataclasses import replace
@@ -17,6 +19,7 @@ from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
 
 
 def _observation(text: str = "hello") -> UserMessageObservation:
+    """指定されたテキストとテスト用IDを持つUserMessageObservationを返す。"""
     return UserMessageObservation(
         observation_id=ObservationId("obs-policy"),
         session_id=SessionId("session-policy"),
@@ -34,6 +37,7 @@ def _observation(text: str = "hello") -> UserMessageObservation:
 
 @pytest.mark.anyio
 async def test_policy_step_returns_typed_result_without_mutating_frame() -> None:
+    """PolicyInhibitionStepが元のフレームを変更せずに型付き制約を返すことを確認する。"""
     frame = WorkspaceFrame(observation=_observation("I feel unsafe"))
     builder = FrameBuilder()
     frame = builder.apply(frame, await SimplePerceptionStep().run(frame))
@@ -53,6 +57,7 @@ async def test_policy_step_returns_typed_result_without_mutating_frame() -> None
 
 
 def test_frame_builder_enriches_frame_from_policy_result() -> None:
+    """FrameBuilder.applyがポリシー結果データでフレームをエンリッチすることを確認する。"""
     frame = WorkspaceFrame(observation=_observation())
     result = PolicyResult(
         step_name="policy_inhibition",
@@ -69,6 +74,7 @@ def test_frame_builder_enriches_frame_from_policy_result() -> None:
 
 @pytest.mark.anyio
 async def test_empty_response_candidate_is_marked_by_policy() -> None:
+    """PolicyInhibitionStepが空の応答候補をブロックすることを確認する。"""
     frame = WorkspaceFrame(
         observation=_observation(),
         candidate_action_plans=(

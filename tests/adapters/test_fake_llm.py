@@ -1,3 +1,5 @@
+"""FakeLLMClientの決定論的動作のテスト。"""
+
 from __future__ import annotations
 
 import pytest
@@ -8,6 +10,7 @@ from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
 @pytest.mark.anyio
 async def test_fake_llm_returns_deterministic_typed_response() -> None:
+    """FakeLLMClientがレスポンスを巡回し、リクエストを記録することを確認する。"""
     client = FakeLLMClient(responses=("first", "second"))
     request = LLMRequest(
         model="fake-llm",
@@ -26,6 +29,7 @@ async def test_fake_llm_returns_deterministic_typed_response() -> None:
 
 @pytest.mark.anyio
 async def test_fake_llm_default_response_uses_last_user_message() -> None:
+    """FakeLLMClientがデフォルトで最後のユーザーメッセージをエコーすることを確認する。"""
     client = FakeLLMClient()
     request = LLMRequest(
         model="fake-llm",

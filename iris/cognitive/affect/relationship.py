@@ -1,18 +1,34 @@
+"""ユーザー関係追跡のための関係状態とパイプラインステップ。"""
+
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import RelationshipResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot, WorkspaceFrame
-from iris.core.ids import UserId
+
+if TYPE_CHECKING:
+    from iris.core.ids import UserId
+
+_POSITIVE_VALENCE_TRUST_THRESHOLD = 0.1
+_NEGATIVE_VALENCE_TRUST_THRESHOLD = -0.1
 
 
 class InMemoryRelationshipState:
+    """ユーザーIDをキーとする関係スナップショットのインメモリ保存。"""
+
     def __init__(self) -> None:
+        """空の関係状態ストアを初期化する。"""
         self._snapshots: dict[UserId, RelationshipSnapshot] = {}
 
     def get(self, user_id: UserId, user_label: str | None = None) -> RelationshipSnapshot:
+        """ユーザーの関係スナップショットを取得する。存在しない場合はデフォルト値を返す。
+
+        Returns:
+            RelationshipSnapshot: ユーザーの関係スナップショット。存在しない場合はデフォルト値。
+        """
         snapshot = self._snapshots.get(user_id)
         if snapshot is not None:
             return snapshot
@@ -25,16 +41,30 @@ class InMemoryRelationshipState:
         )
 
     def set(self, user_id: UserId, snapshot: RelationshipSnapshot) -> None:
+        """ユーザーの関係スナップショットを保存する。"""
         self._snapshots[user_id] = snapshot
 
 
 class RelationshipStep(PipelineStep[RelationshipResult]):
+    """感情に基づいて関係状態を更新するパイプラインステップ。"""
+
     name = "relationship"
 
     def __init__(self, state: InMemoryRelationshipState | None = None) -> None:
+        """オプションの関係状態ストアで初期化する。
+
+        Args:
+            state: The relationship state store. Defaults to InMemoryRelationshipState().
+        """
         self._state = state if state is not None else InMemoryRelationshipState()
 
+    @override
     async def run(self, frame: WorkspaceFrame) -> RelationshipResult:
+        """フレームのアクターに対する関係を更新し、結果を返す。
+
+        Returns:
+            RelationshipResult: 更新された関係情報。actor がない場合は SKIPPED。
+        """
         actor = frame.observation.actor
         if actor is None:
             return RelationshipResult(
@@ -61,9 +91,19 @@ def update_relationship(
     current: RelationshipSnapshot,
     affect: AffectSnapshot,
 ) -> RelationshipSnapshot:
+    """現在の感情状態に基づいて関係スナップショットを更新する。
+
+    Returns:
+        RelationshipSnapshot: 親密度、親和性、信頼度が更新された関係スナップショット。
+    """
     familiarity = _clamp01(current.familiarity + 0.02)
     affinity = _clamp_signed(current.affinity + affect.valence * 0.04)
-    trust_delta = 0.015 if affect.valence > 0.1 else -0.01 if affect.valence < -0.1 else 0.0
+    if affect.valence > _POSITIVE_VALENCE_TRUST_THRESHOLD:
+        trust_delta = 0.015
+    elif affect.valence < _NEGATIVE_VALENCE_TRUST_THRESHOLD:
+        trust_delta = -0.01
+    else:
+        trust_delta = 0.0
     trust = _clamp01(current.trust + trust_delta)
     return replace(
         current,
@@ -76,7 +116,10 @@ def update_relationship(
 
 def _summarize(user_label: str | None, affinity: float, trust: float, familiarity: float) -> str:
     label = user_label or "unknown user"
-    return f"{label} relationship(affinity={affinity:.2f}, trust={trust:.2f}, familiarity={familiarity:.2f})"
+    return (
+        f"{label} relationship(affinity={affinity:.2f}, trust={trust:.2f}, "
+        f"familiarity={familiarity:.2f})"
+    )
 
 
 def _clamp01(value: float) -> float:

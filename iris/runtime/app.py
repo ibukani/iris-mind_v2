@@ -1,23 +1,31 @@
-"""Minimal application composition root for Cognitive Runtime v0.1.
+"""Cognitive Runtime v0.1の最小限のアプリケーション構成ルート.
 
-This is the entry point for wiring all layers together.
-No cognitive policy logic, no service locator, no global registry.
+すべての層を配線するためのエントリポイント.
+認知ポリシーロジック、サービロケータ、グローバルレジストリは使用しない。
 """
 
-from collections.abc import Sequence
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from iris.cognitive.cycle.frame_builder import FrameBuilder
-from iris.cognitive.cycle.models import CycleResult, PipelineStepResult
-from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.cycle.service import CognitiveCycle
 from iris.contracts.actions import ActionPlan, PresentedOutput
-from iris.contracts.observations import Observation
 from iris.presentation.presenter import Presenter, SimplePresenter
 from iris.safety.action_gate import ActionSafetyGate, AllowAllActionGate, GateDecision
 from iris.safety.output_filter import AllowAllOutputGate, OutputSafetyGate
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from iris.cognitive.cycle.models import CycleResult, PipelineStepResult
+    from iris.cognitive.cycle.pipeline import PipelineStep
+    from iris.contracts.observations import Observation
+
 
 class IrisApp:
+    """Iris認知ランタイムの最小限のアプリケーション構成ルート."""
+
     def __init__(
         self,
         steps: Sequence[PipelineStep[PipelineStepResult]] | None = None,
@@ -27,6 +35,19 @@ class IrisApp:
         output_safety_gate: OutputSafetyGate | None = None,
         cycle: CognitiveCycle | None = None,
     ) -> None:
+        """オプションの依存関係オーバーライドでアプリケーションを初期化する.
+
+        Args:
+            steps: Pipeline steps used when no cycle is provided.
+            fallback_plan: Default plan returned on cycle failure.
+            presenter: Output presenter override.
+            action_safety_gate: Action gate override.
+            output_safety_gate: Output gate override.
+            cycle: Pre-wired cognitive cycle; if provided, steps is ignored.
+
+        Raises:
+            ValueError: If neither steps nor cycle is provided.
+        """
         if fallback_plan is None:
             fallback_plan = ActionPlan(
                 turn_intent="no_action",
@@ -38,7 +59,8 @@ class IrisApp:
             self._cycle = cycle
         else:
             if steps is None:
-                raise ValueError("steps or cycle must be provided")
+                err = "steps or cycle must be provided"
+                raise ValueError(err)
             self._cycle = CognitiveCycle(
                 steps=steps,
                 frame_builder=FrameBuilder(),
@@ -49,6 +71,14 @@ class IrisApp:
         self._output_safety_gate = output_safety_gate or AllowAllOutputGate()
 
     async def process_observation(self, observation: Observation) -> PresentedOutput:
+        """完全な認知パイプラインを通して単一の観測を処理する.
+
+        Args:
+            observation: The incoming observation to process.
+
+        Returns:
+            Presented output, or an empty output if the action was blocked.
+        """
         cycle_result: CycleResult = await self._cycle.run(observation)
         plan: ActionPlan = cycle_result.selected_plan
         if plan.is_no_action:

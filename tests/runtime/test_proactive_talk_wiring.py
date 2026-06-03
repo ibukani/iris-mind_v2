@@ -1,3 +1,6 @@
+# Copyright 2025 Iris Mind
+"""Tests for proactive talk feature and cognitive cycle wiring."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -14,6 +17,7 @@ from iris.runtime.wiring.features import (
 
 
 def test_wire_proactive_talk_feature_returns_explicit_feature_definition() -> None:
+    """Verify wire_proactive_talk_feature returns an explicit FeatureDefinition."""
     feature = wire_proactive_talk_feature()
 
     assert isinstance(feature, FeatureDefinition)
@@ -24,6 +28,7 @@ def test_wire_proactive_talk_feature_returns_explicit_feature_definition() -> No
 
 @pytest.mark.anyio
 async def test_wire_proactive_talk_cognitive_cycle_composes_feature_steps() -> None:
+    """Verify wire_proactive_talk_cognitive_cycle composes feature steps correctly."""
     cycle = wire_proactive_talk_cognitive_cycle()
     result = await cycle.run(
         IdleTickObservation(

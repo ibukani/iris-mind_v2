@@ -1,6 +1,10 @@
+"""Tests for proactive salience scoring and thresholds."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
+
+import pytest
 
 from iris.cognitive.workspace.frame import (
     AffectSnapshot,
@@ -59,6 +63,7 @@ def _idle_frame(
 
 
 def test_salience_scoring_is_deterministic_and_bounded() -> None:
+    """Verify SalienceScorer produces deterministic and bounded scores."""
     frame = _idle_frame(600.0, memory=True, familiarity=0.8)
     scorer = SalienceScorer(threshold=0.5)
 
@@ -66,11 +71,12 @@ def test_salience_scoring_is_deterministic_and_bounded() -> None:
     second = scorer.score(frame)
 
     assert first == second
-    assert first.score == 0.9
+    assert first.score == pytest.approx(0.9)
     assert first.should_speak is True
 
 
 def test_low_familiarity_and_negative_affect_reduce_salience() -> None:
+    """Verify low familiarity and negative affect reduce the salience score."""
     frame = _idle_frame(
         300.0,
         familiarity=0.0,
@@ -79,13 +85,14 @@ def test_low_familiarity_and_negative_affect_reduce_salience() -> None:
 
     salience = SalienceScorer(threshold=0.5).score(frame)
 
-    assert salience.score == 0.0
+    assert salience.score == pytest.approx(0.0)
     assert salience.should_speak is False
     assert "low_familiarity" in salience.reasons
     assert "negative_high_arousal" in salience.reasons
 
 
 def test_policy_block_prevents_proactive_speaking() -> None:
+    """Verify a blocking policy constraint prevents proactive speaking."""
     frame = _idle_frame(
         600.0,
         constraints=(

@@ -61,3 +61,17 @@ Prefer the structured files under this directory for new agent sessions. Keep th
 ## Token-saving mode
 
 Primitive Prompt Mode and the token/language policy are embedded directly in `AGENTS.md` so every agent session loads them. Do not move those mandatory rules into optional prompt files.
+
+## AI harness additions
+
+Use these files for Codex/OpenCode harness work:
+
+- `.agents/rules/ai-harness.md` — agent operating loop and handoff rules.
+- `.agents/rules/verification.md` — command hierarchy and failure reporting rules.
+- `.agents/workflows/test-fix.md` — strict gate repair workflow.
+- `.agents/workflows/architecture.md` — architecture change workflow.
+- `.agents/workflows/ai-harness.md` — instruction and verification harness maintenance workflow.
+- `.agents/checklists/ai-harness.md` — checklist for instruction/command changes.
+- `.agents/checklists/failure-analysis.md` — checklist for strict gate failures.
+
+Prefer `make ai-quick` during iteration and `make ai-check` before handoff.
