@@ -1,5 +1,4 @@
-"""Tests for the main.py target runtime entrypoint.
-"""
+"""Tests for the main.py target runtime entrypoint."""
 
 from __future__ import annotations
 

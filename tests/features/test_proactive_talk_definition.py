@@ -51,4 +51,3 @@ def test_proactive_talk_feature_no_forbidden_imports() -> None:
     assert "iris.event" not in source
     assert "iris.kernel.plugin" not in source
     assert "InternalBus" not in source
-

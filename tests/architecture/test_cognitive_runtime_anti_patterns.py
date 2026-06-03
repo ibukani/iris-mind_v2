@@ -365,3 +365,149 @@ def test_features_no_direct_frame_mutation() -> None:
                         violations.append(f"  {rel}: mutates WorkspaceFrame directly")
 
     assert not violations, "Direct WorkspaceFrame mutation from features:\n" + "\n".join(violations)
+
+
+# ── 7. Adapter port boundaries ──────────────────────────────────
+
+
+def test_cognitive_does_not_import_adapter_implementations() -> None:
+    """cognitive/ must not import concrete adapter implementations.
+
+    cognitive/ may only import from adapters/.../ports.py (ports/protocols),
+    not from concrete adapter files like fake.py, openai.py, langchain.py, vector.py.
+    """
+    cognitive_dir = PROJECT_ROOT / "iris" / "cognitive"
+    if not cognitive_dir.is_dir():
+        pytest.skip("iris/cognitive/ does not exist yet")
+
+    adapter_concrete_files = {
+        "iris.adapters.llm.fake",
+        "iris.adapters.llm.openai",
+        "iris.adapters.memory.fake",
+        "iris.adapters.memory.langchain",
+        "iris.adapters.memory.vector",
+    }
+
+    violations: list[str] = []
+    for filepath in _get_python_files(cognitive_dir):
+        rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+        for imp in _get_imports(filepath):
+            if imp in adapter_concrete_files:
+                violations.append(f"  {rel}: imports concrete adapter '{imp}' — use a port/protocol instead")
+
+    assert not violations, "cognitive/ must not import concrete adapter implementations:\n" + "\n".join(violations)
+
+
+def test_cognitive_memory_defines_own_port() -> None:
+    """cognitive/memory/ must define its own MemoryRetriever protocol,
+    not import MemoryStore from adapters."""
+    memory_retrieval = PROJECT_ROOT / "iris" / "cognitive" / "memory" / "retrieval.py"
+    if not memory_retrieval.is_file():
+        pytest.skip("iris/cognitive/memory/retrieval.py does not exist yet")
+
+    text = memory_retrieval.read_text(encoding="utf-8")
+    tree = ast.parse(text)
+
+    imports = _get_imports(memory_retrieval)
+    for imp in imports:
+        assert not imp.startswith("iris.adapters.memory"), (
+            f"cognitive/memory/retrieval.py imports '{imp}' — must define its own port (MemoryRetriever protocol)"
+        )
+
+    has_port = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "MemoryRetriever":
+            has_port = True
+            break
+    assert has_port, "cognitive/memory/retrieval.py must define a MemoryRetriever protocol"
+
+
+def test_cognitive_action_defines_own_port() -> None:
+    """cognitive/action/ must define its own ResponseGenerator protocol,
+    not import LLMClient from adapters."""
+    action_response = PROJECT_ROOT / "iris" / "cognitive" / "action" / "response.py"
+    if not action_response.is_file():
+        pytest.skip("iris/cognitive/action/response.py does not exist yet")
+
+    imports = _get_imports(action_response)
+    for imp in imports:
+        assert not imp.startswith("iris.adapters.llm"), (
+            f"cognitive/action/response.py imports '{imp}' — must define its own port (ResponseGenerator protocol)"
+        )
+
+    tree = ast.parse(action_response.read_text(encoding="utf-8"))
+    has_port = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "ResponseGenerator":
+            has_port = True
+            break
+    assert has_port, "cognitive/action/response.py must define a ResponseGenerator protocol"
+
+
+# ── 8. Untyped dict boundaries expanded ────────────────────────
+
+
+LAYERS_WITH_TYPED_BOUNDARIES: list[str] = [
+    "iris/cognitive",
+    "iris/features",
+    "iris/presentation",
+    "iris/safety",
+]
+
+FORBIDDEN_DICT_PATTERNS: set[str] = {
+    "dict[str, Any]",
+    "dict[str, object]",
+    "Dict[str, Any]",
+    "Dict[str, object]",
+    "MutableMapping",
+}
+
+
+def test_internal_layers_no_untyped_dict() -> None:
+    """All internal layers must avoid untyped dict/mapping in typed boundaries.
+
+    Checks dataclass field annotations and function signatures for
+    dict[str, Any], dict[str, object], and MutableMapping usage.
+    """
+    violations: list[str] = []
+
+    for layer_dir in LAYERS_WITH_TYPED_BOUNDARIES:
+        base = PROJECT_ROOT / layer_dir
+        if not base.is_dir():
+            continue
+        for filepath in _get_python_files(base):
+            rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+            try:
+                tree = ast.parse(filepath.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+
+            for node in ast.walk(tree):
+                if not hasattr(node, "lineno"):
+                    continue
+                annotation: ast.AST | None = None
+                node_line = node.lineno
+
+                if isinstance(node, ast.AnnAssign) and node.annotation:
+                    annotation = node.annotation
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for arg in node.args.args:
+                        if arg.annotation:
+                            ann_str = ast.unparse(arg.annotation)
+                            for f in FORBIDDEN_DICT_PATTERNS:
+                                if f in ann_str:
+                                    violations.append(f"  {rel}:{node_line} parameter '{arg.arg}: {ann_str}'")
+
+                if annotation is None:
+                    continue
+
+                ann_str = ast.unparse(annotation)
+                for f in FORBIDDEN_DICT_PATTERNS:
+                    if f in ann_str:
+                        line_text = filepath.read_text(encoding="utf-8").splitlines()[node_line - 1].strip()
+                        violations.append(f"  {rel}:{node_line} {line_text}")
+                        break
+
+    assert not violations, (
+        "Internal layers must not use dict[str, Any]/dict[str, object]/MutableMapping:\n" + "\n".join(violations)
+    )

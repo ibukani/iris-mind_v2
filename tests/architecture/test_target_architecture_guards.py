@@ -459,4 +459,38 @@ def test_no_global_mutable_registries() -> None:
     assert not violations, "Global mutable registries found:\n" + "\n".join(violations)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 7.  Ports must live in consuming modules, not contracts/
+# ═══════════════════════════════════════════════════════════════════
 
+
+def test_contracts_has_no_ports_file() -> None:
+    """contracts/ports.py must not exist. Ports belong in consuming modules."""
+    ports_path = PROJECT_ROOT / "iris" / "contracts" / "ports.py"
+    assert not ports_path.is_file(), (
+        "contracts/ports.py exists — ports should be defined in consuming modules "
+        "(e.g. cognitive/action/ports.py, cognitive/memory/ports.py, "
+        "presentation/ports.py, safety/ports.py, adapters/app_gateway/ports.py)"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 8.  WIRING_FILES completeness
+# ═══════════════════════════════════════════════════════════════════
+
+
+WIRING_FILES_EXPECTED: set[str] = {
+    "iris/runtime/wiring/app.py",
+    "iris/runtime/wiring/cognitive.py",
+    "iris/runtime/wiring/features.py",
+    "iris/runtime/wiring/presentation.py",
+}
+
+
+def test_required_wiring_files_exist() -> None:
+    """Required wiring files must exist on disk."""
+    missing: list[str] = []
+    for rel in WIRING_FILES_EXPECTED:
+        if not (PROJECT_ROOT / rel).is_file():
+            missing.append(rel)
+    assert not missing, "Required wiring files missing:\n" + "\n".join(missing)

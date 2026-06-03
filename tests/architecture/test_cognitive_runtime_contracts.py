@@ -81,6 +81,15 @@ def _class_has_frozen_dataclass(cls: ast.ClassDef) -> bool:
     return False
 
 
+def _class_has_dataclass(cls: ast.ClassDef) -> bool:
+    for dec in cls.decorator_list:
+        if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id == "dataclass":
+            return True
+        if isinstance(dec, ast.Attribute) and dec.attr == "dataclass":
+            return True
+    return False
+
+
 def _get_field_type_annotations(cls: ast.ClassDef) -> list[str]:
     """Return string representations of field type annotations."""
     annotations: list[str] = []
@@ -385,3 +394,169 @@ def test_pipeline_step_does_not_mutate_frame() -> None:
     assert not violations, "PipelineSteps must not mutate WorkspaceFrame directly — use FrameBuilder:\n" + "\n".join(
         violations
     )
+
+
+# ── 6. IrisApp runtime flow ────────────────────────────────────
+
+
+TARGET_APP_FILE: Path = PROJECT_ROOT / "iris" / "runtime" / "app.py"
+TARGET_ACTIONS_FILE: Path = PROJECT_ROOT / "iris" / "contracts" / "actions.py"
+
+
+def test_iris_app_checks_no_action_before_safety_gate() -> None:
+    """IrisApp.process_observation must check is_no_action before calling safety gate."""
+    if not TARGET_APP_FILE.is_file():
+        pytest.skip("iris/runtime/app.py does not exist yet")
+
+    text = TARGET_APP_FILE.read_text(encoding="utf-8")
+    tree = ast.parse(text)
+
+    cls = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "IrisApp":
+            cls = node
+            break
+    assert cls is not None, "IrisApp class not found in app.py"
+
+    method = None
+    for node in cls.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "process_observation":
+            method = node
+            break
+    assert method is not None, "IrisApp.process_observation() not found"
+
+    method_source = ast.get_source_segment(text, method) or ""
+
+    assert "is_no_action" in method_source, (
+        "process_observation() must check plan.is_no_action to shortcut no-action plans"
+    )
+    assert "check_plan" in method_source, "process_observation() must call action_safety_gate.check_plan()"
+    assert "present" in method_source, "process_observation() must call presenter.present()"
+    assert "check_output" in method_source, "process_observation() must call output_safety_gate.check_output()"
+
+
+def test_iris_app_no_action_returns_presented_output_with_no_text() -> None:
+    """IrisApp.process_observation must return PresentedOutput(text=None) for no-action."""
+    if not TARGET_APP_FILE.is_file():
+        pytest.skip("iris/runtime/app.py does not exist yet")
+
+    text = TARGET_APP_FILE.read_text(encoding="utf-8")
+    assert "PresentedOutput(text=None)" in text, "no-action shortcut must return PresentedOutput(text=None)"
+
+
+# ── 7. ActionPlan.is_no_action / PresentedOutput.is_sendable ───
+
+
+def test_action_plan_is_no_action_property() -> None:
+    """ActionPlan.is_no_action must be a property that checks turn_intent and should_respond."""
+    if not TARGET_ACTIONS_FILE.is_file():
+        pytest.skip("iris/contracts/actions.py does not exist yet")
+
+    tree = ast.parse(TARGET_ACTIONS_FILE.read_text(encoding="utf-8"))
+    cls = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "ActionPlan":
+            cls = node
+            break
+    assert cls is not None, "ActionPlan class not found"
+
+    found_is_no_action = False
+    for node in cls.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "is_no_action":
+            assert node.decorator_list, "is_no_action must be a @property"
+            decorator_names = []
+            for dec in node.decorator_list:
+                if isinstance(dec, ast.Name):
+                    decorator_names.append(dec.id)
+                elif isinstance(dec, ast.Attribute):
+                    decorator_names.append(dec.attr)
+            assert "property" in decorator_names, "is_no_action must be a @property"
+            found_is_no_action = True
+
+    assert found_is_no_action, "ActionPlan.is_no_action property not found"
+
+
+def test_presented_output_is_sendable_property() -> None:
+    """PresentedOutput.is_sendable must be a property that checks text is not None."""
+    if not TARGET_ACTIONS_FILE.is_file():
+        pytest.skip("iris/contracts/actions.py does not exist yet")
+
+    tree = ast.parse(TARGET_ACTIONS_FILE.read_text(encoding="utf-8"))
+    cls = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "PresentedOutput":
+            cls = node
+            break
+    assert cls is not None, "PresentedOutput class not found"
+
+    found_is_sendable = False
+    for node in cls.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "is_sendable":
+            assert node.decorator_list, "is_sendable must be a @property"
+            found_is_sendable = True
+
+    assert found_is_sendable, "PresentedOutput.is_sendable property not found"
+
+
+# ── 8. FeatureDefinition field completeness ─────────────────────
+
+
+TARGET_FEATURE_DEF_FILE: Path = PROJECT_ROOT / "iris" / "features" / "definition.py"
+
+REQUIRED_FEATURE_DEFINITION_FIELDS: set[str] = {
+    "name",
+    "pipeline_steps",
+    "observation_sources",
+    "learning_hooks",
+    "background_jobs",
+}
+
+
+def test_feature_definition_has_all_required_fields() -> None:
+    """FeatureDefinition must expose all five extension point fields."""
+    if not TARGET_FEATURE_DEF_FILE.is_file():
+        pytest.skip("iris/features/definition.py does not exist yet")
+
+    tree = ast.parse(TARGET_FEATURE_DEF_FILE.read_text(encoding="utf-8"))
+    cls = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "FeatureDefinition":
+            cls = node
+            break
+    assert cls is not None, "FeatureDefinition class not found"
+
+    field_names: set[str] = set()
+    for item in cls.body:
+        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+            field_names.add(item.target.id)
+
+    missing = REQUIRED_FEATURE_DEFINITION_FIELDS - field_names
+    assert not missing, f"FeatureDefinition missing required fields: {missing}"
+
+
+# ── 9. PipelineStepResult subclasses frozen ─────────────────────
+
+
+def test_all_pipeline_step_results_are_frozen_dataclass() -> None:
+    """Every PipelineStepResult subclass must be a frozen dataclass."""
+    path = TARGET_FILES["cycle_models"]
+    if not path.is_file():
+        pytest.skip("cycle/models.py does not exist yet")
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    pipeline_result_classes: list[tuple[str, bool, bool]] = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            bases = [ast.unparse(b) for b in node.bases]
+            if "PipelineStepResult" in bases:
+                is_frozen = _class_has_frozen_dataclass(node)
+                is_dataclass = _class_has_dataclass(node)
+                pipeline_result_classes.append((node.name, is_frozen, is_dataclass))
+
+    violations = [
+        f"  {name}: frozen={frozen}, dataclass={dc}"
+        for name, frozen, dc in pipeline_result_classes
+        if not frozen or not dc
+    ]
+    assert not violations, "PipelineStepResult subclasses must be frozen dataclasses:\n" + "\n".join(violations)
