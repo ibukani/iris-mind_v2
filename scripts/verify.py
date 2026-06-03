@@ -15,17 +15,7 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-MYPY_TARGETS: tuple[str, ...] = (
-    "iris/core",
-    "iris/contracts",
-    "iris/cognitive",
-    "iris/presentation",
-    "iris/safety",
-    "iris/features",
-    "iris/adapters",
-    "iris/runtime",
-    "iris/errors.py",
-)
+MYPY_TARGETS: tuple[str, ...] = ("iris", "tests", "scripts", "main.py")
 
 
 @dataclass(frozen=True)
@@ -38,10 +28,10 @@ class Check:
 CHECKS: tuple[Check, ...] = (
     Check("lint", ("uv", "run", "ruff", "check", ".")),
     Check("format", ("uv", "run", "ruff", "format", "--check", ".")),
-    Check("mypy", ("uv", "run", "mypy", *MYPY_TARGETS)),
+    Check("type", ("uv", "run", "mypy", *MYPY_TARGETS)),
     Check("pyright", ("uv", "run", "pyright", ".")),
     Check("architecture", ("uv", "run", "pytest", "tests/architecture", "-q")),
-    Check("tests", ("uv", "run", "pytest", "tests/", "-q"), full_only=True),
+    Check("tests+coverage", ("uv", "run", "pytest", "tests/"), full_only=True),
 )
 
 
@@ -50,7 +40,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "--quick",
         action="store_true",
-        help="Skip the full test suite. Still runs lint, format, type, and architecture tests.",
+        help="Skip the full test suite and coverage gate. Still runs lint, format, mypy, pyright, and architecture tests.",
     )
     parser.add_argument(
         "--keep-going",

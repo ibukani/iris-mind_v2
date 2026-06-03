@@ -17,10 +17,10 @@ The full check runs, in order:
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime iris/errors.py
+uv run mypy iris tests scripts main.py
 uv run pyright .
 uv run pytest tests/architecture -q
-uv run pytest tests/ -q
+uv run pytest tests/
 ```
 
 Use this while iterating:
@@ -29,7 +29,7 @@ Use this while iterating:
 make quick
 ```
 
-`make quick` skips the full test suite, but still runs lint, format check, type check, and architecture tests.
+`make quick` skips the full test suite, but still runs lint, format check, mypy, pyright, and architecture tests.
 
 ## Targeted test selection
 

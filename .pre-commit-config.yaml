@@ -9,7 +9,7 @@ repos:
     rev: v2.1.0
     hooks:
       - id: mypy
-        args: [iris, tests]
+        args: [iris, tests, scripts, main.py]
         additional_dependencies: []
         pass_filenames: false
   - repo: local

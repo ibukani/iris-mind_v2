@@ -65,21 +65,22 @@ The full verification path runs:
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime iris/errors.py
+uv run mypy iris tests scripts main.py
 uv run pyright .
 uv run pytest tests/architecture -q
-uv run pytest tests/ -q
+uv run pytest tests/
 ```
 
 Useful targeted commands:
 
 ```bash
-make quick    # lint, format, type, architecture tests
+make quick    # lint, format, mypy, pyright, architecture tests
 make lint     # ruff check
 make format   # ruff format --check
-make type     # mypy + pyright over production code
+make type     # mypy strict across iris/tests/scripts/main.py
 make arch     # architecture tests
-make test     # all tests
+make pyright  # pyright strict
+make test     # all tests with coverage gate
 ```
 
 ## Agent Harness

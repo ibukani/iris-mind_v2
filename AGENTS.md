@@ -128,6 +128,16 @@ Use these task contracts:
 - Reviews: `.agents/workflows/review.md`
 - Documentation updates: `.agents/workflows/docs-update.md`
 
+## Strict AI Coding Quality Gate
+
+Do not weaken lint, type, pyright, pytest, or coverage settings to make work pass. This repository prioritizes strict AI-coding feedback over short-term convenience. Fix code and tests instead of relaxing configuration.
+
+- Ruff uses `select = ["ALL"]`; only formatter conflicts and explicitly documented context exceptions are ignored.
+- mypy runs strict checks across `iris`, `tests`, `scripts`, and `main.py`.
+- pyright runs in strict mode across the same repository surfaces.
+- pytest treats config, markers, xfail, and warnings strictly.
+- Coverage is part of the full gate and fails below 90%.
+
 ## Verification
 
 Use the repository verification entry point before reporting completion.
@@ -140,11 +150,12 @@ make check
 
 1. `uv run ruff check .`
 2. `uv run ruff format --check .`
-3. `uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime`
-4. `uv run pytest tests/architecture -q`
-5. `uv run pytest tests/ -q`
+3. `uv run mypy iris tests scripts main.py`
+4. `uv run pyright .`
+5. `uv run pytest tests/architecture -q`
+6. `uv run pytest tests/`
 
-Use `make quick` while iterating when the full suite is too broad for the current edit. It still runs lint, format, type, and architecture checks.
+Use `make quick` while iterating when the full suite is too broad for the current edit. It still runs lint, format, mypy, pyright, and architecture checks.
 
 If the environment cannot run a command, report the command, the failure reason, and what you verified instead.
 

@@ -44,7 +44,7 @@ Use one canonical command before reporting completion:
 make check
 ```
 
-`make verify` is an alias. Both call `scripts/verify.py` and run lint, format check, type check, architecture tests, and the full test suite. Use `make quick` for iteration only.
+`make verify` is an alias. Both call `scripts/verify.py` and run strict Ruff, format check, mypy, pyright, architecture tests, and the full test suite with coverage gate. Use `make quick` for iteration only.
 
 ## Source of truth
 
