@@ -78,5 +78,4 @@ Voice / TTS / STT の具体処理は `iris-voice-runtime` 側。
 ## 関連ドキュメント
 
 - architecture.md: adapters 層の責務、依存方向
-- types.md: AppGateway、AppAction、ActionResult の型定義
 - legacy.md: 削除済みアーキテクチャ情報

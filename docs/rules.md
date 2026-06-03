@@ -155,5 +155,4 @@ if message.content.startswith("!"):
 ## 関連ドキュメント
 
 - architecture.md: 依存方向、禁止パターン
-- mvp.md: MVP の制約
 - legacy.md: 削除済みアーキテクチャ情報

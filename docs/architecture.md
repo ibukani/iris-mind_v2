@@ -318,14 +318,6 @@ ActionPlan
 → PresentedOutput
 ```
 
-将来、Neuro-sama 的な配信者・演出層に発展させる。
-
-```text
-ActionPlan
-→ PerformanceDirector
-→ Text + Voice + Expression + Timing
-```
-
 責務分離。
 
 ```text
@@ -343,65 +335,17 @@ adapters/       = どこへ送るかを担当する
 
 各 feature は `features/<name>/feature.py` を持ち、`FeatureDefinition` を返す。
 
-例。
-
 ```python
 @dataclass(frozen=True)
 class FeatureDefinition:
     name: str
-    observation_sources: list[ObservationSource]
-    workspace_contributors: list[WorkspaceContributor]
-    appraisal_providers: list[AppraisalProvider]
-    salience_scorers: list[SalienceScorer]
-    goal_proposers: list[GoalProposer]
-    policy_constraints: list[PolicyConstraint]
-    action_providers: list[ActionProvider]
-    learning_hooks: list[LearningHook]
-    background_jobs: list[BackgroundJob]
+    pipeline_steps: Sequence[PipelineStep[PipelineStepResult]] = ()
+    observation_sources: Sequence[ObservationSource] = ()
+    learning_hooks: Sequence[LearningHook] = ()
+    background_jobs: Sequence[BackgroundJob] = ()
 ```
 
 `runtime/wiring/features.py` は `FeatureDefinition` を集めて登録するだけにする。
-
-新機能は、次のいずれかの拡張ポイントとして追加する。
-
-- ObservationSource
-- WorkspaceContributor
-- MemoryRetriever
-- AppraisalProvider
-- SalienceScorer
-- GoalProposer
-- PolicyConstraint
-- ActionProvider
-- LearningHook
-- BackgroundJob
-- Presenter
-- SafetyGate
-- Adapter
-
-例。
-
-```text
-Proactive
-→ ObservationSource
-→ SalienceScorer
-→ GoalProposer
-→ PolicyConstraint
-→ ActionProvider
-
-Relationship
-→ AppraisalProvider
-→ LearningHook
-
-PersonaPatch
-→ BackgroundJob
-→ LearningHook
-
-Neuro-sama 的な突飛さ
-→ Presenter
-→ GoalProposer
-→ PolicyConstraint
-→ SafetyGate
-```
 
 ### `adapters/`
 
@@ -678,8 +622,6 @@ CLI / main.py
 ## 関連ドキュメント
 
 - cognitive.md: 認知サイクル、workspace、learning、proactive の詳細設計
-- types.md: Minimal Interface Specification（全型定義）
-- mvp.md: MVP 実装順、Go/No-Go 条件
 - rules.md: AI コーディングルール、Do/Don't Examples
 - legacy.md: 削除済みアーキテクチャ情報
 - tests.md: アーキテクチャテスト受入基準

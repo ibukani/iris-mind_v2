@@ -152,55 +152,8 @@ Scheduler
 
 ---
 
-## Neuro-sama 的拡張
-
-最初から巨大な `performance/` は作らない。
-まず `presentation/` を置く。
-
-MVP。
-
-```text
-ActionPlan
-→ SimplePresenter
-→ PresentedOutput
-```
-
-将来。
-
-```text
-ActionPlan
-→ PerformanceDirector
-→ Text + Voice + Expression + Timing
-```
-
-将来の構成。
-
-```text
-performance/
-├── director.py
-├── pacing.py
-├── bit_engine.py
-├── audience.py
-├── stream_state.py
-├── expression.py
-└── moderation.py
-```
-
-突飛さは prompt だけに任せない。
-以下の組み合わせで制御する。
-
-```text
-GoalProposer
-+ Presenter / PerformanceDirector
-+ PolicyConstraint
-+ SafetyGate
-```
-
----
 
 ## 関連ドキュメント
 
 - architecture.md: 全体構造、各層の責務、依存方向
-- types.md: WorkspaceFrame、PipelineStep、CycleResult の型定義
-- mvp.md: MVP 実装順
 - rules.md: 認知サイクルに関する Do/Don't

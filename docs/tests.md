@@ -105,4 +105,3 @@ allowlist は永続化しない。
 
 - architecture.md: 依存方向の定義
 - rules.md: 禁止パターン一覧
-- mvp.md: MVP Scope Lock と完了条件
