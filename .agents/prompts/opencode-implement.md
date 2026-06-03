@@ -6,6 +6,12 @@ Work in this repository using `AGENTS.md` as the main instruction file.
 Task:
 <task>
 
+Token policy:
+- Use Primitive Prompt Mode when context gets long.
+- Think/work in English.
+- Final report must be Japanese and compact.
+
+
 Follow:
 - `.agents/workflows/implement.md`
 - `.agents/rules/architecture.md`
@@ -24,8 +30,6 @@ Required guardrails:
 Run targeted tests first. Before final response, run or report inability to run:
 
 ```bash
-uv run pytest tests/architecture -q
-uv run ruff check .
-uv run ruff format --check .
+make check
 ```
 ```

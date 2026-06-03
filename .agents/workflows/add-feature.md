@@ -1,5 +1,7 @@
 # Workflow: Add a Feature Slice
 
+
+Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
 Use this when adding a new vertical feature under `iris/features/<name>/`.
 
 ## Required structure
@@ -52,9 +54,7 @@ Add or update:
 ## Verification
 
 ```bash
-uv run pytest tests/features -q
-uv run pytest tests/runtime -q
-uv run pytest tests/architecture -q
-uv run ruff check .
-uv run ruff format --check .
+make check
 ```
+
+Use targeted feature/runtime tests while iterating, then `make check` before final report.

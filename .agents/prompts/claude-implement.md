@@ -6,6 +6,12 @@ Use `CLAUDE.md` as the entry point and read the shared harness under `.agents/`.
 Task:
 <task>
 
+Token policy:
+- Use Primitive Prompt Mode when context gets long.
+- Think/work in English.
+- Final report must be Japanese and compact.
+
+
 Operate with these rules:
 - Inspect existing code before editing.
 - Make the smallest correct change.
@@ -16,9 +22,9 @@ Operate with these rules:
 
 Use `.agents/workflows/implement.md` and `.agents/checklists/done.md`.
 
-Expected final answer:
-1. Changed files
-2. Summary
-3. Verification results
-4. Remaining risks
+Expected final answer in Japanese:
+1. 変更ファイル
+2. 概要
+3. 検証
+4. 残リスク
 ```

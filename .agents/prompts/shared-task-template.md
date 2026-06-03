@@ -1,6 +1,6 @@
 # Shared Agent Task Template
 
-Use this template when asking any coding agent to work on Iris.
+Use this template when asking any coding agent to work on Iris. For shorter prompts, apply the Primitive Prompt Mode embedded in `AGENTS.md`.
 
 ```text
 Task:
@@ -9,6 +9,8 @@ Task:
 Context:
 - This is the Iris cognitive runtime repository.
 - Read AGENTS.md first.
+- Use the token/language policy embedded in `AGENTS.md`.
+- Think/work in English; final report in Japanese.
 - Follow `.agents/workflows/<workflow>.md`.
 - Preserve architecture boundaries from `.agents/rules/architecture.md`.
 
@@ -21,11 +23,11 @@ Constraints:
 Acceptance criteria:
 - <observable result>
 - <tests added/updated>
-- `uv run pytest tests/architecture -q` passes.
+- `make check` passes, or any inability to run it is reported exactly.
 
-Report:
-- Changed files
-- Summary
-- Verification commands and results
-- Risks/follow-up
+Report in Japanese:
+- 変更ファイル
+- 概要
+- 検証
+- 残リスク
 ```

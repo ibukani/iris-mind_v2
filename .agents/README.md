@@ -8,6 +8,7 @@ It exists to make agent work repeatable by supplying:
 - task-specific workflows
 - completion checklists
 - reusable prompts
+- token-saving prompt policy embedded in `AGENTS.md`
 - on-demand skills
 
 Root entry files:
@@ -30,9 +31,20 @@ Root entry files:
 
 1. Start from `AGENTS.md` or `CLAUDE.md`.
 2. Read the relevant rule files.
-3. Pick one workflow from `.agents/workflows/`.
-4. Use `.agents/checklists/pre-change.md` before editing.
-5. Use `.agents/checklists/done.md` before reporting completion.
+3. Apply the Primitive Prompt Mode and token/language policy embedded in `AGENTS.md`.
+4. Pick one workflow from `.agents/workflows/`.
+5. Use `.agents/checklists/pre-change.md` before editing.
+6. Use `.agents/checklists/done.md` before reporting completion.
+
+## Standard verification
+
+Use one canonical command before reporting completion:
+
+```bash
+make check
+```
+
+`make verify` is an alias. Both call `scripts/verify.py` and run lint, format check, type check, architecture tests, and the full test suite. Use `make quick` for iteration only.
 
 ## Source of truth
 
@@ -45,3 +57,7 @@ When documentation and tests disagree, do not guess. Inspect implementation and 
 Older flat files may exist directly under `.agents/`, such as `.agents/architecture.md`, `.agents/cognitive.md`, `.agents/rules.md`, and `.agents/tests.md`.
 
 Prefer the structured files under this directory for new agent sessions. Keep the flat files only as compatibility references unless a separate migration task removes them.
+
+## Token-saving mode
+
+Primitive Prompt Mode and the token/language policy are embedded directly in `AGENTS.md` so every agent session loads them. Do not move those mandatory rules into optional prompt files.

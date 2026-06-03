@@ -13,30 +13,34 @@ A task is not complete until the implementation, tests, and report are aligned.
 
 ## Required checks
 
-Run the relevant subset. For broad code changes, run all.
+Run targeted checks while working. Before final completion, run:
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
-uv run pytest tests/architecture -q
-uv run pytest tests/ -q
+make check
 ```
+
+`make verify` is equivalent. If only documentation changed, run the smallest relevant command and explain why full verification was not needed.
+
+Use `make quick` only for iteration; do not present it as full completion verification for behavior or architecture changes.
+
+## Final report language
+
+Write the final report in Japanese. Keep it compact. Internal work may be English, but do not expose hidden reasoning.
 
 ## Final report template
 
 ```text
-Changed files
+変更ファイル
 - ...
 
-Summary
+概要
 - ...
 
-Verification
+検証
 - command: result
 - command: result
 
-Risks / follow-up
+残リスク
 - ...
 ```
 

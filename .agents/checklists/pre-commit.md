@@ -1,30 +1,28 @@
 # Pre-Commit Checklist
 
-Use this before committing or handing off a patch.
+Before committing code changes, run the canonical verification command unless the change is documentation-only and the exception is explicitly reported.
 
-## Code quality
+## Standard path
 
-- [ ] `uv run ruff check .`
-- [ ] `uv run ruff format --check .`
-- [ ] `uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime`
+- [ ] `make check`
 
-## Tests
+`make verify` is an equivalent alias.
 
-- [ ] Targeted tests for changed area
-- [ ] `uv run pytest tests/architecture -q`
-- [ ] `uv run pytest tests/ -q` when the change is broad or behavior-impacting
+## Iteration helpers
 
-## Architecture
+Use these while working, not as a replacement for final verification.
 
-- [ ] No forbidden imports
-- [ ] No service locator or global registry
-- [ ] No new untyped boundary dictionaries
-- [ ] No compatibility shims unless explicitly requested
-- [ ] No hidden behavior changes in refactors
-- [ ] no-action semantics preserved
+- [ ] `make quick`
+- [ ] `make lint`
+- [ ] `make format`
+- [ ] `make type`
+- [ ] `make arch`
+- [ ] `make test`
 
-## Docs
+## Manual review
 
-- [ ] README/docs updated if behavior changed
-- [ ] `.agents/` rules updated if agent guidance changed
-- [ ] Commands in docs are still valid
+- [ ] No architecture tests were weakened.
+- [ ] No new service locator, global registry, compatibility shim, or temporary wrapper was added.
+- [ ] No new `dict[str, Any]` or `dict[str, object]` was added at internal boundaries.
+- [ ] Behavior changes have tests.
+- [ ] Documentation changed when commands, behavior, or architecture changed.

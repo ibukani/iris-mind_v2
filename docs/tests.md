@@ -2,6 +2,67 @@
 
 ---
 
+## 標準検証コマンド
+
+作業完了前の標準コマンドは以下。
+
+```bash
+make check
+```
+
+`make verify` は `make check` の alias。
+
+両方とも `scripts/verify.py` を実行し、以下を順番に検証する。
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
+uv run pytest tests/architecture -q
+uv run pytest tests/ -q
+```
+
+開発途中の軽量確認には以下を使う。
+
+```bash
+make quick
+```
+
+`make quick` は lint、format check、type check、architecture tests を実行する。全テストは実行しないため、完了報告の代替にはしない。
+
+---
+
+## 個別コマンド
+
+```bash
+# Lint check
+make lint
+
+# Format check
+make format
+
+# Type check
+make type
+
+# Architecture guards only
+make arch
+
+# All tests
+make test
+```
+
+直接実行する場合。
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
+uv run pytest tests/architecture -q
+uv run pytest tests/ -q
+```
+
+---
+
 ## テスト実行方法
 
 ```bash
@@ -16,27 +77,6 @@ uv run pytest tests/architecture -q
 
 # Specific test file
 uv run pytest tests/runtime/test_cli.py -q
-```
-
----
-
-## コード品質
-
-```bash
-# Lint check
-uv run ruff check .
-
-# Lint auto-fix
-uv run ruff check --fix .
-
-# Format check
-uv run ruff format --check .
-
-# Format
-uv run ruff format .
-
-# Type check
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
 ```
 
 ---
@@ -103,5 +143,8 @@ allowlist は永続化しない。
 
 ## 関連ドキュメント
 
-- architecture.md: 依存方向の定義
-- rules.md: 禁止パターン一覧
+- `README.md`: 開発者向け入口
+- `AGENTS.md`: AI coding agent 向け入口
+- `.agents/rules/testing.md`: agent harness 用の検証ルール
+- `architecture.md`: 依存方向の定義
+- `rules.md`: 禁止パターン一覧

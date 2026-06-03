@@ -1,5 +1,7 @@
 # Workflow: Review
 
+
+Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
 Use this workflow for code review, architecture review, or agent-output review.
 
 ## Review priorities
@@ -43,13 +45,13 @@ Reject changes that:
 
 ## Review output format
 
-Use this structure:
+Use this Japanese structure:
 
 ```text
-Summary
-Blocking issues
-Non-blocking issues
-Suggested tests
-Architecture risk
-Verdict
+概要
+ブロッキング事項
+非ブロッキング事項
+推奨テスト
+アーキテクチャリスク
+判定
 ```

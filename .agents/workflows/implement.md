@@ -1,5 +1,7 @@
 # Workflow: Implement Feature or Behavior
 
+
+Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
 Use this workflow when adding a new behavior, contract, feature slice, pipeline step, adapter behavior, or runtime path.
 
 ## 1. Understand the target behavior
@@ -56,26 +58,19 @@ Relevant docs:
 
 ## 6. Verify
 
-Run targeted tests first, then at least:
+Run targeted tests first while working. Before final report, run:
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run pytest tests/architecture -q
+make check
 ```
 
-Run broader tests when the change is not isolated:
-
-```bash
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
-uv run pytest tests/ -q
-```
+Use `make quick` only for iteration. If `make check` cannot run, report the exact failure reason and the narrower commands that did run.
 
 ## 7. Final report
 
-Report:
+Report in Japanese:
 
-- changed files
-- behavior added
-- tests/checks run
-- risks and follow-up work
+- 変更ファイル
+- 概要
+- 検証
+- 残リスク

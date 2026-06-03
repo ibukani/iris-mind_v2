@@ -1,5 +1,7 @@
 # Workflow: Refactor
 
+
+Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
 Use this workflow when improving structure without intentionally changing behavior.
 
 ## Refactor scope
@@ -40,18 +42,18 @@ Forbidden refactors:
 Run at least:
 
 ```bash
-uv run pytest tests/architecture -q
-uv run ruff check .
-uv run ruff format --check .
+make check
 ```
+
+Refactors must pass the full verification path because they can break boundaries without changing behavior.
 
 Also run the targeted tests for touched behavior.
 
 ## Report
 
-State clearly:
+State clearly in Japanese:
 
-- what structure changed
-- what behavior should be unchanged
-- what tests confirm equivalence
-- any remaining design debt
+- 変更ファイル
+- 概要
+- 検証
+- 残リスク

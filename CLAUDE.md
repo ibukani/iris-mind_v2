@@ -44,11 +44,9 @@ For broad changes, also read:
 Use `.agents/checklists/done.md` before finishing. If possible, run:
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
-uv run pytest tests/architecture -q
-uv run pytest tests/ -q
+make check
 ```
+
+`make verify` is the same full verification path. Use `make quick` only for iteration, not as a substitute for final verification when code changed broadly.
 
 Report failures exactly; do not claim a check passed unless it actually ran and passed.

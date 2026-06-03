@@ -18,7 +18,7 @@ Read: AGENTS.md, .agents/rules/architecture.md, .agents/rules/boundaries.md.
 Scope: file A, file B if needed.
 Do not: service locator, global registry, dict boundary, compatibility shim, safety/presenter bypass.
 Keep: typed contracts, FeatureDefinition extension, no-action semantics.
-Test: targeted pytest; pytest tests/architecture -q; ruff check; format check.
+Test: targeted pytest while working; make check before final report.
 Report: Japanese, compact.
 ```
 
@@ -127,17 +127,21 @@ Use these task contracts:
 
 ## Verification
 
-At minimum, run the smallest relevant verification first, then the broader checks before finishing.
-
-Common commands:
+Use the repository verification entry point before reporting completion.
 
 ```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
-uv run pytest tests/architecture -q
-uv run pytest tests/ -q
+make check
 ```
+
+`make verify` is an alias for `make check`. Both run `scripts/verify.py`, which executes:
+
+1. `uv run ruff check .`
+2. `uv run ruff format --check .`
+3. `uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime`
+4. `uv run pytest tests/architecture -q`
+5. `uv run pytest tests/ -q`
+
+Use `make quick` while iterating when the full suite is too broad for the current edit. It still runs lint, format, type, and architecture checks.
 
 If the environment cannot run a command, report the command, the failure reason, and what you verified instead.
 

@@ -1,5 +1,7 @@
 # Workflow: Documentation Update
 
+
+Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
 Use this workflow when changing README, docs, agent rules, prompts, or checklists.
 
 ## Documentation rules
@@ -28,14 +30,10 @@ Only document commands that work with this project unless explicitly marked as p
 Known commands:
 
 ```bash
-uv run python main.py --text "hello"
-uv run python -m iris.runtime.cli --text "hello"
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
-uv run pytest tests/ -q
-uv run pytest tests/architecture -q
+make check
 ```
+
+For documentation-only edits, run the smallest relevant check and state why full verification was not required. If command documentation changed, run `make check` when possible.
 
 ## Verification
 

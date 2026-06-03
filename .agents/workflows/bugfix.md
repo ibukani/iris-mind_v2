@@ -1,5 +1,7 @@
 # Workflow: Bug Fix
 
+
+Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
 Use this workflow for incorrect behavior, failing tests, regressions, or runtime errors.
 
 ## 1. Reproduce
@@ -41,10 +43,10 @@ If the bug was not already covered, add a focused test.
 Run the reproducing test, then relevant broader checks.
 
 ```bash
-uv run pytest tests/architecture -q
-uv run ruff check .
-uv run ruff format --check .
+make check
 ```
+
+Use the targeted regression test first, then `make check` before final report.
 
 ## 6. Report
 

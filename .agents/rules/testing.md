@@ -2,9 +2,17 @@
 
 Tests are part of the agent harness. Do not treat them as optional cleanup.
 
-## Standard commands
+## Standard command
 
-Run targeted checks while working, then broad checks before completion.
+Before reporting completion, run:
+
+```bash
+make check
+```
+
+`make verify` is an alias for `make check`. Both call `scripts/verify.py`.
+
+The full check runs, in order:
 
 ```bash
 uv run ruff check .
@@ -14,9 +22,17 @@ uv run pytest tests/architecture -q
 uv run pytest tests/ -q
 ```
 
+Use this while iterating:
+
+```bash
+make quick
+```
+
+`make quick` skips the full test suite, but still runs lint, format check, type check, and architecture tests.
+
 ## Targeted test selection
 
-Use the closest test first:
+Use the closest test first while working:
 
 | Change area | First tests to run |
 |---|---|
@@ -25,7 +41,7 @@ Use the closest test first:
 | runtime flow | `uv run pytest tests/runtime -q` |
 | features | `uv run pytest tests/features -q` |
 | adapters | `uv run pytest tests/adapters -q` |
-| dependency boundaries | `uv run pytest tests/architecture -q` |
+| dependency boundaries | `make arch` |
 
 ## Architecture tests are mandatory
 

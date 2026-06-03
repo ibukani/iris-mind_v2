@@ -18,16 +18,14 @@ Hard constraints:
 Before finishing, run the narrowest relevant tests, then:
 
 ```bash
-uv run pytest tests/architecture -q
-uv run ruff check .
-uv run ruff format --check .
+make check
 ```
 
 If you cannot run a command, report why.
 
-Final report format:
-- Changed files
-- Summary
-- Verification
-- Risks/follow-up
+Final report format in Japanese:
+- 変更ファイル
+- 概要
+- 検証
+- 残リスク
 ```

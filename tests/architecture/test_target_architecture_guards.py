@@ -84,16 +84,22 @@ LAYER_RULES: dict[str, set[str]] = {
         "iris.adapters",
         "iris.runtime",
         "iris.features",
+        "iris.presentation",
+        "iris.safety",
     },
     "iris/presentation": {
         "iris.adapters",
         "iris.runtime",
         "iris.features",
+        "iris.cognitive",
+        "iris.safety",
     },
     "iris/safety": {
         "iris.adapters",
         "iris.runtime",
         "iris.features",
+        "iris.cognitive",
+        "iris.presentation",
     },
     "iris/adapters": {
         "iris.cognitive",
