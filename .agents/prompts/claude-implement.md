@@ -20,7 +20,7 @@ Operate with these rules:
 - Do not weaken architecture tests.
 - Report any command that cannot be run.
 
-Use `.agents/workflows/implement.md` and `.agents/checklists/done.md`.
+Use `.agents/workflows/implement.md`, `.agents/rules/anti-patterns.md`, `.agents/rules/typing.md`, and `.agents/checklists/done.md`.
 
 Expected final answer in Japanese:
 1. 変更ファイル

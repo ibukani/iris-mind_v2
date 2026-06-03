@@ -44,7 +44,25 @@ Prefer the closest test level:
 - Reuse existing contracts.
 - Use constructor injection.
 - Add typed result classes instead of dictionaries.
-- Do not add compatibility shims.
+- Do not add compatibility shims unless the task explicitly requests a migration path with removal criteria and tests.
+
+## 4.1. Reject local patches that preserve bad structure
+
+If the narrow implementation would require duplicated logic, special-case branching, or preserving a bad boundary, perform a minimal enabling refactor first.
+
+Allowed:
+
+- extract a shared typed helper
+- move logic to the owning layer
+- add a small contract type
+- remove obsolete duplication
+
+Forbidden:
+
+- one-off `if` / `else` patches around a bad boundary
+- compatibility wrappers around bad APIs
+- copying logic into another layer
+- bypassing tests because the change is small
 
 ## 5. Update docs only if behavior or architecture changed
 

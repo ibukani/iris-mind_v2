@@ -16,7 +16,7 @@ Preferred task shape:
 Goal: add X.
 Read: AGENTS.md, .agents/rules/architecture.md, .agents/rules/boundaries.md.
 Scope: file A, file B if needed.
-Do not: service locator, global registry, dict boundary, compatibility shim, safety/presenter bypass.
+Do not: service locator, global registry, dict boundary, compatibility shim unless explicit migration task, safety/presenter bypass.
 Keep: typed contracts, FeatureDefinition extension, no-action semantics.
 Test: targeted pytest while working; make check before final report.
 Report: Japanese, compact.
@@ -79,8 +79,10 @@ Before changing code, read the relevant files in this order:
 3. `.agents/rules/architecture.md`
 4. `.agents/rules/boundaries.md`
 5. `.agents/rules/cognitive-cycle.md`
-6. `.agents/rules/testing.md`
-7. The workflow under `.agents/workflows/` that matches the task
+6. `.agents/rules/anti-patterns.md`
+7. `.agents/rules/typing.md`
+8. `.agents/rules/testing.md`
+9. The workflow under `.agents/workflows/` that matches the task
 
 If a task touches existing behavior, also inspect the matching tests under `tests/` before editing.
 
@@ -110,7 +112,7 @@ Observation
 - `features/` must extend through `FeatureDefinition`; do not patch cognitive internals directly.
 - `CognitiveCycle` is a pipeline coordinator, not a God Service.
 - `PipelineStep` implementations return typed results and do not mutate `WorkspaceFrame` directly.
-- Do not introduce service locators, global mutable registries, compatibility shims, or temporary wrappers.
+- Do not introduce service locators, global mutable registries, temporary wrappers, or compatibility shims unless the task explicitly requests a migration path with removal criteria and tests.
 - Do not use `dict[str, Any]` or `dict[str, object]` at internal boundaries.
 - Do not add new `action: str` dispatcher branches.
 - Preserve canonical no-action semantics: no LLM call, no generated text, no external send.
@@ -119,7 +121,8 @@ Observation
 
 Use these task contracts:
 
-- Feature work: `.agents/workflows/implement.md`
+- New feature slices under `iris/features/<name>/`: `.agents/workflows/add-feature.md`
+- General behavior implementation: `.agents/workflows/implement.md`
 - Bug fixes: `.agents/workflows/bugfix.md`
 - Refactoring: `.agents/workflows/refactor.md`
 - Reviews: `.agents/workflows/review.md`

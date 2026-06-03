@@ -1,6 +1,6 @@
 # Anti-Patterns
 
-Reject these patterns unless a task explicitly asks for a temporary migration path and includes removal criteria.
+Reject these patterns unless a task explicitly asks for a temporary migration path and includes removal criteria plus tests.
 
 ## Service locator
 
@@ -28,7 +28,7 @@ Use explicit `FeatureDefinition` collection and runtime composition.
 
 ## Compatibility shim creep
 
-Forbidden unless explicitly requested:
+Forbidden unless the task explicitly requests a migration path with removal criteria and tests:
 
 - `legacy_*.py`
 - wrapper APIs around removed structures
