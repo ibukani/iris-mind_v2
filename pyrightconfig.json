@@ -1,0 +1,23 @@
+{
+    "pythonVersion": "3.13",
+    "include": ["iris"],
+    "exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*",
+        "build",
+        "dist",
+        "venv",
+        ".venv",
+        "tests"
+    ],
+    "venvPath": ".",
+    "venv": ".venv",
+    "typeCheckingMode": "standard",
+    "reportUnnecessaryIsInstance": "error",
+    "reportUnusedVariable": "error",
+    "reportIncompatibleVariableOverride": "error",
+    "reportUnnecessaryCast": "error",
+    "reportMissingImports": false,
+    "reportMissingTypeStubs": false
+}

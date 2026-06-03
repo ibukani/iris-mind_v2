@@ -1,0 +1,38 @@
+[
+  {
+    "label": "setup",
+    "command": "pip install -e \".[dev]\" && pre-commit install",
+    "tags": ["dev"]
+  },
+  {
+    "label": "lint",
+    "command": "ruff check .",
+    "tags": ["check"]
+  },
+  {
+    "label": "lint:fix",
+    "command": "ruff check --fix .",
+    "tags": ["fix"]
+  },
+  {
+    "label": "format:check",
+    "command": "ruff format --check .",
+    "tags": ["check"]
+  },
+  {
+    "label": "test",
+    "command": "pytest tests/",
+    "tags": ["test"]
+  },
+
+  {
+    "label": "typecheck:mypy",
+    "command": "mypy .",
+    "tags": ["check"]
+  },
+  {
+    "label": "typecheck:pyright",
+    "command": "npx pyright .",
+    "tags": ["check"]
+  }
+]

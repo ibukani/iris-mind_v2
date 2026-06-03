@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import pytest
+
+from iris.cognitive.affect.appraisal import AppraisalStep, classify_appraisal
+from iris.cognitive.cycle.frame_builder import FrameBuilder
+from iris.cognitive.cycle.models import StepStatus
+from iris.cognitive.perception.basic import SimplePerceptionStep
+from iris.cognitive.workspace.frame import WorkspaceFrame
+from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.core.ids import ObservationId, SessionId
+
+
+def user_message(text: str) -> UserMessageObservation:
+    return UserMessageObservation(
+        observation_id=ObservationId("obs-affect"),
+        session_id=SessionId("session-affect"),
+        actor=None,
+        occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
+        kind=ObservationKind.USER_MESSAGE,
+        text=text,
+    )
+
+
+def test_keyword_appraisal_is_deterministic() -> None:
+    affect = classify_appraisal("ありがとう、助かった。急ぎで不安だった")
+
+    assert affect.mood_label == "positive"
+    assert affect.valence == 0.25
+    assert affect.arousal == 0.30000000000000004
+    assert affect.dominance == 0.0
+    assert affect.affect_summary == "positive VAD(v=0.25, a=0.30, d=0.00)"
+
+
+@pytest.mark.anyio
+async def test_appraisal_step_enriches_frame_through_frame_builder() -> None:
+    builder = FrameBuilder()
+    frame = WorkspaceFrame(observation=user_message("I am confused and need help urgent"))
+    frame = builder.apply(frame, await SimplePerceptionStep().run(frame))
+
+    result = await AppraisalStep().run(frame)
+    enriched = builder.apply(frame, result)
+
+    assert result.status == StepStatus.OK
+    assert enriched.affect.mood_label == "uncertain"
+    assert enriched.affect.dominance < 0.0
+    assert enriched.affect.affect_summary is not None

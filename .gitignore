@@ -1,0 +1,26 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.log
+*.egg-info/
+dist/
+build/
+.iris_history
+
+# Data files (runtime generated)
+.iris/data/
+!.iris/data/iris_profile.md
+.iris/secrets.yaml
+
+# Test artifacts
+chroma_test/
+*tmp_chroma/
+tmp_chroma_test/
+
+# Log files
+logs/
+
+# Environment variables (API keys etc.)
+.env

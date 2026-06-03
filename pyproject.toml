@@ -1,0 +1,106 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iris-mind"
+version = "0.1.0"
+description = "AI companion — Cognitive Runtime Architecture v0.1 target MVP"
+requires-python = ">=3.13"
+dependencies = [
+    "openai>=2.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["iris*"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "RUF", "C4", "SIM", "RET", "PERF", "PIE", "FA", "ISC", "PT", "T10", "S"]
+ignore = [
+    "E501",
+    "B008",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "ISC001",
+    "S101",
+    "S105",
+    "S106",
+    "S311",
+    "S603",
+    "S607",
+]
+[tool.ruff.lint.per-file-ignores]
+"tests/architecture/*.py" = [
+    "PERF401",
+]
+
+[tool.ruff.lint.isort]
+force-single-line = false
+force-sort-within-sections = true
+known-first-party = ["iris", "tests"]
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.13"
+files = ["iris", "tests/architecture"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_equality = true
+warn_return_any = true
+warn_unreachable = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = false
+no_implicit_optional = true
+enable_error_code = ["ignore-without-code", "redundant-cast", "unused-awaitable"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --strict-markers --tb=short"
+markers = [
+    "unit: ユニットテスト",
+    "integration: 統合テスト",
+    "architecture: v0.1 architecture boundary tests",
+    "target: v0.1 target architecture tests and runtime tests",
+    "slow: 低速テスト",
+    "anyio: anyio-based async tests",
+]
+
+[tool.coverage.run]
+source = ["iris"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+    "@overload",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15",
+    "mypy>=2.1",
+    "pytest>=9",
+    "pytest-asyncio",
+    "hypothesis>=6",
+    "pre-commit>=4",
+
+]

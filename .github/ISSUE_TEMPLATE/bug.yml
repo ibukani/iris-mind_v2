@@ -1,0 +1,57 @@
+name: Bug
+description: バグ報告
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 概要
+      description: バグの簡単な説明
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: バグを再現する手順
+      placeholder: |
+        1. 〜〜を実行
+        2. 〜〜を入力
+        3. エラーが発生
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待される動作
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作
+      description: エラーログやスクリーンショットがあれば添付
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: 関連レイヤー
+      options:
+        - core/
+        - contracts/
+        - runtime/
+        - cognitive/
+        - presentation/
+        - safety/
+        - adapters/
+        - features/
+        - tests/
+        - その他
+    validations:
+      required: true

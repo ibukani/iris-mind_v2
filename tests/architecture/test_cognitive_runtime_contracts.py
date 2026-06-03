@@ -1,0 +1,387 @@
+"""Design contract tests for WorkspaceFrame, CognitiveCycle, and PipelineStep.
+
+Rules enforced:
+  1. WorkspaceFrame must be a frozen dataclass.
+  2. WorkspaceFrame fields must avoid dict[str, Any] / dict[str, object].
+  3. Frame updates must go through FrameBuilder using replace().
+  4. CognitiveCycle must act as a coordinator (no adapter/runtime/feature imports).
+  5. PipelineStep must return typed PipelineStepResult subtypes.
+  6. PipelineStep must not directly call adapters, runtime wiring, or feature registries.
+"""
+
+from __future__ import annotations
+
+import ast
+from pathlib import Path
+
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+TARGET_FILES: dict[str, Path] = {
+    "workspace_frame": PROJECT_ROOT / "iris" / "cognitive" / "workspace" / "frame.py",
+    "frame_builder": PROJECT_ROOT / "iris" / "cognitive" / "cycle" / "frame_builder.py",
+    "cycle_service": PROJECT_ROOT / "iris" / "cognitive" / "cycle" / "service.py",
+    "pipeline": PROJECT_ROOT / "iris" / "cognitive" / "cycle" / "pipeline.py",
+    "cycle_models": PROJECT_ROOT / "iris" / "cognitive" / "cycle" / "models.py",
+}
+
+
+def _skip_if_missing(path: Path, label: str = "") -> None:
+    if not path.is_file():
+        pytest.skip(f"Target file not found: {path} ({label}) — test activates when implemented")
+
+
+def _parse(path: Path) -> ast.Module:
+    return ast.parse(path.read_text(encoding="utf-8"))
+
+
+def _get_decorator_names(node: ast.AST) -> list[str]:
+    names: list[str] = []
+    for dec in getattr(node, "decorator_list", []):
+        if isinstance(dec, ast.Name):
+            names.append(dec.id)
+        elif isinstance(dec, ast.Attribute):
+            names.append(dec.attr)
+        elif isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name):
+            names.append(dec.func.id)
+        elif isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute):
+            names.append(dec.func.attr)
+    return names
+
+
+def _find_class(tree: ast.Module, class_name: str) -> ast.ClassDef | None:
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            return node
+    return None
+
+
+def _get_imports(tree: ast.Module) -> list[str]:
+    imports: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.append(node.module)
+    return imports
+
+
+def _class_has_frozen_dataclass(cls: ast.ClassDef) -> bool:
+    for dec in cls.decorator_list:
+        if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id == "dataclass":
+            for kw in dec.keywords:
+                if kw.arg == "frozen" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                    return True
+        if isinstance(dec, ast.Attribute) and dec.attr == "dataclass":
+            # @dataclass(frozen=True) called as attribute
+            for kw in getattr(dec, "keywords", []):
+                if kw.arg == "frozen" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                    return True
+    return False
+
+
+def _get_field_type_annotations(cls: ast.ClassDef) -> list[str]:
+    """Return string representations of field type annotations."""
+    annotations: list[str] = []
+    for item in cls.body:
+        if isinstance(item, ast.AnnAssign) and item.annotation:
+            annotations.append(ast.unparse(item.annotation))
+        # Also check dataclass field() calls
+        if isinstance(item, ast.Assign):
+            for target in item.targets:
+                if isinstance(target, ast.Name) and target.id in ("__annotations__",):
+                    pass
+    return annotations
+
+
+# ── 1. WorkspaceFrame immutability ─────────────────────────────
+
+
+def test_workspace_frame_is_frozen_dataclass() -> None:
+    """WorkspaceFrame must be a frozen dataclass."""
+    path = TARGET_FILES["workspace_frame"]
+    _skip_if_missing(path)
+    tree = _parse(path)
+    cls = _find_class(tree, "WorkspaceFrame")
+    assert cls is not None, "WorkspaceFrame class not found in frame.py"
+    assert _class_has_frozen_dataclass(cls), "WorkspaceFrame must be decorated with @dataclass(frozen=True)"
+
+
+def test_workspace_frame_no_dict_any_fields() -> None:
+    """WorkspaceFrame must not have dict[str, Any] or dict[str, object] fields."""
+    path = TARGET_FILES["workspace_frame"]
+    _skip_if_missing(path)
+    tree = _parse(path)
+    cls = _find_class(tree, "WorkspaceFrame")
+    assert cls is not None, "WorkspaceFrame class not found"
+
+    forbidden_types = {"dict[str, Any]", "dict[str, object]", "Dict[str, Any]", "Dict[str, object]"}
+    field_types = _get_field_type_annotations(cls)
+    violations = [t for t in field_types if t in forbidden_types]
+    assert not violations, f"WorkspaceFrame uses forbidden untyped dict fields: {violations}"
+
+
+def test_workspace_frame_no_mutable_mapping() -> None:
+    """WorkspaceFrame must not use MutableMapping or mutable default factories
+    that would break immutability (tuple frozen defaults are acceptable)."""
+    path = TARGET_FILES["workspace_frame"]
+    _skip_if_missing(path)
+    tree = _parse(path)
+    cls = _find_class(tree, "WorkspaceFrame")
+    assert cls is not None, "WorkspaceFrame class not found"
+
+    text = path.read_text(encoding="utf-8")
+    forbidden = {"MutableMapping", "dict", "list", "set"}
+    for item in cls.body:
+        if isinstance(item, ast.Assign):
+            for target in item.targets:
+                if isinstance(target, ast.Name):
+                    for f in forbidden:
+                        if f in text.splitlines()[item.lineno - 1]:
+                            line = text.splitlines()[item.lineno - 1].strip()
+                            if (
+                                "tuple" not in line
+                                and "field(default_factory=tuple" not in line
+                                and "frozenset" not in line
+                            ):
+                                pytest.fail(f"WorkspaceFrame has mutable default at line {item.lineno}: {line}")
+
+
+# ── 2. FrameBuilder ────────────────────────────────────────────
+
+
+def test_frame_builder_uses_replace() -> None:
+    """FrameBuilder.apply must use dataclasses.replace() to create a new frame."""
+    path = TARGET_FILES["frame_builder"]
+    _skip_if_missing(path)
+    tree = _parse(path)
+
+    # Check FrameBuilder class exists
+    cls = _find_class(tree, "FrameBuilder")
+    assert cls is not None, "FrameBuilder class not found"
+
+    # Check that replace() is called inside the class
+    has_replace = False
+    for node in ast.walk(cls):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if (isinstance(func, ast.Attribute) and func.attr == "replace") or (
+                isinstance(func, ast.Name) and func.id == "replace"
+            ):
+                has_replace = True
+
+    assert has_replace, "FrameBuilder must use dataclasses.replace() — no replace() call found"
+
+    # Check no direct frame attribute mutation (frame.x = ...)
+    for node in ast.walk(cls):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == "frame"
+                ):
+                    pytest.fail(f"FrameBuilder must not mutate frame directly (line {node.lineno})")
+
+
+# ── 3. CognitiveCycle coordinator role ─────────────────────────
+
+
+@pytest.mark.parametrize(
+    "forbidden_prefix",
+    [
+        "iris.adapters",
+        "iris.runtime",
+        "iris.features",
+        "iris.kernel.manager",
+        "iris.event",
+    ],
+)
+def test_cognitive_cycle_no_forbidden_imports(forbidden_prefix: str) -> None:
+    """CognitiveCycle must not import from adapters, runtime, or features."""
+    path = TARGET_FILES["cycle_service"]
+    _skip_if_missing(path)
+    tree = _parse(path)
+    imports = _get_imports(tree)
+    violations = [i for i in imports if i.startswith(forbidden_prefix)]
+    assert not violations, (
+        f"CognitiveCycle imports '{forbidden_prefix}' — coordinator must not depend on "
+        f"adapters/runtime/features: {violations}"
+    )
+
+
+@pytest.mark.parametrize("app_name", ["discord", "discord.py", "speech", "tts", "stt", "aiohttp", "flask", "fastapi"])
+def test_cognitive_cycle_no_app_specific_imports(app_name: str) -> None:
+    """CognitiveCycle must not import app-specific or IO packages directly."""
+    path = TARGET_FILES["cycle_service"]
+    _skip_if_missing(path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        pytest.skip("CognitiveCycle service.py does not exist yet")
+    if app_name in text:
+        pytest.fail(f"CognitiveCycle references '{app_name}' — must not depend on app-specific or IO packages")
+
+
+def test_cognitive_cycle_is_coordinator_structure() -> None:
+    """CognitiveCycle.run() must be a coordinator loop, not contain business logic.
+
+    Checks that run() delegates to steps and frame_builder rather
+    than performing LLM calls, store saves, or adapter calls.
+    """
+    path = TARGET_FILES["cycle_service"]
+    _skip_if_missing(path)
+    tree = _parse(path)
+    cls = _find_class(tree, "CognitiveCycle")
+    assert cls is not None, "CognitiveCycle class not found"
+
+    run_method = None
+    for node in cls.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "run":
+            run_method = node
+            break
+
+    if run_method is None:
+        pytest.fail("CognitiveCycle has no run() method")
+
+    method_text = ast.get_source_segment(path.read_text(encoding="utf-8"), run_method) or ""
+    # Check the method calls step.run() and frame_builder.apply() — this is the coordinator pattern
+    has_step_loop = "for step in " in method_text and ".run(" in method_text
+    has_frame_builder = "_frame_builder.apply(" in method_text or "frame_builder.apply(" in method_text
+
+    if not (has_step_loop and has_frame_builder):
+        pytest.fail(
+            "CognitiveCycle.run() must delegate to PipelineStep.run() and FrameBuilder.apply() — "
+            "coordinator pattern not detected"
+        )
+
+
+# ── 4. PipelineStep typed results ──────────────────────────────
+
+
+def test_pipeline_step_returns_typed_result() -> None:
+    """PipelineStep.run() return type must be a PipelineStepResult subtype."""
+    path = TARGET_FILES["pipeline"]
+    _skip_if_missing(path)
+    tree = _parse(path)
+
+    # Check the PipelineStep protocol has a return type annotation
+    cls = _find_class(tree, "PipelineStep")
+    if cls is None:
+        # Could be a Protocol class
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and "PipelineStep" in node.name:
+                cls = node
+                break
+    if cls is None:
+        pytest.fail("PipelineStep class/protocol not found in pipeline.py")
+
+    run_method = None
+    for node in cls.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "run":
+            run_method = node
+            break
+
+    assert run_method is not None, "PipelineStep must define run() method"
+
+    # Check return type annotation exists
+    returns = run_method.returns
+    assert returns is not None, "PipelineStep.run() must have a return type annotation"
+
+    return_type_str = ast.unparse(returns)
+    assert "PipelineStepResult" in return_type_str or "ResultT" in return_type_str, (
+        f"PipelineStep.run() return type must be a PipelineStepResult subtype, got '{return_type_str}'"
+    )
+
+
+def test_pipeline_step_no_forbidden_imports() -> None:
+    """PipelineStep implementations must not directly call adapters, runtime, or features."""
+    cognitive_dir = PROJECT_ROOT / "iris" / "cognitive"
+    if not cognitive_dir.is_dir():
+        pytest.skip("iris/cognitive/ does not exist yet")
+
+    forbidden = {"iris.adapters", "iris.runtime", "iris.features"}
+    violations: list[str] = []
+
+    for filepath in sorted(cognitive_dir.rglob("*.py")):
+        if "workspace/frame.py" in str(filepath) or "cycle/models.py" in str(filepath):
+            continue
+        try:
+            tree = ast.parse(filepath.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for imp in _get_imports(tree):
+            for f in forbidden:
+                if imp.startswith(f):
+                    rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+                    violations.append(f"  {rel}: imports '{imp}'")
+
+    assert not violations, "PipelineSteps in iris/cognitive/ must not import adapters/runtime/features:\n" + "\n".join(
+        violations
+    )
+
+
+@pytest.mark.parametrize(
+    ("result_class", "expected_parent"),
+    [
+        ("PerceptionResult", "PipelineStepResult"),
+        ("MemoryRetrievalResult", "PipelineStepResult"),
+        ("AppraisalResult", "PipelineStepResult"),
+        ("RelationshipResult", "PipelineStepResult"),
+        ("MotivationResult", "PipelineStepResult"),
+        ("PolicyResult", "PipelineStepResult"),
+        ("ActionSelectionResult", "PipelineStepResult"),
+    ],
+)
+def test_step_results_inherit_from_base(result_class: str, expected_parent: str) -> None:
+    """Each PipelineStep result type must inherit from PipelineStepResult."""
+    path = TARGET_FILES["cycle_models"]
+    _skip_if_missing(path)
+    tree = _parse(path)
+    cls = _find_class(tree, result_class)
+    if cls is None:
+        pytest.fail(f"{result_class} not found in cycle/models.py")
+
+    base_names = [ast.unparse(b) for b in cls.bases]
+    assert expected_parent in base_names, f"{result_class} must inherit from {expected_parent}, bases: {base_names}"
+
+
+# ── 5. PipelineStep frame immutability ─────────────────────────
+
+
+def test_pipeline_step_does_not_mutate_frame() -> None:
+    """PipelineStep.run() implementations must not mutate the frame in place.
+
+    Scans for Assign nodes whose target is an attribute of the 'frame' parameter.
+    """
+    cognitive_dir = PROJECT_ROOT / "iris" / "cognitive"
+    if not cognitive_dir.is_dir():
+        pytest.skip("iris/cognitive/ does not exist yet")
+
+    violations: list[str] = []
+    for filepath in sorted(cognitive_dir.rglob("*.py")):
+        if (
+            "workspace/frame.py" in str(filepath)
+            or "cycle/frame_builder.py" in str(filepath)
+            or "cycle/models.py" in str(filepath)
+        ):
+            continue
+        try:
+            tree = ast.parse(filepath.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if (
+                        isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "frame"
+                    ):
+                        rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+                        violations.append(f"  {rel}:{node.lineno} mutates frame.{target.attr} directly")
+
+    assert not violations, "PipelineSteps must not mutate WorkspaceFrame directly — use FrameBuilder:\n" + "\n".join(
+        violations
+    )

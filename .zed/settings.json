@@ -1,0 +1,27 @@
+{
+    "lsp": {
+        "ruff": {
+            "settings": {
+                "lineLength": 120
+            }
+        },
+        "pyright": {
+            "settings": {
+                "python": {
+                    "pythonPath": ".venv/bin/python"
+                }
+            }
+        }
+    },
+    "languages": {
+        "Python": {
+            "format_on_save": "on",
+            "language_servers": ["ruff", "pyright"],
+            "code_actions_on_format": {
+                "source.fixAll.ruff": true,
+                "source.organizeImports.ruff": true
+            }
+        }
+    },
+    "tab_size": 4
+}

@@ -1,0 +1,84 @@
+name: Feature
+description: 新機能・改善の提案
+title: "feat: "
+labels: ["enhancement"]
+milestones: []
+body:
+  - type: textarea
+    id: overview
+    attributes:
+      label: 概要
+      description: 1文で何を実装するか
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 現状の問題
+      description: なぜ必要か。現在のコードの問題点を具体的に
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: 実装内容
+      description: |
+        ファイル名と具体的な実装コード。
+        複数ステップある場合は番号付きで。
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影響範囲
+      description: 変更するファイル一覧と既存データへの影響
+    validations:
+      required: true
+
+  - type: textarea
+    id: rationale
+    attributes:
+      label: 根拠
+      description: |
+        参考文献・論文・先行研究。
+        格式: **論文名 (会議/年)**: 一言で何を示したか
+    validations:
+      required: true
+
+  - type: dropdown
+    id: cost
+    attributes:
+      label: 実装コスト
+      options:
+        - 低（フィールド追加程度）
+        - 中（新ファイル + 既存変更）
+        - 高（アーキテクチャ変更含む）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 優先度
+      options:
+        - P0（最重要: 他全ての基盤）
+        - P1（高: 直近に実装）
+        - P2（中: P1後に実装）
+        - P3（低: 余力があれば）
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 依存
+      description: |
+        依存するIssue番号や前提条件。
+        例: Issue #XX（〜〜）推奨
+    validations:
+      required: false

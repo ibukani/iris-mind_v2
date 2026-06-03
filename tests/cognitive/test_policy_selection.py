@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from iris.cognitive.action.response import build_response_prompt
+from iris.cognitive.workspace.frame import InterpretedInput, PolicyConstraint, WorkspaceFrame
+from iris.contracts.identity import Identity
+from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
+
+
+def _frame(constraints: tuple[PolicyConstraint, ...] = ()) -> WorkspaceFrame:
+    return WorkspaceFrame(
+        observation=UserMessageObservation(
+            observation_id=ObservationId("obs-policy-prompt"),
+            session_id=SessionId("session-policy-prompt"),
+            actor=Identity(
+                user_id=UserId("user-policy-prompt"),
+                display_name="Mina",
+                provider="test",
+                provider_subject=ExternalRef("mina"),
+            ),
+            occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
+            kind=ObservationKind.USER_MESSAGE,
+            text="hello",
+        ),
+        interpreted_input=InterpretedInput(text="hello", language=None),
+        constraints=constraints,
+    )
+
+
+def test_policy_prompt_context_appears_only_when_present() -> None:
+    prompt_without_policy = build_response_prompt(_frame())
+    prompt_with_policy = build_response_prompt(
+        _frame(
+            (
+                PolicyConstraint(
+                    name="calm_response",
+                    reason="high arousal",
+                    prompt_instruction="keep tone calm",
+                ),
+            )
+        )
+    )
+
+    assert prompt_without_policy is not None
+    assert prompt_without_policy.constraints == ()
+    assert prompt_with_policy is not None
+    assert prompt_with_policy.constraints == ("keep tone calm",)
