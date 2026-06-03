@@ -9,14 +9,14 @@ repos:
     rev: v2.1.0
     hooks:
       - id: mypy
-        args: [iris/]
+        args: [iris, tests]
         additional_dependencies: []
         pass_filenames: false
   - repo: local
     hooks:
       - id: pyright
         name: pyright
-        entry: npx pyright .
+        entry: uv run pyright .
         language: system
         pass_filenames: false
         types: [python]

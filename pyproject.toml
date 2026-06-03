@@ -18,9 +18,18 @@ include = ["iris*"]
 [tool.ruff]
 target-version = "py313"
 line-length = 120
+src = ["iris", "tests"]
+extend-exclude = [
+    ".venv",
+    "build",
+    "dist",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "RUF", "C4", "SIM", "RET", "PERF", "PIE", "FA", "ISC", "PT", "T10", "S"]
+select = [
+    "E", "F", "W", "I",
+    "B", "UP", "RUF", "C4", "SIM", "RET", "PERF", "PIE", "FA", "ISC", "PT", "T10", "S",
+]
 ignore = [
     "E501",
     "B008",
@@ -35,7 +44,11 @@ ignore = [
     "S603",
     "S607",
 ]
+
 [tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",
+]
 "tests/architecture/*.py" = [
     "PERF401",
 ]
@@ -51,7 +64,7 @@ docstring-code-format = true
 
 [tool.mypy]
 python_version = "3.13"
-files = ["iris", "tests/architecture"]
+files = ["iris/core", "iris/contracts", "iris/cognitive", "iris/presentation", "iris/safety", "iris/features", "iris/adapters", "iris/runtime", "iris/errors.py"]
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
@@ -60,18 +73,17 @@ warn_return_any = true
 warn_unreachable = true
 check_untyped_defs = true
 disallow_incomplete_defs = true
-disallow_untyped_defs = false
+disallow_untyped_defs = true
+disallow_any_generics = true
 no_implicit_optional = true
+show_error_codes = true
+pretty = true
 enable_error_code = ["ignore-without-code", "redundant-cast", "unused-awaitable"]
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-v --strict-markers --tb=short"
+addopts = "-ra --strict-config --strict-markers --tb=short"
 markers = [
     "unit: ユニットテスト",
     "integration: 統合テスト",
@@ -82,18 +94,27 @@ markers = [
 ]
 
 [tool.coverage.run]
+branch = true
 source = ["iris"]
-omit = ["tests/*"]
+omit = [
+    "tests/*",
+    "iris/__init__.py",
+]
 
 [tool.coverage.report]
-fail_under = 70
+fail_under = 0
 show_missing = true
-exclude_lines = [
+skip_covered = true
+exclude_also = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.",
     "@overload",
+    "raise NotImplementedError",
 ]
+
+[tool.coverage.html]
+directory = "htmlcov"
 
 [dependency-groups]
 dev = [
@@ -101,7 +122,8 @@ dev = [
     "mypy>=2.1",
     "pytest>=9",
     "pytest-asyncio",
+    "pytest-cov>=7",
     "hypothesis>=6",
     "pre-commit>=4",
-
+    "pyright>=1.1",
 ]

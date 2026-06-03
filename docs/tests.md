@@ -17,7 +17,8 @@ make check
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
+uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime iris/errors.py
+uv run pyright .
 uv run pytest tests/architecture -q
 uv run pytest tests/ -q
 ```
@@ -28,7 +29,7 @@ uv run pytest tests/ -q
 make quick
 ```
 
-`make quick` は lint、format check、type check、architecture tests を実行する。全テストは実行しないため、完了報告の代替にはしない。
+`make quick` は lint、format check、mypy、pyright、architecture tests を実行する。全テストは実行しないため、完了報告の代替にはしない。
 
 ---
 
@@ -49,14 +50,22 @@ make arch
 
 # All tests
 make test
+
+# Coverage report
+make coverage
 ```
+
+coverage は `pytest-cov` で取得する。初期段階では `fail_under = 0` とし、完了条件にはしない。理由は、AI coding agent が数値目標だけを満たすために意味の薄いテストを追加することを避けるため。カバレッジは未検証領域の発見に使い、閾値はコア API と回帰テストが安定してから段階的に上げる。
+
+
 
 直接実行する場合。
 
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
+uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime iris/errors.py
+uv run pyright .
 uv run pytest tests/architecture -q
 uv run pytest tests/ -q
 ```

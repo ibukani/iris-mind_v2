@@ -17,12 +17,13 @@ Both commands call `scripts/verify.py` and run:
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
+uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime iris/errors.py
+uv run pyright .
 uv run pytest tests/architecture -q
 uv run pytest tests/ -q
 ```
 
-Use `make quick` only while iterating. It skips the full test suite.
+Use `make quick` only while iterating. It runs lint, format, mypy, pyright, and architecture tests, but skips the full test suite.
 
 ## Targeted checks
 

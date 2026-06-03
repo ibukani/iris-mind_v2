@@ -24,6 +24,7 @@ MYPY_TARGETS: tuple[str, ...] = (
     "iris/features",
     "iris/adapters",
     "iris/runtime",
+    "iris/errors.py",
 )
 
 
@@ -37,7 +38,8 @@ class Check:
 CHECKS: tuple[Check, ...] = (
     Check("lint", ("uv", "run", "ruff", "check", ".")),
     Check("format", ("uv", "run", "ruff", "format", "--check", ".")),
-    Check("type", ("uv", "run", "mypy", *MYPY_TARGETS)),
+    Check("mypy", ("uv", "run", "mypy", *MYPY_TARGETS)),
+    Check("pyright", ("uv", "run", "pyright", ".")),
     Check("architecture", ("uv", "run", "pytest", "tests/architecture", "-q")),
     Check("tests", ("uv", "run", "pytest", "tests/", "-q"), full_only=True),
 )

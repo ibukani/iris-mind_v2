@@ -65,7 +65,8 @@ The full verification path runs:
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
+uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime iris/errors.py
+uv run pyright .
 uv run pytest tests/architecture -q
 uv run pytest tests/ -q
 ```
@@ -76,7 +77,7 @@ Useful targeted commands:
 make quick    # lint, format, type, architecture tests
 make lint     # ruff check
 make format   # ruff format --check
-make type     # mypy production packages
+make type     # mypy + pyright over production code
 make arch     # architecture tests
 make test     # all tests
 ```
