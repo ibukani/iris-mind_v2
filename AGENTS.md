@@ -157,8 +157,13 @@ Use `make ai-context` to show the active harness paths. Use `make ai-report` to 
 
 Do not weaken lint, type, pyright, pytest, or coverage settings to make work pass. This repository prioritizes strict AI-coding feedback over short-term convenience. Fix code and tests instead of relaxing configuration.
 
+The strictness policy is scoped, not uniform:
+
 - Ruff uses `select = ["ALL"]`; only formatter conflicts and explicitly documented context exceptions are ignored.
 - mypy runs strict checks across `iris`, `tests`, `scripts`, and `main.py`.
+- mypy maximum `Any` restrictions apply to core architecture code: `contracts`, `core`, `cognitive`, `features`, `presentation`, `safety`, and `runtime`.
+- `adapters` may tolerate incomplete external-library typing at the boundary, but must not leak untyped values into internal contracts.
+- `tests` and `scripts` stay typed, but are not held to the same decorator/third-party-helper strictness as production architecture code.
 - pyright runs in strict mode across production code and in standard mode across tests/scripts.
 - pytest treats config, markers, xfail, and warnings strictly.
 - Coverage is part of the full gate and fails below 90%.
