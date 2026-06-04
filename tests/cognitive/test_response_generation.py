@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 
 import pytest
@@ -19,6 +18,7 @@ from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ObservationId, SessionId
+from tests.helpers.immutability import assert_frozen_field
 
 
 class StubResponseGenerator:
@@ -96,7 +96,5 @@ def test_response_generation_does_not_mutate_workspace_frame_directly() -> None:
     """WorkspaceFrame.candidate_action_plansがその場で変更できないことを確認する。"""
     frame = WorkspaceFrame(observation=user_message())
 
-    with pytest.raises(FrozenInstanceError):
-        frame.candidate_action_plans = ()  # type: ignore[misc]
-
+    assert_frozen_field(frame, "candidate_action_plans", ())
     assert build_response_prompt(frame) is None
