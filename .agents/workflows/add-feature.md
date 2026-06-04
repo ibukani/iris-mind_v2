@@ -1,6 +1,5 @@
 # Workflow: Add a Feature Slice
 
-
 Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
 Use this when adding a new vertical feature under `iris/features/<name>/`.
 
@@ -53,8 +52,10 @@ Add or update:
 
 ## Verification
 
+Use targeted feature/runtime tests while iterating. Before handoff or final report, run:
+
 ```bash
-make check
+make ai-check
 ```
 
-Use targeted feature/runtime tests while iterating, then `make check` before final report.
+Use `make check` when CI-like stop-on-first-failure validation is preferred.
