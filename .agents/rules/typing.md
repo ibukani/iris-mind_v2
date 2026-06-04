@@ -16,6 +16,49 @@ Any
 
 Use typed dataclasses, enums, protocols, or explicit contract types instead.
 
+## Cast policy
+
+Do not use `typing.cast` in protected architecture layers:
+
+- `iris/contracts/`
+- `iris/core/`
+- `iris/cognitive/`
+- `iris/features/`
+- `iris/presentation/`
+- `iris/safety/`
+- `iris/runtime/`
+
+A cast is a type-checker assertion, not runtime validation. Do not use it to silence mypy or pyright in internal code.
+
+Use one of these instead:
+
+- precise function signatures
+- `TypeGuard` with runtime checks
+- `Protocol` for structural requirements
+- frozen dataclass or explicit contract conversion
+- adapter-side normalization from provider payloads into Iris contracts
+
+`typing.cast` is allowed only in:
+
+- `iris/adapters/` at external SDK or provider boundaries
+- `tests/`
+- local `scripts/`
+
+Allowed casts must be local, rule-specific, documented with a reason, and must not leak untyped provider values into internal contracts.
+
+## Generic accessor rule
+
+Do not add generic object/dict accessor helpers in protected layers.
+
+Forbidden examples:
+
+```python
+def _get_value(item: object, name: str) -> object: ...
+def read_field(payload: object, key: str) -> object: ...
+```
+
+These helpers hide boundary problems. Normalize external values at adapter boundaries into typed contracts instead.
+
 ## Dataclass rules
 
 Use frozen dataclasses for immutable turn snapshots and contract values where possible.
