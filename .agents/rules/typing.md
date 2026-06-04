@@ -16,9 +16,19 @@ Any
 
 Use typed dataclasses, enums, protocols, or explicit contract types instead.
 
-## Cast policy
+## Suppression policy
 
-Do not use `typing.cast` in protected architecture layers:
+Suppressions are escape hatches, not normal fixes.
+
+Do not use these in protected architecture layers:
+
+- `# noqa`
+- `# type: ignore`
+- `# pyright: ignore`
+- `typing.cast(...)`
+- `object.__setattr__(...)`
+
+Protected layers are:
 
 - `iris/contracts/`
 - `iris/core/`
@@ -27,6 +37,34 @@ Do not use `typing.cast` in protected architecture layers:
 - `iris/presentation/`
 - `iris/safety/`
 - `iris/runtime/`
+
+Allowed exception zones:
+
+- `iris/adapters/` may use local suppressions only at external SDK or provider boundaries.
+- `tests/` should use helpers or fixtures instead of suppressions; frozen dataclass immutability tests must use `tests.helpers.immutability.assert_frozen_field`.
+- local `scripts/` may use local suppressions for harness operations when the reason is documented.
+
+Allowed suppression shape outside protected layers:
+
+```python
+import subprocess  # noqa: S404 -- local harness runs fixed command tuples only
+value = client.value  # type: ignore[attr-defined] -- third-party package lacks complete stubs
+```
+
+Forbidden suppression shapes:
+
+```python
+x = value  # noqa
+x = value  # noqa: RULE
+x = value  # type: ignore
+object.__setattr__(instance, "field", value)
+```
+
+When a suppression seems necessary, prefer precise signatures, a typed contract, `Protocol`, `TypeGuard`, helper extraction, or adapter-side normalization first.
+
+## Cast policy
+
+Do not use `typing.cast` in protected architecture layers.
 
 A cast is a type-checker assertion, not runtime validation. Do not use it to silence mypy or pyright in internal code.
 
