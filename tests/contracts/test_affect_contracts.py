@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
-
 import pytest
 
 from iris.cognitive.cycle.models import AppraisalResult, RelationshipResult, StepStatus
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot
+from tests.helpers.immutability import assert_frozen_field
 
 
 def test_affect_and_relationship_snapshots_are_frozen_and_typed() -> None:
@@ -29,10 +28,8 @@ def test_affect_and_relationship_snapshots_are_frozen_and_typed() -> None:
 
     assert affect.valence == pytest.approx(0.25)
     assert relationship.trust == pytest.approx(0.5)
-    with pytest.raises(FrozenInstanceError):
-        affect.valence = 0.0  # type: ignore[misc]
-    with pytest.raises(FrozenInstanceError):
-        relationship.trust = 0.0  # type: ignore[misc]
+    assert_frozen_field(affect, "valence", 0.0)
+    assert_frozen_field(relationship, "trust", 0.0)
 
 
 def test_existing_affect_result_types_are_reused() -> None:
