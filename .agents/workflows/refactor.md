@@ -1,6 +1,5 @@
 # Workflow: Refactor
 
-
 Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
 Use this workflow when improving structure without intentionally changing behavior.
 
@@ -42,10 +41,10 @@ Forbidden refactors:
 Run at least:
 
 ```bash
-make check
+make ai-check
 ```
 
-Refactors must pass the full verification path because they can break boundaries without changing behavior.
+Refactors should run the full verification path because they can break boundaries without changing behavior. Use `make ai-check` to collect all failures for handoff; use `make check` when CI-like stop-on-first-failure validation is preferred.
 
 Also run the targeted tests for touched behavior.
 
