@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Iris v0.1 target runtime entrypoint.
 
 Usage:
