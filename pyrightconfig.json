@@ -46,5 +46,31 @@
   "reportUnusedVariable": "error",
   "reportUntypedBaseClass": "error",
   "reportUntypedClassDecorator": "error",
-  "reportUntypedFunctionDecorator": "error"
+  "reportUntypedFunctionDecorator": "error",
+  "executionEnvironments": [
+    {
+      "root": "iris",
+      "typeCheckingMode": "strict"
+    },
+    {
+      "root": "main.py",
+      "typeCheckingMode": "strict"
+    },
+    {
+      "root": "tests",
+      "typeCheckingMode": "standard",
+      "reportMissingTypeStubs": "warning",
+      "reportPrivateUsage": "warning",
+      "reportUnusedClass": "warning",
+      "reportUnusedFunction": "warning"
+    },
+    {
+      "root": "scripts",
+      "typeCheckingMode": "standard",
+      "reportMissingTypeStubs": "warning",
+      "reportPrivateUsage": "warning",
+      "reportUnusedClass": "warning",
+      "reportUnusedFunction": "warning"
+    }
+  ]
 }
