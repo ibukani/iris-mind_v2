@@ -1,3 +1,8 @@
+---
+name: prompt-compression
+description: Compress long agent prompts into Primitive Prompt Mode while preserving constraints, tests, and acceptance criteria.
+---
+
 # Skill: Prompt Compression
 
 Use this skill when an agent prompt, issue handoff, or implementation instruction is too long.
