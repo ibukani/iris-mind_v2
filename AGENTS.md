@@ -108,7 +108,7 @@ Observation
 
 - Preserve layer boundaries between `contracts`, `core`, `cognitive`, `features`, `adapters`, `presentation`, `safety`, and `runtime`.
 - `cognitive/` must not import from `adapters/`, `runtime/`, or `features/`.
-- `contracts/` must not import from `cognitive/`, `adapters/`, or `runtime/`.
+- `contracts/` must not import from `cognitive/`, `adapters/`, or `runtime`.
 - `features/` must extend through `FeatureDefinition`; do not patch cognitive internals directly.
 - `CognitiveCycle` is a pipeline coordinator, not a God Service.
 - `PipelineStep` implementations return typed results and do not mutate `WorkspaceFrame` directly.
@@ -159,9 +159,10 @@ Do not weaken lint, type, pyright, pytest, or coverage settings to make work pas
 
 - Ruff uses `select = ["ALL"]`; only formatter conflicts and explicitly documented context exceptions are ignored.
 - mypy runs strict checks across `iris`, `tests`, `scripts`, and `main.py`.
-- pyright runs in strict mode across the same repository surfaces.
+- pyright runs in strict mode across production code and in standard mode across tests/scripts.
 - pytest treats config, markers, xfail, and warnings strictly.
 - Coverage is part of the full gate and fails below 90%.
+
 ## Suppression Policy
 
 Do not silence quality gates just to make checks pass.
@@ -174,6 +175,7 @@ Allowed examples:
 import subprocess  # noqa: S404 -- subprocess is isolated in the audited process runner boundary
 value = external_api.value  # type: ignore[attr-defined] -- third-party package lacks complete stubs
 result = client.call()  # pyright: ignore[reportUnknownMemberType] -- external API returns dynamically typed object
+```
 
 ## Verification
 
@@ -190,7 +192,7 @@ make check
 3. `uv run mypy iris tests scripts main.py`
 4. `uv run pyright .`
 5. `uv run pytest tests/architecture -q`
-6. `uv run pytest tests/`
+6. `uv run pytest tests/ --cov=iris --cov-branch --cov-report=term-missing:skip-covered --cov-report=html --cov-fail-under=90`
 
 Use `make quick` while iterating when the full suite is too broad for the current edit. It still runs lint, format, mypy, pyright, and architecture checks.
 
