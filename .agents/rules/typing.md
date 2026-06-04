@@ -16,6 +16,150 @@ Any
 
 Use typed dataclasses, enums, protocols, or explicit contract types instead.
 
+## Checker-aware authoring rules
+
+Write code so Ruff, mypy, and pyright pass by construction. Do not rely on a later cleanup pass.
+
+### Public API docstrings
+
+Ruff uses `select = ["ALL"]` with Google pydocstyle. Therefore every public module, class, function, and method introduced by a change must have a docstring.
+
+A symbol is public when its name does not start with `_`.
+
+Before adding a function, class, or module, decide whether it is truly public:
+
+- If it is only used inside one module, make it private with a leading `_`.
+- If it is part of a contract, port, feature definition, runtime entry point, or adapter boundary, keep it public and add a docstring immediately.
+- Do not add public helpers without docstrings as temporary implementation details.
+
+Preferred simple public function shape:
+
+```python
+def build_action_plan(selection: ActionSelection) -> ActionPlan:
+    """Build an action plan from a typed action selection."""
+```
+
+For non-trivial public functions, use Google-style sections:
+
+```python
+def create_presented_output(plan: ActionPlan, text: str) -> PresentedOutput:
+    """Create output for a sendable action plan.
+
+    Args:
+        plan: Typed action plan selected by the cognitive cycle.
+        text: Text that has already passed response generation.
+
+    Returns:
+        Presented output ready for the output safety gate.
+    """
+```
+
+Do not write vague docstrings:
+
+```python
+def build_action_plan(selection: ActionSelection) -> ActionPlan:
+    """Build."""
+```
+
+### Type-checker-first implementation
+
+All new functions must have explicit parameter and return types. Do not wait for mypy or pyright to request them.
+
+Use these defaults:
+
+- Return `None` explicitly for side-effect-only functions.
+- Use `T | None` when `None` is a valid value.
+- Avoid `object` unless runtime type narrowing follows immediately.
+- Avoid `Any` in protected architecture layers.
+- Convert external SDK payloads into Iris dataclasses at adapter boundaries.
+- Use `Protocol` or a typed dataclass instead of `dict[str, Any]`.
+- Use `@override` when overriding a base-class or protocol method implementation.
+
+Preferred boundary shape:
+
+```python
+@dataclass(frozen=True)
+class MemorySearchResult:
+    """Typed memory search result returned by memory adapters."""
+
+    text: str
+    score: float
+```
+
+Avoid this shape:
+
+```python
+def search_memory(query: str) -> dict[str, Any]:
+    ...
+```
+
+### Ruff-first implementation
+
+Ruff is configured broadly. New code should avoid common violations before running the checker.
+
+Use these defaults:
+
+- Add `from __future__ import annotations` to new Python files.
+- Keep public modules, classes, functions, and methods documented.
+- Keep functions small enough to avoid complexity, branch, argument, local-variable, return-count, and statement-count violations.
+- Do not add unused parameters.
+- Do not add unused `self`; if an object has no state, prefer a function or `@staticmethod`.
+- Do not use `print`; use a typed logger or return structured data.
+- Do not use broad `except Exception` unless the boundary requires it and the reason is documented.
+- Do not introduce subprocess calls outside scripts or audited adapter boundaries.
+- Do not add inline `# noqa` for ordinary Ruff failures.
+
+### Pyright-first implementation
+
+Pyright treats unknown types as errors in production code. Avoid unknowns by design.
+
+Use these defaults:
+
+- Do not pass untyped third-party values into `contracts`, `core`, `cognitive`, `features`, `presentation`, `safety`, or `runtime`.
+- Normalize provider responses inside `adapters`.
+- Add explicit typed intermediate variables when inference would otherwise become unknown.
+- Prefer small typed conversion functions over chained dynamic access.
+- Do not use `getattr`, generic object accessors, or untyped dictionaries to hide unknown provider shapes.
+
+Preferred adapter pattern:
+
+```python
+def _to_memory_result(payload: ProviderResult) -> MemorySearchResult:
+    """Convert a provider result into an Iris memory result."""
+    return MemorySearchResult(text=payload.text, score=payload.score)
+```
+
+### Prevention before remediation
+
+Before creating or editing code, check this list:
+
+1. Is this symbol public? If yes, add a docstring now. If no, make it private.
+2. Are all parameters and returns typed?
+3. Does the implementation avoid `Any`, `object`, and generic dictionaries at internal boundaries?
+4. Are external-library values normalized inside `adapters`?
+5. Is an override marked with `@override`?
+6. Is the function small enough to avoid Ruff complexity and size rules?
+7. Are there no unused arguments, unused `self`, unused imports, or temporary compatibility shims?
+8. Are tests using helpers instead of `type: ignore`, `# noqa`, `pyright: ignore`, `typing.cast`, or `object.__setattr__`?
+
+### Remediation order
+
+If a checker fails, fix the design before adding suppressions.
+
+Use this order:
+
+1. Rename internal helpers to private names if they do not need to be public.
+2. Add missing docstrings for public API.
+3. Add precise parameter and return types.
+4. Replace `dict[str, Any]` or `object` with dataclasses, enums, protocols, or typed contracts.
+5. Move dynamic SDK handling into `adapters`.
+6. Split large functions instead of suppressing complexity rules.
+7. Remove unused arguments or change the design so the argument is needed.
+8. Use a project-level per-file ignore only for stable, documented protocol pass-through cases.
+9. Use inline suppression only outside protected architecture layers, only when local, rule-specific, and reasoned.
+
+Do not add suppressions merely because Ruff, mypy, or pyright reported an error.
+
 ## Suppression policy
 
 Suppressions are escape hatches, not normal fixes.
