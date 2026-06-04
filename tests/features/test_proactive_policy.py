@@ -31,7 +31,7 @@ def _idle_frame() -> WorkspaceFrame:
             idle_seconds=600.0,
         ),
         affect=AffectSnapshot(arousal=0.9, valence=-0.8),
-        relationship=RelationshipSnapshot(user_label="Mina", familiarity=0.0),
+        relationship=RelationshipSnapshot(actor_label="Mina", familiarity=0.0),
     )
 
 

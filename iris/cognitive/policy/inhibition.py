@@ -98,7 +98,7 @@ def _constraints_for_affect(frame: WorkspaceFrame) -> tuple[PolicyConstraint, ..
 
 def _constraints_for_relationship(frame: WorkspaceFrame) -> tuple[PolicyConstraint, ...]:
     relationship = frame.relationship
-    if relationship.user_label is None or relationship.familiarity >= _LOW_FAMILIARITY_THRESHOLD:
+    if relationship.actor_label is None or relationship.familiarity >= _LOW_FAMILIARITY_THRESHOLD:
         return ()
     return (
         PolicyConstraint(

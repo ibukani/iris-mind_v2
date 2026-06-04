@@ -8,7 +8,7 @@ All external app events must become typed observations before cognitive code see
 
 Examples:
 
-- `UserMessageObservation`
+- `ActorMessageObservation`
 - `TranscriptObservation`
 - `IdleTickObservation`
 - `AudienceMessageObservation`
@@ -100,7 +100,7 @@ ActionPlan(turn_intent="no_action", candidate_text=None, should_respond=False)
 No-action means:
 
 - do not call the LLM for response generation
-- do not generate user-visible text
+- do not generate actor-visible text
 - do not call presenter as if it were a real response
 - do not call external app execution
 - return or preserve `PresentedOutput(text=None)` at runtime boundary

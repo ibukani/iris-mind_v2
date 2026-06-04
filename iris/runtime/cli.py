@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 import sys
 from typing import TYPE_CHECKING
 
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.config import (
     CliConfigOverrides,
@@ -28,20 +28,20 @@ if TYPE_CHECKING:
     from iris.runtime.app import IrisApp
 
 
-def build_observation(text: str) -> UserMessageObservation:
-    """入力テキストからCLI用UserMessageObservationを構築する.
+def build_observation(text: str) -> ActorMessageObservation:
+    """入力テキストからCLI用ActorMessageObservationを構築する.
 
     Args:
-        text: User input text.
+        text: Actor input text.
 
     Returns:
-        A UserMessageObservation with a fixed session and observation ID.
+        An ActorMessageObservation with a fixed session and observation ID.
     """
-    return UserMessageObservation(
+    return ActorMessageObservation(
         observation_id=ObservationId("cli-obs"),
         session_id=SessionId("cli-session"),
         occurred_at=datetime.now(UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
         actor=None,
         space_id=None,
@@ -89,7 +89,7 @@ async def run_one_turn(
     """単一の対話ターンを実行し、応答テキストを返す.
 
     Args:
-        text: User input text.
+        text: Actor input text.
         llm: Optional default_chat provider override.
         model: Optional default_chat model override.
         ollama_host: Optional Ollama host URL override.

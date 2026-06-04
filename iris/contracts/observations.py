@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class ObservationKind(StrEnum):
     """観測の種類。"""
 
-    USER_MESSAGE = "user_message"
+    ACTOR_MESSAGE = "actor_message"
     TRANSCRIPT = "transcript"
     IDLE_TICK = "idle_tick"
     AUDIENCE_MESSAGE = "audience_message"
@@ -36,8 +36,8 @@ class Observation:
 
 
 @dataclass(frozen=True)
-class UserMessageObservation(Observation):
-    """直接ユーザーメッセージの観測。"""
+class ActorMessageObservation(Observation):
+    """アクターからの直接メッセージ観測。"""
 
     text: str
     external_message_id: ExternalRef | None = None

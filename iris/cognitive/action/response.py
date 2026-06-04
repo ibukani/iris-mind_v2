@@ -19,7 +19,7 @@ class ResponsePrompt:
     """LLM用にワークスペースフレームから組み立てられたプロンプトデータ。"""
 
     system_instruction: str
-    user_text: str
+    actor_text: str
     memory_snippets: tuple[str, ...] = ()
     affect_context: str | None = None
     relationship_context: str | None = None
@@ -54,7 +54,7 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
 
     return ResponsePrompt(
         system_instruction="Generate a concise text response for Iris.",
-        user_text=frame.interpreted_input.text,
+        actor_text=frame.interpreted_input.text,
         memory_snippets=tuple(
             result.record.text for result in frame.memory_summary.retrieved_memories
         ),

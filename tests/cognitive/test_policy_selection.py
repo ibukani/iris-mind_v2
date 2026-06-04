@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from iris.cognitive.action.response import build_response_prompt
 from iris.cognitive.workspace.frame import InterpretedInput, WorkspaceFrame
 from iris.contracts.identity import ActorKind, Identity
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.contracts.policy import PolicyConstraint
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 
@@ -19,7 +19,7 @@ def _frame(constraints: tuple[PolicyConstraint, ...] = ()) -> WorkspaceFrame:
         WorkspaceFrame: 構築済みのワークスペースフレーム。
     """
     return WorkspaceFrame(
-        observation=UserMessageObservation(
+        observation=ActorMessageObservation(
             observation_id=ObservationId("obs-policy-prompt"),
             session_id=SessionId("session-policy-prompt"),
             actor=Identity(
@@ -31,7 +31,7 @@ def _frame(constraints: tuple[PolicyConstraint, ...] = ()) -> WorkspaceFrame:
             ),
             space_id=None,
             occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
-            kind=ObservationKind.USER_MESSAGE,
+            kind=ObservationKind.ACTOR_MESSAGE,
             text="hello",
         ),
         interpreted_input=InterpretedInput(text="hello", language=None),

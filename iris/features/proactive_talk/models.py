@@ -38,13 +38,13 @@ class ProactiveRelationshipContext(Protocol):
     """プロアクティブスコアリングに関係コンテキストを提供するプロトコル。"""
 
     @property
-    def user_label(self) -> str | None:
-        """Return the user label associated with the current session, if any."""
+    def actor_label(self) -> str | None:
+        """Return the actor label associated with the current session, if any."""
         ...
 
     @property
     def familiarity(self) -> float:
-        """Return the familiarity level for the current user on a bounded scale."""
+        """Return the familiarity level for the current actor on a bounded scale."""
         ...
 
 

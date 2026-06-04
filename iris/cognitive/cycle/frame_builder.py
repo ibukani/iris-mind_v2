@@ -67,7 +67,7 @@ class FrameBuilder:
                 updated = replace(
                     frame,
                     relationship=RelationshipSnapshot(
-                        user_label=result.user_label,
+                        actor_label=result.actor_label,
                         affinity=result.affinity,
                         trust=result.trust,
                         familiarity=result.familiarity,

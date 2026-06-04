@@ -36,7 +36,7 @@ def proactive_policy_constraints(frame: ProactiveFrameContext) -> tuple[PolicyCo
         )
 
     if (
-        frame.relationship.user_label is not None
+        frame.relationship.actor_label is not None
         and frame.relationship.familiarity < _LOW_FAMILIARITY_THRESHOLD
     ):
         constraints.append(

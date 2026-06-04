@@ -42,9 +42,9 @@ class AffectSnapshot:
 
 @dataclass(frozen=True)
 class RelationshipSnapshot:
-    """Snapshot of the relationship with the current user."""
+    """Snapshot of the relationship with the current actor."""
 
-    user_label: str | None = None
+    actor_label: str | None = None
     affinity: float = 0.0
     trust: float = 0.0
     familiarity: float = 0.0

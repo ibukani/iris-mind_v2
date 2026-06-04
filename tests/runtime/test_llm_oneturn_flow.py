@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import wire_text_response_cognitive_cycle
@@ -34,15 +34,15 @@ class BlockingOutputGate:
         return SafetyDecision(decision=GateDecision.BLOCK, reason="blocked output")
 
 
-def user_message(text: str = "hello") -> UserMessageObservation:
-    """Return a UserMessageObservation with the given text."""
-    return UserMessageObservation(
+def actor_message(text: str = "hello") -> ActorMessageObservation:
+    """Return an ActorMessageObservation with the given text."""
+    return ActorMessageObservation(
         observation_id=ObservationId("obs-runtime"),
         session_id=SessionId("session-runtime"),
         actor=None,
         space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
     )
 
@@ -53,7 +53,7 @@ async def test_one_turn_flow_uses_fake_llm_and_returns_presented_output() -> Non
     llm = FakeLLMClient(responses=("llm-backed reply",))
     app = IrisApp(cycle=wire_text_response_cognitive_cycle(llm))
 
-    output = await app.process_observation(user_message("hello Iris"))
+    output = await app.process_observation(actor_message("hello Iris"))
 
     assert output.text == "llm-backed reply"
     assert output.priority == 10
@@ -69,7 +69,7 @@ async def test_action_safety_gate_blocks_llm_action_plan() -> None:
         action_safety_gate=BlockingActionGate(),
     )
 
-    output = await app.process_observation(user_message())
+    output = await app.process_observation(actor_message())
 
     assert output.text is None
 
@@ -83,6 +83,6 @@ async def test_output_safety_gate_blocks_llm_presented_output() -> None:
         output_safety_gate=BlockingOutputGate(),
     )
 
-    output = await app.process_observation(user_message())
+    output = await app.process_observation(actor_message())
 
     assert output.text is None

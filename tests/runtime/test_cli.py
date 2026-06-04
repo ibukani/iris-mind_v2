@@ -148,11 +148,11 @@ def test_build_app_default_creates_fake_app() -> None:
 
 
 def test_build_observation_structure() -> None:
-    """Verify build_observation creates a structured UserMessageObservation."""
+    """Verify build_observation creates a structured ActorMessageObservation."""
     obs = build_observation("hello world")
 
     assert obs.text == "hello world"
-    assert obs.kind == ObservationKind.USER_MESSAGE
+    assert obs.kind == ObservationKind.ACTOR_MESSAGE
     assert obs.observation_id == ObservationId("cli-obs")
     assert obs.session_id == SessionId("cli-session")
     assert obs.actor is None
