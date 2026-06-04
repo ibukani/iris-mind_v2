@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess  # noqa: S404  # needed for running shell commands
+import subprocess  # noqa: S404 -- local gate runs fixed repository command tuples only
 import sys
 from typing import TYPE_CHECKING
 
@@ -19,6 +19,13 @@ if TYPE_CHECKING:
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 MYPY_TARGETS: tuple[str, ...] = ("iris", "tests", "scripts", "main.py")
+COVERAGE_ARGS: tuple[str, ...] = (
+    "--cov=iris",
+    "--cov-branch",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=html",
+    "--cov-fail-under=90",
+)
 
 
 @dataclass(frozen=True)
@@ -36,7 +43,7 @@ CHECKS: tuple[Check, ...] = (
     Check("type", ("uv", "run", "mypy", *MYPY_TARGETS)),
     Check("pyright", ("uv", "run", "pyright", ".")),
     Check("architecture", ("uv", "run", "pytest", "tests/architecture", "-q")),
-    Check("tests+coverage", ("uv", "run", "pytest", "tests/"), full_only=True),
+    Check("tests+coverage", ("uv", "run", "pytest", "tests/", *COVERAGE_ARGS), full_only=True),
 )
 
 
