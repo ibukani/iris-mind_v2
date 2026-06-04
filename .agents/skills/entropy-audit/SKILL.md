@@ -1,3 +1,8 @@
+---
+name: entropy-audit
+description: Audit accumulated complexity, duplication, stale code, and architecture drift after multiple agent changes.
+---
+
 # Entropy Audit Skill
 
 Use this skill for cleanup reviews after multiple AI-agent changes.
