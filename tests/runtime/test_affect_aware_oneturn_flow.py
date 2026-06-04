@@ -1,3 +1,5 @@
+"""Tests for affect-aware one-turn cognitive flow with memory and relationship context."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -15,6 +17,7 @@ from iris.runtime.wiring.cognitive import wire_affect_memory_aware_text_response
 
 
 def user_message(text: str) -> UserMessageObservation:
+    """Return a UserMessageObservation with the given text and a test identity."""
     return UserMessageObservation(
         observation_id=ObservationId("obs-affect-runtime"),
         session_id=SessionId("session-affect-runtime"),
@@ -32,6 +35,7 @@ def user_message(text: str) -> UserMessageObservation:
 
 @pytest.mark.anyio
 async def test_affect_aware_one_turn_flow_includes_affect_relationship_and_memory_context() -> None:
+    """Verify affect-aware flow includes memory, affect, and relationship context in the prompt."""
     memory_store = FakeMemoryStore(
         records=(
             MemoryRecord(

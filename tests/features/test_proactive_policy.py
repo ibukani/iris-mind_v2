@@ -1,6 +1,9 @@
+"""Tests for proactive policy constraint generation."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -11,8 +14,12 @@ from iris.core.ids import ObservationId, SessionId
 from iris.features.proactive_talk.definition import ProactivePolicyStep
 from iris.features.proactive_talk.policy import proactive_policy_constraints
 
+if TYPE_CHECKING:
+    from iris.features.proactive_talk.models import ProactiveFrameContext
+
 
 def _idle_frame() -> WorkspaceFrame:
+    """Return a WorkspaceFrame with an IdleTickObservation and affect/relationship data."""
     return WorkspaceFrame(
         observation=IdleTickObservation(
             observation_id=ObservationId("obs-proactive-policy"),
@@ -28,7 +35,8 @@ def _idle_frame() -> WorkspaceFrame:
 
 
 def test_proactive_policy_constraints_are_typed_and_deterministic() -> None:
-    frame = _idle_frame()
+    """Verify proactive policy constraints are deterministic and typed."""
+    frame = cast("ProactiveFrameContext", _idle_frame())
 
     first = proactive_policy_constraints(frame)
     second = proactive_policy_constraints(frame)
@@ -46,6 +54,7 @@ def test_proactive_policy_constraints_are_typed_and_deterministic() -> None:
 
 @pytest.mark.anyio
 async def test_proactive_policy_step_enriches_frame_through_builder() -> None:
+    """Verify ProactivePolicyStep enriches the frame with constraints through FrameBuilder."""
     frame = _idle_frame()
     result = await ProactivePolicyStep().run(frame)
 

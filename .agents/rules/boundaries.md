@@ -1,0 +1,106 @@
+# Boundary Rules
+
+This file defines the boundaries that AI coding agents most often damage.
+
+## External input boundary
+
+All external app events must become typed observations before cognitive code sees them.
+
+Examples:
+
+- `UserMessageObservation`
+- `TranscriptObservation`
+- `IdleTickObservation`
+- `AudienceMessageObservation`
+- `GameEventObservation`
+
+Do not pass Discord, Twitch, voice, HTTP, or CLI objects into `cognitive/`.
+
+## Cognitive boundary
+
+`cognitive/` reads typed contracts and produces an `ActionPlan`. It must not know how an external app sends, speaks, displays, or schedules an action.
+
+Allowed cognitive output:
+
+```text
+ActionPlan
+```
+
+Forbidden cognitive output:
+
+```text
+Discord message send
+Voice synthesis command
+OpenAI provider payload
+Raw app command string
+```
+
+## Presentation boundary
+
+Presentation converts `ActionPlan` into `PresentedOutput`.
+
+Presentation may decide text shape, style hints, emotion hints, expression hints, and timing hints. It must not execute external actions.
+
+## Safety boundary
+
+Safety checks are explicit gates:
+
+```text
+ActionPlan → ActionSafetyGate → Presenter → PresentedOutput → OutputSafetyGate
+```
+
+Safety must not be hidden inside LLM prompt construction or adapter code.
+
+## App action boundary
+
+External app actions are app-specific commands. They belong outside cognitive logic.
+
+Examples:
+
+- `SendMessageAction`
+- `SpeakAction`
+- `ToolCallAction`
+
+## Learning boundary
+
+Learning happens after `ActionResult`, because the runtime needs to know whether the action was sent, blocked, cancelled, or failed.
+
+Do not update durable memory only because an `ActionPlan` was proposed.
+
+## Proactive boundary
+
+Proactive behavior starts from an internal observation, normally `IdleTickObservation`.
+
+Required path:
+
+```text
+Scheduler
+→ IdleTickObservation
+→ CognitiveCycle
+→ ActionPlan
+→ normal safety/presentation/output path
+```
+
+Forbidden path:
+
+```text
+Scheduler
+→ direct LLM call
+→ direct app send
+```
+
+## no-action boundary
+
+Canonical no-action plan:
+
+```python
+ActionPlan(turn_intent="no_action", candidate_text=None, should_respond=False)
+```
+
+No-action means:
+
+- do not call the LLM for response generation
+- do not generate user-visible text
+- do not call presenter as if it were a real response
+- do not call external app execution
+- return or preserve `PresentedOutput(text=None)` at runtime boundary

@@ -45,16 +45,55 @@ iris-mind/
 │   ├── features/        # Feature tests
 │   ├── runtime/         # End-to-end runtime tests
 │   └── test_oneturn_flow.py
+├── scripts/
+│   └── verify.py        # Canonical repository verification runner
 └── main.py              # Target runtime entrypoint
 ```
 
 ## Development
 
+Use the canonical verification entry point before reporting work complete:
+
 ```bash
-uv run ruff check .                   # lint
-uv run ruff format --check .          # format check
-uv run pytest tests/                  # run all tests
+make check
 ```
+
+`make verify` is an alias for `make check`.
+
+The full verification path runs:
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy iris tests scripts main.py
+uv run pyright .
+uv run pytest tests/architecture -q
+uv run pytest tests/
+```
+
+Useful targeted commands:
+
+```bash
+make quick    # lint, format, mypy, pyright, architecture tests
+make lint     # ruff check
+make format   # ruff format --check
+make type     # mypy strict across iris/tests/scripts/main.py
+make arch     # architecture tests
+make pyright  # pyright strict
+make test     # all tests with coverage gate
+```
+
+## Agent Harness
+
+AI coding agents should start from `AGENTS.md`. Claude Code should start from `CLAUDE.md`, which delegates shared rules to `AGENTS.md` and `.agents/`.
+
+The required final verification for agent work is:
+
+```bash
+make check
+```
+
+If the environment cannot run it, the agent must report the exact command, failure reason, narrower checks that were possible, and remaining risk.
 
 ## License
 

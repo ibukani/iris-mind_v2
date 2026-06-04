@@ -2,6 +2,83 @@
 
 ---
 
+## Strict AI Coding Policy
+
+このプロジェクトは初期段階かどうかに関係なく、AI coding agent が壊した変更を早期検出することを優先する。
+
+- Ruff は `select = ["ALL"]` を基準にする。formatter と衝突するルール以外は原則無効化しない。
+- mypy は `strict = true` に加え、`Any` の混入を強く禁止する。対象は `iris`、`tests`、`scripts`、`main.py`。
+- pyright は `typeCheckingMode = "strict"` で `iris`、`tests`、`scripts`、`main.py` を検査する。
+- pytest は `--strict-config`、`--strict-markers`、`xfail_strict = true`、warnings-as-errors を使う。
+- coverage は branch coverage 付きで `fail_under = 90`。`make check` の一部として扱う。
+
+既存コードでエラーが出る場合でも、設定を弱めずコード側を修正する。
+
+---
+
+## 標準検証コマンド
+
+作業完了前の標準コマンドは以下。
+
+```bash
+make check
+```
+
+`make verify` は `make check` の alias。
+
+両方とも `scripts/verify.py` を実行し、以下を順番に検証する。
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy iris tests scripts main.py
+uv run pyright .
+uv run pytest tests/architecture -q
+uv run pytest tests/
+```
+
+開発途中の軽量確認には以下を使う。
+
+```bash
+make quick
+```
+
+`make quick` は lint、format check、mypy、pyright、architecture tests を実行する。全テストと coverage gate は実行しないため、完了報告の代替にはしない。
+
+---
+
+## 個別コマンド
+
+```bash
+# Lint check
+make lint
+
+# Format check
+make format
+
+# Type check
+make type
+
+# Architecture guards only
+make arch
+
+# All tests
+make test
+```
+
+直接実行する場合。
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy iris tests scripts main.py
+uv run pyright .
+uv run pytest tests/architecture -q
+uv run pytest tests/
+```
+
+---
+
 ## テスト実行方法
 
 ```bash
@@ -16,27 +93,6 @@ uv run pytest tests/architecture -q
 
 # Specific test file
 uv run pytest tests/runtime/test_cli.py -q
-```
-
----
-
-## コード品質
-
-```bash
-# Lint check
-uv run ruff check .
-
-# Lint auto-fix
-uv run ruff check --fix .
-
-# Format check
-uv run ruff format --check .
-
-# Format
-uv run ruff format .
-
-# Type check
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
 ```
 
 ---
@@ -103,5 +159,8 @@ allowlist は永続化しない。
 
 ## 関連ドキュメント
 
-- architecture.md: 依存方向の定義
-- rules.md: 禁止パターン一覧
+- `README.md`: 開発者向け入口
+- `AGENTS.md`: AI coding agent 向け入口
+- `.agents/rules/testing.md`: agent harness 用の検証ルール
+- `architecture.md`: 依存方向の定義
+- `rules.md`: 禁止パターン一覧

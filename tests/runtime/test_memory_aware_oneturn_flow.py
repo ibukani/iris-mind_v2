@@ -1,3 +1,6 @@
+# Copyright 2025 Iris Mind
+"""Tests for memory-aware one-turn cognitive flow."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -14,6 +17,7 @@ from iris.runtime.wiring.cognitive import wire_memory_aware_text_response_cognit
 
 
 def user_message(text: str = "tea") -> UserMessageObservation:
+    """Return a UserMessageObservation with the given text."""
     return UserMessageObservation(
         observation_id=ObservationId("obs-memory-runtime"),
         session_id=SessionId("session-memory-runtime"),
@@ -26,7 +30,10 @@ def user_message(text: str = "tea") -> UserMessageObservation:
 
 @pytest.mark.anyio
 async def test_memory_aware_one_turn_flow_includes_memory_in_llm_prompt() -> None:
-    memory_store = FakeMemoryStore(records=(MemoryRecord(id=MemoryId("m1"), text="User likes jasmine tea."),))
+    """Verify memory-aware flow includes recalled memories in the LLM prompt."""
+    memory_store = FakeMemoryStore(
+        records=(MemoryRecord(id=MemoryId("m1"), text="User likes jasmine tea."),)
+    )
     llm = FakeLLMClient(responses=("memory-backed reply",))
     app = IrisApp(cycle=wire_memory_aware_text_response_cognitive_cycle(memory_store, llm))
 

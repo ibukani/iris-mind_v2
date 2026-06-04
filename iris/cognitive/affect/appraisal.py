@@ -1,6 +1,9 @@
+"""キーワードベースの感情アプレイザルパイプラインステップ。"""
+
 from __future__ import annotations
 
 import re
+from typing import override
 
 from iris.cognitive.affect.mood import update_mood
 from iris.cognitive.cycle.models import AppraisalResult, StepStatus
@@ -65,9 +68,15 @@ _LOW_DOMINANCE_KEYWORDS = (
     "cannot",
 )
 _TOKEN_RE = re.compile(r"[a-zA-Z']+|[^\s]+")
+_VAD_THRESHOLD = 0.2
 
 
 def classify_appraisal(text: str) -> AffectSnapshot:
+    """キーワードマッチングを使用してテキストの感情内容を分類する。
+
+    Returns:
+        AffectSnapshot: テキストの感情分析结果(気分ラベル, 覚醒度, valence, 支配度)。
+    """
     lowered = text.casefold()
     positive = _count_matches(lowered, _POSITIVE_KEYWORDS)
     negative = _count_matches(lowered, _NEGATIVE_KEYWORDS)
@@ -88,12 +97,25 @@ def classify_appraisal(text: str) -> AffectSnapshot:
 
 
 class AppraisalStep(PipelineStep[AppraisalResult]):
+    """キーワードベースの認知アプレイザルを実行するパイプラインステップ。"""
+
     name = "appraisal"
 
     def __init__(self, *, elapsed_seconds: float = 0.0) -> None:
+        """前回のアプレイザルからの経過時間で初期化する。
+
+        Args:
+            elapsed_seconds: Seconds since the last appraisal for mood decay.
+        """
         self._elapsed_seconds = elapsed_seconds
 
+    @override
     async def run(self, frame: WorkspaceFrame) -> AppraisalResult:
+        """フレームの解釈入力を評価し、アプレイザル結果を返す。
+
+        Returns:
+            AppraisalResult: 感情評価結果。入力がない場合は SKIPPED。
+        """
         if frame.interpreted_input is None or frame.interpreted_input.text is None:
             return AppraisalResult(
                 step_name=self.name,
@@ -116,21 +138,19 @@ class AppraisalStep(PipelineStep[AppraisalResult]):
 
 def _count_matches(text: str, keywords: tuple[str, ...]) -> int:
     tokens = tuple(match.group(0).casefold() for match in _TOKEN_RE.finditer(text))
-    return sum(1 for keyword in keywords if keyword.casefold() in text or keyword.casefold() in tokens)
+    return sum(
+        1 for keyword in keywords if keyword.casefold() in text or keyword.casefold() in tokens
+    )
 
 
 def _label_for(valence: float, arousal: float, dominance: float) -> str | None:
-    if valence >= 0.2:
+    if valence >= _VAD_THRESHOLD:
         return "positive"
-    if valence <= -0.2 and arousal >= 0.2:
-        return "distressed"
-    if valence <= -0.2:
-        return "negative"
-    if dominance <= -0.2:
+    if valence <= -_VAD_THRESHOLD:
+        return "distressed" if arousal >= _VAD_THRESHOLD else "negative"
+    if dominance <= -_VAD_THRESHOLD:
         return "uncertain"
-    if arousal >= 0.2:
-        return "alert"
-    return None
+    return "alert" if arousal >= _VAD_THRESHOLD else None
 
 
 def _summarize(label: str | None, valence: float, arousal: float, dominance: float) -> str:

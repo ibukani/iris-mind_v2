@@ -1,26 +1,46 @@
+"""テスト・開発用のフェイクLLMクライアント。"""
+
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from iris.adapters.llm.ports import LLMRequest, LLMResponse
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 
 class FakeLLMClient:
+    """本番プロバイダなしでテストするための決定論的フェイクLLMクライアント。"""
+
     def __init__(
         self,
         responses: Sequence[str] | None = None,
         *,
         model: str = "fake-llm",
     ) -> None:
+        """オプションの応答リストで初期化する。
+
+        Args:
+            responses: Optional sequence of predetermined response texts. When exhausted,
+                the last response is reused.
+            model: The model name reported in responses.
+        """
         self._responses = tuple(responses) if responses is not None else None
         self._model = model
         self._requests: list[LLMRequest] = []
 
     @property
     def requests(self) -> tuple[LLMRequest, ...]:
+        """これまでにこのクライアントに送信された全リクエストを返す。"""
         return tuple(self._requests)
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
+        """事前定義リストまたはデフォルトのフォールバックから応答を生成する。
+
+        Returns:
+            LLMResponse: 生成された応答。
+        """
         self._requests.append(request)
         index = len(self._requests) - 1
         if self._responses is None:
@@ -31,8 +51,11 @@ class FakeLLMClient:
             text = self._responses[min(index, len(self._responses) - 1)]
         return LLMResponse(text=text, model=self._model)
 
-    def _default_response(self, request: LLMRequest) -> str:
-        user_messages = tuple(message.content for message in request.messages if message.role == "user")
+    @staticmethod
+    def _default_response(request: LLMRequest) -> str:
+        user_messages = tuple(
+            message.content for message in request.messages if message.role == "user"
+        )
         if not user_messages:
             return ""
         return f"fake response: {user_messages[-1]}"

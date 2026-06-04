@@ -1,3 +1,7 @@
+"""プロアクティブ発話機能：顕著性に基づきIrisが会話を開始する。"""
+
+from __future__ import annotations
+
 from iris.features.proactive_talk.definition import (
     ProactiveActionSelectionStep,
     ProactivePolicyStep,

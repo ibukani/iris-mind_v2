@@ -133,13 +133,13 @@ iris/
 │   ├── embeddings/
 │   └── external_clients/
 │
-├── safety/
-│   ├── action_gate.py
-│   ├── output_filter.py
-│   └── policy_engine.py
-│
-└── admin/
+└── safety/
+    ├── action_gate.py
+    ├── output_filter.py
+    └── policy_engine.py
 ```
+
+`iris/admin` は現在のアクティブ構成には含めない。過去構想や廃止済み構造は `docs/legacy.md` に隔離し、実装時に再作成しない。
 
 ---
 

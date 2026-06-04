@@ -1,6 +1,9 @@
+"""Tests for proactive salience scoring and thresholds."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, cast
 
 from iris.cognitive.workspace.frame import (
     AffectSnapshot,
@@ -13,6 +16,10 @@ from iris.contracts.observations import IdleTickObservation, ObservationKind
 from iris.contracts.policy import PolicyConstraint
 from iris.core.ids import ObservationId, SessionId, UserId
 from iris.features.proactive_talk.scoring import SalienceScorer
+from tests.helpers.approx import approx
+
+if TYPE_CHECKING:
+    from iris.features.proactive_talk.models import ProactiveFrameContext
 
 
 def _idle_frame(
@@ -59,40 +66,49 @@ def _idle_frame(
 
 
 def test_salience_scoring_is_deterministic_and_bounded() -> None:
-    frame = _idle_frame(600.0, memory=True, familiarity=0.8)
+    """Verify SalienceScorer produces deterministic and bounded scores."""
+    frame = cast("ProactiveFrameContext", _idle_frame(600.0, memory=True, familiarity=0.8))
     scorer = SalienceScorer(threshold=0.5)
 
     first = scorer.score(frame)
     second = scorer.score(frame)
 
     assert first == second
-    assert first.score == 0.9
+    assert first.score == approx(0.9)
     assert first.should_speak is True
 
 
 def test_low_familiarity_and_negative_affect_reduce_salience() -> None:
-    frame = _idle_frame(
-        300.0,
-        familiarity=0.0,
-        affect=AffectSnapshot(arousal=0.9, valence=-0.8),
+    """Verify low familiarity and negative affect reduce the salience score."""
+    frame = cast(
+        "ProactiveFrameContext",
+        _idle_frame(
+            300.0,
+            familiarity=0.0,
+            affect=AffectSnapshot(arousal=0.9, valence=-0.8),
+        ),
     )
 
     salience = SalienceScorer(threshold=0.5).score(frame)
 
-    assert salience.score == 0.0
+    assert salience.score == approx(0.0)
     assert salience.should_speak is False
     assert "low_familiarity" in salience.reasons
     assert "negative_high_arousal" in salience.reasons
 
 
 def test_policy_block_prevents_proactive_speaking() -> None:
-    frame = _idle_frame(
-        600.0,
-        constraints=(
-            PolicyConstraint(
-                name="policy_block",
-                reason="test",
-                blocks_response=True,
+    """Verify a blocking policy constraint prevents proactive speaking."""
+    frame = cast(
+        "ProactiveFrameContext",
+        _idle_frame(
+            600.0,
+            constraints=(
+                PolicyConstraint(
+                    name="policy_block",
+                    reason="test",
+                    blocks_response=True,
+                ),
             ),
         ),
     )

@@ -1,9 +1,16 @@
+# Copyright 2025 Iris Mind
+"""Policy inhibition pipeline step for safety constraints."""
+
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import PolicyResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.policy import ActionPreference, PolicyConstraint
+
+if TYPE_CHECKING:
+    from iris.cognitive.workspace.frame import WorkspaceFrame
 
 _HIGH_AROUSAL_THRESHOLD = 0.75
 _NEGATIVE_VALENCE_THRESHOLD = -0.55
@@ -22,9 +29,17 @@ _SELF_HARM_OR_ABUSE_TERMS = (
 
 
 class PolicyInhibitionStep(PipelineStep[PolicyResult]):
+    """Pipeline step that evaluates policy constraints and preferences from the frame."""
+
     name = "policy_inhibition"
 
+    @override
     async def run(self, frame: WorkspaceFrame) -> PolicyResult:
+        """Evaluate constraints and preferences, returning a policy result.
+
+        Returns:
+            PolicyResult: 評価された制約とアクション優先度を含む結果。
+        """
         constraints: list[PolicyConstraint] = []
         preferences: list[ActionPreference] = []
 
@@ -103,7 +118,10 @@ def _constraints_for_input_notes(frame: WorkspaceFrame) -> tuple[PolicyConstrain
     return (
         PolicyConstraint(
             name="sensitive_safety_context",
-            reason="input mentions self-harm or abuse-related content; safety gate remains authoritative",
+            reason=(
+                "input mentions self-harm or abuse-related content; "
+                "safety gate remains authoritative"
+            ),
             prompt_instruction="avoid escalating beyond the safety layer",
         ),
     )

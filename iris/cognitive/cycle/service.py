@@ -1,25 +1,47 @@
-from collections.abc import Sequence
+"""CognitiveCycle：ステップを実行しアクションプランを選択するパイプラインコーディネータ。"""
 
-from iris.cognitive.cycle.frame_builder import FrameBuilder
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from iris.cognitive.cycle.models import CycleResult, PipelineStepResult
-from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
-from iris.contracts.actions import ActionPlan
-from iris.contracts.observations import Observation
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from iris.cognitive.cycle.frame_builder import FrameBuilder
+    from iris.cognitive.cycle.pipeline import PipelineStep
+    from iris.contracts.actions import ActionPlan
+    from iris.contracts.observations import Observation
 
 
 class CognitiveCycle:
+    """認知パイプラインを指揮する：ステップ実行、結果適用、プラン選択。"""
+
     def __init__(
         self,
         steps: Sequence[PipelineStep[PipelineStepResult]],
         frame_builder: FrameBuilder,
         fallback_plan: ActionPlan,
     ) -> None:
+        """パイプラインステップ、フレームビルダー、フォールバックプランで初期化する。
+
+        Args:
+            steps: Ordered sequence of pipeline steps to execute.
+            frame_builder: Builder that applies step results to the frame.
+            fallback_plan: ActionPlan used when no candidate plan is selected.
+        """
         self._steps = tuple(steps)
         self._frame_builder = frame_builder
         self._fallback_plan = fallback_plan
 
     async def run(self, observation: Observation) -> CycleResult:
+        """与えられた観測に対して認知パイプラインを実行し、結果を返す。
+
+        Returns:
+            CycleResult: パイプライン実行结果(最終フレームと選択アクションプラン)。
+        """
         frame = WorkspaceFrame(observation=observation)
 
         for step in self._steps:
@@ -30,6 +52,13 @@ class CognitiveCycle:
         return CycleResult(frame=frame, selected_plan=selected)
 
     def _select_action_plan(self, frame: WorkspaceFrame) -> ActionPlan:
-        if frame.candidate_action_plans:
-            return max(frame.candidate_action_plans, key=lambda plan: plan.priority)
-        return self._fallback_plan
+        plans = frame.candidate_action_plans
+        if not plans:
+            return self._fallback_plan
+        selected: ActionPlan = plans[0]
+        best_priority = selected.priority
+        for plan in plans[1:]:
+            if plan.priority > best_priority:
+                selected = plan
+                best_priority = plan.priority
+        return selected

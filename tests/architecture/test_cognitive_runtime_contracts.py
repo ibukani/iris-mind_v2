@@ -1,12 +1,13 @@
-"""Design contract tests for WorkspaceFrame, CognitiveCycle, and PipelineStep.
+"""WorkspaceFrame、CognitiveCycle、PipelineStepの設計契約テスト。
 
-Rules enforced:
-  1. WorkspaceFrame must be a frozen dataclass.
-  2. WorkspaceFrame fields must avoid dict[str, Any] / dict[str, object].
-  3. Frame updates must go through FrameBuilder using replace().
-  4. CognitiveCycle must act as a coordinator (no adapter/runtime/feature imports).
-  5. PipelineStep must return typed PipelineStepResult subtypes.
-  6. PipelineStep must not directly call adapters, runtime wiring, or feature registries.
+適用されるルール:
+  1. WorkspaceFrameはfrozen dataclassでなければならない。
+  2. WorkspaceFrameのフィールドはdict[str, Any] / dict[str, object]を避けなければならない。
+  3. フレームの更新はreplace()を使用してFrameBuilderを通さなければならない。
+  4. CognitiveCycleはコーディネーターとして機能しなければならない
+  （アダプター/ランタイム/機能のインポート禁止）。
+  5. PipelineStepは型付きのPipelineStepResultサブタイプを返さなければならない。
+  6. PipelineStepはアダプター、ランタイム配線、機能レジストリを直接呼び出してはならない。
 """
 
 from __future__ import annotations
@@ -69,47 +70,69 @@ def _get_imports(tree: ast.Module) -> list[str]:
 
 def _class_has_frozen_dataclass(cls: ast.ClassDef) -> bool:
     for dec in cls.decorator_list:
-        if isinstance(dec, ast.Call) and isinstance(dec.func, ast.Name) and dec.func.id == "dataclass":
+        if (
+            isinstance(dec, ast.Call)
+            and isinstance(dec.func, ast.Name)
+            and dec.func.id == "dataclass"
+        ):
             for kw in dec.keywords:
-                if kw.arg == "frozen" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                if (
+                    kw.arg == "frozen"
+                    and isinstance(kw.value, ast.Constant)
+                    and kw.value.value is True
+                ):
                     return True
         if isinstance(dec, ast.Attribute) and dec.attr == "dataclass":
             # @dataclass(frozen=True) called as attribute
             for kw in getattr(dec, "keywords", []):
-                if kw.arg == "frozen" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                if (
+                    kw.arg == "frozen"
+                    and isinstance(kw.value, ast.Constant)
+                    and kw.value.value is True
+                ):
                     return True
     return False
 
 
+def _class_has_dataclass(cls: ast.ClassDef) -> bool:
+    for dec in cls.decorator_list:
+        if (
+            isinstance(dec, ast.Call)
+            and isinstance(dec.func, ast.Name)
+            and dec.func.id == "dataclass"
+        ):
+            return True
+        if isinstance(dec, ast.Attribute) and dec.attr == "dataclass":
+            return True
+    return False
+
+
 def _get_field_type_annotations(cls: ast.ClassDef) -> list[str]:
-    """Return string representations of field type annotations."""
-    annotations: list[str] = []
-    for item in cls.body:
-        if isinstance(item, ast.AnnAssign) and item.annotation:
-            annotations.append(ast.unparse(item.annotation))
-        # Also check dataclass field() calls
-        if isinstance(item, ast.Assign):
-            for target in item.targets:
-                if isinstance(target, ast.Name) and target.id in ("__annotations__",):
-                    pass
-    return annotations
+    """フィールド型注釈の文字列表現を返す。
+
+    Returns:
+        list[str]: フィールド型注釈の文字列表現リスト。
+    """
+    return [ast.unparse(item.annotation) for item in cls.body if isinstance(item, ast.AnnAssign)]
 
 
 # ── 1. WorkspaceFrame immutability ─────────────────────────────
 
 
 def test_workspace_frame_is_frozen_dataclass() -> None:
-    """WorkspaceFrame must be a frozen dataclass."""
+    """WorkspaceFrameはfrozen dataclassでなければならない。"""
     path = TARGET_FILES["workspace_frame"]
     _skip_if_missing(path)
     tree = _parse(path)
     cls = _find_class(tree, "WorkspaceFrame")
     assert cls is not None, "WorkspaceFrame class not found in frame.py"
-    assert _class_has_frozen_dataclass(cls), "WorkspaceFrame must be decorated with @dataclass(frozen=True)"
+    assert _class_has_frozen_dataclass(cls), (
+        "WorkspaceFrame must be decorated with @dataclass(frozen=True)"
+    )
 
 
 def test_workspace_frame_no_dict_any_fields() -> None:
-    """WorkspaceFrame must not have dict[str, Any] or dict[str, object] fields."""
+    """WorkspaceFrameにdict[str, Any]やdict[str, object]フィールドがあってはならない。"""
     path = TARGET_FILES["workspace_frame"]
     _skip_if_missing(path)
     tree = _parse(path)
@@ -123,8 +146,7 @@ def test_workspace_frame_no_dict_any_fields() -> None:
 
 
 def test_workspace_frame_no_mutable_mapping() -> None:
-    """WorkspaceFrame must not use MutableMapping or mutable default factories
-    that would break immutability (tuple frozen defaults are acceptable)."""
+    """WorkspaceFrameはMutableMappingや可変デフォルトファクトリを使用してはならない。"""
     path = TARGET_FILES["workspace_frame"]
     _skip_if_missing(path)
     tree = _parse(path)
@@ -145,14 +167,16 @@ def test_workspace_frame_no_mutable_mapping() -> None:
                                 and "field(default_factory=tuple" not in line
                                 and "frozenset" not in line
                             ):
-                                pytest.fail(f"WorkspaceFrame has mutable default at line {item.lineno}: {line}")
+                                pytest.fail(
+                                    f"WorkspaceFrame mutable default at L{item.lineno}: {line}"
+                                )
 
 
 # ── 2. FrameBuilder ────────────────────────────────────────────
 
 
 def test_frame_builder_uses_replace() -> None:
-    """FrameBuilder.apply must use dataclasses.replace() to create a new frame."""
+    """FrameBuilder.applyはdataclasses.replace()を使用して新しいフレームを作成しなければならない。"""
     path = TARGET_FILES["frame_builder"]
     _skip_if_missing(path)
     tree = _parse(path)
@@ -199,7 +223,7 @@ def test_frame_builder_uses_replace() -> None:
     ],
 )
 def test_cognitive_cycle_no_forbidden_imports(forbidden_prefix: str) -> None:
-    """CognitiveCycle must not import from adapters, runtime, or features."""
+    """CognitiveCycleはアダプター、ランタイム、機能からインポートしてはならない。"""
     path = TARGET_FILES["cycle_service"]
     _skip_if_missing(path)
     tree = _parse(path)
@@ -211,9 +235,11 @@ def test_cognitive_cycle_no_forbidden_imports(forbidden_prefix: str) -> None:
     )
 
 
-@pytest.mark.parametrize("app_name", ["discord", "discord.py", "speech", "tts", "stt", "aiohttp", "flask", "fastapi"])
+@pytest.mark.parametrize(
+    "app_name", ["discord", "discord.py", "speech", "tts", "stt", "aiohttp", "flask", "fastapi"]
+)
 def test_cognitive_cycle_no_app_specific_imports(app_name: str) -> None:
-    """CognitiveCycle must not import app-specific or IO packages directly."""
+    """CognitiveCycleはアプリ固有またはIOパッケージを直接インポートしてはならない。"""
     path = TARGET_FILES["cycle_service"]
     _skip_if_missing(path)
     try:
@@ -221,14 +247,14 @@ def test_cognitive_cycle_no_app_specific_imports(app_name: str) -> None:
     except FileNotFoundError:
         pytest.skip("CognitiveCycle service.py does not exist yet")
     if app_name in text:
-        pytest.fail(f"CognitiveCycle references '{app_name}' — must not depend on app-specific or IO packages")
+        pytest.fail(f"CognitiveCycle depends on '{app_name}' — no app/IO imports allowed")
 
 
 def test_cognitive_cycle_is_coordinator_structure() -> None:
-    """CognitiveCycle.run() must be a coordinator loop, not contain business logic.
+    """CognitiveCycle.run()はコーディネーターループであり、ビジネスロジックを含んではならない。
 
-    Checks that run() delegates to steps and frame_builder rather
-    than performing LLM calls, store saves, or adapter calls.
+    run()がLLM呼び出し、ストア保存、アダプター呼び出しではなく、
+    ステップとframe_builderに委譲することを確認する。
     """
     path = TARGET_FILES["cycle_service"]
     _skip_if_missing(path)
@@ -248,20 +274,19 @@ def test_cognitive_cycle_is_coordinator_structure() -> None:
     method_text = ast.get_source_segment(path.read_text(encoding="utf-8"), run_method) or ""
     # Check the method calls step.run() and frame_builder.apply() — this is the coordinator pattern
     has_step_loop = "for step in " in method_text and ".run(" in method_text
-    has_frame_builder = "_frame_builder.apply(" in method_text or "frame_builder.apply(" in method_text
+    has_frame_builder = (
+        "_frame_builder.apply(" in method_text or "frame_builder.apply(" in method_text
+    )
 
     if not (has_step_loop and has_frame_builder):
-        pytest.fail(
-            "CognitiveCycle.run() must delegate to PipelineStep.run() and FrameBuilder.apply() — "
-            "coordinator pattern not detected"
-        )
+        pytest.fail("CognitiveCycle.run() must delegate to step + FrameBuilder (coordinator)")
 
 
 # ── 4. PipelineStep typed results ──────────────────────────────
 
 
 def test_pipeline_step_returns_typed_result() -> None:
-    """PipelineStep.run() return type must be a PipelineStepResult subtype."""
+    """PipelineStep.run()の戻り値型はPipelineStepResultサブタイプでなければならない。"""
     path = TARGET_FILES["pipeline"]
     _skip_if_missing(path)
     tree = _parse(path)
@@ -291,12 +316,13 @@ def test_pipeline_step_returns_typed_result() -> None:
 
     return_type_str = ast.unparse(returns)
     assert "PipelineStepResult" in return_type_str or "ResultT" in return_type_str, (
-        f"PipelineStep.run() return type must be a PipelineStepResult subtype, got '{return_type_str}'"
+        f"PipelineStep.run() return type must be a PipelineStepResult subtype,"
+        f" got '{return_type_str}'"
     )
 
 
 def test_pipeline_step_no_forbidden_imports() -> None:
-    """PipelineStep implementations must not directly call adapters, runtime, or features."""
+    """PipelineStepの実装はアダプター、ランタイム、機能を直接呼び出してはならない。"""
     cognitive_dir = PROJECT_ROOT / "iris" / "cognitive"
     if not cognitive_dir.is_dir():
         pytest.skip("iris/cognitive/ does not exist yet")
@@ -317,8 +343,9 @@ def test_pipeline_step_no_forbidden_imports() -> None:
                     rel = filepath.relative_to(PROJECT_ROOT).as_posix()
                     violations.append(f"  {rel}: imports '{imp}'")
 
-    assert not violations, "PipelineSteps in iris/cognitive/ must not import adapters/runtime/features:\n" + "\n".join(
-        violations
+    assert not violations, (
+        "PipelineSteps in iris/cognitive/ must not import adapters/runtime/features:\n"
+        + "\n".join(violations)
     )
 
 
@@ -335,7 +362,7 @@ def test_pipeline_step_no_forbidden_imports() -> None:
     ],
 )
 def test_step_results_inherit_from_base(result_class: str, expected_parent: str) -> None:
-    """Each PipelineStep result type must inherit from PipelineStepResult."""
+    """各PipelineStepの結果型はPipelineStepResultを継承しなければならない。"""
     path = TARGET_FILES["cycle_models"]
     _skip_if_missing(path)
     tree = _parse(path)
@@ -344,16 +371,18 @@ def test_step_results_inherit_from_base(result_class: str, expected_parent: str)
         pytest.fail(f"{result_class} not found in cycle/models.py")
 
     base_names = [ast.unparse(b) for b in cls.bases]
-    assert expected_parent in base_names, f"{result_class} must inherit from {expected_parent}, bases: {base_names}"
+    assert expected_parent in base_names, (
+        f"{result_class} must inherit from {expected_parent}, bases: {base_names}"
+    )
 
 
 # ── 5. PipelineStep frame immutability ─────────────────────────
 
 
-def test_pipeline_step_does_not_mutate_frame() -> None:
-    """PipelineStep.run() implementations must not mutate the frame in place.
+def test_pipeline_step_does_not_mutate_frame() -> None:  # noqa: C901 -- intentionally enumerates per-mutation-kind branches for exhaustive AST coverage
+    """PipelineStep.run()の実装はフレームをその場で変更してはならない。
 
-    Scans for Assign nodes whose target is an attribute of the 'frame' parameter.
+    'frame'パラメータの属性をターゲットとするAssignノードをスキャンする。
     """
     cognitive_dir = PROJECT_ROOT / "iris" / "cognitive"
     if not cognitive_dir.is_dir():
@@ -380,8 +409,183 @@ def test_pipeline_step_does_not_mutate_frame() -> None:
                         and target.value.id == "frame"
                     ):
                         rel = filepath.relative_to(PROJECT_ROOT).as_posix()
-                        violations.append(f"  {rel}:{node.lineno} mutates frame.{target.attr} directly")
+                        violations.append(
+                            f"  {rel}:{node.lineno} mutates frame.{target.attr} directly"
+                        )
 
-    assert not violations, "PipelineSteps must not mutate WorkspaceFrame directly — use FrameBuilder:\n" + "\n".join(
-        violations
+    assert not violations, (
+        "PipelineSteps must not mutate WorkspaceFrame directly — use FrameBuilder:\n"
+        + "\n".join(violations)
+    )
+
+
+# ── 6. IrisApp runtime flow ────────────────────────────────────
+
+
+TARGET_APP_FILE: Path = PROJECT_ROOT / "iris" / "runtime" / "app.py"
+TARGET_ACTIONS_FILE: Path = PROJECT_ROOT / "iris" / "contracts" / "actions.py"
+
+
+def test_iris_app_checks_no_action_before_safety_gate() -> None:
+    """IrisApp.process_observationはセーフティゲートを呼び出す前にis_no_actionをチェックしなければならない。"""
+    if not TARGET_APP_FILE.is_file():
+        pytest.skip("iris/runtime/app.py does not exist yet")
+
+    text = TARGET_APP_FILE.read_text(encoding="utf-8")
+    tree = ast.parse(text)
+
+    cls = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "IrisApp":
+            cls = node
+            break
+    assert cls is not None, "IrisApp class not found in app.py"
+
+    method = None
+    for node in cls.body:
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == "process_observation"
+        ):
+            method = node
+            break
+    assert method is not None, "IrisApp.process_observation() not found"
+
+    method_source = ast.get_source_segment(text, method) or ""
+
+    assert "is_no_action" in method_source, (
+        "process_observation() must check plan.is_no_action to shortcut no-action plans"
+    )
+    assert "check_plan" in method_source, (
+        "process_observation() must call action_safety_gate.check_plan()"
+    )
+    assert "present" in method_source, "process_observation() must call presenter.present()"
+    assert "check_output" in method_source, (
+        "process_observation() must call output_safety_gate.check_output()"
+    )
+
+
+def test_iris_app_no_action_returns_presented_output_with_no_text() -> None:
+    """IrisApp.process_observationはno-actionに対してPresentedOutput(text=None)を返さなければならない。"""
+    if not TARGET_APP_FILE.is_file():
+        pytest.skip("iris/runtime/app.py does not exist yet")
+
+    text = TARGET_APP_FILE.read_text(encoding="utf-8")
+    assert "PresentedOutput(text=None)" in text, (
+        "no-action shortcut must return PresentedOutput(text=None)"
+    )
+
+
+# ── 7. ActionPlan.is_no_action / PresentedOutput.is_sendable ───
+
+
+def test_action_plan_is_no_action_property() -> None:
+    """ActionPlan.is_no_actionはturn_intentとshould_respondをチェックするプロパティでなければならない。"""
+    if not TARGET_ACTIONS_FILE.is_file():
+        pytest.skip("iris/contracts/actions.py does not exist yet")
+
+    tree = ast.parse(TARGET_ACTIONS_FILE.read_text(encoding="utf-8"))
+    cls = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "ActionPlan":
+            cls = node
+            break
+    assert cls is not None, "ActionPlan class not found"
+
+    found_is_no_action = False
+    for node in cls.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "is_no_action":
+            assert node.decorator_list, "is_no_action must be a @property"
+            decorator_names = _get_decorator_names(node)
+            assert "property" in decorator_names, "is_no_action must be a @property"
+            found_is_no_action = True
+
+    assert found_is_no_action, "ActionPlan.is_no_action property not found"
+
+
+def test_presented_output_is_sendable_property() -> None:
+    """PresentedOutput.is_sendableはtextがNoneでないことをチェックするプロパティでなければならない。"""
+    if not TARGET_ACTIONS_FILE.is_file():
+        pytest.skip("iris/contracts/actions.py does not exist yet")
+
+    tree = ast.parse(TARGET_ACTIONS_FILE.read_text(encoding="utf-8"))
+    cls = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "PresentedOutput":
+            cls = node
+            break
+    assert cls is not None, "PresentedOutput class not found"
+
+    found_is_sendable = False
+    for node in cls.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "is_sendable":
+            assert node.decorator_list, "is_sendable must be a @property"
+            found_is_sendable = True
+
+    assert found_is_sendable, "PresentedOutput.is_sendable property not found"
+
+
+# ── 8. FeatureDefinition field completeness ─────────────────────
+
+
+TARGET_FEATURE_DEF_FILE: Path = PROJECT_ROOT / "iris" / "features" / "definition.py"
+
+REQUIRED_FEATURE_DEFINITION_FIELDS: set[str] = {
+    "name",
+    "pipeline_steps",
+    "observation_sources",
+    "learning_hooks",
+    "background_jobs",
+}
+
+
+def test_feature_definition_has_all_required_fields() -> None:
+    """FeatureDefinitionは5つすべての拡張ポイントフィールドを公開しなければならない。"""
+    if not TARGET_FEATURE_DEF_FILE.is_file():
+        pytest.skip("iris/features/definition.py does not exist yet")
+
+    tree = ast.parse(TARGET_FEATURE_DEF_FILE.read_text(encoding="utf-8"))
+    cls = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "FeatureDefinition":
+            cls = node
+            break
+    assert cls is not None, "FeatureDefinition class not found"
+
+    field_names: set[str] = set()
+    for item in cls.body:
+        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+            field_names.add(item.target.id)
+
+    missing = REQUIRED_FEATURE_DEFINITION_FIELDS - field_names
+    assert not missing, f"FeatureDefinition missing required fields: {missing}"
+
+
+# ── 9. PipelineStepResult subclasses frozen ─────────────────────
+
+
+def test_all_pipeline_step_results_are_frozen_dataclass() -> None:
+    """すべてのPipelineStepResultサブクラスはfrozen dataclassでなければならない。"""
+    path = TARGET_FILES["cycle_models"]
+    if not path.is_file():
+        pytest.skip("cycle/models.py does not exist yet")
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    pipeline_result_classes: list[tuple[str, bool, bool]] = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            bases = [ast.unparse(b) for b in node.bases]
+            if "PipelineStepResult" in bases:
+                is_frozen = _class_has_frozen_dataclass(node)
+                is_dataclass = _class_has_dataclass(node)
+                pipeline_result_classes.append((node.name, is_frozen, is_dataclass))
+
+    violations = [
+        f"  {name}: frozen={frozen}, dataclass={dc}"
+        for name, frozen, dc in pipeline_result_classes
+        if not frozen or not dc
+    ]
+    assert not violations, (
+        "PipelineStepResult subclasses must be frozen dataclasses:\n" + "\n".join(violations)
     )

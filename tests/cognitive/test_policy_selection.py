@@ -1,15 +1,23 @@
+"""ポリシー対応応答プロンプト構築のテスト。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
 from iris.cognitive.action.response import build_response_prompt
-from iris.cognitive.workspace.frame import InterpretedInput, PolicyConstraint, WorkspaceFrame
+from iris.cognitive.workspace.frame import InterpretedInput, WorkspaceFrame
 from iris.contracts.identity import Identity
 from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.policy import PolicyConstraint
 from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
 
 
 def _frame(constraints: tuple[PolicyConstraint, ...] = ()) -> WorkspaceFrame:
+    """オプションのポリシー制約を持つWorkspaceFrameを返す。
+
+    Returns:
+        WorkspaceFrame: 構築済みのワークスペースフレーム。
+    """
     return WorkspaceFrame(
         observation=UserMessageObservation(
             observation_id=ObservationId("obs-policy-prompt"),
@@ -30,6 +38,7 @@ def _frame(constraints: tuple[PolicyConstraint, ...] = ()) -> WorkspaceFrame:
 
 
 def test_policy_prompt_context_appears_only_when_present() -> None:
+    """ポリシープロンプト命令が制約が存在する場合のみ含まれることを確認する。"""
     prompt_without_policy = build_response_prompt(_frame())
     prompt_with_policy = build_response_prompt(
         _frame(

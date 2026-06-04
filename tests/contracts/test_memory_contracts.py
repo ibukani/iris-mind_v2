@@ -1,14 +1,14 @@
+"""メモリ契約の不変性と型のテスト。"""
+
 from __future__ import annotations
-
-from dataclasses import FrozenInstanceError
-
-import pytest
 
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
 from iris.core.ids import UserId
+from tests.helpers.immutability import assert_frozen_field
 
 
 def test_memory_contracts_are_frozen_and_typed() -> None:
+    """MemoryRecord、MemoryQuery、MemorySearchResultがfrozen dataclassであることを確認する。"""
     record = MemoryRecord(
         id=MemoryId("memory-1"),
         text="Iris remembers tea preferences.",
@@ -21,6 +21,4 @@ def test_memory_contracts_are_frozen_and_typed() -> None:
     assert record.id == MemoryId("memory-1")
     assert query.limit == 3
     assert result.record.text == "Iris remembers tea preferences."
-
-    with pytest.raises(FrozenInstanceError):
-        record.text = "changed"  # type: ignore[misc]
+    assert_frozen_field(record, "text", "changed")

@@ -1,14 +1,15 @@
+"""アフェクトと関係性の契約の不変性と型のテスト。"""
+
 from __future__ import annotations
-
-from dataclasses import FrozenInstanceError
-
-import pytest
 
 from iris.cognitive.cycle.models import AppraisalResult, RelationshipResult, StepStatus
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot
+from tests.helpers.approx import approx
+from tests.helpers.immutability import assert_frozen_field
 
 
 def test_affect_and_relationship_snapshots_are_frozen_and_typed() -> None:
+    """AffectSnapshotとRelationshipSnapshotがfrozen dataclassであることを確認する。"""
     affect = AffectSnapshot(
         mood_label="positive",
         valence=0.25,
@@ -24,15 +25,14 @@ def test_affect_and_relationship_snapshots_are_frozen_and_typed() -> None:
         relationship_summary="User relationship(affinity=0.10, trust=0.50, familiarity=0.20)",
     )
 
-    assert affect.valence == 0.25
-    assert relationship.trust == 0.5
-    with pytest.raises(FrozenInstanceError):
-        affect.valence = 0.0  # type: ignore[misc]
-    with pytest.raises(FrozenInstanceError):
-        relationship.trust = 0.0  # type: ignore[misc]
+    assert affect.valence == approx(0.25)
+    assert relationship.trust == approx(0.5)
+    assert_frozen_field(affect, "valence", 0.0)
+    assert_frozen_field(relationship, "trust", 0.0)
 
 
 def test_existing_affect_result_types_are_reused() -> None:
+    """既存のAppraisalResultとRelationshipResult型が使用されていることを確認する。"""
     appraisal = AppraisalResult(step_name="appraisal", status=StepStatus.OK, valence=0.25)
     relationship = RelationshipResult(step_name="relationship", status=StepStatus.OK, trust=0.5)
 

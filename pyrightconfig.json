@@ -1,23 +1,75 @@
 {
-    "pythonVersion": "3.13",
-    "include": ["iris"],
-    "exclude": [
-        "**/node_modules",
-        "**/__pycache__",
-        "**/.*",
-        "build",
-        "dist",
-        "venv",
-        ".venv",
-        "tests"
-    ],
-    "venvPath": ".",
-    "venv": ".venv",
-    "typeCheckingMode": "standard",
-    "reportUnnecessaryIsInstance": "error",
-    "reportUnusedVariable": "error",
-    "reportIncompatibleVariableOverride": "error",
-    "reportUnnecessaryCast": "error",
-    "reportMissingImports": false,
-    "reportMissingTypeStubs": false
+  "pythonVersion": "3.13",
+  "include": [
+    "iris",
+    "tests",
+    "scripts",
+    "main.py"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "build",
+    "dist",
+    "venv",
+    ".venv",
+    "htmlcov"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "strict",
+  "useLibraryCodeForTypes": true,
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": "error",
+  "reportUnknownArgumentType": "error",
+  "reportUnknownLambdaType": "error",
+  "reportUnknownMemberType": "error",
+  "reportUnknownParameterType": "error",
+  "reportUnknownVariableType": "error",
+  "reportImplicitOverride": "error",
+  "reportImplicitStringConcatenation": "error",
+  "reportImportCycles": "error",
+  "reportIncompatibleMethodOverride": "error",
+  "reportIncompatibleVariableOverride": "error",
+  "reportMissingParameterType": "error",
+  "reportMissingTypeArgument": "error",
+  "reportPrivateUsage": "error",
+  "reportPropertyTypeMismatch": "error",
+  "reportUnnecessaryCast": "error",
+  "reportUnnecessaryComparison": "error",
+  "reportUnnecessaryContains": "error",
+  "reportUnnecessaryIsInstance": "error",
+  "reportUnusedClass": "error",
+  "reportUnusedFunction": "error",
+  "reportUnusedImport": "error",
+  "reportUnusedVariable": "error",
+  "reportUntypedBaseClass": "error",
+  "reportUntypedClassDecorator": "error",
+  "reportUntypedFunctionDecorator": "error",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["."],
+      "typeCheckingMode": "strict"
+    },
+    {
+      "root": "tests",
+      "extraPaths": ["."],
+      "typeCheckingMode": "standard",
+      "reportMissingTypeStubs": "warning",
+      "reportPrivateUsage": "warning",
+      "reportUnusedClass": "warning",
+      "reportUnusedFunction": "warning"
+    },
+    {
+      "root": "scripts",
+      "extraPaths": ["."],
+      "typeCheckingMode": "standard",
+      "reportMissingTypeStubs": "warning",
+      "reportPrivateUsage": "warning",
+      "reportUnusedClass": "warning",
+      "reportUnusedFunction": "warning"
+    }
+  ]
 }

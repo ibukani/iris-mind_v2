@@ -1,8 +1,9 @@
+"""メモリ検索パイプラインステップとフレームエンリッチメントのテスト。"""
+
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,19 +15,36 @@ from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ObservationId, SessionId
+from tests.helpers.immutability import assert_frozen_field
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class StubMemoryRetriever:
+    """クエリを記録して固定結果を返すスタブメモリ検索器。"""
+
     def __init__(self, results: Sequence[MemorySearchResult]) -> None:
+        """固定検索結果で初期化する。"""
         self.queries: list[MemoryQuery] = []
         self._results = tuple(results)
 
     def search(self, query: MemoryQuery) -> Sequence[MemorySearchResult]:
+        """クエリを記録して固定結果を返す。
+
+        Returns:
+            Sequence[MemorySearchResult]: 事前定義された固定結果。
+        """
         self.queries.append(query)
         return self._results
 
 
 def user_message(text: str = "hello tea") -> UserMessageObservation:
+    """指定されたテキストを持つUserMessageObservationを返す。
+
+    Returns:
+        UserMessageObservation: 構築済みの観測。
+    """
     return UserMessageObservation(
         observation_id=ObservationId("obs-memory"),
         session_id=SessionId("session-memory"),
@@ -39,6 +57,7 @@ def user_message(text: str = "hello tea") -> UserMessageObservation:
 
 @pytest.mark.anyio
 async def test_memory_retrieval_step_returns_typed_results() -> None:
+    """MemoryRetrievalStepがメモリを検索してフレームをエンリッチすることを確認する。"""
     memory = MemorySearchResult(
         record=MemoryRecord(id=MemoryId("m1"), text="User likes tea."),
         score=1.0,
@@ -60,6 +79,7 @@ async def test_memory_retrieval_step_returns_typed_results() -> None:
 
 @pytest.mark.anyio
 async def test_memory_retrieval_step_skips_without_interpreted_text() -> None:
+    """フレームに解釈テキストがない場合にMemoryRetrievalStepがスキップすることを確認する。"""
     retriever = StubMemoryRetriever(())
     frame = WorkspaceFrame(observation=user_message())
 
@@ -71,7 +91,7 @@ async def test_memory_retrieval_step_skips_without_interpreted_text() -> None:
 
 
 def test_workspace_frame_memory_is_not_directly_mutated() -> None:
+    """WorkspaceFrame.memory_summaryがその場で変更できないことを確認する。"""
     frame = WorkspaceFrame(observation=user_message())
 
-    with pytest.raises(FrozenInstanceError):
-        frame.memory_summary = frame.memory_summary  # type: ignore[misc]
+    assert_frozen_field(frame, "memory_summary", frame.memory_summary)

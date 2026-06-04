@@ -1,17 +1,23 @@
+"""応答生成パイプラインステップとサポート型。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol, override
 
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.actions import ActionPlan
-from iris.contracts.policy import PolicyConstraint
+
+if TYPE_CHECKING:
+    from iris.cognitive.workspace.frame import WorkspaceFrame
+    from iris.contracts.policy import PolicyConstraint
 
 
 @dataclass(frozen=True)
 class ResponsePrompt:
+    """LLM用にワークスペースフレームから組み立てられたプロンプトデータ。"""
+
     system_instruction: str
     user_text: str
     memory_snippets: tuple[str, ...] = ()
@@ -23,26 +29,41 @@ class ResponsePrompt:
 
 @dataclass(frozen=True)
 class GeneratedResponse:
+    """LLMによって生成された応答。"""
+
     text: str
     model: str
 
 
 class ResponseGenerator(Protocol):
-    async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse: ...
+    """LLM応答生成器のプロトコル。"""
+
+    async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
+        """与えられたプロンプトから応答を生成する。"""
+        ...
 
 
 def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
+    """ワークスペースフレームからResponsePromptを組み立てる。入力テキストがない場合はNone。
+
+    Returns:
+        ResponsePrompt | None: 構築された応答プロンプト。入力テキストがない場合は None。
+    """
     if frame.interpreted_input is None or frame.interpreted_input.text is None:
         return None
 
     return ResponsePrompt(
         system_instruction="Generate a concise text response for Iris.",
         user_text=frame.interpreted_input.text,
-        memory_snippets=tuple(result.record.text for result in frame.memory_summary.retrieved_memories),
+        memory_snippets=tuple(
+            result.record.text for result in frame.memory_summary.retrieved_memories
+        ),
         affect_context=frame.affect.affect_summary,
         relationship_context=frame.relationship.relationship_summary,
         goals=tuple(goal.name for goal in frame.goals),
-        constraints=tuple(_format_policy_constraint(constraint) for constraint in frame.constraints),
+        constraints=tuple(
+            _format_policy_constraint(constraint) for constraint in frame.constraints
+        ),
     )
 
 
@@ -51,13 +72,27 @@ def _format_policy_constraint(constraint: PolicyConstraint) -> str:
 
 
 class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):
+    """LLMを介してテキスト応答を生成するパイプラインステップ。"""
+
     name = "response_generation"
 
     def __init__(self, generator: ResponseGenerator, *, priority: int = 10) -> None:
+        """応答生成器とオプションの優先度で初期化する。
+
+        Args:
+            generator: The response generator to use.
+            priority: Priority for the resulting action plan.
+        """
         self._generator = generator
         self._priority = priority
 
+    @override
     async def run(self, frame: WorkspaceFrame) -> ActionSelectionResult:
+        """応答を生成し、アクション選択結果を返す。
+
+        Returns:
+            ActionSelectionResult: 生成されたアクションプラン。入力がない場合は SKIPPED。
+        """
         prompt = build_response_prompt(frame)
         if prompt is None:
             return ActionSelectionResult(

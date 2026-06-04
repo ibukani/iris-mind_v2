@@ -1,3 +1,5 @@
+"""Tests for proactive talk goal proposal and action selection."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -13,6 +15,7 @@ from iris.features.proactive_talk.models import ProactiveSalience
 
 
 def _idle_frame(idle_seconds: float) -> WorkspaceFrame:
+    """Return a WorkspaceFrame with an IdleTickObservation."""
     return WorkspaceFrame(
         observation=IdleTickObservation(
             observation_id=ObservationId("obs-proactive-goal"),
@@ -26,6 +29,7 @@ def _idle_frame(idle_seconds: float) -> WorkspaceFrame:
 
 
 def test_low_salience_proposes_no_action() -> None:
+    """Verify a low salience score produces a no_action goal."""
     goal = GoalProposer().propose(ProactiveSalience(score=0.1, threshold=0.5))
 
     assert goal.name == "no_action"
@@ -34,6 +38,7 @@ def test_low_salience_proposes_no_action() -> None:
 
 
 def test_high_salience_proposes_proactive_talk() -> None:
+    """Verify a high salience score produces a proactive_talk goal."""
     goal = GoalProposer().propose(ProactiveSalience(score=0.7, threshold=0.5))
 
     assert goal.name == "proactive_talk"
@@ -43,6 +48,7 @@ def test_high_salience_proposes_proactive_talk() -> None:
 
 @pytest.mark.anyio
 async def test_proactive_action_selection_returns_typed_action_plan() -> None:
+    """Verify ProactiveActionSelectionStep returns an ActionPlan with proactive_talk intent."""
     result = await ProactiveActionSelectionStep().run(_idle_frame(600.0))
 
     assert result.action_plans[0].turn_intent == "proactive_talk"

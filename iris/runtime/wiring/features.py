@@ -1,20 +1,34 @@
+"""Wiring functions for feature-extended cognitive cycles."""
+
 from __future__ import annotations
 
-from iris.adapters.memory.ports import MemoryStore
+from typing import TYPE_CHECKING
+
 from iris.cognitive.affect.appraisal import AppraisalStep
 from iris.cognitive.affect.relationship import InMemoryRelationshipState, RelationshipStep
-from iris.cognitive.cycle.models import PipelineStepResult
-from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.cognitive.cycle.service import CognitiveCycle
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
-from iris.features.definition import FeatureDefinition
 from iris.features.proactive_talk import define_proactive_talk_feature
 from iris.runtime.wiring.cognitive import wire_cognitive_cycle
 
+if TYPE_CHECKING:
+    from iris.adapters.memory.ports import MemoryStore
+    from iris.cognitive.cycle.models import PipelineStepResult
+    from iris.cognitive.cycle.pipeline import PipelineStep
+    from iris.cognitive.cycle.service import CognitiveCycle
+    from iris.features.definition import FeatureDefinition
+
 
 def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefinition:
+    """Wire the proactive talk feature definition.
+
+    Args:
+        salience_threshold: Minimum salience for proactive initiation.
+
+    Returns:
+        A FeatureDefinition for proactive talk.
+    """
     return define_proactive_talk_feature(salience_threshold=salience_threshold)
 
 
@@ -23,6 +37,17 @@ def wire_proactive_talk_cognitive_cycle(
     relationship_state: InMemoryRelationshipState | None = None,
     salience_threshold: float = 0.5,
 ) -> CognitiveCycle:
+    """Wire a cognitive cycle extended with the proactive talk feature.
+
+    Args:
+        memory_store: Optional memory store for retrieval.
+        relationship_state: Optional shared relationship state.
+        salience_threshold: Minimum salience for proactive initiation.
+
+    Returns:
+        A CognitiveCycle with perception, memory, affect, policy,
+        and proactive talk pipeline steps.
+    """
     feature = wire_proactive_talk_feature(salience_threshold=salience_threshold)
     steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
     if memory_store is not None:

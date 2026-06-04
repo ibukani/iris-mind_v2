@@ -1,14 +1,14 @@
+"""ポリシー契約の不変性と型階層のテスト。"""
+
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
-
-import pytest
-
 from iris.cognitive.cycle.models import PipelineStepResult, PolicyResult, StepStatus
-from iris.cognitive.workspace.frame import ActionPreference, PolicyConstraint
+from iris.contracts.policy import ActionPreference, PolicyConstraint
+from tests.helpers.immutability import assert_frozen_field
 
 
 def test_policy_contracts_are_immutable_and_typed() -> None:
+    """ポリシー契約がfrozenでありPipelineStepResultを継承していることを確認する。"""
     constraint = PolicyConstraint(
         name="calm_response",
         reason="high arousal with negative valence",
@@ -31,8 +31,5 @@ def test_policy_contracts_are_immutable_and_typed() -> None:
     assert result.constraints == (constraint,)
     assert result.action_preferences == (preference,)
 
-    with pytest.raises(FrozenInstanceError):
-        constraint.name = "other"
-
-    with pytest.raises(FrozenInstanceError):
-        result.response_allowed = False
+    assert_frozen_field(constraint, "name", "other")
+    assert_frozen_field(result, "response_allowed", False)  # noqa: FBT003 -- bool literal probes frozen-field rejection

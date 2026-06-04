@@ -24,3 +24,9 @@ logs/
 
 # Environment variables (API keys etc.)
 .env
+
+# coverage results
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml

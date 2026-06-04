@@ -1,40 +1,38 @@
 # Test & Quality Rules for AI Coding Agents
 
-## Test Execution Commands
+This compatibility file points to the structured harness rules under `.agents/rules/testing.md`.
+
+## Canonical verification
+
+Before reporting completion, run:
 
 ```bash
-# All tests
-uv run pytest tests/
-
-# Quick run
-uv run pytest tests/ -q
-
-# Architecture guards only (MUST PASS before commit)
-uv run pytest tests/architecture -q
-
-# Specific test file
-uv run pytest tests/runtime/test_cli.py -q
+make check
 ```
 
-## Code Quality Commands
+`make verify` is an alias for `make check`.
 
-Run ALL of these before considering work complete:
+Both commands call `scripts/verify.py` and run:
 
 ```bash
-# Lint check
 uv run ruff check .
-
-# Lint auto-fix
-uv run ruff check --fix .
-
-# Format check
 uv run ruff format --check .
+uv run mypy iris tests scripts main.py
+uv run pyright .
+uv run pytest tests/architecture -q
+uv run pytest tests/
+```
 
-# Format
-uv run ruff format .
+Use `make quick` only while iterating. It skips the full test suite and coverage gate.
 
-# Type check
-uv run mypy iris/core iris/contracts iris/cognitive iris/presentation iris/safety iris/features iris/adapters iris/runtime
+## Targeted checks
+
+```bash
+make lint
+make format
+make type
+make arch
+make test
 ```
 
 ## Architecture Test Pass Criteria (ALL 13 MUST PASS)
@@ -55,15 +53,6 @@ Architecture tests verify that design boundaries are intact. These are NOT optio
 12. No service locator / global registry / `resolve_optional` outside `runtime/wiring/**`
 13. No new `action: str` dispatcher branches added
 
-## Architecture Test Files
-
-| File | Purpose |
-|------|---------|
-| `tests/architecture/test_target_architecture_guards.py` | Forbidden symbols, layer dependency direction, runtime entrypoint rules, `__init__.py` rules, no service locator |
-| `tests/architecture/test_cognitive_runtime_boundaries.py` | Layer boundary rules |
-| `tests/architecture/test_cognitive_runtime_anti_patterns.py` | Anti-pattern scans (global mutable registries, untyped contracts, etc.) |
-| `tests/architecture/test_cognitive_runtime_contracts.py` | Design contract tests (frozen dataclasses, FrameBuilder, PipelineStep) |
-
 ## Exception Policy
 
 Exceptions are NOT permitted by default. If an exception is unavoidable, the SAME PR/commit MUST include:
@@ -74,15 +63,3 @@ Exceptions are NOT permitted by default. If an exception is unavoidable, the SAM
 - Explicit allowlist entry in architecture tests
 
 Allowlists are NEVER permanent. Failures left in place by subsequent implementation are considered design debt.
-
-## Pre-Commit Checklist
-
-Before committing, run and verify:
-
-```bash
-uv run ruff check .          # Must pass
-uv run ruff format --check .  # Must pass
-uv run mypy iris/...          # Must pass
-uv run pytest tests/ -q       # Must pass
-uv run pytest tests/architecture -q  # Must pass
-```

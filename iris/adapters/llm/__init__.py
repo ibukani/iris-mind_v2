@@ -1,1 +1,1 @@
-"""LLM adapter boundary."""
+"""LLMアダプタ境界。"""

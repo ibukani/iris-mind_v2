@@ -1,1 +1,1 @@
-"""Memory adapter boundary."""
+"""メモリアダプタ境界。"""

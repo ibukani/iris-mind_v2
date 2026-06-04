@@ -1,3 +1,6 @@
+# Copyright 2025 Iris Mind
+"""Tests for proactive idle tick flow with salience-based action selection."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -11,6 +14,7 @@ from iris.runtime.wiring.features import wire_proactive_talk_cognitive_cycle
 
 
 def _idle_tick(idle_seconds: float) -> IdleTickObservation:
+    """Return an IdleTickObservation with the given idle duration."""
     return IdleTickObservation(
         observation_id=ObservationId("obs-proactive-idle-flow"),
         session_id=SessionId("session-proactive-idle-flow"),
@@ -24,6 +28,7 @@ def _idle_tick(idle_seconds: float) -> IdleTickObservation:
 
 @pytest.mark.anyio
 async def test_low_idle_tick_flow_selects_no_action() -> None:
+    """Verify a low idle tick duration produces a no_action plan."""
     cycle = wire_proactive_talk_cognitive_cycle()
     result = await cycle.run(_idle_tick(10.0))
 
@@ -34,6 +39,7 @@ async def test_low_idle_tick_flow_selects_no_action() -> None:
 
 @pytest.mark.anyio
 async def test_high_idle_tick_flow_represents_proactive_talk_without_sending() -> None:
+    """Verify a high idle tick duration produces proactive_talk without sending."""
     app = IrisApp(cycle=wire_proactive_talk_cognitive_cycle())
 
     output = await app.process_observation(_idle_tick(600.0))

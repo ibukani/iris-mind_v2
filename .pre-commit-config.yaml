@@ -3,20 +3,18 @@ repos:
     rev: v0.15.12
     hooks:
       - id: ruff
-        args: [--fix]
       - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v2.1.0
-    hooks:
-      - id: mypy
-        args: [iris/]
-        additional_dependencies: []
-        pass_filenames: false
   - repo: local
     hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy iris tests scripts main.py
+        language: system
+        pass_filenames: false
+        types: [python]
       - id: pyright
         name: pyright
-        entry: npx pyright .
+        entry: uv run pyright .
         language: system
         pass_filenames: false
         types: [python]

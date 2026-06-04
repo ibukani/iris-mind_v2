@@ -1,70 +1,68 @@
-"""Iris プロジェクト全体で使用するカスタム例外群。
-
-トレーサビリティと例外処理の一貫性を向上させるため、
-プロジェクト固有の例外をここで定義する。
-"""
+# Copyright 2025 Iris Mind
+"""Irisプロジェクト全体で使用するカスタム例外クラス。"""
 
 from __future__ import annotations
 
+from typing import override
 
-class IrisException(Exception):
-    """Iris プロジェクトの全カスタム例外の基底クラス。
 
-    Args:
-        message: エラーメッセージ。
-        code: エラーコード（オプション、デバッグ/ロギング用）。
-    """
+class IrisError(Exception):
+    """全Irisカスタム例外の基底クラス。"""
 
     def __init__(self, message: str, code: str | None = None) -> None:
+        """メッセージとオプションのコードでエラーを初期化する。
+
+        Args:
+            message: Human-readable error description.
+            code: Optional error code for debugging and logging.
+        """
         super().__init__(message)
         self.message = message
         self.code = code or self.__class__.__name__
 
+    @override
     def __str__(self) -> str:
+        """オプションのエラーコード接頭辞付きでエラーメッセージを返す。
+
+        Returns:
+            str: フォーマットされたエラーメッセージ。
+        """
         if self.code != self.__class__.__name__:
             return f"[{self.code}] {self.message}"
         return self.message
 
 
-class IrisConfigError(IrisException):
-    """設定ファイル読み込みまたは検証エラー。
-
-    config.yaml の不正な値、必須項目の欠落、
-    モデル名の不正値などが対象。
-    """
+class IrisConfigError(IrisError):
+    """設定ファイルの読み込みまたは検証エラー。"""
 
 
-class IrisRuntimeError(IrisException):
-    """実行時エラー。実行中の予期しない状態遷移など。"""
+class IrisRuntimeError(IrisError):
+    """実行中の予期しない状態遷移のランタイムエラー。"""
 
 
-class IrisConnectionError(IrisException):
-    """外部接続エラー。LLM プロバイダへの接続失敗など。"""
+class IrisConnectionError(IrisError):
+    """外部接続エラー（例：LLMプロバイダ接続失敗）。"""
 
 
-class IrisMemoryError(IrisException):
-    """記憶レイヤーのエラー（ファイル操作失敗、パース失敗など）。"""
+class IrisMemoryError(IrisError):
+    """メモリレイヤエラー（例：ファイル操作またはパース失敗）。"""
 
 
-class IrisToolError(IrisException):
-    """ツール（capability）実行エラー。ツール未発見、実行失敗など。"""
+class IrisToolError(IrisError):
+    """ツールまたは能力の実行エラー。"""
 
 
-class IrisSessionError(IrisException):
-    """セッション管理エラー。セッション重複、無効な session_id など。"""
+class IrisSessionError(IrisError):
+    """セッション管理エラー（例：重複または無効なsession_id）。"""
 
 
 class IrisLLMError(IrisConnectionError):
-    """LLM プロバイダ固有エラー。
-
-    Ollama/OpenRouter への接続失敗、タイムアウト、
-    レート制限など。
-    """
+    """LLMプロバイダ固有エラー（例：接続失敗、タイムアウト、レート制限）。"""
 
 
 class IrisLLMUnavailableError(IrisLLMError):
-    """LLM プロバイダが利用不可（起動していない、キーなし等）。"""
+    """LLMプロバイダが利用不可（未実行、キー欠落等）。"""
 
 
 class IrisCapabilityError(IrisToolError):
-    """Capability（ツール）が利用不可またはサポート外。"""
+    """能力またはツールが利用不可または非サポート。"""

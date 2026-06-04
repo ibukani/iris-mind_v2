@@ -1,3 +1,5 @@
+"""アフェクトアプレイザルパイプラインステップとキーワード分類のテスト。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -11,9 +13,15 @@ from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ObservationId, SessionId
+from tests.helpers.approx import approx
 
 
 def user_message(text: str) -> UserMessageObservation:
+    """指定されたテキストを持つUserMessageObservationを返す。
+
+    Returns:
+        UserMessageObservation: 構築済みの観測。
+    """
     return UserMessageObservation(
         observation_id=ObservationId("obs-affect"),
         session_id=SessionId("session-affect"),
@@ -25,17 +33,19 @@ def user_message(text: str) -> UserMessageObservation:
 
 
 def test_keyword_appraisal_is_deterministic() -> None:
+    """キーワードベースのアフェクト分類が決定論的なVAD値を生成することを確認する。"""
     affect = classify_appraisal("ありがとう、助かった。急ぎで不安だった")
 
     assert affect.mood_label == "positive"
-    assert affect.valence == 0.25
-    assert affect.arousal == 0.30000000000000004
-    assert affect.dominance == 0.0
+    assert affect.valence == approx(0.25)
+    assert affect.arousal == approx(0.30000000000000004)
+    assert affect.dominance == approx(0.0)
     assert affect.affect_summary == "positive VAD(v=0.25, a=0.30, d=0.00)"
 
 
 @pytest.mark.anyio
 async def test_appraisal_step_enriches_frame_through_frame_builder() -> None:
+    """AppraisalStepがFrameBuilder.apply()を通じてエンリッチメントを生成することを確認する。"""
     builder = FrameBuilder()
     frame = WorkspaceFrame(observation=user_message("I am confused and need help urgent"))
     frame = builder.apply(frame, await SimplePerceptionStep().run(frame))

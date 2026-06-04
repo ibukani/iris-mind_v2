@@ -1,3 +1,5 @@
+"""関係性追跡パイプラインステップのテスト。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -11,9 +13,15 @@ from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.identity import Identity
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
+from tests.helpers.approx import approx
 
 
 def user_message(actor: Identity | None = None) -> UserMessageObservation:
+    """オプションのアクターIDを持つUserMessageObservationを返す。
+
+    Returns:
+        UserMessageObservation: 構築済みの観測。
+    """
     return UserMessageObservation(
         observation_id=ObservationId("obs-relationship"),
         session_id=SessionId("session-relationship"),
@@ -26,6 +34,7 @@ def user_message(actor: Identity | None = None) -> UserMessageObservation:
 
 @pytest.mark.anyio
 async def test_relationship_step_updates_per_user_state() -> None:
+    """RelationshipStepがユーザーごとの親密度、信頼度、熟知度を更新することを確認する。"""
     actor = Identity(
         user_id=UserId("user-relationship"),
         display_name="Mina",
@@ -45,14 +54,15 @@ async def test_relationship_step_updates_per_user_state() -> None:
 
     assert result.status == StepStatus.OK
     assert enriched.relationship.user_label == "Mina"
-    assert enriched.relationship.affinity == 0.02
-    assert enriched.relationship.trust == 0.515
-    assert enriched.relationship.familiarity == 0.02
+    assert enriched.relationship.affinity == approx(0.02)
+    assert enriched.relationship.trust == approx(0.515)
+    assert enriched.relationship.familiarity == approx(0.02)
     assert enriched.relationship.relationship_summary is not None
 
 
 @pytest.mark.anyio
 async def test_relationship_step_skips_without_actor_identity() -> None:
+    """観測にアクターIDがない場合にRelationshipStepがスキップすることを確認する。"""
     result = await RelationshipStep().run(WorkspaceFrame(observation=user_message()))
 
     assert result.status == StepStatus.SKIPPED

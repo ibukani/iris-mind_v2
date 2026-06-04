@@ -1,3 +1,5 @@
+"""決定論的埋め込みを使用したInMemoryVectorMemoryStoreのテスト。"""
+
 from __future__ import annotations
 
 import pytest
@@ -8,6 +10,11 @@ from iris.core.ids import UserId
 
 
 def embed_text(text: str) -> tuple[float, float]:
+    """teaおよびcoffeeキーワードの存在に基づいて2次元埋め込みを返す。
+
+    Returns:
+        tuple[float, float]: 埋め込みベクトル。
+    """
     return (
         1.0 if "tea" in text.casefold() else 0.0,
         1.0 if "coffee" in text.casefold() else 0.0,
@@ -15,6 +22,7 @@ def embed_text(text: str) -> tuple[float, float]:
 
 
 def test_in_memory_vector_store_search_is_deterministic() -> None:
+    """ベクトル検索が類似度でランク付けされた決定論的な結果を返すことを確認する。"""
     store = InMemoryVectorMemoryStore(
         embed_text,
         records=(
@@ -31,6 +39,7 @@ def test_in_memory_vector_store_search_is_deterministic() -> None:
 
 
 def test_in_memory_vector_store_filters_subject_id() -> None:
+    """ベクトル検索がsubject_idで結果をフィルタリングすることを確認する。"""
     user_id = UserId("user-1")
     store = InMemoryVectorMemoryStore(
         embed_text,
@@ -46,6 +55,8 @@ def test_in_memory_vector_store_filters_subject_id() -> None:
 
 
 def test_in_memory_vector_store_rejects_unstable_embedding_dimensions() -> None:
+    """埋め込み次元が変化したときにベクターストアがValueErrorを発生させることを確認する。"""
+
     def unstable_embed(text: str) -> tuple[float, ...]:
         if text == "query":
             return (1.0,)
