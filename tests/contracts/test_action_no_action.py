@@ -7,7 +7,6 @@ import pytest
 from iris.contracts.actions import ActionPlan, PresentedOutput
 from tests.helpers.immutability import assert_frozen_field
 
-
 _ERR_INVALID_NO_ACTION = "no_action plan must not include candidate text or response intent"
 
 
