@@ -16,7 +16,11 @@ from iris.core.ids import ObservationId, SessionId
 
 
 def user_message(text: str) -> UserMessageObservation:
-    """指定されたテキストを持つUserMessageObservationを返す。"""
+    """指定されたテキストを持つUserMessageObservationを返す。
+
+    Returns:
+        UserMessageObservation: 構築済みの観測。
+    """
     return UserMessageObservation(
         observation_id=ObservationId("obs-affect"),
         session_id=SessionId("session-affect"),

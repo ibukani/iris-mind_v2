@@ -21,7 +21,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--text", required=True, help="Input text for one-turn interaction")
     parser.add_argument(
         "--llm",
-        choices=["fake", "openai"],
+        choices=("fake", "openai"),
         default="fake",
         help="LLM backend (default: fake, deterministic)",
     )
@@ -32,7 +32,9 @@ def _parse_args() -> argparse.Namespace:
 def run() -> None:
     """Parse CLI arguments, run one turn, and print the response."""
     args = _parse_args()
-    output_text = asyncio.run(run_one_turn(args.text, llm=args.llm))
+    text: str = args.text
+    llm: str = args.llm
+    output_text = asyncio.run(run_one_turn(text, llm=llm))
     if output_text:
         sys.stdout.write(output_text + "\n")
     sys.exit(0)

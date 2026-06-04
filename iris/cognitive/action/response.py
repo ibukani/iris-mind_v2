@@ -40,6 +40,7 @@ class ResponseGenerator(Protocol):
 
     async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
         """与えられたプロンプトから応答を生成する。"""
+        ...
 
 
 def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:

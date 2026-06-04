@@ -160,22 +160,6 @@ def _all_imports(tree: ast.Module) -> list[str]:
     return imports
 
 
-def _runtime_imports(tree: ast.Module) -> list[str]:
-    imports: list[str] = []
-    for node in tree.body:
-        if (
-            isinstance(node, ast.If)
-            and isinstance(node.test, ast.Name)
-            and node.test.id == "TYPE_CHECKING"
-        ):
-            continue
-        if isinstance(node, ast.Import):
-            imports.extend(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            imports.append(node.module)
-    return imports
-
-
 # ═══════════════════════════════════════════════════════════════════
 # 1.  Deleted packages must not exist
 # ═══════════════════════════════════════════════════════════════════

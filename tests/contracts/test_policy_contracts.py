@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from iris.cognitive.cycle.models import PipelineStepResult, PolicyResult, StepStatus
-from iris.cognitive.workspace.frame import ActionPreference, PolicyConstraint
+from iris.contracts.policy import ActionPreference, PolicyConstraint
 
 
 def test_policy_contracts_are_immutable_and_typed() -> None:
@@ -35,7 +35,7 @@ def test_policy_contracts_are_immutable_and_typed() -> None:
     assert result.action_preferences == (preference,)
 
     with pytest.raises(FrozenInstanceError):
-        constraint.name = "other"
+        object.__setattr__(constraint, "name", "other")
 
     with pytest.raises(FrozenInstanceError):
-        result.response_allowed = False
+        object.__setattr__(result, "response_allowed", False)

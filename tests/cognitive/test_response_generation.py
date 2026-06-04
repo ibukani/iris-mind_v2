@@ -40,7 +40,11 @@ class StubResponseGenerator:
 
 
 def user_message(text: str = "hello") -> UserMessageObservation:
-    """指定されたテキストを持つUserMessageObservationを返す。"""
+    """指定されたテキストを持つUserMessageObservationを返す。
+
+    Returns:
+        UserMessageObservation: 構築済みの観測。
+    """
     return UserMessageObservation(
         observation_id=ObservationId("obs-response"),
         session_id=SessionId("session-response"),

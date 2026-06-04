@@ -19,7 +19,11 @@ from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
 
 
 def _observation(text: str = "hello") -> UserMessageObservation:
-    """指定されたテキストとテスト用IDを持つUserMessageObservationを返す。"""
+    """指定されたテキストとテスト用IDを持つUserMessageObservationを返す。
+
+    Returns:
+        UserMessageObservation: 構築済みの観測。
+    """
     return UserMessageObservation(
         observation_id=ObservationId("obs-policy"),
         session_id=SessionId("session-policy"),

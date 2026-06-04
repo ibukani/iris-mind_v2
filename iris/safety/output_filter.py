@@ -15,6 +15,7 @@ class OutputSafetyGate(Protocol):
 
     async def check_output(self, output: PresentedOutput) -> SafetyDecision:
         """Evaluate presented output and return a safety decision."""
+        ...
 
 
 class AllowAllOutputGate:

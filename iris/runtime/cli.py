@@ -84,15 +84,17 @@ def main() -> None:
     parser.add_argument("--text", required=True, help="Input text for one-turn interaction")
     parser.add_argument(
         "--llm",
-        choices=["fake", "openai"],
+        choices=("fake", "openai"),
         default="fake",
         help="LLM backend (default: fake, deterministic; 'openai' requires OPENAI_API_KEY)",
     )
     parser.add_argument("--model", default=None, help="OpenAI model name (only with --llm openai)")
 
     args = parser.parse_args()
+    text: str = args.text
+    llm: str = args.llm
 
-    output_text = asyncio.run(run_one_turn(args.text, llm=args.llm))
+    output_text = asyncio.run(run_one_turn(text, llm=llm))
     if output_text:
         sys.stderr.write(output_text + "\n")
 

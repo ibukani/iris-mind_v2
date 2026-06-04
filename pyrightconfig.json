@@ -49,11 +49,13 @@
   "reportUntypedFunctionDecorator": "error",
   "executionEnvironments": [
     {
-      "root": "iris",
+      "root": ".",
+      "extraPaths": ["."],
       "typeCheckingMode": "strict"
     },
     {
       "root": "tests",
+      "extraPaths": ["."],
       "typeCheckingMode": "standard",
       "reportMissingTypeStubs": "warning",
       "reportPrivateUsage": "warning",
@@ -62,6 +64,7 @@
     },
     {
       "root": "scripts",
+      "extraPaths": ["."],
       "typeCheckingMode": "standard",
       "reportMissingTypeStubs": "warning",
       "reportPrivateUsage": "warning",

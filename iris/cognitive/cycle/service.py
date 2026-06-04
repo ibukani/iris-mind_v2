@@ -52,6 +52,13 @@ class CognitiveCycle:
         return CycleResult(frame=frame, selected_plan=selected)
 
     def _select_action_plan(self, frame: WorkspaceFrame) -> ActionPlan:
-        if frame.candidate_action_plans:
-            return max(frame.candidate_action_plans, key=lambda plan: plan.priority)
-        return self._fallback_plan
+        plans = frame.candidate_action_plans
+        if not plans:
+            return self._fallback_plan
+        selected: ActionPlan = plans[0]
+        best_priority = selected.priority
+        for plan in plans[1:]:
+            if plan.priority > best_priority:
+                selected = plan
+                best_priority = plan.priority
+        return selected

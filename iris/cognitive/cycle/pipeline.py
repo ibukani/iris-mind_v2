@@ -19,3 +19,4 @@ class PipelineStep(Protocol[ResultT_co]):
 
     async def run(self, frame: WorkspaceFrame) -> ResultT_co:
         """現在のワークスペースフレームに対してステップを実行し、型付き結果を返す。"""
+        ...

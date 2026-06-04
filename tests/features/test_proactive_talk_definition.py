@@ -44,7 +44,7 @@ def test_idle_tick_observation_is_typed_and_provider_neutral() -> None:
     assert observation.idle_seconds == pytest.approx(120.0)
 
     with pytest.raises(FrozenInstanceError):
-        observation.idle_seconds = 0.0
+        object.__setattr__(observation, "idle_seconds", 0.0)
 
 
 def test_proactive_talk_feature_no_forbidden_imports() -> None:

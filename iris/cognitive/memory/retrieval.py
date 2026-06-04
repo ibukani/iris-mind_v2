@@ -20,6 +20,7 @@ class MemoryRetriever(Protocol):
 
     def search(self, query: MemoryQuery) -> Sequence[MemorySearchResult]:
         """クエリに一致するメモリレコードを検索する。"""
+        ...
 
 
 class MemoryRetrievalStep(PipelineStep[MemoryRetrievalResult]):

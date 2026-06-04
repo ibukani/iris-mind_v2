@@ -25,10 +25,12 @@ class SimplePerceptionStep(PipelineStep[PerceptionResult]):
             PerceptionResult: 観測から抽出されたテキストとメタデータ。
         """
         obs = frame.observation
+        raw_text: object = getattr(obs, "text", None)
+        text: str | None = raw_text if isinstance(raw_text, str) else str(obs.kind)
         return PerceptionResult(
             step_name=self.name,
             status=StepStatus.OK,
-            text=getattr(obs, "text", str(obs.kind)),
+            text=text,
             language=None,
             intent_hint=None,
         )

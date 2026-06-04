@@ -76,11 +76,11 @@ def test_action_plan_is_immutable() -> None:
         priority=0,
     )
     with pytest.raises(FrozenInstanceError):
-        plan.turn_intent = "other"
+        object.__setattr__(plan, "turn_intent", "other")
 
 
 def test_presented_output_is_immutable() -> None:
     """PresentedOutputが作成後に変更できないことを確認する。"""
     output = PresentedOutput(text="hello")
     with pytest.raises(FrozenInstanceError):
-        output.text = "other"
+        object.__setattr__(output, "text", "other")

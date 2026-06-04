@@ -14,6 +14,8 @@ class AppGateway(Protocol):
 
     async def receive_observation(self) -> Observation | None:
         """外部アプリから次の観測を受信する。イベントがない場合はNoneを返す。"""
+        ...
 
     async def execute(self, action: AppAction) -> ActionResult:
         """アプリアクションを実行し、結果を返す。"""
+        ...

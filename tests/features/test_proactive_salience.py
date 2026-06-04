@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
@@ -16,6 +17,7 @@ from iris.contracts.memory import MemoryId, MemoryRecord, MemorySearchResult
 from iris.contracts.observations import IdleTickObservation, ObservationKind
 from iris.contracts.policy import PolicyConstraint
 from iris.core.ids import ObservationId, SessionId, UserId
+from iris.features.proactive_talk.models import ProactiveFrameContext
 from iris.features.proactive_talk.scoring import SalienceScorer
 
 
@@ -64,7 +66,7 @@ def _idle_frame(
 
 def test_salience_scoring_is_deterministic_and_bounded() -> None:
     """Verify SalienceScorer produces deterministic and bounded scores."""
-    frame = _idle_frame(600.0, memory=True, familiarity=0.8)
+    frame = cast("ProactiveFrameContext", _idle_frame(600.0, memory=True, familiarity=0.8))
     scorer = SalienceScorer(threshold=0.5)
 
     first = scorer.score(frame)
@@ -77,10 +79,13 @@ def test_salience_scoring_is_deterministic_and_bounded() -> None:
 
 def test_low_familiarity_and_negative_affect_reduce_salience() -> None:
     """Verify low familiarity and negative affect reduce the salience score."""
-    frame = _idle_frame(
-        300.0,
-        familiarity=0.0,
-        affect=AffectSnapshot(arousal=0.9, valence=-0.8),
+    frame = cast(
+        "ProactiveFrameContext",
+        _idle_frame(
+            300.0,
+            familiarity=0.0,
+            affect=AffectSnapshot(arousal=0.9, valence=-0.8),
+        ),
     )
 
     salience = SalienceScorer(threshold=0.5).score(frame)
@@ -93,13 +98,16 @@ def test_low_familiarity_and_negative_affect_reduce_salience() -> None:
 
 def test_policy_block_prevents_proactive_speaking() -> None:
     """Verify a blocking policy constraint prevents proactive speaking."""
-    frame = _idle_frame(
-        600.0,
-        constraints=(
-            PolicyConstraint(
-                name="policy_block",
-                reason="test",
-                blocks_response=True,
+    frame = cast(
+        "ProactiveFrameContext",
+        _idle_frame(
+            600.0,
+            constraints=(
+                PolicyConstraint(
+                    name="policy_block",
+                    reason="test",
+                    blocks_response=True,
+                ),
             ),
         ),
     )

@@ -83,8 +83,7 @@ def test_runtime_wiring_no_cognitive_policy() -> None:  # noqa: C901
                     ):
                         rel = filepath.relative_to(PROJECT_ROOT).as_posix()
                         violations.append(
-                            f"  {rel}: calls '{child.func.attr}'"
-                            " — service locator forbidden in wiring"
+                            f"  {rel}: calls '{child.func.attr}' — service locator forbidden in wiring"
                         )
 
     assert not violations, "runtime/wiring violations found:\n" + "\n".join(violations)

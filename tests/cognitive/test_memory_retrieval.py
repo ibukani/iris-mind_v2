@@ -40,7 +40,11 @@ class StubMemoryRetriever:
 
 
 def user_message(text: str = "hello tea") -> UserMessageObservation:
-    """指定されたテキストを持つUserMessageObservationを返す。"""
+    """指定されたテキストを持つUserMessageObservationを返す。
+
+    Returns:
+        UserMessageObservation: 構築済みの観測。
+    """
     return UserMessageObservation(
         observation_id=ObservationId("obs-memory"),
         session_id=SessionId("session-memory"),

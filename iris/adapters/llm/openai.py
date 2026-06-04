@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 import os
 from typing import TYPE_CHECKING, Protocol, cast
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Protocol, cast
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
 if TYPE_CHECKING:
-    import openai  # noqa: F401
+    import openai  # pyright: ignore[reportUnusedImport] # noqa: F401
 
 try:
     import openai as _openai
@@ -59,6 +59,7 @@ class OpenAIResponsesClient(Protocol):
     @property
     def responses(self) -> OpenAIResponsesResource:
         """responsesリソースハンドルを返す。"""
+        ...
 
 
 class OpenAIResponsesResource(Protocol):
@@ -150,14 +151,14 @@ def _extract_output_text(response: object) -> str:
 def _iter_response_output(response: object) -> tuple[object, ...]:
     output = _get_value(response, "output")
     if isinstance(output, list | tuple):
-        return tuple(output)
+        return tuple(cast("Iterable[object]", output))
     return ()
 
 
 def _iter_content(output_item: object) -> tuple[object, ...]:
     content = _get_value(output_item, "content")
     if isinstance(content, list | tuple):
-        return tuple(content)
+        return tuple(cast("Iterable[object]", content))
     return ()
 
 
@@ -170,7 +171,8 @@ def _get_text(content_item: object) -> str | None:
 
 def _get_value(item: object, name: str) -> object:
     if isinstance(item, Mapping):
-        return item.get(name)
+        mapping: Mapping[str, object] = cast("Mapping[str, object]", item)
+        return mapping.get(name, None)
     return getattr(item, name, None)
 
 

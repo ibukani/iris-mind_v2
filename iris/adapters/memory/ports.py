@@ -15,6 +15,7 @@ class MemoryStore(Protocol):
 
     def search(self, query: MemoryQuery) -> Sequence[MemorySearchResult]:
         """クエリに一致するメモリレコードを検索する。"""
+        ...
 
     def put(self, record: MemoryRecord) -> None:
         """メモリレコードを保存する。"""

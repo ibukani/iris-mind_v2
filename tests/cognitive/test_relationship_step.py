@@ -16,7 +16,11 @@ from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
 
 
 def user_message(actor: Identity | None = None) -> UserMessageObservation:
-    """オプションのアクターIDを持つUserMessageObservationを返す。"""
+    """オプションのアクターIDを持つUserMessageObservationを返す。
+
+    Returns:
+        UserMessageObservation: 構築済みの観測。
+    """
     return UserMessageObservation(
         observation_id=ObservationId("obs-relationship"),
         session_id=SessionId("session-relationship"),

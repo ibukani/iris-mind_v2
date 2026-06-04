@@ -12,6 +12,7 @@ class Presenter(Protocol):
 
     async def present(self, plan: ActionPlan) -> PresentedOutput:
         """アクションプランを提示し、整形された出力を返す."""
+        ...
 
 
 class SimplePresenter:

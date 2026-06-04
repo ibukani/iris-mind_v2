@@ -126,7 +126,7 @@ def _has_action_str_dispatch(tree: ast.Module) -> list[str]:
                 "command",
             }:
                 findings.extend(
-                    f"match/case dispatch on string '{case.pattern.value.value}'"
+                    f"match/case dispatch on string '{case.pattern.value.value!r}'"
                     for case in node.cases
                     if isinstance(case.pattern, ast.MatchValue)
                     and isinstance(case.pattern.value, ast.Constant)
@@ -266,7 +266,7 @@ def test_contracts_no_untyped_dict_public_api() -> None:
         except SyntaxError:
             continue
         for node in ast.walk(tree):
-            if isinstance(node, ast.AnnAssign) and node.annotation:
+            if isinstance(node, ast.AnnAssign) and node.annotation is not None:
                 ann_str = ast.unparse(node.annotation).lower().replace(" ", "")
                 for f in forbidden:
                     if f.lower().replace(" ", "") in ann_str:
@@ -511,7 +511,8 @@ FORBIDDEN_DICT_PATTERNS: set[str] = {
 def test_internal_layers_no_untyped_dict() -> None:  # noqa: C901, PLR0912
     """すべての内部層は型付き境界内で未型付けのdict/mappingを避けなければならない。
 
-    dataclassフィールド注釈と関数シグネチャのdict[str, Any]、dict[str, object]、MutableMappingの使用をチェックする。
+    dataclassフィールド注釈と関数シグネチャの
+    dict[str, Any]、dict[str, object]、MutableMappingの使用をチェックする。
     """
     violations: list[str] = []
 
@@ -530,13 +531,13 @@ def test_internal_layers_no_untyped_dict() -> None:  # noqa: C901, PLR0912
                 if not hasattr(node, "lineno"):
                     continue
                 annotation: ast.AST | None = None
-                node_line = node.lineno
+                node_line: int = node.lineno  # type: ignore[attr-defined]
 
-                if isinstance(node, ast.AnnAssign) and node.annotation:
+                if isinstance(node, ast.AnnAssign) and node.annotation is not None:
                     annotation = node.annotation
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     for arg in node.args.args:
-                        if arg.annotation:
+                        if arg.annotation is not None:
                             ann_str = ast.unparse(arg.annotation)
                             violations.extend(
                                 f"  {rel}:{node_line} parameter '{arg.arg}: {ann_str}'"
@@ -550,9 +551,8 @@ def test_internal_layers_no_untyped_dict() -> None:  # noqa: C901, PLR0912
                 ann_str = ast.unparse(annotation)
                 for f in FORBIDDEN_DICT_PATTERNS:
                     if f in ann_str:
-                        line_text = (
-                            filepath.read_text(encoding="utf-8").splitlines()[node_line - 1].strip()
-                        )
+                        lines = filepath.read_text(encoding="utf-8").splitlines()
+                        line_text: str = lines[node_line - 1].strip()
                         violations.append(f"  {rel}:{node_line} {line_text}")
                         break
 

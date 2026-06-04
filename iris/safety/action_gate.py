@@ -30,6 +30,7 @@ class ActionSafetyGate(Protocol):
 
     async def check_plan(self, plan: ActionPlan) -> SafetyDecision:
         """Evaluate an action plan and return a safety decision."""
+        ...
 
 
 class AllowAllActionGate:

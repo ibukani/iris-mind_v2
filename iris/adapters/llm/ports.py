@@ -40,3 +40,4 @@ class LLMClient(Protocol):
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """リクエストから応答を生成する。"""
+        ...

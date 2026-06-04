@@ -4,7 +4,8 @@
   1. WorkspaceFrameはfrozen dataclassでなければならない。
   2. WorkspaceFrameのフィールドはdict[str, Any] / dict[str, object]を避けなければならない。
   3. フレームの更新はreplace()を使用してFrameBuilderを通さなければならない。
-  4. CognitiveCycleはコーディネーターとして機能しなければならない（アダプター/ランタイム/機能のインポート禁止）。
+  4. CognitiveCycleはコーディネーターとして機能しなければならない
+  （アダプター/ランタイム/機能のインポート禁止）。
   5. PipelineStepは型付きのPipelineStepResultサブタイプを返さなければならない。
   6. PipelineStepはアダプター、ランタイム配線、機能レジストリを直接呼び出してはならない。
 """
@@ -114,12 +115,8 @@ def _get_field_type_annotations(cls: ast.ClassDef) -> list[str]:
     """
     annotations: list[str] = []
     for item in cls.body:
-        if isinstance(item, ast.AnnAssign) and item.annotation:
+        if isinstance(item, ast.AnnAssign) and item.annotation is not None:
             annotations.append(ast.unparse(item.annotation))
-        # Also check dataclass field() calls
-        if isinstance(item, ast.Assign):
-            for target in item.targets:
-                isinstance(target, ast.Name) and target.id == "__annotations__"
     return annotations
 
 
@@ -175,8 +172,7 @@ def test_workspace_frame_no_mutable_mapping() -> None:
                                 and "frozenset" not in line
                             ):
                                 pytest.fail(
-                                    f"WorkspaceFrame has mutable default at line"
-                                    f" {item.lineno}: {line}"
+                                    f"WorkspaceFrame has mutable default at line {item.lineno}: {line}"
                                 )
 
 
@@ -256,8 +252,7 @@ def test_cognitive_cycle_no_app_specific_imports(app_name: str) -> None:
         pytest.skip("CognitiveCycle service.py does not exist yet")
     if app_name in text:
         pytest.fail(
-            f"CognitiveCycle references '{app_name}'"
-            " — must not depend on app-specific or IO packages"
+            f"CognitiveCycle references '{app_name}' — must not depend on app-specific or IO packages"
         )
 
 
@@ -291,8 +286,7 @@ def test_cognitive_cycle_is_coordinator_structure() -> None:
 
     if not (has_step_loop and has_frame_builder):
         pytest.fail(
-            "CognitiveCycle.run() must delegate to PipelineStep.run() and FrameBuilder.apply() — "
-            "coordinator pattern not detected"
+            "CognitiveCycle.run() must delegate to PipelineStep.run() and FrameBuilder.apply() — coordinator pattern not detected"
         )
 
 
@@ -510,12 +504,7 @@ def test_action_plan_is_no_action_property() -> None:  # noqa: C901
     for node in cls.body:
         if isinstance(node, ast.FunctionDef) and node.name == "is_no_action":
             assert node.decorator_list, "is_no_action must be a @property"
-            decorator_names = []
-            for dec in node.decorator_list:
-                if isinstance(dec, ast.Name):
-                    decorator_names.append(dec.id)
-                elif isinstance(dec, ast.Attribute):
-                    decorator_names.append(dec.attr)
+            decorator_names = _get_decorator_names(node)
             assert "property" in decorator_names, "is_no_action must be a @property"
             found_is_no_action = True
 

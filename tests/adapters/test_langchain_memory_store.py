@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from inspect import signature
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -68,9 +68,18 @@ def make_document(*, page_content: str, metadata: Mapping[str, object]) -> StubD
     return StubDocument(page_content=page_content, metadata=metadata)
 
 
+def document_factory() -> langchain._DocumentFactory:  # pyright: ignore[reportPrivateUsage]
+    """LangChainMemoryStoreの引数型と互換性のあるファクトリを返す。
+
+    Returns:
+        _DocumentFactory: make_documentと互換のドキュメントファクトリ。
+    """
+    return cast("langchain._DocumentFactory", make_document)
+
+
 def test_langchain_memory_store_uses_iris_contracts_only() -> None:
     """put/searchのシグネチャがLangChain型ではなくIris契約を使用することを確認する。"""
-    store = LangChainMemoryStore(StubVectorStore(), document_factory=make_document)
+    store = LangChainMemoryStore(StubVectorStore(), document_factory=document_factory())
 
     put_signature = signature(store.put)
     search_signature = signature(store.search)
@@ -84,7 +93,7 @@ def test_langchain_memory_store_uses_iris_contracts_only() -> None:
 def test_langchain_memory_store_puts_and_searches_iris_records() -> None:
     """Iris MemoryRecordがLangChainを通じてput/searchのラウンドトリップを行うことを確認する。"""
     vector_store = StubVectorStore()
-    store = LangChainMemoryStore(vector_store, document_factory=make_document)
+    store = LangChainMemoryStore(vector_store, document_factory=document_factory())
     user_id = UserId("user-1")
 
     store.put(
@@ -114,7 +123,7 @@ def test_langchain_memory_store_puts_and_searches_iris_records() -> None:
 def test_langchain_memory_store_filters_subject_id_after_vector_search() -> None:
     """ベクトル類似度検索後にsubject_idフィルタリングが適用されることを確認する。"""
     vector_store = StubVectorStore()
-    store = LangChainMemoryStore(vector_store, document_factory=make_document)
+    store = LangChainMemoryStore(vector_store, document_factory=document_factory())
     store.put(
         MemoryRecord(
             id=MemoryId("m1"),
@@ -140,7 +149,7 @@ def test_langchain_memory_store_reports_missing_optional_dependency(
 ) -> None:
     """langchain-coreが欠落している場合にLangChainMemoryStoreがUnavailableErrorを発生させることを確認する。"""
 
-    def missing_document_factory() -> langchain._DocumentFactory:
+    def missing_document_factory() -> langchain._DocumentFactory:  # pyright: ignore[reportPrivateUsage]
         msg = "langchain-core is not installed"
         raise LangChainMemoryStoreUnavailableError(msg)
 
@@ -152,7 +161,7 @@ def test_langchain_memory_store_reports_missing_optional_dependency(
 
 def test_langchain_memory_store_rejects_missing_vector_store_methods() -> None:
     """ベクターストアのメソッド欠落時にLangChainMemoryStoreがエラーを発生させることを確認する。"""
-    store = LangChainMemoryStore(object(), document_factory=make_document)
+    store = LangChainMemoryStore(object(), document_factory=document_factory())
 
     with pytest.raises(LangChainMemoryStoreError, match="add_documents"):
         store.put(MemoryRecord(id=MemoryId("m1"), text="memory"))
