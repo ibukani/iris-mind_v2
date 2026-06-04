@@ -13,6 +13,8 @@ build/
 .iris/data/
 !.iris/data/iris_profile.md
 .iris/secrets.yaml
+.iris/config/llm.toml
+.iris/config/local.toml
 
 # Test artifacts
 chroma_test/

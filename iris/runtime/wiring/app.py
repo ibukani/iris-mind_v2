@@ -12,29 +12,45 @@ from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import wire_text_response_cognitive_cycle
+from iris.runtime.wiring.llm import LLMClientFactory
 
 if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
+    from iris.runtime.config import IrisRuntimeConfig
 
 
-def wire_default_app(llm_client: LLMClient | None = None) -> IrisApp:
-    """Wire the default IrisApp with a text-response cognitive cycle.
+def wire_default_app(
+    llm_client: LLMClient,
+    *,
+    model: str = "fake-llm",
+    temperature: float = 0.0,
+    max_tokens: int | None = None,
+) -> IrisApp:
+    """Wire an IrisApp using the standard text-response cognitive cycle.
 
     Args:
-        llm_client: Optional LLM client override.
+        llm_client: LLM client used by response generation.
+        model: Model name passed to response generation.
+        temperature: Sampling temperature passed to response generation.
+        max_tokens: Optional output token limit passed to response generation.
 
     Returns:
         A fully wired IrisApp instance.
     """
-    cycle = wire_text_response_cognitive_cycle(llm_client)
+    cycle = wire_text_response_cognitive_cycle(
+        llm_client,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
     return IrisApp(cycle=cycle)
 
 
 def wire_fake_app(responses: tuple[str, ...] | None = None) -> IrisApp:
-    """Wire an IrisApp backed by the fake (deterministic) LLM.
+    """Wire an IrisApp backed by fake deterministic LLM.
 
     Args:
-        responses: Optional canned responses for the fake LLM.
+        responses: Optional canned response strings for FakeLLMClient.
 
     Returns:
         A fully wired IrisApp instance.
@@ -48,18 +64,18 @@ def wire_openai_app(
     *,
     model: str = "gpt-5-mini",
 ) -> IrisApp:
-    """Wire an IrisApp backed by the OpenAI LLM client.
+    """Wire an IrisApp backed by an OpenAI LLM client.
 
     Args:
-        config: OpenAI configuration; loaded from env if not provided.
-        model: Model name override when config is not provided.
+        config: OpenAI configuration. When omitted, OPENAI_API_KEY is read from env.
+        model: OpenAI model name used when config is not provided.
 
     Returns:
         A fully wired IrisApp instance.
     """
     if config is None:
         config = OpenAIConfig.from_env(model=model)
-    return wire_default_app(OpenAILLMClient(config))
+    return wire_default_app(OpenAILLMClient(config), model=config.model)
 
 
 def wire_ollama_app(
@@ -80,4 +96,36 @@ def wire_ollama_app(
     """
     if config is None:
         config = OllamaConfig(model=model, base_url=base_url)
-    return wire_default_app(OllamaLLMClient(config))
+    return wire_default_app(
+        OllamaLLMClient(config),
+        model=config.model,
+        temperature=config.temperature,
+        max_tokens=config.max_output_tokens,
+    )
+
+
+def build_app_from_config(
+    config: IrisRuntimeConfig,
+    *,
+    client_factory: LLMClientFactory | None = None,
+) -> IrisApp:
+    """Build an IrisApp from runtime configuration.
+
+    Only the ``default_chat`` model slot is wired into the current one-turn response path.
+
+    Args:
+        config: Runtime configuration.
+        client_factory: Optional explicit LLM client factory.
+
+    Returns:
+        A fully wired IrisApp instance.
+    """
+    model_config = config.models.default_chat
+    factory = client_factory or LLMClientFactory()
+    client = factory.create_client(model_config, config)
+    return wire_default_app(
+        client,
+        model=model_config.model,
+        temperature=model_config.temperature,
+        max_tokens=model_config.max_output_tokens,
+    )

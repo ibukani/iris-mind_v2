@@ -9,30 +9,42 @@ from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest
 from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator, ResponsePrompt
+from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
 
 
 class LLMResponseGenerator(ResponseGenerator):
     """ResponseGenerator backed by an LLM client."""
 
-    def __init__(self, client: LLMClient, *, model: str = "fake-llm") -> None:
-        """Initialize the generator with an LLM client.
+    def __init__(
+        self,
+        client: LLMClient,
+        model: str = "fake-llm",
+        *,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+    ) -> None:
+        """Create an LLM-backed response generator.
 
         Args:
-            client: The LLM client to use for generation.
-            model: Model identifier string.
+            client: LLM client.
+            model: Model name passed to the LLM provider.
+            temperature: Sampling temperature passed to the LLM provider.
+            max_tokens: Optional output token limit passed to the LLM provider.
         """
         self._client = client
         self._model = model
+        self._temperature = temperature
+        self._max_tokens = max_tokens
 
     @override
     async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
-        """Generate a response from the LLM for the given prompt.
+        """Generate response text for a prompt.
 
         Args:
-            prompt: The response prompt with context sections.
+            prompt: Response generation prompt.
 
         Returns:
-            The generated response text and model info.
+            Generated response text and model metadata.
         """
         request = LLMRequest(
             model=self._model,
@@ -40,14 +52,15 @@ class LLMResponseGenerator(ResponseGenerator):
                 LLMMessage(role="system", content=prompt.system_instruction),
                 LLMMessage(role="user", content=_build_user_content(prompt)),
             ),
-            temperature=0.0,
+            temperature=self._temperature,
+            max_tokens=self._max_tokens,
         )
         response = await self._client.generate(request)
         return GeneratedResponse(text=response.text, model=response.model)
 
 
 def wire_fake_llm_client(responses: tuple[str, ...] | None = None) -> FakeLLMClient:
-    """Wire a fake (deterministic) LLM client.
+    """Wire a fake deterministic LLM client.
 
     Args:
         responses: Optional canned response strings.
@@ -58,18 +71,32 @@ def wire_fake_llm_client(responses: tuple[str, ...] | None = None) -> FakeLLMCli
     return FakeLLMClient(responses=responses)
 
 
-def wire_response_generator(client: LLMClient | None = None) -> LLMResponseGenerator:
-    """Wire a response generator, defaulting to a fake LLM client.
+def wire_response_generator(
+    client: LLMClient | None = None,
+    *,
+    model: str = "fake-llm",
+    temperature: float = 0.0,
+    max_tokens: int | None = None,
+) -> LLMResponseGenerator:
+    """Wire a response generator.
 
     Args:
-        client: Optional LLM client override.
+        client: Optional LLM client. When omitted, a fake client is used.
+        model: Model name passed to the LLM provider.
+        temperature: Sampling temperature passed to the LLM provider.
+        max_tokens: Optional output token limit passed to the LLM provider.
 
     Returns:
-        An LLMResponseGenerator instance.
+        LLMResponseGenerator instance.
     """
     if client is None:
         client = wire_fake_llm_client()
-    return LLMResponseGenerator(client)
+    return LLMResponseGenerator(
+        client,
+        model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
 
 
 def wire_openai_llm_client(config: OpenAIConfig) -> LLMClient:
@@ -94,6 +121,74 @@ def wire_ollama_llm_client(config: OllamaConfig) -> LLMClient:
         An OllamaLLMClient instance.
     """
     return OllamaLLMClient(config)
+
+
+class LLMClientFactory:
+    """Explicit runtime factory for provider-specific LLM clients."""
+
+    def __init__(self) -> None:
+        """Create an explicit LLM client factory."""
+        self._known_providers = ("fake", "ollama", "openai")
+
+    def create_client(
+        self,
+        model_config: RuntimeModelConfig,
+        runtime_config: IrisRuntimeConfig,
+    ) -> LLMClient:
+        """Create an LLM client for a runtime model slot.
+
+        Args:
+            model_config: Model slot configuration.
+            runtime_config: Full runtime configuration.
+
+        Returns:
+            Provider-neutral LLM client.
+
+        Raises:
+            ConfigError: If the configured provider is unknown.
+        """
+        if model_config.provider not in self._known_providers:
+            message = f"Unknown LLM provider: {model_config.provider}"
+            raise ConfigError(message)
+        if model_config.provider == "fake":
+            return FakeLLMClient(model=model_config.model)
+        if model_config.provider == "ollama":
+            return OllamaLLMClient(_ollama_adapter_config(model_config, runtime_config))
+        return OpenAILLMClient(_openai_adapter_config(model_config, runtime_config))
+
+
+def _ollama_adapter_config(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> OllamaConfig:
+    model = model_config.model
+    if model == "fake-llm":
+        model = OllamaConfig().model
+    return OllamaConfig(
+        model=model,
+        base_url=runtime_config.ollama.base_url,
+        timeout_seconds=runtime_config.ollama.timeout_seconds,
+        temperature=model_config.temperature,
+        max_output_tokens=model_config.max_output_tokens,
+        keep_alive=runtime_config.ollama.keep_alive,
+    )
+
+
+def _openai_adapter_config(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> OpenAIConfig:
+    model = model_config.model
+    if model == "fake-llm":
+        model = runtime_config.openai.model
+    max_output_tokens = model_config.max_output_tokens
+    if max_output_tokens is None:
+        max_output_tokens = runtime_config.openai.max_output_tokens
+    return OpenAIConfig.from_env(
+        model=model,
+        timeout_seconds=runtime_config.openai.timeout_seconds,
+        max_output_tokens=max_output_tokens,
+    )
 
 
 def _build_user_content(prompt: ResponsePrompt) -> str:
