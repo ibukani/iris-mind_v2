@@ -34,7 +34,11 @@ class ActionPlan:
     @property
     def is_no_action(self) -> bool:
         """この計画が無アクション決定を表す場合にTrue。"""
-        return self.turn_intent == "no_action" and not self.should_respond
+        return (
+            self.turn_intent == "no_action"
+            and self.candidate_text is None
+            and not self.should_respond
+        )
 
 
 @dataclass(frozen=True)
@@ -52,7 +56,7 @@ class PresentedOutput:
     @property
     def is_sendable(self) -> bool:
         """出力が送信可能なテキストを含む場合にTrue。"""
-        return self.text is not None
+        return self.text is not None and bool(self.text.strip())
 
 
 @dataclass(frozen=True)
