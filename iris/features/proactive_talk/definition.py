@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import ActionSelectionResult, PolicyResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
@@ -16,7 +16,7 @@ from iris.features.proactive_talk.policy import (
 from iris.features.proactive_talk.scoring import SalienceScorer
 
 if TYPE_CHECKING:
-    from iris.features.proactive_talk.models import ProactiveFrameContext
+    from iris.cognitive.workspace.frame import WorkspaceFrame
 
 
 class ProactivePolicyStep(PipelineStep[PolicyResult]):
@@ -25,21 +25,23 @@ class ProactivePolicyStep(PipelineStep[PolicyResult]):
     name = "proactive_policy"
 
     @override
-    async def run(self, frame: object) -> PolicyResult:
+    async def run(self, frame: WorkspaceFrame) -> PolicyResult:
         """フレームに対してプロアクティブポリシー制約とプリファレンスを評価する。
+
+        Args:
+            frame: Typed workspace frame for the current cognitive cycle.
 
         Returns:
             PolicyResult: 評価された制約とアクション優先度を含む結果。
         """
-        proactive_frame = cast("ProactiveFrameContext", frame)
-        constraints = proactive_policy_constraints(proactive_frame)
+        constraints = proactive_policy_constraints(frame)
         preferences = proactive_action_preferences(constraints)
-        all_constraints = proactive_frame.constraints + constraints
+        all_constraints = frame.constraints + constraints
         return PolicyResult(
             step_name=self.name,
             status=StepStatus.OK,
             constraints=all_constraints,
-            action_preferences=proactive_frame.action_preferences + preferences,
+            action_preferences=frame.action_preferences + preferences,
             response_allowed=not any(constraint.blocks_response for constraint in all_constraints),
             policy_summary=policy_summary(all_constraints),
         )
@@ -65,14 +67,16 @@ class ProactiveActionSelectionStep(PipelineStep[ActionSelectionResult]):
         self._proposer = proposer or GoalProposer()
 
     @override
-    async def run(self, frame: object) -> ActionSelectionResult:
+    async def run(self, frame: WorkspaceFrame) -> ActionSelectionResult:
         """顕著性をスコアリングし、ゴールを提案し、アクション選択結果を返す。
+
+        Args:
+            frame: Typed workspace frame for the current cognitive cycle.
 
         Returns:
             ActionSelectionResult: 生成されたアクションプランを含む結果。
         """
-        proactive_frame = cast("ProactiveFrameContext", frame)
-        salience = self._scorer.score(proactive_frame)
+        salience = self._scorer.score(frame)
         goal = self._proposer.propose(salience)
         plan = action_plan_from_goal(goal)
         return ActionSelectionResult(
