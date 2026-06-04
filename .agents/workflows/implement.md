@@ -1,6 +1,5 @@
 # Workflow: Implement Feature or Behavior
 
-
 Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
 Use this workflow when adding a new behavior, contract, feature slice, pipeline step, adapter behavior, or runtime path.
 
@@ -76,13 +75,15 @@ Relevant docs:
 
 ## 6. Verify
 
-Run targeted tests first while working. Before final report, run:
+Run targeted tests first while working. Before handoff or final report, run:
 
 ```bash
-make check
+make ai-check
 ```
 
-Use `make quick` only for iteration. If `make check` cannot run, report the exact failure reason and the narrower commands that did run.
+Use `make ai-check` to collect the full failure list for agent handoff. Use `make check` when CI-like stop-on-first-failure validation is preferred. Use `make quick` or `make ai-quick` only for iteration.
+
+If full verification cannot run, report the exact failure reason and the narrower commands that did run.
 
 ## 7. Final report
 
