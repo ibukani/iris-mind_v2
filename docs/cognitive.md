@@ -2,7 +2,7 @@
 
 ## 認知サイクル
 
-Iris の中核は `cognitive/` にあり、認知サイクル、記憶、感情、動機、行動選択、学習を担当する。
+Iris の中核は `cognitive/` にあり、認知サイクル、記憶、感情、行動選択を担当する。
 
 中心は `CognitiveCycle`。
 
@@ -12,19 +12,43 @@ class CognitiveCycle:
         ...
 ```
 
-ただし、`CognitiveCycle` は God Service にしない。
-処理本体ではなく pipeline coordinator として実装する。
+`CognitiveCycle` は God Service ではなく pipeline coordinator として実装する。
 
-基本フロー。
+### 実装済み PipelineStep
+
+| Step | ソース | 役割 |
+|---|---|---|
+| `SimplePerceptionStep` | `cognitive/perception/basic.py` | Observation からテキスト抽出 |
+| `MemoryRetrievalStep` | `cognitive/memory/retrieval.py` | MemoryStore からの関連記憶検索 |
+| `AppraisalStep` | `cognitive/affect/appraisal.py` | 感情評価 (mood, arousal, valence, dominance) |
+| `RelationshipStep` | `cognitive/affect/relationship.py` | 関係性スナップショット更新 (affinity, trust, familiarity) |
+| `PolicyInhibitionStep` | `cognitive/policy/inhibition.py` | 発話抑制・行動制約 |
+| `ResponseGenerationStep` | `cognitive/action/response.py` | LLM 応答生成 → ActionPlan |
+
+### 利用可能な配線
+
+`runtime/wiring/cognitive.py` に4種類の配線:
+
+1. `wire_text_response_cognitive_cycle` — Perception → ResponseGeneration
+2. `wire_memory_aware_text_response_cognitive_cycle` — Perception → MemoryRetrieval → ResponseGeneration
+3. `wire_affect_memory_aware_text_response_cognitive_cycle` — Perception → (memory) → Appraisal → Relationship → ResponseGeneration
+4. `wire_policy_affect_memory_aware_text_response_cognitive_cycle` — Perception → (memory) → Appraisal → Relationship → PolicyInhibition → ResponseGeneration
+
+### 拡張予定（未実装）
+
+- `MotivationStep` — `MotivationResult` 型と `FrameBuilder` の対応は既存、step 実装は未着手
+- `PlanningStep` — 将来の目標計画ステップ
+
+基本フロー（最大構成）:
 
 ```text
 Observation
-→ PerceptionStep
+→ SimplePerceptionStep
 → MemoryRetrievalStep
 → AppraisalStep
-→ MotivationStep
-→ PlanningStep
-→ ActionSelectionStep
+→ RelationshipStep
+→ PolicyInhibitionStep
+→ ResponseGenerationStep
 → ActionPlan
 ```
 
@@ -60,21 +84,18 @@ CognitiveCycle → action step
 
 1ターン中の状態を集約する。
 
-`WorkspaceFrame` は、会話ターン内で各認知モジュールが共有する typed snapshot である。
+`WorkspaceFrame` は frozen dataclass。実際のフィールド:
 
-入れてよいもの。
-
-- observation
-- interpreted input
-- identity context
-- conversation context
-- retrieved memory summary
-- affect state
-- relationship snapshot
-- motivation state
-- goals
-- constraints
-- candidate actions
+- `observation: Observation`
+- `interpreted_input: InterpretedInput | None`
+- `memory_summary: MemorySummary`
+- `affect: AffectSnapshot`
+- `relationship: RelationshipSnapshot`
+- `goals: tuple[GoalCandidate, ...]`
+- `constraints: tuple[PolicyConstraint, ...]`
+- `action_preferences: tuple[ActionPreference, ...]`
+- `policy_summary: str | None`
+- `candidate_action_plans: tuple[ActionPlan, ...]`
 
 入れてはいけないもの。
 
@@ -89,9 +110,9 @@ CognitiveCycle → action step
 
 ---
 
-## Learning と BackgroundJob
+## Learning と BackgroundJob（未実装）
 
-Learning は ActionResult 後に行う。
+Learning は ActionResult 後に行う設計だが、現状未実装。
 
 ```text
 ActionPlan
@@ -99,31 +120,27 @@ ActionPlan
 → SafetyGate
 → Adapter
 → ActionResult
-→ LearningHook
+→ LearningHook       ← 未実装
 ```
 
 理由。
-
 - 送信成功したか
 - 失敗したか
 - safety で blocked されたか
-- user interrupt により cancelled されたか
 
 を見てから記憶や関係性を更新する必要がある。
 
-### LearningHook
+### LearningHook（予定）
 
 hot path で実行する軽量処理。
-
 - 会話ログの追加
 - working memory 更新
 - relationship の軽い更新
 - background job の enqueue
 
-### BackgroundJob
+### BackgroundJob（予定）
 
 hot path から外す重い処理。
-
 - 長期記憶抽出
 - LangMem extraction
 - persona patch proposal
@@ -132,23 +149,30 @@ hot path から外す重い処理。
 
 ---
 
-## Proactive の設計
+## Proactive（実装済み）
 
-Proactive は特殊な別システムではなく、内部 Observation から始まる CognitiveCycle として扱う。
+Proactive は内部 Observation から始まる CognitiveCycle として実装されている。
 
 ```text
-Scheduler
-→ IdleTickObservation (actor: Identity | None, space_id: SpaceId | None)
-→ CognitiveCycle
+Scheduler (runtime)
+→ IdleTickObservation
+→ CognitiveCycle (with proactive steps)
 → WorkspaceFrame
-→ SalienceScorer
-→ GoalProposer
-→ PolicyConstraint
-→ ActionProvider
-→ SpeakAction or NoAction
+→ ActionPlan
+→ Presenter
 ```
 
-`IdleTickObservation` も基底 `Observation` の `actor` / `space_id` を継承する。Scheduler 起点のティックでは `actor` は `None` または `ActorKind.SYSTEM` の system actor、`space_id` は対象スペースの ID（あるいは `None`）を入れる。
+`features/proactive_talk/` に実装:
+
+| モジュール | 役割 |
+|---|---|
+| `scoring.py` | SalienceScorer（発話重要度スコアリング） |
+| `goals.py` | GoalProposer（会話目標提案） |
+| `policy.py` | プロアクティブ発話のポリシー制約 |
+| `models.py` | プロアクティブ専用型 |
+| `definition.py` | FeatureDefinition 登録 |
+
+`IdleTickObservation` は基底 `Observation` の `actor` / `space_id` を継承する。
 `features/proactive_talk/` が直接 memory や policy の内部実装を改造してはいけない。
 
 ---

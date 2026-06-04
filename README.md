@@ -109,35 +109,58 @@ Config precedence is:
 ```text
 main.py / iris.runtime.cli
 → IrisApp
-→ CognitiveCycle (PerceptionStep → ActionSelectionStep)
+→ CognitiveCycle (perception → memory → affect → policy → response)
 → target LLM adapter (FakeLLMClient, OpenAI adapter, or Ollama adapter)
 → Presenter / Safety gates
 → stdout
 ```
 
+Available pipeline configurations:
+
+| Wiring function | Steps |
+|---|---|
+| `wire_text_response_cognitive_cycle` | perception → response |
+| `wire_memory_aware_text_response_cognitive_cycle` | perception → memory → response |
+| `wire_affect_memory_aware_text_response_cognitive_cycle` | perception → (memory) → appraisal → relationship → response |
+| `wire_policy_affect_memory_aware_text_response_cognitive_cycle` | perception → (memory) → appraisal → relationship → policy → response |
+
 ## Project Structure
 
 ```text
-iris-mind/
-├── iris/
-│   ├── core/
-│   ├── contracts/      Domain contracts (actions, observations, memory)
-│   ├── cognitive/      Cognitive cycle, pipeline, workspace
-│   ├── presentation/
-│   ├── safety/         Safety gates (action gate, output filter)
-│   ├── features/
-│   ├── adapters/       LLM/memory adapters (FakeLLM, OpenAI, Ollama, vector store)
-│   └── runtime/        App composition, CLI entrypoint, wiring
+iris/
+├── core/               IDs, base types
+├── contracts/          Domain contracts (actions, observations, memory, identity, policy, spaces)
+├── cognitive/          Cognitive cycle, pipeline, workspace
+│   ├── action/         Response generation
+│   ├── affect/         Appraisal, mood, relationship
+│   ├── cycle/          CognitiveCycle coordinator, pipeline protocol, frame builder
+│   ├── memory/         Memory retrieval step
+│   ├── perception/     Observation parsing
+│   ├── policy/         Inhibition / behavioral constraints
+│   └── workspace/      WorkspaceFrame (typed one-turn snapshot)
+├── presentation/       ActionPlan → PresentedOutput conversion
+├── safety/             Action gate, output filter
+├── features/           Feature extension (proactive_talk)
+│   └── proactive_talk/ Salience scoring, goal proposal, proactive policy
+├── adapters/           External integrations
+│   ├── app_gateway/    External app protocol boundary
+│   ├── llm/            FakeLLM, OpenAI, Ollama clients
+│   └── memory/         Fake, vector, LangChain memory stores
+└── runtime/            App composition, CLI entrypoint, wiring
+    └── wiring/         Constructor-injection wiring (app, cognitive, features, llm, memory, presentation)
 ├── tests/
-│   ├── architecture/
+│   ├── architecture/   Guard tests (18+ files)
 │   ├── adapters/
 │   ├── cognitive/
 │   ├── contracts/
 │   ├── features/
+│   ├── helpers/
 │   └── runtime/
 ├── scripts/
-│   └── verify.py
-└── main.py
+│   ├── verify.py       Repository verification entry point
+│   ├── ai_context.py   AI harness context dump
+│   └── ai_report.py    Completion report skeleton
+└── main.py             CLI entrypoint
 ```
 
 ## Development
@@ -156,25 +179,39 @@ uv run ruff format --check .
 uv run mypy iris tests scripts main.py
 uv run pyright .
 uv run pytest tests/architecture -q
-uv run pytest tests/
+uv run pytest tests/ --cov=iris --cov-branch --cov-report=term-missing:skip-covered --cov-report=html --cov-fail-under=90
 ```
 
 Useful targeted commands:
 
 ```bash
-make quick   # lint, format, mypy, pyright, architecture tests
-make lint    # ruff check
-make format  # ruff format
-make type    # mypy strict across iris/tests/scripts/main.py
-make arch    # architecture tests
-make pyright # pyright strict
-make test    # all tests with coverage gate
+make quick        # lint, format, mypy, pyright, architecture tests (no coverage)
+make lint         # ruff check
+make lint-fix     # ruff check --fix
+make format       # ruff format --check
+make format-write # ruff format
+make type         # mypy strict across iris/tests/scripts/main.py
+make pyright      # pyright strict
+make arch         # architecture tests
+make test         # all tests without coverage
+make coverage     # full coverage gate (90% threshold + HTML report)
 ```
 
-## Agent Harness
+## AI Harness
 
 AI coding agents should start from `AGENTS.md`. Claude Code should start from `CLAUDE.md`,
 which delegates shared rules to `AGENTS.md` and `.agents/`.
+
+Agent-oriented commands:
+
+```bash
+make ai-context           # show active harness paths
+make ai-quick             # fast strict loop (keep going after failures)
+make ai-check             # full strict loop (keep going after failures)
+make ai-arch              # architecture guard tests
+make ai-test-target TARGET=tests/path.py::test_name  # focused test
+make ai-report            # Japanese completion report skeleton
+```
 
 The required final verification for agent work is:
 

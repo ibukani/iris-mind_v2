@@ -161,6 +161,7 @@ if message.content.startswith("!"):
 - Use `FeatureDefinition` protocol from `iris/features/definition.py`
 - Features must not mutate `WorkspaceFrame` directly
 - Features must not import from `iris/adapters`, `iris/runtime`, `iris/presentation`, `iris/safety`
+- 実装例: `iris/features/proactive_talk/` (salience scoring, goal proposal, policy, definition)
 
 ### Testing rules
 

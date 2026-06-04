@@ -69,18 +69,26 @@ langchain-core は core 依存としては削除されたが、`iris/adapters/me
 
 ---
 
-## MVP実装履歴 (完了済みフェーズ)
+## 実装状態 (Phase 0-9 対応)
 
-Phase 0: v0.1 設計固定
-Phase 1: architecture test 先行
-Phase 2: v2 scaffold
-Phase 3: 最小会話ループ
-Phase 4: LLM 移植
-Phase 5: memory 移植
-Phase 6: affect / relationship 移植
-Phase 7: policy / inhibition 移植
-Phase 8: proactive 実装
-Phase 9: 旧構造削除
+Phase 0: v0.1 設計固定 — 完了
+Phase 1: architecture test 先行 — 完了 (18+ tests)
+Phase 2: v2 scaffold — 完了
+Phase 3: 最小会話ループ — 完了
+Phase 4: LLM 移植 (FakeLLM / OpenAI / Ollama adapter) — 完了
+Phase 5: memory 移植 (retrieval step + Fake/Vector/LangChain stores) — 完了
+Phase 6: affect / relationship 移植 (appraisal, mood, relationship step) — 完了
+Phase 7: policy / inhibition 移植 — 完了
+Phase 8: proactive 実装 (features/proactive_talk/) — 完了
+Phase 9: 旧構造削除 — 完了
+
+未実装の拡張:
+- MotivationStep (型/FrameBuilder は対応済み)
+- LearningHook / BackgroundJob
+- runtime scheduler, lifecycle, telemetry
+- features/chat/, memory_consolidation/, relationship_update/, persona_patch/, command_control/
+- adapters/tools/, embeddings/, external_clients/
+- safety/policy_engine
 
 ---
 

@@ -63,84 +63,95 @@ External App
 ```text
 iris/
 ├── core/
-│   ├── ids.py
-│   ├── time.py
-│   ├── errors.py
-│   └── result.py
+│   └── ids.py
 │
 ├── contracts/
 │   ├── observations.py
 │   ├── actions.py
-│   ├── messages.py
 │   ├── identity.py
 │   ├── spaces.py
-│   ├── conversation.py
 │   ├── memory.py
-│   ├── affect.py
-│   └── commands.py
+│   └── policy.py
 │
 ├── runtime/
 │   ├── app.py
+│   ├── cli.py
 │   ├── config.py
-│   ├── scheduler.py
-│   ├── background_jobs.py
-│   ├── lifecycle.py
-│   ├── telemetry.py
 │   └── wiring/
+│       ├── app.py
 │       ├── cognitive.py
-│       ├── adapters.py
 │       ├── features.py
-│       ├── presentation.py
-│       └── safety.py
+│       ├── llm.py
+│       ├── memory.py
+│       └── presentation.py
 │
 ├── cognitive/
 │   ├── cycle/
 │   │   ├── service.py
 │   │   ├── pipeline.py
-│   │   ├── steps.py
 │   │   ├── frame_builder.py
 │   │   └── models.py
 │   │
 │   ├── workspace/
-│   │   ├── frame.py
-│   │   └── contributors.py
+│   │   └── frame.py
 │   │
 │   ├── perception/
+│   │   └── basic.py
+│   │
 │   ├── memory/
+│   │   └── retrieval.py
+│   │
 │   ├── affect/
-│   ├── motivation/
+│   │   ├── appraisal.py
+│   │   ├── mood.py
+│   │   └── relationship.py
+│   │
 │   ├── policy/
-│   ├── action/
-│   └── learning/
+│   │   └── inhibition.py
+│   │
+│   └── action/
+│       ├── basic.py
+│       └── response.py
 │
 ├── presentation/
-│   ├── presenter.py
-│   ├── output.py
-│   └── style.py
+│   └── presenter.py
 │
 ├── features/
-│   ├── chat/
-│   ├── proactive_talk/
-│   ├── memory_consolidation/
-│   ├── relationship_update/
-│   ├── persona_patch/
-│   └── command_control/
+│   └── proactive_talk/
+│       ├── definition.py
+│       ├── goals.py
+│       ├── models.py
+│       ├── policy.py
+│       └── scoring.py
 │
 ├── adapters/
 │   ├── app_gateway/
+│   │   └── ports.py
 │   ├── llm/
-│   ├── stores/
-│   ├── tools/
-│   ├── embeddings/
-│   └── external_clients/
+│   │   ├── fake.py
+│   │   ├── ollama.py
+│   │   ├── openai.py
+│   │   └── ports.py
+│   └── memory/
+│       ├── fake.py
+│       ├── langchain.py
+│       ├── ports.py
+│       └── vector.py
 │
 └── safety/
     ├── action_gate.py
-    ├── output_filter.py
-    └── policy_engine.py
+    └── output_filter.py
 ```
 
 `iris/admin` は現在のアクティブ構成には含めない。過去構想や廃止済み構造は `docs/legacy.md` に隔離し、実装時に再作成しない。
+
+将来の拡張予定（未実装）:
+- `cognitive/motivation/` — MotivationStep の実装（`MotivationResult` 型と `FrameBuilder` 対応は既存）
+- `cognitive/learning/` — LearningHook / BackgroundJob
+- `runtime/scheduler.py`, `background_jobs.py`, `lifecycle.py`, `telemetry.py`
+- `features/chat/`, `features/memory_consolidation/`, `features/relationship_update/`, `features/persona_patch/`, `features/command_control/`
+- `adapters/tools/`, `adapters/embeddings/`, `adapters/external_clients/`
+- `safety/policy_engine.py`
 
 ---
 
@@ -175,14 +186,11 @@ iris/
 主な責務。
 
 - `Observation`
-- `Action`
-- `Message`
+- `Action` / `ActionPlan`
 - `Identity` (actor-centered)
 - `InteractionSpace` / `SpaceParticipant`
-- `Conversation`
-- `Memory`
-- `Affect`
-- `Command`
+- `Memory` / `MemorySearchResult`
+- `Policy` / `ActionPreference` / `PolicyConstraint`
 
 `Identity` は人間・デバイス・サービス・システム・Iris 自身を区別する `ActorKind` を持つ。
 `AccountId` / `DeviceId` は任意の関連リンクで、認証・権限はここで扱わない。
@@ -241,18 +249,32 @@ class CognitiveCycle:
 ただし、`CognitiveCycle` は God Service にしない。
 処理本体ではなく pipeline coordinator として実装する。
 
-基本フロー。
+基本フロー（実装済み）。
 
 ```text
 Observation
-→ PerceptionStep
-→ MemoryRetrievalStep
-→ AppraisalStep
-→ MotivationStep
-→ PlanningStep
-→ ActionSelectionStep
+→ SimplePerceptionStep
+→ MemoryRetrievalStep (optional)
+→ AppraisalStep (optional)
+→ RelationshipStep (optional)
+→ PolicyInhibitionStep (optional)
+→ ResponseGenerationStep
 → ActionPlan
 ```
+
+利用可能な配線（`runtime/wiring/cognitive.py`）:
+
+| 配線関数 | ステップ順序 |
+|---|---|
+| `wire_text_response_cognitive_cycle` | Perception → ResponseGeneration |
+| `wire_memory_aware_text_response_cognitive_cycle` | Perception → MemoryRetrieval → ResponseGeneration |
+| `wire_affect_memory_aware_text_response_cognitive_cycle` | Perception → (MemoryRetrieval) → Appraisal → Relationship → ResponseGeneration |
+| `wire_policy_affect_memory_aware_text_response_cognitive_cycle` | Perception → (MemoryRetrieval) → Appraisal → Relationship → PolicyInhibition → ResponseGeneration |
+
+拡張予定（未実装）:
+
+- MotivationStep — `MotivationResult` 型と `FrameBuilder` の対応は既存、step 実装は未着手
+- PlanningStep — 将来の目標計画ステップ
 
 重要ルール。
 
@@ -286,20 +308,18 @@ CognitiveCycle → action step
 
 `WorkspaceFrame` は、会話ターン内で各認知モジュールが共有する typed snapshot である。
 
-入れてよいもの。
+実際のフィールド（`WorkspaceFrame`）:
 
-- observation
-- interpreted input
-- actor identity snapshot (Identity 由来)
-- space context (InteractionSpace / SpaceParticipant 由来)
-- conversation context
-- retrieved memory summary
-- affect state
-- relationship snapshot (actor_id キーで保持)
-- motivation state
-- goals
-- constraints
-- candidate actions
+- `observation` — 元の Observation
+- `interpreted_input` — `InterpretedInput` (text, language, intent_hint)
+- `memory_summary` — `MemorySummary` (retrieved_memories)
+- `affect` — `AffectSnapshot` (mood_label, arousal, valence, dominance, affect_summary)
+- `relationship` — `RelationshipSnapshot` (actor_label, affinity, trust, familiarity, relationship_summary)
+- `goals` — `tuple[GoalCandidate, ...]`
+- `constraints` — `tuple[PolicyConstraint, ...]`
+- `action_preferences` — `tuple[ActionPreference, ...]`
+- `policy_summary` — `str | None`
+- `candidate_action_plans` — `tuple[ActionPlan, ...]`
 
 入れてはいけないもの。
 
@@ -316,7 +336,7 @@ CognitiveCycle → action step
 
 `cognitive/` が決めた `ActionPlan` を、実際にどのような形で見せるかに変換する。
 
-MVPでは軽量でよい。
+MVPでは軽量。`SimplePresenter` が `ActionPlan` を `PresentedOutput` に変換する。
 
 ```text
 ActionPlan
@@ -339,7 +359,7 @@ adapters/       = どこへ送るかを担当する
 ただし、`features/` は好き勝手に内部実装を改造する場所ではない。
 `CognitiveCycle` の拡張ポイントに参加する extension provider である。
 
-各 feature は `features/<name>/feature.py` を持ち、`FeatureDefinition` を返す。
+各 feature は `features/<name>/` に縦切りで配置し、`FeatureDefinition` を返す `define_feature()` 関数を公開する。
 
 ```python
 @dataclass(frozen=True)
@@ -350,6 +370,8 @@ class FeatureDefinition:
     learning_hooks: Sequence[LearningHook] = ()
     background_jobs: Sequence[BackgroundJob] = ()
 ```
+
+現在実装済みの feature: `proactive_talk/`（salience scoring, goal proposal, proactive policy, expression抑制）。
 
 `runtime/wiring/features.py` は `FeatureDefinition` を集めて登録するだけにする。
 
@@ -368,7 +390,7 @@ real provider configuration は typed config で明示注入し、global discove
 provider tests は `FakeLLMClient` または mocked provider client を使い、実ネットワークへ接続しない。
 `cognitive/` は `adapters/llm/` を import せず、runtime wiring が constructor injection で接続する。
 
-`adapters/memory/` は memory store 技術境界である。
+`adapters/memory/`（元 `adapters/stores/`）は memory store 技術境界である。
 責務は、typed `MemoryQuery` を受け取り typed `MemorySearchResult` を返すことに限定する。
 テストと local MVP は deterministic な `FakeMemoryStore` を使う。
 LangChain / LangMem / vector store は `MemoryStore` 背後の optional adapter としてだけ扱う。
@@ -624,12 +646,15 @@ adapters → cognitive 原則禁止
 ## Runtime Flow
 
 ```text
-CLI / main.py
+CLI / main.py / iris.runtime.cli
 → Observation
 → CognitiveCycle (cognitive/cycle/)
    → SimplePerceptionStep (cognitive/perception/)
-   → ResponseGenerationStep (cognitive/action/)   [action selection]
-   → [その他 PipelineStep]
+   → [MemoryRetrievalStep (cognitive/memory/)]   (optional)
+   → [AppraisalStep (cognitive/affect/)]          (optional)
+   → [RelationshipStep (cognitive/affect/)]        (optional)
+   → [PolicyInhibitionStep (cognitive/policy/)]    (optional)
+   → ResponseGenerationStep (cognitive/action/)
 → ActionPlan (contracts/)
 → ActionSafetyGate (safety/)
 → Presenter (presentation/)
@@ -640,17 +665,24 @@ CLI / main.py
 
 `IrisApp` (`iris/runtime/app.py`) が `process_observation()` で上記フローを実行します。
 
-デフォルトの配線は `SimplePerceptionStep` → `ResponseGenerationStep` の 2 ステップ。
-メモリ・感情・ポリシーステップ追加配線も用意されています (`wire_text_response_cognitive_cycle` 等)。
+4種類の配線関数が `runtime/wiring/cognitive.py` に用意されています:
+
+1. `wire_text_response_cognitive_cycle` — Perception + ResponseGeneration
+2. `wire_memory_aware_text_response_cognitive_cycle` — Perception + MemoryRetrieval + ResponseGeneration
+3. `wire_affect_memory_aware_text_response_cognitive_cycle` — Perception + (memory) + Appraisal + Relationship + ResponseGeneration
+4. `wire_policy_affect_memory_aware_text_response_cognitive_cycle` — Perception + (memory) + Appraisal + Relationship + PolicyInhibition + ResponseGeneration
 
 ---
 
 ## 現状のスコープ
 
 - text-only 1 ターン会話
-- FakeLLM デフォルト (OpenAI 切替可)
-- メモリ検索・感情評価・関係性・ポリシー抑制の PipelineStep は実装済み (配線選択可能)
-- 永続ストレバックエンドは未実装 (InMemoryStore のみ)
+- FakeLLM デフォルト (OpenAI / Ollama 切替可)
+- 認識・メモリ検索・感情評価・関係性・ポリシー抑制 PipelineStep 実装済み (配線選択可能)
+- proactive_talk feature 実装済み (salience scoring, goal proposal, policy)
+- 永続ストレージは未実装 (InMemoryStore / FakeMemoryStore のみ)
+- `MotivationResult` 型と `FrameBuilder` 対応は既存、step 実装は未着手
+- LearningHook / BackgroundJob は未実装
 - 外部アプリ連携 (Discord, Voice, Twitch) は未実装
 - AppGateway は Protocol のみ定義 (将来の外部アプリ用)
 
