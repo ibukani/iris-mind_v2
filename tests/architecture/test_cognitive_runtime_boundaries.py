@@ -45,7 +45,7 @@ def _get_imports(filepath: Path) -> list[str]:
 # ── 1. Runtime wiring rules ────────────────────────────────────
 
 
-def test_runtime_wiring_no_cognitive_policy() -> None:  # noqa: C901
+def test_runtime_wiring_no_cognitive_policy() -> None:  # noqa: C901 -- architecture scan intentionally checks several AST node shapes
     """runtime/wiringにコグニティブポリシーロジックやビジネスロジックを含めてはならない。
 
     runtime/wiring/内の各ファイルはコンストラクタインジェクションを介してのみ依存関係を構成すべきである。
