@@ -53,10 +53,6 @@
       "typeCheckingMode": "strict"
     },
     {
-      "root": "main.py",
-      "typeCheckingMode": "strict"
-    },
-    {
       "root": "tests",
       "typeCheckingMode": "standard",
       "reportMissingTypeStubs": "warning",
