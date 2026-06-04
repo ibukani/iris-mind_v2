@@ -1,3 +1,8 @@
+---
+name: architecture-review
+description: Review implementation changes for Iris architecture drift, layer violations, and boundary regressions.
+---
+
 # Architecture Review Skill
 
 Use this skill when reviewing changes that touch imports, contracts, cognitive pipeline code, runtime wiring, features, adapters, or safety/presentation boundaries.
