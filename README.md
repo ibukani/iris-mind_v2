@@ -7,11 +7,36 @@ AI コンパニオン — Cognitive Runtime Architecture v0.1 ターゲット MV
 ```bash
 uv run python main.py --text "hello"
 uv run python main.py --text "hello" --llm fake
+uv run python main.py --text "こんにちは" --llm ollama --model qwen3:8b
 uv run python -m iris.runtime.cli --text "hello"
 ```
 
 - `--llm fake` (default): Deterministic response, no API key needed.
 - `--llm openai`: Uses `OPENAI_API_KEY` from environment. Configure model with `--model`.
+- `--llm ollama`: Uses a local Ollama server. Configure model with `--model` and host with `--ollama-host`.
+
+## Local Ollama
+
+Install and start Ollama separately before using the local provider. Pull the model you want
+to run:
+
+```bash
+ollama pull qwen3:8b
+```
+
+Run Iris against the default local Ollama host:
+
+```bash
+uv run python main.py --text "こんにちは" --llm ollama --model qwen3:8b
+```
+
+Use `--ollama-host` when Ollama is listening somewhere else:
+
+```bash
+uv run python main.py --text "hello" --llm ollama --model qwen3:8b --ollama-host http://localhost:11434
+```
+
+The fake LLM remains the default and does not require external services.
 
 ## Target Architecture
 
@@ -19,7 +44,7 @@ uv run python -m iris.runtime.cli --text "hello"
 main.py / iris.runtime.cli
 → IrisApp
 → CognitiveCycle (PerceptionStep → ActionSelectionStep)
-→ target LLM adapter (FakeLLMClient or OpenAI adapter)
+→ target LLM adapter (FakeLLMClient, OpenAI adapter, or Ollama adapter)
 → Presenter / Safety gates
 → stdout
 ```
@@ -35,7 +60,7 @@ iris-mind/
 │   ├── presentation/    # Output formatting / presentation
 │   ├── safety/          # Safety gates (action gate, output filter)
 │   ├── features/        # Feature definitions and wiring
-│   ├── adapters/        # LLM/memory adapters (FakeLLM, OpenAI, etc.)
+│   ├── adapters/        # LLM/memory adapters (FakeLLM, OpenAI, Ollama, etc.)
 │   └── runtime/         # App composition, CLI entrypoint, wiring
 ├── tests/
 │   ├── architecture/    # Architecture boundary tests

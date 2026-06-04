@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import override
 
 from iris.adapters.llm.fake import FakeLLMClient
+from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest
 from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator, ResponsePrompt
@@ -81,6 +82,18 @@ def wire_openai_llm_client(config: OpenAIConfig) -> LLMClient:
         An OpenAILLMClient instance.
     """
     return OpenAILLMClient(config)
+
+
+def wire_ollama_llm_client(config: OllamaConfig) -> LLMClient:
+    """Wire an Ollama LLM client.
+
+    Args:
+        config: Ollama adapter configuration.
+
+    Returns:
+        An OllamaLLMClient instance.
+    """
+    return OllamaLLMClient(config)
 
 
 def _build_user_content(prompt: ResponsePrompt) -> str:

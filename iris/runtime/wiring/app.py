@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.adapters.llm.fake import FakeLLMClient
+from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import wire_text_response_cognitive_cycle
@@ -59,3 +60,24 @@ def wire_openai_app(
     if config is None:
         config = OpenAIConfig.from_env(model=model)
     return wire_default_app(OpenAILLMClient(config))
+
+
+def wire_ollama_app(
+    config: OllamaConfig | None = None,
+    *,
+    model: str = "qwen3:8b",
+    base_url: str = "http://localhost:11434",
+) -> IrisApp:
+    """Wire an IrisApp backed by an Ollama LLM client.
+
+    Args:
+        config: Ollama adapter configuration.
+        model: Model name used when config is not provided.
+        base_url: Ollama host URL used when config is not provided.
+
+    Returns:
+        A fully wired IrisApp instance.
+    """
+    if config is None:
+        config = OllamaConfig(model=model, base_url=base_url)
+    return wire_default_app(OllamaLLMClient(config))

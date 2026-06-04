@@ -4,6 +4,7 @@ Usage:
     python main.py --text "hello"
     python main.py --text "hello" --llm fake
     python main.py --text "hello" --llm openai
+    python main.py --text "hello" --llm ollama --model qwen3:8b
 """
 
 from __future__ import annotations
@@ -20,11 +21,16 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--text", required=True, help="Input text for one-turn interaction")
     parser.add_argument(
         "--llm",
-        choices=("fake", "openai"),
+        choices=("fake", "openai", "ollama"),
         default="fake",
         help="LLM backend (default: fake, deterministic)",
     )
-    parser.add_argument("--model", default=None, help="OpenAI model name (only with --llm openai)")
+    parser.add_argument("--model", default=None, help="Model name for provider-backed LLMs")
+    parser.add_argument(
+        "--ollama-host",
+        default=None,
+        help="Ollama host URL (only with --llm ollama)",
+    )
     return parser.parse_args()
 
 
@@ -33,7 +39,9 @@ def run() -> None:
     args = _parse_args()
     text: str = args.text
     llm: str = args.llm
-    output_text = asyncio.run(run_one_turn(text, llm=llm))
+    model: str | None = args.model
+    ollama_host: str | None = args.ollama_host
+    output_text = asyncio.run(run_one_turn(text, llm=llm, model=model, ollama_host=ollama_host))
     if output_text:
         sys.stdout.write(output_text + "\n")
     sys.exit(0)

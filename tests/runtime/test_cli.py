@@ -14,6 +14,7 @@ from typing import cast
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
+from iris.adapters.llm.ollama import OllamaConfig
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ObservationId, SessionId
@@ -102,6 +103,68 @@ def test_build_app_openai_dispatches_to_wire_openai_app(
     assert called.get("model") == "gpt-custom"
 
 
+def test_build_app_ollama_dispatches_to_wire_ollama_app(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify build_app dispatches Ollama options without calling a real server."""
+    called: dict[str, object] = {}
+
+    def _fake_wire_ollama_app(
+        config: OllamaConfig | None = None,
+        *,
+        model: str = "qwen3:8b",
+        base_url: str = "http://localhost:11434",
+    ) -> IrisApp:
+        """Return a fake app and record Ollama wiring arguments."""
+        called["config"] = config
+        called["model"] = model
+        called["base_url"] = base_url
+        cycle = wire_text_response_cognitive_cycle(FakeLLMClient())
+        return IrisApp(cycle=cycle)
+
+    monkeypatch.setattr(cli_module, "wire_ollama_app", _fake_wire_ollama_app)
+
+    app = build_app(
+        "ollama",
+        model="qwen3:8b",
+        ollama_host="http://ollama.local:11434",
+    )
+
+    assert app is not None
+    assert called.get("config") is None
+    assert called.get("model") == "qwen3:8b"
+    assert called.get("base_url") == "http://ollama.local:11434"
+
+
+def test_build_app_ollama_uses_config_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify build_app uses OllamaConfig defaults when no overrides are passed."""
+    called: dict[str, object] = {}
+
+    def _fake_wire_ollama_app(
+        config: OllamaConfig | None = None,
+        *,
+        model: str = "qwen3:8b",
+        base_url: str = "http://localhost:11434",
+    ) -> IrisApp:
+        """Return a fake app and record default Ollama wiring arguments."""
+        called["config"] = config
+        called["model"] = model
+        called["base_url"] = base_url
+        cycle = wire_text_response_cognitive_cycle(FakeLLMClient())
+        return IrisApp(cycle=cycle)
+
+    monkeypatch.setattr(cli_module, "wire_ollama_app", _fake_wire_ollama_app)
+
+    app = build_app("ollama")
+
+    assert app is not None
+    assert called.get("config") is None
+    assert called.get("model") == OllamaConfig().model
+    assert called.get("base_url") == OllamaConfig().base_url
+
+
 def test_build_app_default_creates_default_app() -> None:
     """Verify build_app with an unknown backend falls back to the default app."""
     app = build_app("unknown-backend")
@@ -185,17 +248,24 @@ def test_main_with_openai_backend(
     stub = cast("LLMClient", _StubOpenAILLM())
     called: dict[str, object] = {}
 
-    def _fake_wire(_llm: str, *, model: str | None = None) -> IrisApp:
+    def _fake_wire(
+        _llm: str,
+        *,
+        model: str | None = None,
+        ollama_host: str | None = None,
+    ) -> IrisApp:
         """Build a fake IrisApp that uses the stub LLM.
 
         Args:
             _llm: Ignored; the backend name is not relevant for the stub.
             model: The model name to record in the call log.
+            ollama_host: Unused Ollama host passthrough.
 
         Returns:
             IrisApp: An app backed by the stub LLM.
         """
         called["model"] = model
+        called["ollama_host"] = ollama_host
         cycle = wire_text_response_cognitive_cycle(stub)
         return IrisApp(cycle=cycle)
 

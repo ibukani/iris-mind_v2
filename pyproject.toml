@@ -9,6 +9,7 @@ description = "AI companion — Cognitive Runtime Architecture v0.1 target MVP"
 requires-python = ">=3.13"
 dependencies = [
     "openai>=2.0",
+    "httpx>=0.28",
     "langchain>=1.3",
 ]
 
