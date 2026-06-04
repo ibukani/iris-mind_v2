@@ -134,7 +134,7 @@ def _has_action_str_dispatch(tree: ast.Module) -> list[str]:
     return findings
 
 
-def _check_if_for_string_dispatch(node: ast.If, findings: list[str]) -> None:  # noqa: C901
+def _check_if_for_string_dispatch(node: ast.If, findings: list[str]) -> None:  # noqa: C901 -- AST-walking helper must branch on each comparison / pattern kind
     """if-elifチェーンを再帰的にチェックして文字列比較ディスパッチを検出する。"""
 
     def _get_compare_str(comparison: ast.Compare | None) -> str | None:
@@ -248,6 +248,27 @@ def test_no_service_locator_patterns(target_dir: str) -> None:
 # ── 3. Untyped dict contracts ────────────────────────────────
 
 
+def _annassign_has_forbidden_dict(node: ast.AnnAssign, forbidden: set[str]) -> bool:
+    """Return whether an AnnAssign annotation contains a forbidden dict pattern."""
+    ann_str = ast.unparse(node.annotation).lower().replace(" ", "")
+    return any(f.lower().replace(" ", "") in ann_str for f in forbidden)
+
+
+def _format_violation(filepath: Path, node: ast.stmt) -> str:
+    """Format a single dict-pattern violation message for a node.
+
+    Args:
+        filepath: Path of the file containing the violation.
+        node: AST node whose line is being reported.
+
+    Returns:
+        str: A two-space-indented, relative-pathed message line.
+    """
+    rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+    line = filepath.read_text(encoding="utf-8").splitlines()[node.lineno - 1]
+    return f"  {rel}:{node.lineno} {line.strip()}"
+
+
 def test_contracts_no_untyped_dict_public_api() -> None:
     """公開契約はフィールド型としてdict[str, Any]やdict[str, object]を使用してはならない。
 
@@ -265,14 +286,11 @@ def test_contracts_no_untyped_dict_public_api() -> None:
             tree = ast.parse(filepath.read_text(encoding="utf-8"))
         except SyntaxError:
             continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.AnnAssign) and node.annotation is not None:
-                ann_str = ast.unparse(node.annotation).lower().replace(" ", "")
-                for f in forbidden:
-                    if f.lower().replace(" ", "") in ann_str:
-                        rel = filepath.relative_to(PROJECT_ROOT).as_posix()
-                        line = filepath.read_text(encoding="utf-8").splitlines()[node.lineno - 1]
-                        violations.append(f"  {rel}:{node.lineno} {line.strip()}")
+        violations.extend(
+            _format_violation(filepath, node)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AnnAssign) and _annassign_has_forbidden_dict(node, forbidden)
+        )
 
     assert not violations, "Untyped dict[str, Any] in public contracts:\n" + "\n".join(violations)
 
@@ -366,8 +384,11 @@ def test_features_use_definition_pattern() -> None:
             if not imp.startswith(("iris.cognitive.cycle", "iris.cognitive.workspace")):
                 continue
             # FeatureDefinition is architecturally allowed to import cognitive
-            # extension protocols (PipelineStep, PipelineStepResult) from cognitive/cycle/.
-            if filepath.name == "definition.py" and imp.startswith("iris.cognitive.cycle"):
+            # extension protocols (PipelineStep, PipelineStepResult) from cognitive/cycle/
+            # and the WorkspaceFrame type referenced by those protocols.
+            if filepath.name == "definition.py" and (
+                imp.startswith("iris.cognitive.cycle") or imp == "iris.cognitive.workspace.frame"
+            ):
                 continue
             violations.append(
                 f"  {rel}: imports '{imp}' — features must not import cognitive internals"
@@ -508,7 +529,7 @@ FORBIDDEN_DICT_PATTERNS: set[str] = {
 }
 
 
-def test_internal_layers_no_untyped_dict() -> None:  # noqa: C901, PLR0912
+def test_internal_layers_no_untyped_dict() -> None:  # noqa: C901, PLR0912 -- branches per (layer, forbidden dict pattern) pair for exhaustive type-boundary audit
     """すべての内部層は型付き境界内で未型付けのdict/mappingを避けなければならない。
 
     dataclassフィールド注釈と関数シグネチャの
@@ -528,12 +549,12 @@ def test_internal_layers_no_untyped_dict() -> None:  # noqa: C901, PLR0912
                 continue
 
             for node in ast.walk(tree):
-                if not hasattr(node, "lineno"):
+                if not isinstance(node, ast.stmt):
                     continue
-                annotation: ast.AST | None = None
-                node_line: int = node.lineno  # type: ignore[attr-defined]
+                node_line: int = node.lineno
+                annotation: ast.expr | None = None
 
-                if isinstance(node, ast.AnnAssign) and node.annotation is not None:
+                if isinstance(node, ast.AnnAssign):
                     annotation = node.annotation
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     for arg in node.args.args:

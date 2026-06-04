@@ -5,17 +5,18 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 import os
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
 if TYPE_CHECKING:
-    import openai  # pyright: ignore[reportUnusedImport] # noqa: F401
+    import openai  # pyright: ignore[reportUnusedImport]  # typing-only re-export, not used at runtime  # noqa: F401  # typing-only re-export, not used at runtime
 
-try:
+import contextlib
+
+_openai: Any = None
+with contextlib.suppress(ImportError):
     import openai as _openai
-except ImportError:  # pragma: no cover - exercised by monkeypatching module state
-    _openai = None  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)

@@ -6,6 +6,7 @@ import ast
 import json
 from pathlib import Path
 import re
+from typing import cast
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -84,24 +85,34 @@ def _verify_check_names() -> set[str]:
 
 def test_required_ai_harness_paths_exist() -> None:
     """All mandatory AI harness paths referenced by entrypoint docs must exist."""
-    missing = [str(path) for path in sorted(REQUIRED_AGENT_PATHS) if not (PROJECT_ROOT / path).exists()]
+    missing = [
+        str(path) for path in sorted(REQUIRED_AGENT_PATHS) if not (PROJECT_ROOT / path).exists()
+    ]
     assert not missing, "missing AI harness paths:\n" + "\n".join(missing)
 
 
 def test_opencode_instructions_reference_existing_files() -> None:
     """OpenCode instruction paths must stay valid."""
-    config = json.loads((PROJECT_ROOT / "opencode.json").read_text(encoding="utf-8"))
-    instructions = config.get("instructions", [])
-    assert isinstance(instructions, list), "opencode.json instructions must be a list"
-    missing = [path for path in instructions if not (PROJECT_ROOT / path).is_file()]
+    config: dict[str, object] = cast(
+        "dict[str, object]",
+        json.loads((PROJECT_ROOT / "opencode.json").read_text(encoding="utf-8")),
+    )
+    instructions_raw = config.get("instructions", [])
+    assert isinstance(instructions_raw, list), "opencode.json instructions must be a list"
+    instructions = cast("list[object]", instructions_raw)
+    missing = [str(path) for path in instructions if not (PROJECT_ROOT / str(path)).is_file()]
     assert not missing, "opencode instructions reference missing files:\n" + "\n".join(missing)
 
 
 def test_opencode_commands_match_make_targets() -> None:
     """OpenCode commands must call existing Makefile AI harness targets."""
-    config = json.loads((PROJECT_ROOT / "opencode.json").read_text(encoding="utf-8"))
-    commands = config.get("command", {})
-    assert isinstance(commands, dict), "opencode.json command must be an object"
+    config: dict[str, object] = cast(
+        "dict[str, object]",
+        json.loads((PROJECT_ROOT / "opencode.json").read_text(encoding="utf-8")),
+    )
+    commands_raw = config.get("command", {})
+    assert isinstance(commands_raw, dict), "opencode.json command must be an object"
+    commands: dict[str, object] = cast("dict[str, object]", commands_raw)
     make_targets = _target_names_from_makefile()
     violations: list[str] = []
 
@@ -110,7 +121,8 @@ def test_opencode_commands_match_make_targets() -> None:
         if not isinstance(command_config, dict):
             violations.append(f"missing command {command_name}")
             continue
-        template = command_config.get("template", "")
+        command_dict: dict[str, object] = cast("dict[str, object]", command_config)
+        template = command_dict.get("template", "")
         if not isinstance(template, str) or expected_template_text not in template:
             violations.append(f"{command_name}: template must mention {expected_template_text}")
         make_target = command_name

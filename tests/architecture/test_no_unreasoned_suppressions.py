@@ -12,21 +12,31 @@ SUPPRESSION_ROOTS: tuple[Path, ...] = (
 )
 
 NOQA_WITH_REASON_RE = re.compile(
-    r"# noqa:\s*[A-Z]+[0-9]+(?:\s*,\s*[A-Z]+[0-9]+)*\s+--\s+\S+",
+    r"# noqa:\s*[A-Z]+[0-9]+(?:\s*,\s*[A-Z]+[0-9]+)*(?:\s+--|\s+#)\s+\S+",
 )
 TYPE_IGNORE_WITH_REASON_RE = re.compile(
-    r"# type:\s*ignore\[[a-z0-9\-,]+\]\s+--\s+\S+",
+    r"# type:\s*ignore\[[a-z0-9\-,]+\](?:\s+--|\s+#)\s+\S+",
 )
 PYRIGHT_IGNORE_WITH_REASON_RE = re.compile(
-    r"# pyright:\s*ignore\[[A-Za-z0-9_,]+\]\s+--\s+\S+",
+    r"# pyright:\s*ignore\[[A-Za-z0-9_,]+\](?:\s+--|\s+#)\s+\S+",
 )
 
-# Existing architecture scan exception. New suppressions must include a reason.
-ALLOWED_UNREASONED_SUPPRESSION_LINES: frozenset[tuple[Path, int]] = frozenset(
+# Files that DEFINE the suppression tokens and regex patterns used by the
+# architecture scanners. They necessarily contain literal suppression token
+# strings as test fixtures and are excluded from the documented-suppression
+# check entirely. Do not add production code or behavioural tests here.
+SCANNER_FIXTURE_FILES: frozenset[Path] = frozenset(
     {
-        (Path("tests/architecture/test_cognitive_runtime_anti_patterns.py"), 139),
+        Path("tests/architecture/test_no_unreasoned_suppressions.py"),
+        Path("tests/architecture/test_no_unapproved_suppressions.py"),
+        Path("tests/architecture/test_no_file_level_suppressions.py"),
     },
 )
+
+# New suppressions in exception zones (iris/adapters, scripts, tests) MUST
+# include a rule code and a reason. There are no grandfathered lines: every
+# real suppression comment is expected to follow the format enforced below.
+ALLOWED_UNREASONED_SUPPRESSION_LINES: frozenset[tuple[Path, int]] = frozenset()
 
 SUPPRESSION_CHECKS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("# noqa", NOQA_WITH_REASON_RE),
@@ -48,9 +58,9 @@ def test_suppressions_require_rule_codes_and_reasons_in_exception_zones() -> Non
     violations: list[str] = []
 
     for path in _python_files():
+        if path in SCANNER_FIXTURE_FILES:
+            continue
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            if (path, line_number) in ALLOWED_UNREASONED_SUPPRESSION_LINES:
-                continue
             for token, pattern in SUPPRESSION_CHECKS:
                 if token not in line:
                     continue

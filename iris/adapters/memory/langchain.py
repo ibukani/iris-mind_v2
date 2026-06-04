@@ -165,7 +165,7 @@ class LangChainMemoryStore(MemoryStore):
 
 def _load_document_factory() -> DocumentFactory:
     try:
-        from langchain_core.documents import (  # noqa: PLC0415  # conditional optional dependency
+        from langchain_core.documents import (  # noqa: PLC0415  # langchain_core is an optional dependency imported lazily
             Document,
         )
     except ImportError as exc:  # pragma: no cover - covered with monkeypatched loader

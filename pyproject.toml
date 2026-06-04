@@ -61,6 +61,24 @@ preview = true
     # Architecture tests are intentionally deeply nested for exhaustive checks.
     "PLR1702",
 ]
+"iris/presentation/presenter.py" = [
+    # SimplePresenter.present is a Protocol-typed pass-through for the no-action
+    # boundary; self and plan are part of the contract but unused in the body.
+    "PLR6301",
+    "ARG002",
+]
+"iris/safety/action_gate.py" = [
+    # AllowAllActionGate.check_plan is a Protocol-typed pass-through; both self
+    # and plan are part of the contract but unused in the body by design.
+    "PLR6301",
+    "ARG002",
+]
+"iris/safety/output_filter.py" = [
+    # AllowAllOutputGate.check_output is a Protocol-typed pass-through; both
+    # self and output are part of the contract but unused in the body by design.
+    "PLR6301",
+    "ARG002",
+]
 
 [tool.ruff.lint.flake8-annotations]
 allow-star-arg-any = false
@@ -173,6 +191,18 @@ module = [
 # the boundary instead of forcing fake casts into internal domain code.
 disallow_untyped_calls = false
 disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = [
+    "openai",
+    "openai.*",
+    "langchain_core",
+    "langchain_core.*",
+]
+# openai and langchain_core do not ship complete type stubs. Treat the libraries
+# as Any-typed at the adapter boundary so iris code can import and assign their
+# values without inline # type: ignore. Internal iris modules stay strictly typed.
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [

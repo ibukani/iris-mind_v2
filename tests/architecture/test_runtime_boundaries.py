@@ -59,9 +59,11 @@ def test_concrete_adapter_imports_are_confined_to_runtime_wiring() -> None:
         if _is_wiring_file(path):
             continue
         rel_path = path.relative_to(PROJECT_ROOT)
-        for imported in _imports(path):
-            if imported in CONCRETE_ADAPTER_IMPORTS:
-                violations.append(f"{rel_path}: imports concrete adapter {imported}")
+        violations.extend(
+            f"{rel_path}: imports concrete adapter {imported}"
+            for imported in _imports(path)
+            if imported in CONCRETE_ADAPTER_IMPORTS
+        )
 
     assert not violations, "concrete adapter imports outside runtime/wiring:\n" + "\n".join(
         violations,
@@ -76,9 +78,11 @@ def test_runtime_entrypoints_do_not_import_features_directly() -> None:
         path = PROJECT_ROOT / rel_path
         if not path.is_file():
             continue
-        for imported in _imports(path):
-            if imported.startswith("iris.features"):
-                violations.append(f"{rel_path}: imports {imported}")
+        violations.extend(
+            f"{rel_path}: imports {imported}"
+            for imported in _imports(path)
+            if imported.startswith("iris.features")
+        )
 
     assert not violations, "runtime entrypoints import features directly:\n" + "\n".join(
         violations,

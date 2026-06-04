@@ -9,8 +9,22 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 APP_PATH = PROJECT_ROOT / "iris" / "runtime" / "app.py"
 
 
-def _find_method(class_node: ast.ClassDef, method_name: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    """Find a method on a class."""
+def _find_method(
+    class_node: ast.ClassDef,
+    method_name: str,
+) -> ast.FunctionDef | ast.AsyncFunctionDef:
+    """Locate a method node by name on a class body.
+
+    Args:
+        class_node: Class definition node to search.
+        method_name: Method name to locate.
+
+    Returns:
+        ast.FunctionDef | ast.AsyncFunctionDef: The matching method node.
+
+    Raises:
+        AssertionError: If the method is not declared on the class.
+    """
     for node in class_node.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == method_name:
             return node
@@ -19,7 +33,18 @@ def _find_method(class_node: ast.ClassDef, method_name: str) -> ast.FunctionDef 
 
 
 def _find_class(tree: ast.Module, class_name: str) -> ast.ClassDef:
-    """Find a class in a module."""
+    """Locate a class node by name in a parsed module.
+
+    Args:
+        tree: Parsed module AST to search.
+        class_name: Class name to locate.
+
+    Returns:
+        ast.ClassDef: The matching class definition node.
+
+    Raises:
+        AssertionError: If the class is not present in the tree.
+    """
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == class_name:
             return node
@@ -32,8 +57,22 @@ def _node_mentions_text(node: ast.AST, text: str) -> bool:
     return text in ast.unparse(node)
 
 
-def _first_statement_index(method: ast.FunctionDef | ast.AsyncFunctionDef, text: str) -> int:
-    """Return first top-level statement index containing text."""
+def _first_statement_index(
+    method: ast.FunctionDef | ast.AsyncFunctionDef,
+    text: str,
+) -> int:
+    """Return the first top-level statement index that mentions text.
+
+    Args:
+        method: Method node whose body is searched.
+        text: Substring to look for in the unparsed statement.
+
+    Returns:
+        int: Index of the first matching statement in ``method.body``.
+
+    Raises:
+        AssertionError: If no statement in the body mentions ``text``.
+    """
     for index, statement in enumerate(method.body):
         if _node_mentions_text(statement, text):
             return index
@@ -42,7 +81,17 @@ def _first_statement_index(method: ast.FunctionDef | ast.AsyncFunctionDef, text:
 
 
 def _no_action_if_statement(method: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.If:
-    """Return the top-level if statement checking plan.is_no_action."""
+    """Return the top-level if statement checking plan.is_no_action.
+
+    Args:
+        method: Method node whose body is searched.
+
+    Returns:
+        ast.If: The first top-level ``if`` whose test mentions ``is_no_action``.
+
+    Raises:
+        AssertionError: If the method has no such guard.
+    """
     for statement in method.body:
         if isinstance(statement, ast.If) and _node_mentions_text(statement.test, "is_no_action"):
             return statement

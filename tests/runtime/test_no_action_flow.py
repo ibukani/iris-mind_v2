@@ -17,7 +17,7 @@ from iris.runtime.wiring.features import wire_proactive_talk_cognitive_cycle
 class FailingPresenter:
     """Presenter stub that raises if called."""
 
-    async def present(self, plan: ActionPlan) -> PresentedOutput:  # noqa: PLR6301, ARG002
+    async def present(self, plan: ActionPlan) -> PresentedOutput:  # noqa: PLR6301, ARG002 -- test sentinel implements Presenter protocol; raise-only body must keep protocol signature
         """Raise an error to verify presenter is not invoked.
 
         Raises:

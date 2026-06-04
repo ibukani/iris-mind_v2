@@ -70,6 +70,5 @@ def test_no_unapproved_suppressions_in_protected_architecture_layers() -> None:
         violations.extend(_suppression_comment_violations(path))
         violations.extend(_object_setattr_violations(path))
 
-    assert not violations, "unapproved suppressions are forbidden in protected layers:\n" + "\n".join(
-        violations,
-    )
+    message = "unapproved suppressions are forbidden in protected layers:\n" + "\n".join(violations)
+    assert not violations, message

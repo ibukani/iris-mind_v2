@@ -5,8 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
-import pytest
-
 from iris.cognitive.workspace.frame import (
     AffectSnapshot,
     MemorySummary,
@@ -18,6 +16,7 @@ from iris.contracts.observations import IdleTickObservation, ObservationKind
 from iris.contracts.policy import PolicyConstraint
 from iris.core.ids import ObservationId, SessionId, UserId
 from iris.features.proactive_talk.scoring import SalienceScorer
+from tests.helpers.approx import approx
 
 if TYPE_CHECKING:
     from iris.features.proactive_talk.models import ProactiveFrameContext
@@ -75,7 +74,7 @@ def test_salience_scoring_is_deterministic_and_bounded() -> None:
     second = scorer.score(frame)
 
     assert first == second
-    assert first.score == pytest.approx(0.9)
+    assert first.score == approx(0.9)
     assert first.should_speak is True
 
 
@@ -92,7 +91,7 @@ def test_low_familiarity_and_negative_affect_reduce_salience() -> None:
 
     salience = SalienceScorer(threshold=0.5).score(frame)
 
-    assert salience.score == pytest.approx(0.0)
+    assert salience.score == approx(0.0)
     assert salience.should_speak is False
     assert "low_familiarity" in salience.reasons
     assert "negative_high_arousal" in salience.reasons

@@ -29,7 +29,7 @@ class StubDocument:
 class StubVectorStore:
     """Stub vector store for testing memory wiring functions."""
 
-    def similarity_search(self, _query: str, *, _k: int) -> Sequence[StubDocument]:  # noqa: PLR6301
+    def similarity_search(self, _query: str, *, _k: int) -> Sequence[StubDocument]:  # noqa: PLR6301 -- test stub implements VectorSearchPort protocol; self unused by stub design
         """Return empty results."""
         return ()
 

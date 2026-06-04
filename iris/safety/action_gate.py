@@ -36,7 +36,7 @@ class ActionSafetyGate(Protocol):
 class AllowAllActionGate:
     """Pass-through action gate that allows every plan."""
 
-    async def check_plan(self, plan: ActionPlan) -> SafetyDecision:  # noqa: PLR6301, ARG002
+    async def check_plan(self, plan: ActionPlan) -> SafetyDecision:
         """Allow all action plans unconditionally.
 
         Args:

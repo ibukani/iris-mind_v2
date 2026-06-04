@@ -13,6 +13,7 @@ from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.identity import Identity
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
+from tests.helpers.approx import approx
 
 
 def user_message(actor: Identity | None = None) -> UserMessageObservation:
@@ -53,9 +54,9 @@ async def test_relationship_step_updates_per_user_state() -> None:
 
     assert result.status == StepStatus.OK
     assert enriched.relationship.user_label == "Mina"
-    assert enriched.relationship.affinity == pytest.approx(0.02)
-    assert enriched.relationship.trust == pytest.approx(0.515)
-    assert enriched.relationship.familiarity == pytest.approx(0.02)
+    assert enriched.relationship.affinity == approx(0.02)
+    assert enriched.relationship.trust == approx(0.515)
+    assert enriched.relationship.familiarity == approx(0.02)
     assert enriched.relationship.relationship_summary is not None
 
 

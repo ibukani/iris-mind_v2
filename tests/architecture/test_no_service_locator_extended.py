@@ -97,13 +97,17 @@ def test_extended_service_locator_patterns_are_forbidden() -> None:
         text = path.read_text(encoding="utf-8")
         tree = ast.parse(text, filename=str(path))
 
-        for imported in _imports(tree):
-            if any(imported.startswith(prefix) for prefix in FORBIDDEN_IMPORT_PREFIXES):
-                violations.append(f"{rel_path}: imports {imported}")
+        violations.extend(
+            f"{rel_path}: imports {imported}"
+            for imported in _imports(tree)
+            if any(imported.startswith(prefix) for prefix in FORBIDDEN_IMPORT_PREFIXES)
+        )
 
-        for pattern in FORBIDDEN_TEXT_PATTERNS:
-            if pattern in text:
-                violations.append(f"{rel_path}: contains {pattern!r}")
+        violations.extend(
+            f"{rel_path}: contains {pattern!r}"
+            for pattern in FORBIDDEN_TEXT_PATTERNS
+            if pattern in text
+        )
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):

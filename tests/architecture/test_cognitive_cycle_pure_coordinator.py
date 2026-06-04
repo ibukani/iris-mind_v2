@@ -38,7 +38,18 @@ ALLOWED_CALL_NAMES: frozenset[str] = frozenset(
 
 
 def _find_class(tree: ast.Module, class_name: str) -> ast.ClassDef:
-    """Find a class in a module."""
+    """Locate a class node by name in a parsed module.
+
+    Args:
+        tree: Parsed module AST to search.
+        class_name: Class name to locate.
+
+    Returns:
+        ast.ClassDef: The matching class definition node.
+
+    Raises:
+        AssertionError: If the class is not present in the tree.
+    """
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == class_name:
             return node
@@ -46,8 +57,22 @@ def _find_class(tree: ast.Module, class_name: str) -> ast.ClassDef:
     raise AssertionError(message)
 
 
-def _find_method(class_node: ast.ClassDef, method_name: str) -> ast.FunctionDef | ast.AsyncFunctionDef:
-    """Find a method in a class."""
+def _find_method(
+    class_node: ast.ClassDef,
+    method_name: str,
+) -> ast.FunctionDef | ast.AsyncFunctionDef:
+    """Locate a method node by name on a class body.
+
+    Args:
+        class_node: Class definition node to search.
+        method_name: Method name to locate.
+
+    Returns:
+        ast.FunctionDef | ast.AsyncFunctionDef: The matching method node.
+
+    Raises:
+        AssertionError: If the method is not declared on the class.
+    """
     for node in class_node.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == method_name:
             return node
@@ -81,7 +106,9 @@ def test_cognitive_cycle_run_contains_only_coordination_calls() -> None:
         if name in ALLOWED_CALL_NAMES:
             continue
         if any(part in FORBIDDEN_CALL_PARTS for part in name.split(".")):
-            violations.append(f"{SERVICE_PATH.relative_to(PROJECT_ROOT)}:{node.lineno}: calls {name}")
+            violations.append(
+                f"{SERVICE_PATH.relative_to(PROJECT_ROOT)}:{node.lineno}: calls {name}"
+            )
 
     assert not violations, "CognitiveCycle.run contains non-coordinator calls:\n" + "\n".join(
         violations,

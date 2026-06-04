@@ -18,7 +18,8 @@ class Presenter(Protocol):
 class SimplePresenter:
     """アクションプランのフィールドをそのまま出力に委譲するデフォルトプレゼンター."""
 
-    async def present(self, plan: ActionPlan) -> PresentedOutput:  # noqa: PLR6301
+    @staticmethod
+    async def present(plan: ActionPlan) -> PresentedOutput:
         """アクションプランを提示用出力に変換する.
 
         Args:

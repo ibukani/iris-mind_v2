@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from iris.cognitive.affect.mood import update_mood
 from iris.cognitive.workspace.frame import AffectSnapshot
+from tests.helpers.approx import approx
 
 
 def test_mood_decays_toward_neutral_deterministically() -> None:
@@ -15,9 +14,9 @@ def test_mood_decays_toward_neutral_deterministically() -> None:
 
     mood = update_mood(current, neutral, elapsed_seconds=600.0)
 
-    assert mood.valence == pytest.approx(0.4)
-    assert mood.arousal == pytest.approx(0.2)
-    assert mood.dominance == pytest.approx(0.1)
+    assert mood.valence == approx(0.4)
+    assert mood.arousal == approx(0.2)
+    assert mood.dominance == approx(0.1)
 
 
 def test_mood_updates_from_current_appraisal() -> None:
@@ -29,6 +28,6 @@ def test_mood_updates_from_current_appraisal() -> None:
     )
 
     assert mood.mood_label == "negative"
-    assert mood.valence == pytest.approx(-0.175)
-    assert mood.arousal == pytest.approx(0.06999999999999999)
-    assert mood.dominance == pytest.approx(-0.0875)
+    assert mood.valence == approx(-0.175)
+    assert mood.arousal == approx(0.06999999999999999)
+    assert mood.dominance == approx(-0.0875)

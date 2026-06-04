@@ -21,7 +21,7 @@ class OutputSafetyGate(Protocol):
 class AllowAllOutputGate:
     """Pass-through output gate that allows every output."""
 
-    async def check_output(self, output: PresentedOutput) -> SafetyDecision:  # noqa: PLR6301, ARG002
+    async def check_output(self, output: PresentedOutput) -> SafetyDecision:
         """Allow all output unconditionally.
 
         Args:

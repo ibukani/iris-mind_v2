@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import tomllib
+from typing import cast
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -29,45 +30,99 @@ PROTECTED_MYPY_MODULES: frozenset[str] = frozenset(
 
 
 def _pyproject() -> dict[str, object]:
-    """Load pyproject.toml."""
+    """Load pyproject.toml.
+
+    Returns:
+        dict[str, object]: Parsed contents of the project's pyproject.toml.
+    """
     with (PROJECT_ROOT / "pyproject.toml").open("rb") as file:
         return tomllib.load(file)
 
 
+_EMPTY_DICT: dict[str, object] = {}
+
+
+def _as_dict(value: object) -> dict[str, object]:
+    """Coerce a config value into a dict.
+
+    Args:
+        value: Arbitrary config value extracted from TOML.
+
+    Returns:
+        dict[str, object]: The value when it is a mapping, otherwise an empty dict.
+    """
+    if isinstance(value, dict):
+        return cast("dict[str, object]", value)
+    return _EMPTY_DICT
+
+
+_EMPTY_LIST: list[object] = []
+
+
+def _as_list(value: object) -> list[object]:
+    """Coerce a config value into a list.
+
+    Args:
+        value: Arbitrary config value extracted from TOML.
+
+    Returns:
+        list[object]: The value when it is a list, otherwise an empty list.
+    """
+    if isinstance(value, list):
+        return cast("list[object]", value)
+    return _EMPTY_LIST
+
+
 def _tool_config(name: str) -> dict[str, object]:
-    """Return a tool config from pyproject.toml."""
+    """Return a tool config from pyproject.toml.
+
+    Args:
+        name: Tool section name to look up.
+
+    Returns:
+        dict[str, object]: Mapping for the requested tool section, empty if absent.
+    """
     project = _pyproject()
-    tool = project.get("tool", {})
-    assert isinstance(tool, dict)
-    config = tool.get(name, {})
-    assert isinstance(config, dict)
-    return config
+    tool = _as_dict(project.get("tool", {}))
+    return _as_dict(tool.get(name, _EMPTY_DICT))
+
+
+def _tool_get(name: str, key: str) -> dict[str, object]:
+    """Return a nested dict from a tool section.
+
+    Args:
+        name: Tool section name to look up.
+        key: Nested key inside the tool section.
+
+    Returns:
+        dict[str, object]: Nested mapping, empty if absent.
+    """
+    return _as_dict(_tool_config(name).get(key, {}))
 
 
 def test_ruff_all_rules_remain_selected() -> None:
     """Ruff must remain an ALL-rule strict gate."""
     ruff = _tool_config("ruff")
-    lint = ruff.get("lint", {})
-    assert isinstance(lint, dict)
+    lint = _as_dict(ruff.get("lint", {}))
     assert lint.get("select") == ["ALL"]
 
 
 def test_mypy_strict_and_protected_any_policy_remain_enabled() -> None:
-    """mypy strict mode and protected-layer Any restrictions must not be weakened."""
+    """Mypy strict mode and protected-layer Any restrictions must not be weakened."""
     mypy = _tool_config("mypy")
     assert mypy.get("strict") is True
     assert mypy.get("disallow_any_generics") is True
     assert mypy.get("disallow_untyped_defs") is True
     assert mypy.get("warn_unused_ignores") is True
 
-    overrides = mypy.get("overrides", [])
-    assert isinstance(overrides, list)
-    protected_override = None
+    overrides = _as_list(mypy.get("overrides", []))
+    protected_override: dict[str, object] | None = None
     for override in overrides:
-        assert isinstance(override, dict)
-        modules = override.get("module", [])
-        if isinstance(modules, list) and PROTECTED_MYPY_MODULES.issubset(set(modules)):
-            protected_override = override
+        override_dict = _as_dict(override)
+        modules = _as_list(override_dict.get("module", []))
+        module_names = frozenset(modules)
+        if PROTECTED_MYPY_MODULES.issubset(module_names):
+            protected_override = override_dict
             break
     assert protected_override is not None, "missing protected mypy override"
     assert protected_override.get("disallow_any_expr") is True
@@ -76,8 +131,8 @@ def test_mypy_strict_and_protected_any_policy_remain_enabled() -> None:
 
 
 def test_pyright_strict_mode_remains_enabled() -> None:
-    """pyright must remain strict for production code."""
-    config = json.loads((PROJECT_ROOT / "pyrightconfig.json").read_text(encoding="utf-8"))
+    """Pyright must remain strict for production code."""
+    config = _as_dict(json.loads((PROJECT_ROOT / "pyrightconfig.json").read_text(encoding="utf-8")))
     assert config.get("typeCheckingMode") == "strict"
     assert config.get("reportMissingImports") == "error"
     assert config.get("reportUnknownMemberType") == "error"
@@ -86,9 +141,8 @@ def test_pyright_strict_mode_remains_enabled() -> None:
 
 
 def test_pytest_strictness_and_coverage_threshold_remain_enabled() -> None:
-    """pytest strict behavior and coverage floor must remain active."""
-    pytest_config = _tool_config("pytest").get("ini_options", {})
-    assert isinstance(pytest_config, dict)
+    """Pytest strict behavior and coverage floor must remain active."""
+    pytest_config = _tool_get("pytest", "ini_options")
     addopts = pytest_config.get("addopts", "")
     assert isinstance(addopts, str)
     assert "--strict-config" in addopts
@@ -96,8 +150,7 @@ def test_pytest_strictness_and_coverage_threshold_remain_enabled() -> None:
     assert pytest_config.get("xfail_strict") is True
     assert pytest_config.get("filterwarnings") == ["error"]
 
-    coverage = _tool_config("coverage").get("report", {})
-    assert isinstance(coverage, dict)
+    coverage = _tool_get("coverage", "report")
     fail_under = coverage.get("fail_under")
     assert isinstance(fail_under, int)
     assert fail_under >= 90

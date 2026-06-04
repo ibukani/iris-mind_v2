@@ -250,7 +250,7 @@ def test_no_deleted_imports_in_source_code() -> None:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _check_layer_imports(  # noqa: C901
+def _check_layer_imports(  # noqa: C901 -- branches per (layer, allowed-import, exception) tuple for exhaustive boundary check
     layer_dir: str,
     forbidden: set[str],
     exceptions: list[tuple[str, str, str, str]],
@@ -330,7 +330,7 @@ def test_cli_exports_run_one_turn_and_main() -> None:
     assert "def main()" in text
 
 
-def test_wiring_uses_constructor_injection() -> None:  # noqa: C901
+def test_wiring_uses_constructor_injection() -> None:  # noqa: C901 -- branches per forbidden service-locator call pattern for exhaustive wiring check
     """配線関数はresolve()、get_service()、locate()を呼び出してはならない。"""
     violations: list[str] = []
     for rel in WIRING_FILES:
@@ -435,7 +435,7 @@ def test_no_service_locator_patterns(target_dir: str) -> None:
     )
 
 
-def test_no_global_mutable_registries() -> None:  # noqa: C901
+def test_no_global_mutable_registries() -> None:  # noqa: C901 -- branches per detected registry pattern for exhaustive global-state audit
     """ターゲットモジュールにモジュールレベルの可変レジストリがあってはならない。"""
     violations: list[str] = []
     for filepath in _iter_source_files():

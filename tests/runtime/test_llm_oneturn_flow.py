@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class BlockingActionGate:
     """Stub action safety gate that blocks all plans."""
 
-    async def check_plan(self, plan: ActionPlan) -> SafetyDecision:  # noqa: PLR6301, ARG002
+    async def check_plan(self, plan: ActionPlan) -> SafetyDecision:  # noqa: PLR6301, ARG002 -- test stub implements ActionSafetyGate protocol; self/plan are unused by stub design
         """Return a BLOCK decision."""
         return SafetyDecision(decision=GateDecision.BLOCK, reason="blocked action")
 
@@ -29,7 +29,7 @@ class BlockingActionGate:
 class BlockingOutputGate:
     """Stub output safety gate that blocks all outputs."""
 
-    async def check_output(self, output: PresentedOutput) -> SafetyDecision:  # noqa: PLR6301, ARG002
+    async def check_output(self, output: PresentedOutput) -> SafetyDecision:  # noqa: PLR6301, ARG002 -- test stub implements OutputSafetyGate protocol; self/output are unused by stub design
         """Return a BLOCK decision."""
         return SafetyDecision(decision=GateDecision.BLOCK, reason="blocked output")
 

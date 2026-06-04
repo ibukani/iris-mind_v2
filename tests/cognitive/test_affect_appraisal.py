@@ -13,6 +13,7 @@ from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ObservationId, SessionId
+from tests.helpers.approx import approx
 
 
 def user_message(text: str) -> UserMessageObservation:
@@ -36,9 +37,9 @@ def test_keyword_appraisal_is_deterministic() -> None:
     affect = classify_appraisal("ありがとう、助かった。急ぎで不安だった")
 
     assert affect.mood_label == "positive"
-    assert affect.valence == pytest.approx(0.25)
-    assert affect.arousal == pytest.approx(0.30000000000000004)
-    assert affect.dominance == pytest.approx(0.0)
+    assert affect.valence == approx(0.25)
+    assert affect.arousal == approx(0.30000000000000004)
+    assert affect.dominance == approx(0.0)
     assert affect.affect_summary == "positive VAD(v=0.25, a=0.30, d=0.00)"
 
 

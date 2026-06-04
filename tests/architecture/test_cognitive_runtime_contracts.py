@@ -113,11 +113,7 @@ def _get_field_type_annotations(cls: ast.ClassDef) -> list[str]:
     Returns:
         list[str]: フィールド型注釈の文字列表現リスト。
     """
-    return [
-        ast.unparse(item.annotation)
-        for item in cls.body
-        if isinstance(item, ast.AnnAssign) and item.annotation is not None
-    ]
+    return [ast.unparse(item.annotation) for item in cls.body if isinstance(item, ast.AnnAssign)]
 
 
 # ── 1. WorkspaceFrame immutability ─────────────────────────────
@@ -383,7 +379,7 @@ def test_step_results_inherit_from_base(result_class: str, expected_parent: str)
 # ── 5. PipelineStep frame immutability ─────────────────────────
 
 
-def test_pipeline_step_does_not_mutate_frame() -> None:  # noqa: C901
+def test_pipeline_step_does_not_mutate_frame() -> None:  # noqa: C901 -- intentionally enumerates per-mutation-kind branches for exhaustive AST coverage
     """PipelineStep.run()の実装はフレームをその場で変更してはならない。
 
     'frame'パラメータの属性をターゲットとするAssignノードをスキャンする。

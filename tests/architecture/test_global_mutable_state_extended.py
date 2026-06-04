@@ -63,6 +63,26 @@ def _name_is_suspicious(name: str) -> bool:
     )
 
 
+def _violation_for_assign(node: ast.Assign, rel_path: Path) -> list[str]:
+    """Return violation strings for a plain assignment node, when mutable and suspicious."""
+    found: list[str] = []
+    for target in node.targets:
+        if not isinstance(target, ast.Name):
+            continue
+        if _value_is_mutable(node.value) and _name_is_suspicious(target.id):
+            found.append(f"{rel_path}:{node.lineno}: {target.id}")
+    return found
+
+
+def _violation_for_annassign(node: ast.AnnAssign, rel_path: Path) -> list[str]:
+    """Return violation strings for an annotated assignment node, when mutable and suspicious."""
+    if not isinstance(node.target, ast.Name):
+        return []
+    if _value_is_mutable(node.value) and _name_is_suspicious(node.target.id):
+        return [f"{rel_path}:{node.lineno}: {node.target.id}"]
+    return []
+
+
 def test_no_suspicious_module_level_mutable_state_in_protected_layers() -> None:
     """Protected source layers must avoid hidden module-level mutable state."""
     violations: list[str] = []
@@ -72,15 +92,9 @@ def test_no_suspicious_module_level_mutable_state_in_protected_layers() -> None:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.iter_child_nodes(tree):
             if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if not isinstance(target, ast.Name):
-                        continue
-                    if _value_is_mutable(node.value) and _name_is_suspicious(target.id):
-                        violations.append(f"{rel_path}:{node.lineno}: {target.id}")
-            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-                name = node.target.id
-                if _value_is_mutable(node.value) and _name_is_suspicious(name):
-                    violations.append(f"{rel_path}:{node.lineno}: {name}")
+                violations.extend(_violation_for_assign(node, rel_path))
+            elif isinstance(node, ast.AnnAssign):
+                violations.extend(_violation_for_annassign(node, rel_path))
 
     assert not violations, "suspicious module-level mutable state found:\n" + "\n".join(
         violations,

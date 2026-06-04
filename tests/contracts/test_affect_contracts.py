@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
-
 from iris.cognitive.cycle.models import AppraisalResult, RelationshipResult, StepStatus
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot
+from tests.helpers.approx import approx
 from tests.helpers.immutability import assert_frozen_field
 
 
@@ -26,8 +25,8 @@ def test_affect_and_relationship_snapshots_are_frozen_and_typed() -> None:
         relationship_summary="User relationship(affinity=0.10, trust=0.50, familiarity=0.20)",
     )
 
-    assert affect.valence == pytest.approx(0.25)
-    assert relationship.trust == pytest.approx(0.5)
+    assert affect.valence == approx(0.25)
+    assert relationship.trust == approx(0.5)
     assert_frozen_field(affect, "valence", 0.0)
     assert_frozen_field(relationship, "trust", 0.0)
 
