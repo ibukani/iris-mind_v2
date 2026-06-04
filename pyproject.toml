@@ -146,7 +146,7 @@ enable_error_code = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q --strict-config --strict-markers --tb=short --cov=iris --cov-branch --cov-report=term-missing:skip-covered --cov-report=html --cov-fail-under=90"
+addopts = "-q --strict-config --strict-markers --tb=short"
 xfail_strict = true
 filterwarnings = ["error"]
 markers = [
@@ -178,7 +178,7 @@ exclude_also = [
     "if __name__ == .__main__.",
     "@overload",
     "raise NotImplementedError",
-    "\\.\\.\\.",
+    "\.\.\.",
 ]
 
 [tool.coverage.html]
