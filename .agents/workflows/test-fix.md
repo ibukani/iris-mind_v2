@@ -16,18 +16,22 @@ Use this workflow when the task is to fix Ruff, mypy, pyright, pytest, coverage,
 1. Capture the exact failing command and the first failure.
 2. Classify the failure: lint, format, type, pyright, unit test, architecture, coverage.
 3. Fix the root cause, not the checker.
-4. Prefer precise signatures, typed contracts, `Protocol`, or `TypeGuard` over `typing.cast`.
-5. Add or update tests when behavior changes.
-6. Re-run the narrow command.
-7. Run `make ai-quick`.
-8. Run `make ai-check` when the error class is resolved.
+4. Prefer precise signatures, typed contracts, `Protocol`, `TypeGuard`, helpers, or adapter normalization over suppression comments.
+5. For frozen dataclass immutability tests, use `tests.helpers.immutability.assert_frozen_field`.
+6. Add or update tests when behavior changes.
+7. Re-run the narrow command.
+8. Run `make ai-quick`.
+9. Run `make ai-check` when the error class is resolved.
 
 ## Forbidden fixes
 
-- Adding `type: ignore` without a specific error code and comment.
+- Adding `# noqa` in protected architecture layers.
+- Adding `type: ignore` or `pyright: ignore` in protected architecture layers.
+- Adding `type: ignore` without a specific error code and reason outside protected layers.
 - Adding `typing.cast` in protected architecture layers to silence type errors.
 - Replacing typed boundaries with `Any`, `object`, raw `dict`, or untyped callbacks.
 - Adding generic object/dict accessor helpers such as `_get_value(item: object, name: str)` in protected layers.
+- Using `object.__setattr__` or `# noqa: B010` for frozen dataclass tests.
 - Marking tests xfail/skip to pass the gate.
 - Lowering coverage.
 - Removing architecture tests.
