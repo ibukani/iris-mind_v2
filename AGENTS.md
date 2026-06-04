@@ -2,7 +2,7 @@
 
 This repository is **Iris**, an AI companion cognitive runtime MVP. Treat this file as the entry point for Codex, OpenCode, and other coding agents.
 
-## Must-follow token and language policy
+## Must-follow token, language, and output compression policy
 
 These rules are embedded here, not delegated to another file, because they must be loaded at the start of every agent session.
 
@@ -30,6 +30,74 @@ Avoid:
 - motivational wording
 - speculative alternatives not needed for the task
 - copying whole files into the prompt when paths are enough
+
+### Caveman Output Compression Mode
+
+Use for English agent-visible replies, progress notes, handoffs, and completion reports.
+
+Core rule:
+
+```text
+Respond terse like smart caveman. All technical substance stay. Only fluff die.
+```
+
+Compress English by default:
+
+- Drop pleasantries: `Sure`, `I'd be happy to`, `Thanks for`, `Great question`.
+- Drop filler: `just`, `really`, `basically`, `actually`, `quite`, `very` unless meaning changes.
+- Drop hedging when evidence is enough: `might`, `perhaps`, `it seems`, `I think`.
+- Drop articles and helper words when clear: `the`, `a`, `an`, `that`, `in order to`.
+- Prefer direct technical fragments, bullets, `path:line`, commands, and code blocks.
+- Preserve code, identifiers, commands, paths, URLs, stack traces, quoted errors, API names, and type names exactly.
+
+Examples:
+
+```text
+Before: Sure, I'd be happy to help. The issue is likely caused by the authentication middleware where the token expiry check uses `<` instead of `<=`.
+After: Bug: auth middleware token expiry check uses `<`, need `<=`.
+
+Before: In order to fix this issue, you should update the configuration file and then run the full test suite.
+After: Fix: update config. Verify: run full test suite.
+```
+
+### Genshijin Output Compression Mode
+
+Use for Japanese agent-visible replies, progress notes, handoffs, and completion reports.
+
+Core rule:
+
+```text
+賢い原始人のように短く返す。技術情報は残す。無駄だけ消す。
+```
+
+Compress Japanese by default:
+
+- Delete greetings, thanks, apologies, cushion words, motivational wording, and business-politeness padding.
+- Convert polite endings to compact technical Japanese where natural.
+- Compress redundant phrases: `することができます` → `可能` / `できる`, `ということになります` → `になる`.
+- Delete obvious particles when readable: `認証ミドルウェアのトークンの有効期限チェック` → `認証middleware token期限check`.
+- Prefer noun/verb fragments, dense bullets, checklists, `path:line`, and command blocks.
+- Omit obvious background, generic tutorials, and repeated architecture summaries.
+
+Examples:
+
+```text
+Before: 修正することができます。
+After: 修正可能。
+
+Before: 認証ミドルウェアにおけるトークンの有効期限チェックの部分に原因がある可能性があります。
+After: 原因: 認証middleware token期限check。
+```
+
+### Mode selection and safety valve
+
+- English natural language: use Caveman Mode.
+- Japanese natural language: use Genshijin Mode.
+- Mixed Japanese/English: compress each natural-language segment with the matching mode; keep code and identifiers exact.
+- User asks `詳しく`, `FULL`, `網羅`, `比較`, or similar: expand enough for the request, still avoid filler.
+- Destructive operations, data loss risk, security/privacy issues, irreversible commands, migrations, and compliance warnings: use normal precise language over maximum compression.
+- Reviews, verification failures, and residual risks must keep evidence, severity, and reproduction steps. Do not over-compress findings.
+- This policy controls coding-agent communication only. It must not change Iris runtime personality, user-facing companion dialogue, safety gates, prompts, or product behavior.
 
 ### Language split
 
@@ -74,7 +142,7 @@ If nothing remains, write `なし` under `残リスク`.
 
 Before changing code, read the relevant files in this order:
 
-1. `AGENTS.md` fully, including the token and language policy above
+1. `AGENTS.md` fully, including the token, language, and output compression policy above
 2. `.agents/README.md`
 3. `.agents/rules/architecture.md`
 4. `.agents/rules/boundaries.md`
