@@ -15,9 +15,9 @@ Each step receives a read-only frame snapshot and returns a typed result.
 ## Forbidden pattern
 
 ```python
-memory = await self.memory.search(user_text)
+memory = await self.memory.search(actor_text)
 mood = self.relationship.update(memory)
-reply = await self.llm.chat(memory, mood, user_text)
+reply = await self.llm.chat(memory, mood, actor_text)
 await self.discord.send(reply)
 ```
 

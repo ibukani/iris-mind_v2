@@ -10,15 +10,15 @@ from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.memory.fake import FakeMemoryStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryId, MemoryRecord
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import wire_affect_memory_aware_text_response_cognitive_cycle
 
 
-def user_message(text: str) -> UserMessageObservation:
-    """Return a UserMessageObservation with the given text and a test identity."""
-    return UserMessageObservation(
+def actor_message(text: str) -> ActorMessageObservation:
+    """Return an ActorMessageObservation with the given text and a test identity."""
+    return ActorMessageObservation(
         observation_id=ObservationId("obs-affect-runtime"),
         session_id=SessionId("session-affect-runtime"),
         actor=Identity(
@@ -30,7 +30,7 @@ def user_message(text: str) -> UserMessageObservation:
         ),
         space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
     )
 
@@ -55,7 +55,7 @@ async def test_affect_aware_one_turn_flow_includes_affect_relationship_and_memor
         )
     )
 
-    output = await app.process_observation(user_message("jasmine tea ありがとう、急ぎで助かった"))
+    output = await app.process_observation(actor_message("jasmine tea ありがとう、急ぎで助かった"))
 
     prompt = llm.requests[0].messages[-1].content
     assert output.text == "affect-aware reply"

@@ -14,17 +14,17 @@ from iris.cognitive.policy.inhibition import PolicyInhibitionStep
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot, WorkspaceFrame
 from iris.contracts.actions import ActionPlan
 from iris.contracts.identity import ActorKind, Identity
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 
 
-def _observation(text: str = "hello") -> UserMessageObservation:
-    """指定されたテキストとテスト用IDを持つUserMessageObservationを返す。
+def _observation(text: str = "hello") -> ActorMessageObservation:
+    """指定されたテキストとテスト用IDを持つActorMessageObservationを返す。
 
     Returns:
-        UserMessageObservation: 構築済みの観測。
+        ActorMessageObservation: 構築済みの観測。
     """
-    return UserMessageObservation(
+    return ActorMessageObservation(
         observation_id=ObservationId("obs-policy"),
         session_id=SessionId("session-policy"),
         actor=Identity(
@@ -36,7 +36,7 @@ def _observation(text: str = "hello") -> UserMessageObservation:
         ),
         space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
     )
 
@@ -50,7 +50,7 @@ async def test_policy_step_returns_typed_result_without_mutating_frame() -> None
     enriched = replace(
         frame,
         affect=AffectSnapshot(mood_label="negative", arousal=0.9, valence=-0.8),
-        relationship=RelationshipSnapshot(user_label="Mina", familiarity=0.0),
+        relationship=RelationshipSnapshot(actor_label="Mina", familiarity=0.0),
     )
 
     result = await PolicyInhibitionStep().run(enriched)

@@ -16,7 +16,7 @@ from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import StepStatus
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from tests.helpers.immutability import assert_frozen_field
 
@@ -39,19 +39,19 @@ class StubResponseGenerator:
         return GeneratedResponse(text=self._response_text, model="stub")
 
 
-def user_message(text: str = "hello") -> UserMessageObservation:
-    """指定されたテキストを持つUserMessageObservationを返す。
+def actor_message(text: str = "hello") -> ActorMessageObservation:
+    """指定されたテキストを持つActorMessageObservationを返す。
 
     Returns:
-        UserMessageObservation: 構築済みの観測。
+        ActorMessageObservation: 構築済みの観測。
     """
-    return UserMessageObservation(
+    return ActorMessageObservation(
         observation_id=ObservationId("obs-response"),
         session_id=SessionId("session-response"),
         actor=None,
         space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
     )
 
@@ -60,7 +60,7 @@ def user_message(text: str = "hello") -> UserMessageObservation:
 async def test_response_generation_step_converts_frame_text_into_action_plan() -> None:
     """ResponseGenerationStepが解釈テキストからActionPlanを生成することを確認する。"""
     frame_builder = FrameBuilder()
-    frame = WorkspaceFrame(observation=user_message("what is new?"))
+    frame = WorkspaceFrame(observation=actor_message("what is new?"))
     perceived = await SimplePerceptionStep().run(frame)
     frame = frame_builder.apply(frame, perceived)
     generator = StubResponseGenerator("generated reply")
@@ -72,7 +72,7 @@ async def test_response_generation_step_converts_frame_text_into_action_plan() -
     assert generator.prompts == [
         ResponsePrompt(
             system_instruction="Generate a concise text response for Iris.",
-            user_text="what is new?",
+            actor_text="what is new?",
         ),
     ]
     assert frame_after_response.candidate_action_plans[0].candidate_text == "generated reply"
@@ -83,7 +83,7 @@ async def test_response_generation_step_converts_frame_text_into_action_plan() -
 @pytest.mark.anyio
 async def test_response_generation_skips_when_frame_has_no_interpreted_text() -> None:
     """フレームに解釈テキストがない場合にResponseGenerationStepがスキップすることを確認する。"""
-    frame = WorkspaceFrame(observation=user_message())
+    frame = WorkspaceFrame(observation=actor_message())
     generator = StubResponseGenerator("unused")
 
     result = await ResponseGenerationStep(generator).run(frame)
@@ -95,7 +95,7 @@ async def test_response_generation_skips_when_frame_has_no_interpreted_text() ->
 
 def test_response_generation_does_not_mutate_workspace_frame_directly() -> None:
     """WorkspaceFrame.candidate_action_plansがその場で変更できないことを確認する。"""
-    frame = WorkspaceFrame(observation=user_message())
+    frame = WorkspaceFrame(observation=actor_message())
 
     assert_frozen_field(frame, "candidate_action_plans", ())
     assert build_response_prompt(frame) is None

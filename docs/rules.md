@@ -59,9 +59,9 @@ for step in self._steps:
 悪い例。
 
 ```python
-memory = await self.memory.search(user_text)
+memory = await self.memory.search(actor_text)
 mood = self.relationship.update(memory)
-reply = await self.llm.chat(memory, mood, user_text)
+reply = await self.llm.chat(memory, mood, actor_text)
 await self.discord.send(reply)
 ```
 
@@ -115,7 +115,7 @@ global_cycle.register_hook(...)
 良い例。
 
 ```python
-observation = UserMessageObservation(
+observation = ActorMessageObservation(
     observation_id=ObservationId("obs-1"),
     session_id=SessionId("session-1"),
     actor=Identity(
@@ -127,7 +127,7 @@ observation = UserMessageObservation(
     ),
     space_id=SpaceId("space-1"),
     occurred_at=datetime.now(UTC),
-    kind=ObservationKind.USER_MESSAGE,
+    kind=ObservationKind.ACTOR_MESSAGE,
     text=message.content,
 )
 return observation

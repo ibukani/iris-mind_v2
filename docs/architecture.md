@@ -452,7 +452,7 @@ safety:
 
 例。
 
-- `UserMessageObservation`
+- `ActorMessageObservation`
 - `TranscriptObservation`
 - `IdleTickObservation`
 - `AudienceMessageObservation`

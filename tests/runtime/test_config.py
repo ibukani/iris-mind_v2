@@ -10,7 +10,7 @@ from typing import override
 import pytest
 
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.config import (
     CliConfigOverrides,
@@ -374,12 +374,12 @@ def _repo_path(relative_path: str) -> Path:
     return Path(__file__).resolve().parents[2] / relative_path
 
 
-def _observation(text: str) -> UserMessageObservation:
-    return UserMessageObservation(
+def _observation(text: str) -> ActorMessageObservation:
+    return ActorMessageObservation(
         observation_id=ObservationId("config-test"),
         session_id=SessionId("config-test"),
         occurred_at=datetime(2026, 6, 4, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
         actor=None,
         space_id=None,

@@ -18,7 +18,7 @@ def test_affect_and_relationship_snapshots_are_frozen_and_typed() -> None:
         affect_summary="positive VAD(v=0.25, a=0.10, d=0.00)",
     )
     relationship = RelationshipSnapshot(
-        user_label="User",
+        actor_label="User",
         affinity=0.1,
         trust=0.5,
         familiarity=0.2,

@@ -47,7 +47,7 @@ def _idle_frame(
 
     relationship = RelationshipSnapshot()
     if familiarity is not None:
-        relationship = RelationshipSnapshot(user_label="Mina", familiarity=familiarity)
+        relationship = RelationshipSnapshot(actor_label="Mina", familiarity=familiarity)
 
     return WorkspaceFrame(
         observation=IdleTickObservation(

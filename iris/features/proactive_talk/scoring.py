@@ -59,7 +59,7 @@ class SalienceScorer:
             reasons.append("memory_context")
 
         score = _apply_relationship_score(
-            score, reasons, frame.relationship.user_label, frame.relationship.familiarity
+            score, reasons, frame.relationship.actor_label, frame.relationship.familiarity
         )
         score = _apply_affect_score(score, reasons, frame.affect.arousal, frame.affect.valence)
 
@@ -77,9 +77,9 @@ def _idle_score(idle_seconds: float) -> float:
 
 
 def _apply_relationship_score(
-    score: float, reasons: list[str], user_label: str | None, familiarity: float
+    score: float, reasons: list[str], actor_label: str | None, familiarity: float
 ) -> float:
-    if user_label is None:
+    if actor_label is None:
         return score
     if familiarity < _LOW_FAMILIARITY_THRESHOLD:
         score -= _LOW_FAMILIARITY_PENALTY

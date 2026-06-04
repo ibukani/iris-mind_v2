@@ -33,7 +33,7 @@ class InMemoryRelationshipState:
         if snapshot is not None:
             return snapshot
         return RelationshipSnapshot(
-            user_label=actor_label,
+            actor_label=actor_label,
             affinity=0.0,
             trust=0.5,
             familiarity=0.0,
@@ -79,7 +79,7 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
         return RelationshipResult(
             step_name=self.name,
             status=StepStatus.OK,
-            user_label=updated.user_label,
+            actor_label=updated.actor_label,
             affinity=updated.affinity,
             trust=updated.trust,
             familiarity=updated.familiarity,
@@ -110,7 +110,7 @@ def update_relationship(
         familiarity=familiarity,
         affinity=affinity,
         trust=trust,
-        relationship_summary=_summarize(current.user_label, affinity, trust, familiarity),
+        relationship_summary=_summarize(current.actor_label, affinity, trust, familiarity),
     )
 
 

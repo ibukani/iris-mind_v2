@@ -11,24 +11,24 @@ from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import AppraisalResult, StepStatus
 from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.identity import ActorKind, Identity
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from tests.helpers.approx import approx
 
 
-def user_message(actor: Identity | None = None) -> UserMessageObservation:
-    """オプションのアクターIDを持つUserMessageObservationを返す。
+def actor_message(actor: Identity | None = None) -> ActorMessageObservation:
+    """オプションのアクターIDを持つActorMessageObservationを返す。
 
     Returns:
-        UserMessageObservation: 構築済みの観測。
+        ActorMessageObservation: 構築済みの観測。
     """
-    return UserMessageObservation(
+    return ActorMessageObservation(
         observation_id=ObservationId("obs-relationship"),
         session_id=SessionId("session-relationship"),
         actor=actor,
         space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text="thanks",
     )
 
@@ -45,7 +45,7 @@ async def test_relationship_step_updates_per_user_state() -> None:
     )
     state = InMemoryRelationshipState()
     builder = FrameBuilder()
-    frame = WorkspaceFrame(observation=user_message(actor))
+    frame = WorkspaceFrame(observation=actor_message(actor))
     frame = builder.apply(
         frame,
         AppraisalResult(step_name="appraisal", status=StepStatus.OK, valence=0.5),
@@ -55,7 +55,7 @@ async def test_relationship_step_updates_per_user_state() -> None:
     enriched = builder.apply(frame, result)
 
     assert result.status == StepStatus.OK
-    assert enriched.relationship.user_label == "Mina"
+    assert enriched.relationship.actor_label == "Mina"
     assert enriched.relationship.affinity == approx(0.02)
     assert enriched.relationship.trust == approx(0.515)
     assert enriched.relationship.familiarity == approx(0.02)
@@ -65,7 +65,7 @@ async def test_relationship_step_updates_per_user_state() -> None:
 @pytest.mark.anyio
 async def test_relationship_step_skips_without_actor_identity() -> None:
     """観測にアクターIDがない場合にRelationshipStepがスキップすることを確認する。"""
-    result = await RelationshipStep().run(WorkspaceFrame(observation=user_message()))
+    result = await RelationshipStep().run(WorkspaceFrame(observation=actor_message()))
 
     assert result.status == StepStatus.SKIPPED
     assert result.reason == "no actor identity"

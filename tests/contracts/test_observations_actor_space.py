@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
+    ActorMessageObservation,
     IdleTickObservation,
     ObservationKind,
-    UserMessageObservation,
 )
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId, SpaceId
 from tests.helpers.immutability import assert_frozen_field
@@ -29,15 +29,15 @@ def _actor(kind: ActorKind = ActorKind.HUMAN, actor_id: str = "actor-1") -> Iden
     )
 
 
-def test_user_message_observation_carries_actor_and_space_id() -> None:
-    """UserMessageObservation exposes actor and space_id fields at the base layer."""
-    observation = UserMessageObservation(
+def test_actor_message_observation_carries_actor_and_space_id() -> None:
+    """ActorMessageObservation exposes actor and space_id fields at the base layer."""
+    observation = ActorMessageObservation(
         observation_id=ObservationId("obs-1"),
         session_id=SessionId("session-1"),
         actor=_actor(),
         space_id=SpaceId("space-dm-1"),
         occurred_at=datetime(2026, 6, 4, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text="hello",
     )
 
@@ -66,13 +66,13 @@ def test_idle_tick_observation_carries_actor_and_space_id() -> None:
 
 def test_observation_actor_and_space_id_are_optional() -> None:
     """Observation accepts None for actor and space_id for source-agnostic construction."""
-    observation = UserMessageObservation(
+    observation = ActorMessageObservation(
         observation_id=ObservationId("obs-3"),
         session_id=SessionId("session-3"),
         actor=None,
         space_id=None,
         occurred_at=datetime(2026, 6, 4, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text="hello",
     )
 
@@ -106,13 +106,13 @@ def test_observation_carries_iris_actor() -> None:
 
 def test_observation_actor_and_space_id_are_frozen() -> None:
     """Observation's actor and space_id fields cannot be reassigned after construction."""
-    observation = UserMessageObservation(
+    observation = ActorMessageObservation(
         observation_id=ObservationId("obs-frozen"),
         session_id=SessionId("session-frozen"),
         actor=_actor(),
         space_id=SpaceId("space-1"),
         occurred_at=datetime(2026, 6, 4, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text="hello",
     )
 

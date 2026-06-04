@@ -91,7 +91,7 @@ async def test_proactive_speak_calls_presenter() -> None:
 
 
 @pytest.mark.anyio
-async def test_no_action_does_not_produce_user_visible_text() -> None:
+async def test_no_action_does_not_produce_actor_visible_text() -> None:
     """Verify no_action produces PresentedOutput with text=None and is_sendable=False."""
     app = IrisApp(cycle=wire_proactive_talk_cognitive_cycle())
     output = await app.process_observation(_idle_tick(10.0))

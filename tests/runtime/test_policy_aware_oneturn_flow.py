@@ -11,7 +11,7 @@ from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.memory.fake import FakeMemoryStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryId, MemoryRecord
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
@@ -19,9 +19,9 @@ from iris.runtime.wiring.cognitive import (
 )
 
 
-def _user_message(text: str) -> UserMessageObservation:
-    """Return a UserMessageObservation with the given text and a test identity."""
-    return UserMessageObservation(
+def _actor_message(text: str) -> ActorMessageObservation:
+    """Return an ActorMessageObservation with the given text and a test identity."""
+    return ActorMessageObservation(
         observation_id=ObservationId("obs-policy-runtime"),
         session_id=SessionId("session-policy-runtime"),
         actor=Identity(
@@ -33,7 +33,7 @@ def _user_message(text: str) -> UserMessageObservation:
         ),
         space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
     )
 
@@ -58,7 +58,7 @@ async def test_policy_aware_one_turn_flow_includes_policy_context() -> None:
         )
     )
 
-    output = await app.process_observation(_user_message("hello"))
+    output = await app.process_observation(_actor_message("hello"))
 
     prompt = llm.requests[0].messages[-1].content
     assert output.text == "policy-aware reply"

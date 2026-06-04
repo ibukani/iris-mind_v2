@@ -231,6 +231,6 @@ def _build_user_content(prompt: ResponsePrompt) -> str:
     if prompt.goals:
         sections.append(f"Goals: {'; '.join(prompt.goals)}")
     if not sections:
-        return prompt.user_text
-    sections.append(f"User message:\n{prompt.user_text}")
+        return prompt.actor_text
+    sections.append(f"Actor message:\n{prompt.actor_text}")
     return "\n\n".join(sections)

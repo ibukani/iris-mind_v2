@@ -11,24 +11,24 @@ from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import StepStatus
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
-from iris.contracts.observations import ObservationKind, UserMessageObservation
+from iris.contracts.observations import ActorMessageObservation, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from tests.helpers.approx import approx
 
 
-def user_message(text: str) -> UserMessageObservation:
-    """指定されたテキストを持つUserMessageObservationを返す。
+def actor_message(text: str) -> ActorMessageObservation:
+    """指定されたテキストを持つActorMessageObservationを返す。
 
     Returns:
-        UserMessageObservation: 構築済みの観測。
+        ActorMessageObservation: 構築済みの観測。
     """
-    return UserMessageObservation(
+    return ActorMessageObservation(
         observation_id=ObservationId("obs-affect"),
         session_id=SessionId("session-affect"),
         actor=None,
         space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
-        kind=ObservationKind.USER_MESSAGE,
+        kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
     )
 
@@ -48,7 +48,7 @@ def test_keyword_appraisal_is_deterministic() -> None:
 async def test_appraisal_step_enriches_frame_through_frame_builder() -> None:
     """AppraisalStepがFrameBuilder.apply()を通じてエンリッチメントを生成することを確認する。"""
     builder = FrameBuilder()
-    frame = WorkspaceFrame(observation=user_message("I am confused and need help urgent"))
+    frame = WorkspaceFrame(observation=actor_message("I am confused and need help urgent"))
     frame = builder.apply(frame, await SimplePerceptionStep().run(frame))
 
     result = await AppraisalStep().run(frame)
