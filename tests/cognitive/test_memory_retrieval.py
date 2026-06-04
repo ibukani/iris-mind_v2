@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -16,6 +15,7 @@ from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ObservationId, SessionId
+from tests.helpers.immutability import assert_frozen_field
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -94,5 +94,4 @@ def test_workspace_frame_memory_is_not_directly_mutated() -> None:
     """WorkspaceFrame.memory_summaryがその場で変更できないことを確認する。"""
     frame = WorkspaceFrame(observation=user_message())
 
-    with pytest.raises(FrozenInstanceError):
-        frame.memory_summary = frame.memory_summary  # type: ignore[misc]
+    assert_frozen_field(frame, "memory_summary", frame.memory_summary)
