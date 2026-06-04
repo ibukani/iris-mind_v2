@@ -1,3 +1,8 @@
+---
+name: test-repair
+description: Repair failing tests or add regression coverage without weakening the architecture harness.
+---
+
 # Test Repair Skill
 
 Use this skill when tests fail or when adding regression coverage.
