@@ -41,13 +41,17 @@ class _DocumentLike(Protocol):
     metadata: Mapping[str, object]
 
 
-class _DocumentFactory(Protocol):
+class DocumentFactory(Protocol):
+    """LangChain互換ドキュメントを生成する呼び出し可能オブジェクトのプロトコル。"""
+
     def __call__(
         self,
         *,
         page_content: str,
         metadata: Mapping[str, object],
-    ) -> _DocumentLike: ...
+    ) -> _DocumentLike:
+        """指定されたページ内容とメタデータでドキュメントを生成する。"""
+        ...
 
 
 class _AddDocumentsStore(Protocol):
@@ -83,7 +87,7 @@ class LangChainMemoryStore(MemoryStore):
         self,
         vector_store: object,
         *,
-        document_factory: _DocumentFactory | None = None,
+        document_factory: DocumentFactory | None = None,
     ) -> None:
         """LangChainベクターストアとカスタムドキュメントファクトリで初期化する。
 
@@ -159,7 +163,7 @@ class LangChainMemoryStore(MemoryStore):
         )[: query.limit]
 
 
-def _load_document_factory() -> _DocumentFactory:
+def _load_document_factory() -> DocumentFactory:
     try:
         from langchain_core.documents import (  # noqa: PLC0415  # conditional optional dependency
             Document,
@@ -167,7 +171,7 @@ def _load_document_factory() -> _DocumentFactory:
     except ImportError as exc:  # pragma: no cover - covered with monkeypatched loader
         raise LangChainMemoryStoreUnavailableError(_ERR_REQUIRES_LANGCHAIN_CORE) from exc
 
-    return cast("_DocumentFactory", Document)
+    return cast("DocumentFactory", Document)
 
 
 def _metadata_from_record(record: MemoryRecord) -> Mapping[str, object]:

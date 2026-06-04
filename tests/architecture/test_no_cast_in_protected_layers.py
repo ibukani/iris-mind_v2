@@ -43,9 +43,11 @@ def test_typing_cast_is_not_used_in_protected_architecture_layers() -> None:
 
     for path in _python_files():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and _is_cast_call(node):
-                violations.append(f"{path}:{node.lineno}")
+        violations.extend(
+            f"{path}:{node.lineno}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and _is_cast_call(node)
+        )
 
     assert not violations, "typing.cast is forbidden in protected layers:\n" + "\n".join(
         violations,

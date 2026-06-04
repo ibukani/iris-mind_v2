@@ -113,11 +113,11 @@ def _get_field_type_annotations(cls: ast.ClassDef) -> list[str]:
     Returns:
         list[str]: フィールド型注釈の文字列表現リスト。
     """
-    annotations: list[str] = []
-    for item in cls.body:
-        if isinstance(item, ast.AnnAssign) and item.annotation is not None:
-            annotations.append(ast.unparse(item.annotation))
-    return annotations
+    return [
+        ast.unparse(item.annotation)
+        for item in cls.body
+        if isinstance(item, ast.AnnAssign) and item.annotation is not None
+    ]
 
 
 # ── 1. WorkspaceFrame immutability ─────────────────────────────
@@ -172,7 +172,7 @@ def test_workspace_frame_no_mutable_mapping() -> None:
                                 and "frozenset" not in line
                             ):
                                 pytest.fail(
-                                    f"WorkspaceFrame has mutable default at line {item.lineno}: {line}"
+                                    f"WorkspaceFrame mutable default at L{item.lineno}: {line}"
                                 )
 
 
@@ -251,9 +251,7 @@ def test_cognitive_cycle_no_app_specific_imports(app_name: str) -> None:
     except FileNotFoundError:
         pytest.skip("CognitiveCycle service.py does not exist yet")
     if app_name in text:
-        pytest.fail(
-            f"CognitiveCycle references '{app_name}' — must not depend on app-specific or IO packages"
-        )
+        pytest.fail(f"CognitiveCycle depends on '{app_name}' — no app/IO imports allowed")
 
 
 def test_cognitive_cycle_is_coordinator_structure() -> None:
@@ -285,9 +283,7 @@ def test_cognitive_cycle_is_coordinator_structure() -> None:
     )
 
     if not (has_step_loop and has_frame_builder):
-        pytest.fail(
-            "CognitiveCycle.run() must delegate to PipelineStep.run() and FrameBuilder.apply() — coordinator pattern not detected"
-        )
+        pytest.fail("CognitiveCycle.run() must delegate to step + FrameBuilder (coordinator)")
 
 
 # ── 4. PipelineStep typed results ──────────────────────────────
@@ -487,7 +483,7 @@ def test_iris_app_no_action_returns_presented_output_with_no_text() -> None:
 # ── 7. ActionPlan.is_no_action / PresentedOutput.is_sendable ───
 
 
-def test_action_plan_is_no_action_property() -> None:  # noqa: C901
+def test_action_plan_is_no_action_property() -> None:
     """ActionPlan.is_no_actionはturn_intentとshould_respondをチェックするプロパティでなければならない。"""
     if not TARGET_ACTIONS_FILE.is_file():
         pytest.skip("iris/contracts/actions.py does not exist yet")

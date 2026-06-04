@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
-
-import pytest
-
 from iris.contracts.actions import ActionPlan, PresentedOutput
+from tests.helpers.immutability import assert_frozen_field
 
 
 def test_canonical_no_action_plan_is_identified() -> None:
@@ -75,12 +72,10 @@ def test_action_plan_is_immutable() -> None:
         should_respond=False,
         priority=0,
     )
-    with pytest.raises(FrozenInstanceError):
-        object.__setattr__(plan, "turn_intent", "other")
+    assert_frozen_field(plan, "turn_intent", "other")
 
 
 def test_presented_output_is_immutable() -> None:
     """PresentedOutputが作成後に変更できないことを確認する。"""
     output = PresentedOutput(text="hello")
-    with pytest.raises(FrozenInstanceError):
-        object.__setattr__(output, "text", "other")
+    assert_frozen_field(output, "text", "other")

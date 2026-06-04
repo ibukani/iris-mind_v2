@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -17,8 +17,10 @@ from iris.contracts.memory import MemoryId, MemoryRecord, MemorySearchResult
 from iris.contracts.observations import IdleTickObservation, ObservationKind
 from iris.contracts.policy import PolicyConstraint
 from iris.core.ids import ObservationId, SessionId, UserId
-from iris.features.proactive_talk.models import ProactiveFrameContext
 from iris.features.proactive_talk.scoring import SalienceScorer
+
+if TYPE_CHECKING:
+    from iris.features.proactive_talk.models import ProactiveFrameContext
 
 
 def _idle_frame(

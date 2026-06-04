@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from iris.contracts.observations import IdleTickObservation, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.features.definition import FeatureDefinition
 from iris.features.proactive_talk import define_proactive_talk_feature
+from tests.helpers.immutability import assert_frozen_field
 
 
 def test_proactive_talk_feature_definition_is_explicit_and_provider_neutral() -> None:
@@ -43,8 +43,7 @@ def test_idle_tick_observation_is_typed_and_provider_neutral() -> None:
     assert observation.reason == "quiet_room"
     assert observation.idle_seconds == pytest.approx(120.0)
 
-    with pytest.raises(FrozenInstanceError):
-        object.__setattr__(observation, "idle_seconds", 0.0)
+    assert_frozen_field(observation, "idle_seconds", 0.0)
 
 
 def test_proactive_talk_feature_no_forbidden_imports() -> None:

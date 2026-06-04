@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -12,8 +12,10 @@ from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot,
 from iris.contracts.observations import IdleTickObservation, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.features.proactive_talk.definition import ProactivePolicyStep
-from iris.features.proactive_talk.models import ProactiveFrameContext
 from iris.features.proactive_talk.policy import proactive_policy_constraints
+
+if TYPE_CHECKING:
+    from iris.features.proactive_talk.models import ProactiveFrameContext
 
 
 def _idle_frame() -> WorkspaceFrame:

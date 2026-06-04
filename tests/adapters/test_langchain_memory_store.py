@@ -68,13 +68,13 @@ def make_document(*, page_content: str, metadata: Mapping[str, object]) -> StubD
     return StubDocument(page_content=page_content, metadata=metadata)
 
 
-def document_factory() -> langchain._DocumentFactory:  # pyright: ignore[reportPrivateUsage]
+def document_factory() -> langchain.DocumentFactory:
     """LangChainMemoryStoreの引数型と互換性のあるファクトリを返す。
 
     Returns:
-        _DocumentFactory: make_documentと互換のドキュメントファクトリ。
+        DocumentFactory: make_documentと互換のドキュメントファクトリ。
     """
-    return cast("langchain._DocumentFactory", make_document)
+    return cast("langchain.DocumentFactory", make_document)
 
 
 def test_langchain_memory_store_uses_iris_contracts_only() -> None:
@@ -149,7 +149,7 @@ def test_langchain_memory_store_reports_missing_optional_dependency(
 ) -> None:
     """langchain-coreが欠落している場合にLangChainMemoryStoreがUnavailableErrorを発生させることを確認する。"""
 
-    def missing_document_factory() -> langchain._DocumentFactory:  # pyright: ignore[reportPrivateUsage]
+    def missing_document_factory() -> langchain.DocumentFactory:
         msg = "langchain-core is not installed"
         raise LangChainMemoryStoreUnavailableError(msg)
 

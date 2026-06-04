@@ -63,8 +63,8 @@ def test_wire_langchain_memory_store_is_explicit_adapter_wiring(
 ) -> None:
     """Verify wire_langchain_memory_store returns a LangChainMemoryStore instance."""
 
-    def load_document_factory() -> langchain._DocumentFactory:  # pyright: ignore[reportPrivateUsage]
-        return cast("langchain._DocumentFactory", make_document)
+    def load_document_factory() -> langchain.DocumentFactory:
+        return cast("langchain.DocumentFactory", make_document)
 
     monkeypatch.setattr(langchain, "_load_document_factory", load_document_factory)
 
