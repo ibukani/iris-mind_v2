@@ -214,3 +214,59 @@ When done, report in Japanese:
 3. Tests/checks run
 4. Any commands that could not be run
 5. Remaining risks or follow-up work
+
+
+<!-- headroom:rtk-instructions -->
+# RTK Command Filtering for Iris
+
+RTK is an optional token-saving command filter for local agent sessions. It is not an Iris dependency, not part of CI, and not the source of truth for verification. Prefer repository commands first; wrap them with `rtk` only when the tool is available and filtered output is useful.
+
+## Canonical Iris commands
+
+Use these commands as the canonical project interface:
+
+```bash
+make ai-context
+make ai-test-target TARGET=tests/path_or_file.py
+make ai-arch
+make ai-quick
+make ai-check
+make check
+make verify
+make ai-report
+```
+
+`make check` and `make verify` remain the completion gates. `make ai-quick` and `make ai-check` are diagnostic wrappers, not weaker alternatives.
+
+## Safe RTK usage
+
+When logs are too large, RTK may wrap Iris commands without changing the command contract:
+
+```bash
+rtk make ai-context
+rtk make ai-test-target TARGET=tests/path_or_file.py
+rtk make ai-quick
+rtk make ai-check
+rtk make check
+```
+
+For narrow debugging, RTK may also wrap the exact `uv` commands already documented in this file:
+
+```bash
+rtk uv run ruff check .
+rtk uv run ruff format --check .
+rtk uv run mypy iris tests scripts main.py
+rtk uv run pyright .
+rtk uv run pytest tests/architecture -q
+rtk uv run pytest tests/path_or_file.py -q
+```
+
+## Rules
+
+- Do not require RTK in project setup, CI, Makefile targets, docs, or tests.
+- Do not replace canonical `make` / `uv` commands with RTK-only commands.
+- Do not introduce examples for unrelated ecosystems such as Cargo, npm, Docker, Kubernetes, or TypeScript unless the repository actually adds those tools.
+- Use raw commands when exact output, full logs, or debugging context matters.
+- In completion reports, write the command that was actually run and note when RTK filtered output.
+- If RTK is unavailable, continue with the raw `make` / `uv` command and report normally.
+<!-- /headroom:rtk-instructions -->

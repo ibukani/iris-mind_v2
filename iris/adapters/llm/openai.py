@@ -112,12 +112,18 @@ class OpenAILLMClient:
             finish_reason=_extract_finish_reason(response),
         )
 
+    def _request_model(self, request: LLMRequest) -> str:
+        if request.model == "fake-llm":
+            return self._config.model
+        return request.model or self._config.model
+
     def _to_provider_request(self, request: LLMRequest) -> dict[str, object]:
         max_output_tokens = request.max_tokens or self._config.max_output_tokens
+        temperature = request.temperature if request.temperature is not None else 0.0
         provider_request: dict[str, object] = {
-            "model": request.model or self._config.model,
+            "model": self._request_model(request),
             "input": tuple(_to_provider_message(message) for message in request.messages),
-            "temperature": request.temperature,
+            "temperature": temperature,
         }
         if max_output_tokens is not None:
             provider_request["max_output_tokens"] = max_output_tokens

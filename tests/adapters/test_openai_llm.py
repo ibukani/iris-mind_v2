@@ -125,6 +125,23 @@ async def test_openai_client_extracts_text_from_structured_response() -> None:
     assert response == LLMResponse(text="first second", model="gpt-test")
 
 
+@pytest.mark.anyio
+async def test_openai_client_resolves_fake_llm_sentinel_to_config_model() -> None:
+    """OpenAILLMClient uses config model when request carries the fake-llm sentinel."""
+    stub_client = StubOpenAIClient(StubOutputTextResponse("reply", "gpt-5-mini", "completed"))
+    client = OpenAILLMClient(OpenAIConfig(model="gpt-5-mini"), client=stub_client)
+
+    await client.generate(LLMRequest(model="fake-llm", messages=()))
+
+    assert stub_client.responses.requests == [
+        {
+            "model": "gpt-5-mini",
+            "input": (),
+            "temperature": 0.0,
+        }
+    ]
+
+
 def test_openai_client_import_is_safe_when_sdk_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """OpenAI SDKが欠落している場合にOpenAILLMClientがAdapterErrorを発生させることを確認する。"""
     monkeypatch.setattr(openai_adapter, "_openai", None)

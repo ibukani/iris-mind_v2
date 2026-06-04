@@ -4,6 +4,8 @@ Usage:
     python main.py --text "hello"
     python main.py --text "hello" --llm fake
     python main.py --text "hello" --llm openai
+    python main.py --text "hello" --llm ollama --model qwen3:8b
+    python main.py --config .iris/config/llm.toml --text "hello"
 """
 
 from __future__ import annotations
@@ -20,11 +22,25 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--text", required=True, help="Input text for one-turn interaction")
     parser.add_argument(
         "--llm",
-        choices=("fake", "openai"),
-        default="fake",
-        help="LLM backend (default: fake, deterministic)",
+        choices=("fake", "openai", "ollama"),
+        default=None,
+        help="Override models.default_chat.provider: fake, openai, or ollama",
     )
-    parser.add_argument("--model", default=None, help="OpenAI model name (only with --llm openai)")
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Override models.default_chat.model",
+    )
+    parser.add_argument(
+        "--ollama-host",
+        default=None,
+        help="Override ollama.base_url",
+    )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Explicit runtime TOML config path, usually .iris/config/llm.toml",
+    )
     return parser.parse_args()
 
 
@@ -32,8 +48,19 @@ def run() -> None:
     """Parse CLI arguments, run one turn, and print the response."""
     args = _parse_args()
     text: str = args.text
-    llm: str = args.llm
-    output_text = asyncio.run(run_one_turn(text, llm=llm))
+    llm: str | None = args.llm
+    model: str | None = args.model
+    ollama_host: str | None = args.ollama_host
+    config_path: str | None = args.config
+    output_text = asyncio.run(
+        run_one_turn(
+            text,
+            llm=llm,
+            model=model,
+            ollama_host=ollama_host,
+            config_path=config_path,
+        )
+    )
     if output_text:
         sys.stdout.write(output_text + "\n")
     sys.exit(0)

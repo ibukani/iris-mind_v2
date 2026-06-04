@@ -32,14 +32,14 @@ def wire_cognitive_cycle(
     steps: Sequence[PipelineStep[PipelineStepResult]],
     fallback_plan: ActionPlan | None = None,
 ) -> CognitiveCycle:
-    """Wire a CognitiveCycle with the given pipeline steps.
+    """Wire a CognitiveCycle from explicit pipeline steps.
 
     Args:
         steps: Ordered pipeline steps to execute per turn.
         fallback_plan: Plan returned when the cycle produces no result.
 
     Returns:
-        A configured CognitiveCycle instance.
+        A configured CognitiveCycle.
     """
     if fallback_plan is None:
         fallback_plan = ActionPlan(
@@ -55,19 +55,35 @@ def wire_cognitive_cycle(
     )
 
 
-def wire_text_response_cognitive_cycle(llm_client: LLMClient | None = None) -> CognitiveCycle:
-    """Wire a minimal text-response cognitive cycle.
+def wire_text_response_cognitive_cycle(
+    llm_client: LLMClient | None = None,
+    *,
+    model: str = "fake-llm",
+    temperature: float = 0.0,
+    max_tokens: int | None = None,
+) -> CognitiveCycle:
+    """Wire the default one-turn text-response cognitive cycle.
 
     Args:
         llm_client: Optional LLM client override.
+        model: Model name passed to response generation.
+        temperature: Sampling temperature passed to response generation.
+        max_tokens: Optional output token limit passed to response generation.
 
     Returns:
-        A CognitiveCycle with perception and response generation steps.
+        CognitiveCycle with perception and response generation steps.
     """
     return wire_cognitive_cycle(
         steps=(
             SimplePerceptionStep(),
-            ResponseGenerationStep(wire_response_generator(llm_client)),
+            ResponseGenerationStep(
+                wire_response_generator(
+                    llm_client,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            ),
         ),
     )
 
@@ -75,21 +91,35 @@ def wire_text_response_cognitive_cycle(llm_client: LLMClient | None = None) -> C
 def wire_memory_aware_text_response_cognitive_cycle(
     memory_store: MemoryStore,
     llm_client: LLMClient | None = None,
+    *,
+    model: str = "fake-llm",
+    temperature: float = 0.0,
+    max_tokens: int | None = None,
 ) -> CognitiveCycle:
     """Wire a text-response cognitive cycle with memory retrieval.
 
     Args:
-        memory_store: Memory store for retrieval.
+        memory_store: Memory store used for retrieval.
         llm_client: Optional LLM client override.
+        model: Model name passed to response generation.
+        temperature: Sampling temperature passed to response generation.
+        max_tokens: Optional output token limit passed to response generation.
 
     Returns:
-        A CognitiveCycle with perception, memory, and response generation steps.
+        CognitiveCycle with perception, memory retrieval, and response generation.
     """
     return wire_cognitive_cycle(
         steps=(
             SimplePerceptionStep(),
             MemoryRetrievalStep(memory_store),
-            ResponseGenerationStep(wire_response_generator(llm_client)),
+            ResponseGenerationStep(
+                wire_response_generator(
+                    llm_client,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            ),
         ),
     )
 
@@ -98,6 +128,10 @@ def wire_affect_memory_aware_text_response_cognitive_cycle(
     memory_store: MemoryStore | None = None,
     llm_client: LLMClient | None = None,
     relationship_state: InMemoryRelationshipState | None = None,
+    *,
+    model: str = "fake-llm",
+    temperature: float = 0.0,
+    max_tokens: int | None = None,
 ) -> CognitiveCycle:
     """Wire a text-response cognitive cycle with affect and optional memory.
 
@@ -105,10 +139,13 @@ def wire_affect_memory_aware_text_response_cognitive_cycle(
         memory_store: Optional memory store for retrieval.
         llm_client: Optional LLM client override.
         relationship_state: Optional shared relationship state.
+        model: Model name passed to response generation.
+        temperature: Sampling temperature passed to response generation.
+        max_tokens: Optional output token limit passed to response generation.
 
     Returns:
-        A CognitiveCycle with perception, optional memory, appraisal,
-        relationship, and response generation steps.
+        CognitiveCycle with perception, optional memory, appraisal, relationship,
+        and response generation steps.
     """
     steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
     if memory_store is not None:
@@ -116,8 +153,15 @@ def wire_affect_memory_aware_text_response_cognitive_cycle(
     steps.extend(
         (
             AppraisalStep(),
-            RelationshipStep(relationship_state),
-            ResponseGenerationStep(wire_response_generator(llm_client)),
+            RelationshipStep(relationship_state or InMemoryRelationshipState()),
+            ResponseGenerationStep(
+                wire_response_generator(
+                    llm_client,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            ),
         )
     )
     return wire_cognitive_cycle(steps=tuple(steps))
@@ -127,17 +171,24 @@ def wire_policy_affect_memory_aware_text_response_cognitive_cycle(
     memory_store: MemoryStore | None = None,
     llm_client: LLMClient | None = None,
     relationship_state: InMemoryRelationshipState | None = None,
+    *,
+    model: str = "fake-llm",
+    temperature: float = 0.0,
+    max_tokens: int | None = None,
 ) -> CognitiveCycle:
-    """Wire a text-response cognitive cycle with policy, affect, and optional memory.
+    """Wire a text-response cognitive cycle with policy, affect, and memory.
 
     Args:
         memory_store: Optional memory store for retrieval.
         llm_client: Optional LLM client override.
         relationship_state: Optional shared relationship state.
+        model: Model name passed to response generation.
+        temperature: Sampling temperature passed to response generation.
+        max_tokens: Optional output token limit passed to response generation.
 
     Returns:
-        A CognitiveCycle with perception, optional memory, appraisal,
-        relationship, policy inhibition, and response generation steps.
+        CognitiveCycle with perception, optional memory, appraisal, relationship,
+        policy inhibition, and response generation steps.
     """
     steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
     if memory_store is not None:
@@ -147,7 +198,14 @@ def wire_policy_affect_memory_aware_text_response_cognitive_cycle(
             AppraisalStep(),
             RelationshipStep(relationship_state or InMemoryRelationshipState()),
             PolicyInhibitionStep(),
-            ResponseGenerationStep(wire_response_generator(llm_client)),
+            ResponseGenerationStep(
+                wire_response_generator(
+                    llm_client,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            ),
         )
     )
     return wire_cognitive_cycle(steps=tuple(steps))
