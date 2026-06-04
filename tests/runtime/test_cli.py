@@ -155,8 +155,9 @@ def test_build_observation_structure() -> None:
     assert obs.kind == ObservationKind.ACTOR_MESSAGE
     assert obs.observation_id == ObservationId("cli-obs")
     assert obs.session_id == SessionId("cli-session")
-    assert obs.actor is None
-    assert obs.space_id is None
+    assert obs.context.actor is None
+    assert obs.context.space_id is None
+    assert obs.context.source == "cli"
     assert obs.occurred_at.tzinfo is not None
 
 

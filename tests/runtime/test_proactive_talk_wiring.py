@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.contracts.observations import IdleTickObservation, ObservationKind
+from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.features.definition import FeatureDefinition
 from iris.runtime.wiring.features import (
@@ -34,8 +34,7 @@ async def test_wire_proactive_talk_cognitive_cycle_composes_feature_steps() -> N
         IdleTickObservation(
             observation_id=ObservationId("obs-proactive-wiring"),
             session_id=SessionId("session-proactive-wiring"),
-            actor=None,
-            space_id=None,
+            context=ObservationContext(),
             occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
             kind=ObservationKind.IDLE_TICK,
             idle_seconds=600.0,

@@ -11,7 +11,7 @@ from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import StepStatus
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
-from iris.contracts.observations import ActorMessageObservation, ObservationKind
+from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from tests.helpers.approx import approx
 
@@ -25,8 +25,7 @@ def actor_message(text: str) -> ActorMessageObservation:
     return ActorMessageObservation(
         observation_id=ObservationId("obs-affect"),
         session_id=SessionId("session-affect"),
-        actor=None,
-        space_id=None,
+        context=ObservationContext(),
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text=text,

@@ -96,6 +96,8 @@ CognitiveCycle → action step
 - `action_preferences: tuple[ActionPreference, ...]`
 - `policy_summary: str | None`
 - `candidate_action_plans: tuple[ActionPlan, ...]`
+- `actor_context: ActorContextSnapshot`
+- `space_context: SpaceContextSnapshot`
 
 入れてはいけないもの。
 
@@ -172,7 +174,8 @@ Scheduler (runtime)
 | `models.py` | プロアクティブ専用型 |
 | `definition.py` | FeatureDefinition 登録 |
 
-`IdleTickObservation` は基底 `Observation` の `actor` / `space_id` を継承する。
+`IdleTickObservation` は基底 `Observation.context` に actor / account / device / space 情報を持つ。
+直接 `Observation.actor` / `Observation.space_id` は使わない。
 `features/proactive_talk/` が直接 memory や policy の内部実装を改造してはいけない。
 
 ---

@@ -13,7 +13,7 @@ from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
-from iris.contracts.observations import ActorMessageObservation, ObservationKind
+from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from tests.helpers.immutability import assert_frozen_field
 
@@ -48,8 +48,7 @@ def actor_message(text: str = "hello tea") -> ActorMessageObservation:
     return ActorMessageObservation(
         observation_id=ObservationId("obs-memory"),
         session_id=SessionId("session-memory"),
-        actor=None,
-        space_id=None,
+        context=ObservationContext(),
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text=text,

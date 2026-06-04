@@ -10,7 +10,7 @@ from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.memory.fake import FakeMemoryStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryId, MemoryRecord
-from iris.contracts.observations import ActorMessageObservation, ObservationKind
+from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import wire_affect_memory_aware_text_response_cognitive_cycle
@@ -21,14 +21,15 @@ def actor_message(text: str) -> ActorMessageObservation:
     return ActorMessageObservation(
         observation_id=ObservationId("obs-affect-runtime"),
         session_id=SessionId("session-affect-runtime"),
-        actor=Identity(
-            actor_id=ActorId("actor-affect-runtime"),
-            actor_kind=ActorKind.HUMAN,
-            display_name="Mina",
-            provider="test",
-            provider_subject=ExternalRef("mina"),
+        context=ObservationContext(
+            actor=Identity(
+                actor_id=ActorId("actor-affect-runtime"),
+                actor_kind=ActorKind.HUMAN,
+                display_name="Mina",
+                provider="test",
+                provider_subject=ExternalRef("mina"),
+            ),
         ),
-        space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text=text,

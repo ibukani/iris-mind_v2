@@ -10,7 +10,7 @@ import pytest
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.memory.fake import FakeMemoryStore
 from iris.contracts.memory import MemoryId, MemoryRecord
-from iris.contracts.observations import ActorMessageObservation, ObservationKind
+from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import wire_memory_aware_text_response_cognitive_cycle
@@ -21,8 +21,7 @@ def actor_message(text: str = "tea") -> ActorMessageObservation:
     return ActorMessageObservation(
         observation_id=ObservationId("obs-memory-runtime"),
         session_id=SessionId("session-memory-runtime"),
-        actor=None,
-        space_id=None,
+        context=ObservationContext(),
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text=text,

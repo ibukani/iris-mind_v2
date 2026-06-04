@@ -10,7 +10,7 @@ from typing import override
 import pytest
 
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
-from iris.contracts.observations import ActorMessageObservation, ObservationKind
+from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.config import (
     CliConfigOverrides,
@@ -381,6 +381,5 @@ def _observation(text: str) -> ActorMessageObservation:
         occurred_at=datetime(2026, 6, 4, tzinfo=UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
-        actor=None,
-        space_id=None,
+        context=ObservationContext(),
     )

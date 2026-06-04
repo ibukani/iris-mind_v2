@@ -9,7 +9,7 @@ import pytest
 
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot, WorkspaceFrame
-from iris.contracts.observations import IdleTickObservation, ObservationKind
+from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.features.proactive_talk.definition import ProactivePolicyStep
 from iris.features.proactive_talk.policy import proactive_policy_constraints
@@ -24,8 +24,7 @@ def _idle_frame() -> WorkspaceFrame:
         observation=IdleTickObservation(
             observation_id=ObservationId("obs-proactive-policy"),
             session_id=SessionId("session-proactive-policy"),
-            actor=None,
-            space_id=None,
+            context=ObservationContext(),
             occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
             kind=ObservationKind.IDLE_TICK,
             idle_seconds=600.0,

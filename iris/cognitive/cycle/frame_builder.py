@@ -1,8 +1,9 @@
-"""FrameBuilderはパイプラインステップ結果を適用し、更新済みWorkspaceFrameを生成する。"""
+"""FrameBuilder applies pipeline step results to WorkspaceFrame."""
 
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
 from iris.cognitive.cycle.models import (
     ActionSelectionResult,
@@ -15,27 +16,50 @@ from iris.cognitive.cycle.models import (
     RelationshipResult,
 )
 from iris.cognitive.workspace.frame import (
+    ActorContextSnapshot,
     AffectSnapshot,
     GoalCandidate,
     InterpretedInput,
     MemorySummary,
     RelationshipSnapshot,
+    SpaceContextSnapshot,
     WorkspaceFrame,
 )
 
+if TYPE_CHECKING:
+    from iris.contracts.observations import Observation
+
 
 class FrameBuilder:
-    """構造マッチングにより型付きPipelineStepResultをWorkspaceFrameに適用する。"""
+    """Apply typed pipeline results to immutable WorkspaceFrame snapshots."""
+
+    @staticmethod
+    def build_initial(observation: Observation) -> WorkspaceFrame:
+        """Build an initial frame from an observation context.
+
+        Returns:
+            Initial workspace frame with actor and space context snapshots.
+        """
+        context = observation.context
+        return WorkspaceFrame(
+            observation=observation,
+            actor_context=ActorContextSnapshot(
+                actor=context.actor,
+                account_id=context.account_id,
+                device_id=context.device_id,
+            ),
+            space_context=SpaceContextSnapshot(space_id=context.space_id),
+        )
 
     @staticmethod
     def apply(frame: WorkspaceFrame, result: PipelineStepResult) -> WorkspaceFrame:
-        """パイプラインステップ結果をフレームに適用し、更新されたコピーを返す。
+        """Apply a typed pipeline result to a frame.
 
         Returns:
-            WorkspaceFrame: パイプラインステップの結果が適用された更新済みフレーム。
+            Updated workspace frame.
 
         Raises:
-            TypeError: 未知の PipelineStepResult 型の場合。
+            TypeError: Unsupported pipeline result type.
         """
         match result:
             case PerceptionResult():
@@ -77,10 +101,7 @@ class FrameBuilder:
             case MotivationResult():
                 updated = replace(
                     frame,
-                    goals=tuple(
-                        GoalCandidate(name=goal, reason="pipeline", priority=index)
-                        for index, goal in enumerate(result.goals)
-                    ),
+                    goals=tuple(GoalCandidate(name=goal) for goal in result.goals),
                 )
             case PolicyResult():
                 updated = replace(
@@ -92,6 +113,7 @@ class FrameBuilder:
             case ActionSelectionResult():
                 updated = replace(frame, candidate_action_plans=result.action_plans)
             case _:
-                err = f"Unsupported step result: {type(result).__name__}"
-                raise TypeError(err)
+                msg = f"Unsupported pipeline step result: {type(result).__name__}"
+                raise TypeError(msg)
+
         return updated

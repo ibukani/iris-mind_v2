@@ -18,7 +18,7 @@ import pytest
 from iris.cognitive.action.basic import SimpleActionSelectionStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.contracts.actions import ActionPlan, PresentedOutput
-from iris.contracts.observations import ActorMessageObservation, ObservationKind
+from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.safety.action_gate import GateDecision, SafetyDecision
@@ -46,8 +46,7 @@ def actor_message() -> ActorMessageObservation:
     return ActorMessageObservation(
         observation_id=ObservationId("obs-1"),
         session_id=SessionId("session-1"),
-        actor=None,
-        space_id=None,
+        context=ObservationContext(),
         occurred_at=datetime.now(UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text="Hello, Iris!",
@@ -70,8 +69,7 @@ async def test_one_turn_flow_with_empty_text_returns_presented_output(app: IrisA
     idle = ActorMessageObservation(
         observation_id=ObservationId("obs-2"),
         session_id=SessionId("session-1"),
-        actor=None,
-        space_id=None,
+        context=ObservationContext(),
         occurred_at=datetime.now(UTC),
         kind=ObservationKind.IDLE_TICK,
         text="",
