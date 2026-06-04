@@ -44,6 +44,26 @@ Use the closest test first while working:
 | adapters | `uv run pytest tests/adapters -q` |
 | dependency boundaries | `make arch` |
 
+## Suppression-free test patterns
+
+Tests should not become a dumping ground for `# noqa`, `type: ignore`, `pyright: ignore`, `typing.cast`, or `object.__setattr__`.
+
+For frozen dataclass immutability checks, use:
+
+```python
+from tests.helpers.immutability import assert_frozen_field
+
+assert_frozen_field(instance, "field_name", replacement_value)
+```
+
+Do not use these patterns for frozen dataclass tests:
+
+```python
+instance.field = replacement_value  # type: ignore[misc]
+setattr(instance, "field", replacement_value)  # noqa: B010
+object.__setattr__(instance, "field", replacement_value)  # noqa: PLC2801
+```
+
 ## Architecture tests are mandatory
 
 Architecture tests verify design boundaries. They are not cosmetic.
