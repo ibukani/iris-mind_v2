@@ -14,9 +14,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 CORE_FILES: tuple[str, ...] = (
     "AGENTS.md",
+    "CLAUDE.md",
     ".agents/README.md",
     ".agents/rules/architecture.md",
     ".agents/rules/boundaries.md",
+    ".agents/rules/cognitive-cycle.md",
+    ".agents/rules/anti-patterns.md",
+    ".agents/rules/typing.md",
+    ".agents/rules/testing.md",
     ".agents/rules/ai-harness.md",
     ".agents/rules/verification.md",
 )
@@ -27,9 +32,17 @@ WORKFLOWS: tuple[str, ...] = (
     ".agents/workflows/bugfix.md",
     ".agents/workflows/refactor.md",
     ".agents/workflows/review.md",
+    ".agents/workflows/docs-update.md",
     ".agents/workflows/test-fix.md",
     ".agents/workflows/architecture.md",
     ".agents/workflows/ai-harness.md",
+)
+
+CHECKLISTS: tuple[str, ...] = (
+    ".agents/checklists/pre-change.md",
+    ".agents/checklists/done.md",
+    ".agents/checklists/ai-harness.md",
+    ".agents/checklists/failure-analysis.md",
 )
 
 COMMANDS: tuple[str, ...] = (
@@ -67,9 +80,10 @@ def main() -> int:
     """
     write_section("Core instruction files", existing_paths(CORE_FILES))
     write_section("Task workflows", existing_paths(WORKFLOWS))
+    write_section("Checklists", existing_paths(CHECKLISTS))
     write_section("Verification commands", COMMANDS)
 
-    missing = missing_paths((*CORE_FILES, *WORKFLOWS))
+    missing = missing_paths((*CORE_FILES, *WORKFLOWS, *CHECKLISTS))
     if missing:
         write_section("Missing expected files", missing)
         return 1
