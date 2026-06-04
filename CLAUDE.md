@@ -11,8 +11,12 @@ Before editing code, read:
 3. `.agents/rules/architecture.md`
 4. `.agents/rules/boundaries.md`
 5. `.agents/rules/cognitive-cycle.md`
-6. `.agents/rules/testing.md`
-7. The matching workflow in `.agents/workflows/`
+6. `.agents/rules/anti-patterns.md`
+7. `.agents/rules/typing.md`
+8. `.agents/rules/testing.md`
+9. `.agents/rules/ai-harness.md`
+10. `.agents/rules/verification.md`
+11. The matching workflow in `.agents/workflows/`
 
 For broad changes, also read:
 
