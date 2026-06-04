@@ -1,3 +1,8 @@
+---
+name: feature-boundary
+description: Check that Iris feature modules remain vertical slices without bypassing runtime, cognitive, safety, or presentation boundaries.
+---
+
 # Feature Boundary Skill
 
 Use this skill when adding or reviewing a feature under `iris/features/`.
