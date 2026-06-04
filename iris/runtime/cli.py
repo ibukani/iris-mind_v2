@@ -16,7 +16,6 @@ from datetime import UTC, datetime
 import sys
 from typing import TYPE_CHECKING
 
-from iris.adapters.llm.openai import OpenAIConfig
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.wiring.app import wire_default_app, wire_fake_app, wire_openai_app
@@ -57,23 +56,23 @@ def build_app(llm: str, *, model: str | None = None) -> IrisApp:
     if llm == "fake":
         return wire_fake_app()
     if llm == "openai":
-        config = OpenAIConfig.from_env(model=model or "gpt-5-mini")
-        return wire_openai_app(config)
+        return wire_openai_app(model=model or "gpt-5-mini")
     return wire_default_app()
 
 
-async def run_one_turn(text: str, llm: str = "fake") -> str | None:
+async def run_one_turn(text: str, llm: str = "fake", *, model: str | None = None) -> str | None:
     """単一の対話ターンを実行し、応答テキストを返す.
 
     Args:
         text: User input text.
         llm: LLM backend name.
+        model: Optional model name override for OpenAI.
 
     Returns:
         Response text, or None if no response was produced.
     """
     obs = build_observation(text)
-    app = build_app(llm)
+    app = build_app(llm, model=model)
     output = await app.process_observation(obs)
     return output.text
 
@@ -93,8 +92,9 @@ def main() -> None:
     args = parser.parse_args()
     text: str = args.text
     llm: str = args.llm
+    model: str | None = args.model
 
-    output_text = asyncio.run(run_one_turn(text, llm=llm))
+    output_text = asyncio.run(run_one_turn(text, llm=llm, model=model))
     if output_text:
         sys.stderr.write(output_text + "\n")
 
