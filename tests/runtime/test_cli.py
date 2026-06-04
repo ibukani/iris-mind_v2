@@ -63,6 +63,7 @@ async def test_build_app_fake_creates_app() -> None:
         observation_id=ObservationId("test"),
         session_id=SessionId("test"),
         actor=None,
+        space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.USER_MESSAGE,
         text="hi",
@@ -115,6 +116,7 @@ def test_build_observation_structure() -> None:
     assert obs.observation_id == ObservationId("cli-obs")
     assert obs.session_id == SessionId("cli-session")
     assert obs.actor is None
+    assert obs.space_id is None
     assert obs.occurred_at.tzinfo is not None
 
 

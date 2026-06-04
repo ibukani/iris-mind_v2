@@ -25,6 +25,7 @@ def _idle_frame() -> WorkspaceFrame:
             observation_id=ObservationId("obs-proactive-policy"),
             session_id=SessionId("session-proactive-policy"),
             actor=None,
+            space_id=None,
             occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
             kind=ObservationKind.IDLE_TICK,
             idle_seconds=600.0,

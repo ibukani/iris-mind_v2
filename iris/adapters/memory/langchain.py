@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from iris.adapters.memory.ports import MemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
-from iris.core.ids import UserId
+from iris.core.ids import ActorId
 
 _MEMORY_ID_KEY = "iris_memory_id"
 _SUBJECT_ID_KEY = "iris_subject_id"
@@ -195,7 +195,7 @@ def _record_from_document(document: _DocumentLike) -> MemoryRecord:
     return MemoryRecord(
         id=MemoryId(memory_id),
         text=document.page_content,
-        subject_id=UserId(subject_id) if subject_id is not None else None,
+        subject_id=ActorId(subject_id) if subject_id is not None else None,
         salience=salience,
     )
 

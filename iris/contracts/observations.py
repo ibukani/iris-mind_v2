@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.identity import Identity
-    from iris.core.ids import ExternalRef, ObservationId, SessionId
+    from iris.core.ids import ExternalRef, ObservationId, SessionId, SpaceId
 
 
 class ObservationKind(StrEnum):
@@ -30,6 +30,7 @@ class Observation:
     observation_id: ObservationId
     session_id: SessionId
     actor: Identity | None
+    space_id: SpaceId | None
     occurred_at: datetime
     kind: ObservationKind
 

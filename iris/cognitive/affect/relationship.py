@@ -1,4 +1,4 @@
-"""ユーザー関係追跡のための関係状態とパイプラインステップ。"""
+"""アクター関係追跡のための関係状態とパイプラインステップ。"""
 
 from __future__ import annotations
 
@@ -10,39 +10,39 @@ from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot, WorkspaceFrame
 
 if TYPE_CHECKING:
-    from iris.core.ids import UserId
+    from iris.core.ids import ActorId
 
 _POSITIVE_VALENCE_TRUST_THRESHOLD = 0.1
 _NEGATIVE_VALENCE_TRUST_THRESHOLD = -0.1
 
 
 class InMemoryRelationshipState:
-    """ユーザーIDをキーとする関係スナップショットのインメモリ保存。"""
+    """アクターIDをキーとする関係スナップショットのインメモリ保存。"""
 
     def __init__(self) -> None:
         """空の関係状態ストアを初期化する。"""
-        self._snapshots: dict[UserId, RelationshipSnapshot] = {}
+        self._snapshots: dict[ActorId, RelationshipSnapshot] = {}
 
-    def get(self, user_id: UserId, user_label: str | None = None) -> RelationshipSnapshot:
-        """ユーザーの関係スナップショットを取得する。存在しない場合はデフォルト値を返す。
+    def get(self, actor_id: ActorId, actor_label: str | None = None) -> RelationshipSnapshot:
+        """アクターの関係スナップショットを取得する。存在しない場合はデフォルト値を返す。
 
         Returns:
-            RelationshipSnapshot: ユーザーの関係スナップショット。存在しない場合はデフォルト値。
+            RelationshipSnapshot: アクターの関係スナップショット。存在しない場合はデフォルト値。
         """
-        snapshot = self._snapshots.get(user_id)
+        snapshot = self._snapshots.get(actor_id)
         if snapshot is not None:
             return snapshot
         return RelationshipSnapshot(
-            user_label=user_label,
+            user_label=actor_label,
             affinity=0.0,
             trust=0.5,
             familiarity=0.0,
-            relationship_summary=_summarize(user_label, 0.0, 0.5, 0.0),
+            relationship_summary=_summarize(actor_label, 0.0, 0.5, 0.0),
         )
 
-    def set(self, user_id: UserId, snapshot: RelationshipSnapshot) -> None:
-        """ユーザーの関係スナップショットを保存する。"""
-        self._snapshots[user_id] = snapshot
+    def set(self, actor_id: ActorId, snapshot: RelationshipSnapshot) -> None:
+        """アクターの関係スナップショットを保存する。"""
+        self._snapshots[actor_id] = snapshot
 
 
 class RelationshipStep(PipelineStep[RelationshipResult]):
@@ -73,9 +73,9 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
                 reason="no actor identity",
             )
 
-        snapshot = self._state.get(actor.user_id, actor.display_name)
+        snapshot = self._state.get(actor.actor_id, actor.display_name)
         updated = update_relationship(snapshot, frame.affect)
-        self._state.set(actor.user_id, updated)
+        self._state.set(actor.actor_id, updated)
         return RelationshipResult(
             step_name=self.name,
             status=StepStatus.OK,
@@ -114,8 +114,8 @@ def update_relationship(
     )
 
 
-def _summarize(user_label: str | None, affinity: float, trust: float, familiarity: float) -> str:
-    label = user_label or "unknown user"
+def _summarize(actor_label: str | None, affinity: float, trust: float, familiarity: float) -> str:
+    label = actor_label or "unknown actor"
     return (
         f"{label} relationship(affinity={affinity:.2f}, trust={trust:.2f}, "
         f"familiarity={familiarity:.2f})"

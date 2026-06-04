@@ -10,9 +10,9 @@ from iris.cognitive.affect.relationship import InMemoryRelationshipState, Relati
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import AppraisalResult, StepStatus
 from iris.cognitive.workspace.frame import WorkspaceFrame
-from iris.contracts.identity import Identity
+from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ObservationKind, UserMessageObservation
-from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
+from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from tests.helpers.approx import approx
 
 
@@ -26,6 +26,7 @@ def user_message(actor: Identity | None = None) -> UserMessageObservation:
         observation_id=ObservationId("obs-relationship"),
         session_id=SessionId("session-relationship"),
         actor=actor,
+        space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.USER_MESSAGE,
         text="thanks",
@@ -36,7 +37,8 @@ def user_message(actor: Identity | None = None) -> UserMessageObservation:
 async def test_relationship_step_updates_per_user_state() -> None:
     """RelationshipStepがユーザーごとの親密度、信頼度、熟知度を更新することを確認する。"""
     actor = Identity(
-        user_id=UserId("user-relationship"),
+        actor_id=ActorId("actor-relationship"),
+        actor_kind=ActorKind.HUMAN,
         display_name="Mina",
         provider="test",
         provider_subject=ExternalRef("mina"),

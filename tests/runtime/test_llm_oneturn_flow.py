@@ -40,6 +40,7 @@ def user_message(text: str = "hello") -> UserMessageObservation:
         observation_id=ObservationId("obs-runtime"),
         session_id=SessionId("session-runtime"),
         actor=None,
+        space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.USER_MESSAGE,
         text=text,

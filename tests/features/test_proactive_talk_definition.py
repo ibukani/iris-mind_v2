@@ -33,6 +33,7 @@ def test_idle_tick_observation_is_typed_and_provider_neutral() -> None:
         observation_id=ObservationId("obs-idle"),
         session_id=SessionId("session-idle"),
         actor=None,
+        space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.IDLE_TICK,
         reason="quiet_room",

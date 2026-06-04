@@ -9,10 +9,10 @@ import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.memory.fake import FakeMemoryStore
-from iris.contracts.identity import Identity
+from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryId, MemoryRecord
 from iris.contracts.observations import ObservationKind, UserMessageObservation
-from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
+from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
     wire_policy_affect_memory_aware_text_response_cognitive_cycle,
@@ -25,11 +25,13 @@ def _user_message(text: str) -> UserMessageObservation:
         observation_id=ObservationId("obs-policy-runtime"),
         session_id=SessionId("session-policy-runtime"),
         actor=Identity(
-            user_id=UserId("user-policy-runtime"),
+            actor_id=ActorId("actor-policy-runtime"),
+            actor_kind=ActorKind.HUMAN,
             display_name="Mina",
             provider="test",
             provider_subject=ExternalRef("mina"),
         ),
+        space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.USER_MESSAGE,
         text=text,
@@ -44,7 +46,7 @@ async def test_policy_aware_one_turn_flow_includes_policy_context() -> None:
             MemoryRecord(
                 id=MemoryId("policy-memory"),
                 text="Mina said hello before.",
-                subject_id=UserId("user-policy-runtime"),
+                subject_id=ActorId("actor-policy-runtime"),
             ),
         )
     )

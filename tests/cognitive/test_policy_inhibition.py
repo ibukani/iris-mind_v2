@@ -13,9 +13,9 @@ from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot, WorkspaceFrame
 from iris.contracts.actions import ActionPlan
-from iris.contracts.identity import Identity
+from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ObservationKind, UserMessageObservation
-from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
+from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 
 
 def _observation(text: str = "hello") -> UserMessageObservation:
@@ -28,11 +28,13 @@ def _observation(text: str = "hello") -> UserMessageObservation:
         observation_id=ObservationId("obs-policy"),
         session_id=SessionId("session-policy"),
         actor=Identity(
-            user_id=UserId("user-policy"),
+            actor_id=ActorId("actor-policy"),
+            actor_kind=ActorKind.HUMAN,
             display_name="Mina",
             provider="test",
             provider_subject=ExternalRef("mina"),
         ),
+        space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.USER_MESSAGE,
         text=text,
