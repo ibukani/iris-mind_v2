@@ -37,6 +37,7 @@ def build_observation(text: str) -> UserMessageObservation:
         observation_id=ObservationId("cli-obs"),
         session_id=SessionId("cli-session"),
         actor=None,
+        space_id=None,
         occurred_at=datetime.now(UTC),
         kind=ObservationKind.USER_MESSAGE,
         text=text,

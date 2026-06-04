@@ -73,6 +73,7 @@ iris/
 │   ├── actions.py
 │   ├── messages.py
 │   ├── identity.py
+│   ├── spaces.py
 │   ├── conversation.py
 │   ├── memory.py
 │   ├── affect.py
@@ -176,11 +177,15 @@ iris/
 - `Observation`
 - `Action`
 - `Message`
-- `Identity`
+- `Identity` (actor-centered)
+- `InteractionSpace` / `SpaceParticipant`
 - `Conversation`
 - `Memory`
 - `Affect`
 - `Command`
+
+`Identity` は人間・デバイス・サービス・システム・Iris 自身を区別する `ActorKind` を持つ。
+`AccountId` / `DeviceId` は任意の関連リンクで、認証・権限はここで扱わない。
 
 注意点。
 
@@ -285,11 +290,12 @@ CognitiveCycle → action step
 
 - observation
 - interpreted input
-- identity context
+- actor identity snapshot (Identity 由来)
+- space context (InteractionSpace / SpaceParticipant 由来)
 - conversation context
 - retrieved memory summary
 - affect state
-- relationship snapshot
+- relationship snapshot (actor_id キーで保持)
 - motivation state
 - goals
 - constraints
@@ -453,6 +459,37 @@ safety:
 - `GameEventObservation`
 
 Discord / Voice / Twitch などの具体イベントは、外部アプリまたは AppGateway で Observation に変換する。
+
+基底 `Observation` は以下を運ぶ。
+
+```text
+- observation_id
+- session_id
+- actor: Identity | None         # 誰がこの観測を生んだか
+- space_id: SpaceId | None       # どの相互作用スペースの観測か
+- occurred_at
+- kind: ObservationKind
+```
+
+`actor` も `space_id` も optional であり、ソースが人を特定できない、またはスペースに紐づかないケースを許可する。
+`actor.user_id` のようなユーザー中心のフィールドは存在せず、すべて `Identity.actor_id` を介してアクセスする。
+
+### `Identity` と `InteractionSpace`
+
+`Identity` はアクター中心の不変データ型で、認証・権限は含まない。
+
+```text
+actor_id: ActorId
+actor_kind: ActorKind        # human / device / service / system / iris
+display_name: str
+provider: str
+provider_subject: ExternalRef
+account_id: AccountId | None
+device_id: DeviceId | None
+metadata: Mapping[str, str]
+```
+
+`InteractionSpace` は観測が起きた相互作用のコンテキストで、`space_id` / `space_kind` (direct_message / channel / thread / room / broadcast) / `display_name` / `participants` を持つ。`SpaceParticipant` は `actor_id` と `participant_kind` を運ぶ。
 
 ### `WorkspaceFrame`
 

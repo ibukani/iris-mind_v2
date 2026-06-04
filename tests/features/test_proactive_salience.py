@@ -14,7 +14,7 @@ from iris.cognitive.workspace.frame import (
 from iris.contracts.memory import MemoryId, MemoryRecord, MemorySearchResult
 from iris.contracts.observations import IdleTickObservation, ObservationKind
 from iris.contracts.policy import PolicyConstraint
-from iris.core.ids import ObservationId, SessionId, UserId
+from iris.core.ids import ActorId, ObservationId, SessionId
 from iris.features.proactive_talk.scoring import SalienceScorer
 from tests.helpers.approx import approx
 
@@ -38,7 +38,7 @@ def _idle_frame(
                     record=MemoryRecord(
                         id=MemoryId("memory-proactive"),
                         text="quiet room context",
-                        subject_id=UserId("user-proactive"),
+                        subject_id=ActorId("actor-proactive"),
                     ),
                     score=0.8,
                 ),
@@ -54,6 +54,7 @@ def _idle_frame(
             observation_id=ObservationId("obs-proactive-salience"),
             session_id=SessionId("session-proactive-salience"),
             actor=None,
+            space_id=None,
             occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
             kind=ObservationKind.IDLE_TICK,
             idle_seconds=idle_seconds,

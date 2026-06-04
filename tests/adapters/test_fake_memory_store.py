@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from iris.adapters.memory.fake import FakeMemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
-from iris.core.ids import UserId
+from iris.core.ids import ActorId
 
 
 def test_fake_memory_store_returns_deterministic_text_matches() -> None:
@@ -26,10 +26,10 @@ def test_fake_memory_store_returns_deterministic_text_matches() -> None:
 def test_fake_memory_store_filters_by_subject_and_supports_put() -> None:
     """FakeMemoryStoreがsubject_idで検索結果をフィルタリングし、put()をサポートすることを確認する。"""
     store = FakeMemoryStore()
-    store.put(MemoryRecord(id=MemoryId("m1"), text="Alice likes tea.", subject_id=UserId("alice")))
-    store.put(MemoryRecord(id=MemoryId("m2"), text="Bob likes tea.", subject_id=UserId("bob")))
+    store.put(MemoryRecord(id=MemoryId("m1"), text="Alice likes tea.", subject_id=ActorId("alice")))
+    store.put(MemoryRecord(id=MemoryId("m2"), text="Bob likes tea.", subject_id=ActorId("bob")))
 
-    results = store.search(MemoryQuery(text="tea", subject_id=UserId("bob")))
+    results = store.search(MemoryQuery(text="tea", subject_id=ActorId("bob")))
 
     assert tuple(result.record.id for result in results) == (MemoryId("m2"),)
 

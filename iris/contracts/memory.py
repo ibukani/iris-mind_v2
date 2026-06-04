@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, NewType
 
 if TYPE_CHECKING:
-    from iris.core.ids import UserId
+    from iris.core.ids import ActorId
 
 MemoryId = NewType("MemoryId", str)
 
@@ -17,7 +17,7 @@ class MemoryRecord:
 
     id: MemoryId
     text: str
-    subject_id: UserId | None = None
+    subject_id: ActorId | None = None
     salience: float = 0.0
 
 
@@ -26,7 +26,7 @@ class MemoryQuery:
     """メモリレコード検索のクエリ。"""
 
     text: str
-    subject_id: UserId | None = None
+    subject_id: ActorId | None = None
     limit: int = 5
 
 

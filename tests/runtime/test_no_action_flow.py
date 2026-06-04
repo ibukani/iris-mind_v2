@@ -50,6 +50,7 @@ def _idle_tick(idle_seconds: float) -> IdleTickObservation:
         observation_id=ObservationId("obs-no-action-flow"),
         session_id=SessionId("session-no-action-flow"),
         actor=None,
+        space_id=None,
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.IDLE_TICK,
         reason="test",

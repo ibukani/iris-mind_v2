@@ -115,7 +115,21 @@ global_cycle.register_hook(...)
 良い例。
 
 ```python
-observation = UserMessageObservation(...)
+observation = UserMessageObservation(
+    observation_id=ObservationId("obs-1"),
+    session_id=SessionId("session-1"),
+    actor=Identity(
+        actor_id=ActorId("actor-1"),
+        actor_kind=ActorKind.HUMAN,
+        display_name="Mina",
+        provider="discord",
+        provider_subject=ExternalRef("12345"),
+    ),
+    space_id=SpaceId("space-1"),
+    occurred_at=datetime.now(UTC),
+    kind=ObservationKind.USER_MESSAGE,
+    text=message.content,
+)
 return observation
 ```
 
@@ -128,6 +142,8 @@ if message.content.startswith("!"):
 
 理由。
 外部アプリ側が cognitive 判断を持ち始めるため。
+
+`actor` / `space_id` が決まらないケースは `None` を渡す。`actor.user_id` のようなユーザー中心フィールドは存在しない。
 
 ---
 

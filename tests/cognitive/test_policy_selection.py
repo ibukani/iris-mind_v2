@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 
 from iris.cognitive.action.response import build_response_prompt
 from iris.cognitive.workspace.frame import InterpretedInput, WorkspaceFrame
-from iris.contracts.identity import Identity
+from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ObservationKind, UserMessageObservation
 from iris.contracts.policy import PolicyConstraint
-from iris.core.ids import ExternalRef, ObservationId, SessionId, UserId
+from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 
 
 def _frame(constraints: tuple[PolicyConstraint, ...] = ()) -> WorkspaceFrame:
@@ -23,11 +23,13 @@ def _frame(constraints: tuple[PolicyConstraint, ...] = ()) -> WorkspaceFrame:
             observation_id=ObservationId("obs-policy-prompt"),
             session_id=SessionId("session-policy-prompt"),
             actor=Identity(
-                user_id=UserId("user-policy-prompt"),
+                actor_id=ActorId("actor-policy-prompt"),
+                actor_kind=ActorKind.HUMAN,
                 display_name="Mina",
                 provider="test",
                 provider_subject=ExternalRef("mina"),
             ),
+            space_id=None,
             occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
             kind=ObservationKind.USER_MESSAGE,
             text="hello",

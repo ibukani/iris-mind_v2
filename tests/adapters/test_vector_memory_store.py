@@ -6,7 +6,7 @@ import pytest
 
 from iris.adapters.memory.vector import InMemoryVectorMemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord
-from iris.core.ids import UserId
+from iris.core.ids import ActorId
 
 
 def embed_text(text: str) -> tuple[float, float]:
@@ -40,16 +40,16 @@ def test_in_memory_vector_store_search_is_deterministic() -> None:
 
 def test_in_memory_vector_store_filters_subject_id() -> None:
     """ベクトル検索がsubject_idで結果をフィルタリングすることを確認する。"""
-    user_id = UserId("user-1")
+    actor_id = ActorId("actor-1")
     store = InMemoryVectorMemoryStore(
         embed_text,
         records=(
-            MemoryRecord(id=MemoryId("m1"), text="User likes tea.", subject_id=user_id),
+            MemoryRecord(id=MemoryId("m1"), text="User likes tea.", subject_id=actor_id),
             MemoryRecord(id=MemoryId("m2"), text="Someone else likes tea."),
         ),
     )
 
-    results = store.search(MemoryQuery(text="tea", subject_id=user_id))
+    results = store.search(MemoryQuery(text="tea", subject_id=actor_id))
 
     assert [result.record.id for result in results] == [MemoryId("m1")]
 

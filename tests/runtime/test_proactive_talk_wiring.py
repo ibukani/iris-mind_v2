@@ -35,6 +35,7 @@ async def test_wire_proactive_talk_cognitive_cycle_composes_feature_steps() -> N
             observation_id=ObservationId("obs-proactive-wiring"),
             session_id=SessionId("session-proactive-wiring"),
             actor=None,
+            space_id=None,
             occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
             kind=ObservationKind.IDLE_TICK,
             idle_seconds=600.0,

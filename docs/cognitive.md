@@ -138,7 +138,7 @@ Proactive は特殊な別システムではなく、内部 Observation から始
 
 ```text
 Scheduler
-→ IdleTickObservation
+→ IdleTickObservation (actor: Identity | None, space_id: SpaceId | None)
 → CognitiveCycle
 → WorkspaceFrame
 → SalienceScorer
@@ -148,6 +148,7 @@ Scheduler
 → SpeakAction or NoAction
 ```
 
+`IdleTickObservation` も基底 `Observation` の `actor` / `space_id` を継承する。Scheduler 起点のティックでは `actor` は `None` または `ActorKind.SYSTEM` の system actor、`space_id` は対象スペースの ID（あるいは `None`）を入れる。
 `features/proactive_talk/` が直接 memory や policy の内部実装を改造してはいけない。
 
 ---

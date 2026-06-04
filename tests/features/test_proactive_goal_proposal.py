@@ -21,6 +21,7 @@ def _idle_frame(idle_seconds: float) -> WorkspaceFrame:
             observation_id=ObservationId("obs-proactive-goal"),
             session_id=SessionId("session-proactive-goal"),
             actor=None,
+            space_id=None,
             occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
             kind=ObservationKind.IDLE_TICK,
             idle_seconds=idle_seconds,

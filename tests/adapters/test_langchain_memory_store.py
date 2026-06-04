@@ -15,7 +15,7 @@ from iris.adapters.memory.langchain import (
     LangChainMemoryStoreUnavailableError,
 )
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
-from iris.core.ids import UserId
+from iris.core.ids import ActorId
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -94,25 +94,25 @@ def test_langchain_memory_store_puts_and_searches_iris_records() -> None:
     """Iris MemoryRecordがLangChainを通じてput/searchのラウンドトリップを行うことを確認する。"""
     vector_store = StubVectorStore()
     store = LangChainMemoryStore(vector_store, document_factory=document_factory())
-    user_id = UserId("user-1")
+    actor_id = ActorId("actor-1")
 
     store.put(
         MemoryRecord(
             id=MemoryId("m1"),
             text="User likes jasmine tea.",
-            subject_id=user_id,
+            subject_id=actor_id,
             salience=0.7,
         )
     )
 
-    results = store.search(MemoryQuery(text="jasmine", subject_id=user_id))
+    results = store.search(MemoryQuery(text="jasmine", subject_id=actor_id))
 
     assert results == (
         MemorySearchResult(
             record=MemoryRecord(
                 id=MemoryId("m1"),
                 text="User likes jasmine tea.",
-                subject_id=user_id,
+                subject_id=actor_id,
                 salience=0.7,
             ),
             score=1.0,
@@ -128,18 +128,18 @@ def test_langchain_memory_store_filters_subject_id_after_vector_search() -> None
         MemoryRecord(
             id=MemoryId("m1"),
             text="User likes tea.",
-            subject_id=UserId("user-1"),
+            subject_id=ActorId("actor-1"),
         )
     )
     store.put(
         MemoryRecord(
             id=MemoryId("m2"),
             text="User likes tea.",
-            subject_id=UserId("user-2"),
+            subject_id=ActorId("actor-2"),
         )
     )
 
-    results = store.search(MemoryQuery(text="tea", subject_id=UserId("user-2")))
+    results = store.search(MemoryQuery(text="tea", subject_id=ActorId("actor-2")))
 
     assert [result.record.id for result in results] == [MemoryId("m2")]
 
