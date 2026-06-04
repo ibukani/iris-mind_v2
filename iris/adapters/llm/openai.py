@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+import contextlib
 from dataclasses import dataclass
 import os
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import Any, Protocol, cast
 
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
-
-if TYPE_CHECKING:
-    import openai  # pyright: ignore[reportUnusedImport]  # typing-only re-export, not used at runtime  # noqa: F401  # typing-only re-export, not used at runtime
-
-import contextlib
 
 _openai: Any = None
 with contextlib.suppress(ImportError):
@@ -152,14 +148,16 @@ def _extract_output_text(response: object) -> str:
 def _iter_response_output(response: object) -> tuple[object, ...]:
     output = _get_value(response, "output")
     if isinstance(output, list | tuple):
-        return tuple(cast("Iterable[object]", output))
+        items: Iterable[object] = cast("Iterable[object]", output)
+        return tuple(items)
     return ()
 
 
 def _iter_content(output_item: object) -> tuple[object, ...]:
     content = _get_value(output_item, "content")
     if isinstance(content, list | tuple):
-        return tuple(cast("Iterable[object]", content))
+        items: Iterable[object] = cast("Iterable[object]", content)
+        return tuple(items)
     return ()
 
 

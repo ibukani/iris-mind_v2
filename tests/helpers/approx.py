@@ -85,5 +85,5 @@ def approx(
     Returns:
         ApproxBase: A pytest approx wrapper suitable for ``==`` comparison.
     """
-    raw: ApproxBase = pytest.approx(expected, rel=rel, abs=abs, nan_ok=nan_ok)
+    raw: ApproxBase = pytest.approx(expected, rel=rel, abs=abs, nan_ok=nan_ok)  # pyright: ignore[reportUnknownMemberType] -- pytest.approx lacks complete pyright stubs
     return raw

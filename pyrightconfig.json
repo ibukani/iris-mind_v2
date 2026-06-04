@@ -18,7 +18,6 @@
   ],
   "venvPath": ".",
   "venv": ".venv",
-  "stubPath": "typestubs",
   "typeCheckingMode": "strict",
   "useLibraryCodeForTypes": true,
   "reportMissingImports": "error",

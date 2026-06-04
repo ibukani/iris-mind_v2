@@ -188,20 +188,12 @@ module = [
     "iris.adapters.*",
 ]
 # External libraries often expose incomplete typing. Keep adapter uncertainty at
-# the boundary instead of forcing fake casts into internal domain code.
+# the boundary instead of forcing fake casts into internal domain code. The
+# adapter scope is the only place where missing third-party imports are
+# tolerated; internal iris modules stay strictly typed and must not import
+# libraries with incomplete stubs.
 disallow_untyped_calls = false
 disallow_untyped_decorators = false
-
-[[tool.mypy.overrides]]
-module = [
-    "openai",
-    "openai.*",
-    "langchain_core",
-    "langchain_core.*",
-]
-# openai and langchain_core do not ship complete type stubs. Treat the libraries
-# as Any-typed at the adapter boundary so iris code can import and assign their
-# values without inline # type: ignore. Internal iris modules stay strictly typed.
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
