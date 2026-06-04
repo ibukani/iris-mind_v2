@@ -23,17 +23,24 @@ If a check fails, keep the failure visible. Do not claim the task is complete un
 
 ## No quality-gate escape hatches
 
-Do not weaken these to make a task pass:
+Do not weaken the scoped quality policy to make a task pass.
 
-- Ruff rule selection or ignores
-- mypy strictness
-- pyright strictness
-- pytest warning behavior
-- coverage threshold
-- architecture guard tests
-- no-action contract tests
+Keep these invariants:
 
-Fix the code, tests, or task scope instead.
+- Ruff keeps `select = ["ALL"]` unless a documented project-wide policy change is requested.
+- Core architecture code keeps maximum mypy `Any` restrictions.
+- `adapters` may handle incomplete external-library typing only at the provider boundary.
+- `tests` and `scripts` may use lighter decorator/third-party-helper strictness, but must not become untyped dumping grounds.
+- pyright stays strict for production code and standard for tests/scripts unless a documented policy change is requested.
+- pytest warning behavior, marker strictness, and xfail strictness stay enabled.
+- coverage threshold stays at 90% for the full gate.
+- architecture guard tests and no-action contract tests stay active.
+
+Fix the code, tests, or task scope instead of relaxing the policy for convenience.
+
+## Autofix rule
+
+Use `make lint-fix` or `make format-write` only after inspecting the target files and understanding the expected diff. Do not run broad autofix to hide unrelated failures.
 
 ## Context budget rule
 
