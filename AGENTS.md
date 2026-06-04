@@ -217,44 +217,56 @@ When done, report in Japanese:
 
 
 <!-- headroom:rtk-instructions -->
-# RTK (Rust Token Killer) - Token-Optimized Commands
+# RTK Command Filtering for Iris
 
-When running shell commands, **always prefix with `rtk`**. This reduces context
-usage by 60-90% with zero behavior change. If rtk has no filter for a command,
-it passes through unchanged — so it is always safe to use.
+RTK is an optional token-saving command filter for local agent sessions. It is not an Iris dependency, not part of CI, and not the source of truth for verification. Prefer repository commands first; wrap them with `rtk` only when the tool is available and filtered output is useful.
 
-## Key Commands
+## Canonical Iris commands
+
+Use these commands as the canonical project interface:
+
 ```bash
-# Git (59-80% savings)
-rtk git status          rtk git diff            rtk git log
+make ai-context
+make ai-test-target TARGET=tests/path_or_file.py
+make ai-arch
+make ai-quick
+make ai-check
+make check
+make verify
+make ai-report
+```
 
-# Files & Search (60-75% savings)
-rtk ls <path>           rtk read <file>         rtk grep <pattern>
-rtk find <pattern>      rtk diff <file>
+`make check` and `make verify` remain the completion gates. `make ai-quick` and `make ai-check` are diagnostic wrappers, not weaker alternatives.
 
-# Test (90-99% savings) — shows failures only
-rtk pytest tests/       rtk cargo test          rtk test <cmd>
+## Safe RTK usage
 
-# Build & Lint (80-90% savings) — shows errors only
-rtk tsc                 rtk lint                rtk cargo build
-rtk prettier --check    rtk mypy                rtk ruff check
+When logs are too large, RTK may wrap Iris commands without changing the command contract:
 
-# Analysis (70-90% savings)
-rtk err <cmd>           rtk log <file>          rtk json <file>
-rtk summary <cmd>       rtk deps                rtk env
+```bash
+rtk make ai-context
+rtk make ai-test-target TARGET=tests/path_or_file.py
+rtk make ai-quick
+rtk make ai-check
+rtk make check
+```
 
-# GitHub (26-87% savings)
-rtk gh pr view <n>      rtk gh run list         rtk gh issue list
+For narrow debugging, RTK may also wrap the exact `uv` commands already documented in this file:
 
-# Infrastructure (85% savings)
-rtk docker ps           rtk kubectl get         rtk docker logs <c>
-
-# Package managers (70-90% savings)
-rtk pip list            rtk pnpm install        rtk npm run <script>
+```bash
+rtk uv run ruff check .
+rtk uv run ruff format --check .
+rtk uv run mypy iris tests scripts main.py
+rtk uv run pyright .
+rtk uv run pytest tests/architecture -q
+rtk uv run pytest tests/path_or_file.py -q
 ```
 
 ## Rules
-- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
-- For debugging, use raw command without rtk prefix
-- `rtk proxy <cmd>` runs command without filtering but tracks usage
+
+- Do not require RTK in project setup, CI, Makefile targets, docs, or tests.
+- Do not replace canonical `make` / `uv` commands with RTK-only commands.
+- Do not introduce examples for unrelated ecosystems such as Cargo, npm, Docker, Kubernetes, or TypeScript unless the repository actually adds those tools.
+- Use raw commands when exact output, full logs, or debugging context matters.
+- In completion reports, write the command that was actually run and note when RTK filtered output.
+- If RTK is unavailable, continue with the raw `make` / `uv` command and report normally.
 <!-- /headroom:rtk-instructions -->
