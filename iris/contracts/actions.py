@@ -21,6 +21,9 @@ class ActionStatus(StrEnum):
     BLOCKED = "blocked"
 
 
+_ERR_INVALID_NO_ACTION = "no_action plan must not include candidate text or response intent"
+
+
 @dataclass(frozen=True)
 class ActionPlan:
     """ターンレベルのアクション決定のための計画。"""
@@ -30,6 +33,17 @@ class ActionPlan:
     should_respond: bool
     priority: int
     interruptible: bool = True
+
+    def __post_init__(self) -> None:
+        """no_actionプランの不変条件を検証する。
+
+        Raises:
+            ValueError: no_actionプランが応答テキストまたは応答意図を含む場合。
+        """
+        if self.turn_intent == "no_action" and (
+            self.candidate_text is not None or self.should_respond
+        ):
+            raise ValueError(_ERR_INVALID_NO_ACTION)
 
     @property
     def is_no_action(self) -> bool:
