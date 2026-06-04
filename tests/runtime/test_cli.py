@@ -120,6 +120,26 @@ def test_build_app_openai_dispatches_without_real_api(
     assert config.models.default_chat.model == "gpt-custom"
 
 
+def test_build_app_openai_without_model_uses_provider_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify --llm openai without --model keeps fake-llm sentinel in config."""
+    captured: dict[str, IrisRuntimeConfig] = {}
+
+    def _fake_build_app_from_config(config: IrisRuntimeConfig) -> IrisApp:
+        captured["config"] = config
+        return wire_default_app(FakeLLMClient())
+
+    monkeypatch.setattr(cli_module, "build_app_from_config", _fake_build_app_from_config)
+
+    app = build_app("openai")
+
+    assert app is not None
+    config = captured["config"]
+    assert config.models.default_chat.provider == "openai"
+    assert config.models.default_chat.model == "fake-llm"
+
+
 def test_build_app_default_creates_fake_app() -> None:
     """Verify build_app with no overrides creates a fake-backed app."""
     app = build_app()

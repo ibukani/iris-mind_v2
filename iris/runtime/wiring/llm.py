@@ -156,6 +156,32 @@ class LLMClientFactory:
             return OllamaLLMClient(_ollama_adapter_config(model_config, runtime_config))
         return OpenAILLMClient(_openai_adapter_config(model_config, runtime_config))
 
+    def resolve_model(
+        self,
+        model_config: RuntimeModelConfig,
+        runtime_config: IrisRuntimeConfig,
+    ) -> str:
+        """Resolve the model name sent in provider-neutral LLMRequest.
+
+        Args:
+            model_config: Model slot configuration.
+            runtime_config: Full runtime configuration.
+
+        Returns:
+            Model name to pass into response generation.
+
+        Raises:
+            ConfigError: If the configured provider is unknown.
+        """
+        if model_config.provider not in self._known_providers:
+            message = f"Unknown LLM provider: {model_config.provider}"
+            raise ConfigError(message)
+        if model_config.provider == "ollama":
+            return _ollama_adapter_config(model_config, runtime_config).model
+        if model_config.provider == "openai":
+            return _openai_adapter_config(model_config, runtime_config).model
+        return model_config.model
+
 
 def _ollama_adapter_config(
     model_config: RuntimeModelConfig,

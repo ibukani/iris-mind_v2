@@ -89,7 +89,10 @@ class OllamaLLMClient(LLMClient):
         return request.model or self._config.model
 
     def _build_payload(self, request: LLMRequest, model: str) -> _JsonObject:
-        options: _JsonObject = {"temperature": request.temperature or self._config.temperature}
+        temperature = (
+            request.temperature if request.temperature is not None else self._config.temperature
+        )
+        options: _JsonObject = {"temperature": temperature}
         max_tokens = request.max_tokens or self._config.max_output_tokens
         if max_tokens is not None:
             options["num_predict"] = max_tokens

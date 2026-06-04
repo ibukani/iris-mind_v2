@@ -123,9 +123,10 @@ def build_app_from_config(
     model_config = config.models.default_chat
     factory = client_factory or LLMClientFactory()
     client = factory.create_client(model_config, config)
+    model = factory.resolve_model(model_config, config)
     return wire_default_app(
         client,
-        model=model_config.model,
+        model=model,
         temperature=model_config.temperature,
         max_tokens=model_config.max_output_tokens,
     )

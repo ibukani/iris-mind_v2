@@ -22,7 +22,7 @@ class LLMRequest:
 
     model: str
     messages: tuple[LLMMessage, ...]
-    temperature: float = 0.0
+    temperature: float | None = None
     max_tokens: int | None = None
 
 

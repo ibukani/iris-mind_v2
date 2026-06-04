@@ -307,8 +307,30 @@ async def test_build_app_from_config_uses_default_chat() -> None:
     assert factory.model_config == config.models.default_chat
     assert client.request is not None
     assert client.request.model == "slot-model"
+    assert client.request.temperature is not None
     assert abs(client.request.temperature - 0.3) < 0.001
     assert client.request.max_tokens == 77
+
+
+@pytest.mark.anyio
+async def test_build_app_from_config_resolves_openai_default_model() -> None:
+    """OpenAI provider override without model uses the OpenAI provider default model."""
+    client = _RecordingLLMClient()
+    factory = _RecordingFactory(client)
+    base = default_runtime_config()
+    config = replace(
+        base,
+        models=replace(
+            base.models,
+            default_chat=RuntimeModelConfig(provider="openai", model="fake-llm"),
+        ),
+    )
+    app = build_app_from_config(config, client_factory=factory)
+
+    await app.process_observation(_observation("hello"))
+
+    assert client.request is not None
+    assert client.request.model == "gpt-5-mini"
 
 
 class _RecordingLLMClient:
@@ -322,6 +344,7 @@ class _RecordingLLMClient:
 
 class _RecordingFactory(LLMClientFactory):
     def __init__(self, client: LLMClient) -> None:
+        super().__init__()
         self._client = client
         self.model_config: RuntimeModelConfig | None = None
         self.runtime_config: IrisRuntimeConfig | None = None
