@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
-import subprocess  # noqa: S404
+import subprocess  # noqa: S404 -- local report helper runs fixed git command tuples only
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
