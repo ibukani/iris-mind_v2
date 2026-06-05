@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import TypeGuard
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 SOURCE_ROOT = PROJECT_ROOT / "iris"
@@ -25,9 +26,7 @@ def _scan_file(path: Path) -> list[str]:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Pass):
-            violations.append(
-                f"{rel_path}:{node.lineno}: pass hides an incomplete implementation"
-            )
+            violations.append(f"{rel_path}:{node.lineno}: pass hides an incomplete implementation")
         if _is_forbidden_ellipsis(node, allowed_ellipsis_ids):
             violations.append(
                 f"{rel_path}:{node.lineno}: ellipsis is only allowed in explicit stubs"
@@ -46,7 +45,7 @@ def _allowed_ellipsis_expr_ids(tree: ast.AST) -> set[int]:
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and _is_protocol_class(node):
             allowed.update(_protocol_ellipsis_expr_ids(node))
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _is_abstract_function(node):
+        if isinstance(node, FunctionNode) and _is_abstract_function(node):
             allowed.update(_ellipsis_expr_ids(node.body))
     return allowed
 
@@ -69,7 +68,7 @@ def _ellipsis_expr_ids(statements: list[ast.stmt]) -> set[int]:
     }
 
 
-def _is_forbidden_ellipsis(node: ast.AST, allowed_ellipsis_ids: set[int]) -> bool:
+def _is_forbidden_ellipsis(node: ast.AST, allowed_ellipsis_ids: set[int]) -> TypeGuard[ast.Expr]:
     """Return whether an ellipsis expression is outside an explicit stub context."""
     return (
         isinstance(node, ast.Expr)
@@ -96,9 +95,7 @@ def _base_name(node: ast.expr) -> str | None:
 
 def _is_abstract_function(node: FunctionNode) -> bool:
     """Return whether a function is decorated with abstractmethod."""
-    return any(
-        _decorator_name(decorator) == "abstractmethod" for decorator in node.decorator_list
-    )
+    return any(_decorator_name(decorator) == "abstractmethod" for decorator in node.decorator_list)
 
 
 def _decorator_name(node: ast.expr) -> str | None:
@@ -142,7 +139,5 @@ def test_no_silent_incomplete_implementations_in_iris_source() -> None:
     for path in _source_files():
         violations.extend(_scan_file(path))
 
-    message = "silent incomplete implementation markers are forbidden:\n" + "\n".join(
-        violations
-    )
+    message = "silent incomplete implementation markers are forbidden:\n" + "\n".join(violations)
     assert not violations, message
