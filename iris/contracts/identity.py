@@ -30,8 +30,8 @@ class Identity:
     actor_id: ActorId
     actor_kind: ActorKind
     display_name: str
-    provider: str
-    provider_subject: ExternalRef
+    provider: str | None = None
+    provider_subject: ExternalRef | None = None
     account_id: AccountId | None = None
     device_id: DeviceId | None = None
     metadata: Mapping[str, str] = MappingProxyType({})

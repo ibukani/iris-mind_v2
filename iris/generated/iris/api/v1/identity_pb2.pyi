@@ -102,3 +102,55 @@ class Identity(_message.Message):
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___Identity: _TypeAlias = Identity  # noqa: Y015
+
+@_typing.final
+class ExternalAccountRef(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    @_typing.final
+    class MetadataEntry(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: _builtins.int
+        VALUE_FIELD_NUMBER: _builtins.int
+        key: _builtins.str
+        value: _builtins.str
+        def __init__(
+            self,
+            *,
+            key: _builtins.str = ...,
+            value: _builtins.str = ...,
+        ) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "value", b"value"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+    PROVIDER_FIELD_NUMBER: _builtins.int
+    PROVIDER_SUBJECT_FIELD_NUMBER: _builtins.int
+    DISPLAY_NAME_FIELD_NUMBER: _builtins.int
+    ACTOR_KIND_FIELD_NUMBER: _builtins.int
+    METADATA_FIELD_NUMBER: _builtins.int
+    provider: _builtins.str
+    provider_subject: _builtins.str
+    display_name: _builtins.str
+    actor_kind: Global___ActorKind.ValueType
+    @_builtins.property
+    def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
+    def __init__(
+        self,
+        *,
+        provider: _builtins.str = ...,
+        provider_subject: _builtins.str = ...,
+        display_name: _builtins.str = ...,
+        actor_kind: Global___ActorKind.ValueType = ...,
+        metadata: _abc.Mapping[_builtins.str, _builtins.str] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["actor_kind", b"actor_kind", "display_name", b"display_name", "metadata", b"metadata", "provider", b"provider", "provider_subject", b"provider_subject"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___ExternalAccountRef: _TypeAlias = ExternalAccountRef  # noqa: Y015

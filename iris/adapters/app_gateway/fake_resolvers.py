@@ -5,7 +5,9 @@ from __future__ import annotations
 from hashlib import blake2b
 from typing import TYPE_CHECKING, override
 
-from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
+from iris.adapters.accounts.memory import InMemoryAccountStore
+from iris.adapters.app_gateway.ports import AccountStore, IdentityResolver, SpaceResolver
+from iris.contracts.accounts import AccountProfile
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.spaces import (
     InteractionSpace,
@@ -13,19 +15,29 @@ from iris.contracts.spaces import (
     SpaceParticipant,
     SpaceParticipantKind,
 )
-from iris.core.ids import ActorId, SpaceId
+from iris.core.ids import AccountId, ActorId, SpaceId
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from iris.core.ids import AccountId, DeviceId, ExternalRef
+    from iris.core.ids import DeviceId, ExternalRef
 
 
 class FakeIdentityResolver(IdentityResolver):
     """テストとローカル配線向けの決定論的IdentityResolver。"""
 
+    def __init__(
+        self,
+        *,
+        account_store: AccountStore | None = None,
+        linked_actor_ids: Mapping[tuple[str, str], ActorId] | None = None,
+    ) -> None:
+        """テスト用のリンクリストを使ってresolverを初期化する。"""
+        self._linked_actor_ids = dict(linked_actor_ids or {})
+        self._account_store = account_store or InMemoryAccountStore()
+
     @override
-    async def resolve_actor(
+    async def resolve_identity(
         self,
         *,
         provider: str,
@@ -36,20 +48,54 @@ class FakeIdentityResolver(IdentityResolver):
         device_id: DeviceId | None = None,
         metadata: Mapping[str, str] | None = None,
     ) -> Identity:
-        """同じprovider/provider_subjectから同じActorIdを持つIdentityを返す。
+        """AccountProfile/AccountStoreを使ってIdentityを解決する。
 
         Returns:
             Identity: 外部refから決定論的に解決されたIdentity。
         """
-        return Identity(
-            actor_id=ActorId(_stable_id("actor", provider, str(provider_subject))),
-            actor_kind=actor_kind,
-            display_name=display_name,
+        # Look up AccountProfile
+        profile = await self._account_store.get_by_external_ref(
             provider=provider,
             provider_subject=provider_subject,
-            account_id=account_id,
+        )
+
+        if not profile:
+            # Create a deterministic AccountProfile
+            resolved_account_id = AccountId(
+                account_id or _stable_id("account", provider, str(provider_subject))
+            )
+            profile = AccountProfile(
+                account_id=resolved_account_id,
+                provider=provider,
+                provider_subject=provider_subject,
+                display_name=display_name,
+                metadata=dict(metadata or {}),
+            )
+            profile = await self._account_store.put(profile)
+
+        # Check explicit links from constructor mapping
+        link_target = self._linked_actor_ids.get((provider, str(provider_subject)))
+        if link_target and profile.linked_actor_id != link_target:
+            profile = await self._account_store.link_account_to_actor(
+                account_id=profile.account_id,
+                actor_id=link_target,
+            )
+
+        # Determine actor_id
+        if profile.linked_actor_id:
+            actor_id = profile.linked_actor_id
+        else:
+            actor_id = ActorId(_stable_id("actor", "", str(profile.account_id)))
+
+        return Identity(
+            actor_id=actor_id,
+            actor_kind=actor_kind,
+            display_name=profile.display_name,
+            provider=profile.provider,
+            provider_subject=profile.provider_subject,
+            account_id=profile.account_id,
             device_id=device_id,
-            metadata=dict(metadata or {}),
+            metadata=dict(profile.metadata),
         )
 
 

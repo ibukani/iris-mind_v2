@@ -123,6 +123,7 @@ class ObservationContext(_message.Message):
     DEVICE_ID_FIELD_NUMBER: _builtins.int
     SPACE_ID_FIELD_NUMBER: _builtins.int
     SOURCE_FIELD_NUMBER: _builtins.int
+    ACCOUNT_REF_FIELD_NUMBER: _builtins.int
     METADATA_FIELD_NUMBER: _builtins.int
     account_id: _builtins.str
     device_id: _builtins.str
@@ -130,6 +131,8 @@ class ObservationContext(_message.Message):
     source: _builtins.str
     @_builtins.property
     def actor(self) -> _identity_pb2.Identity: ...
+    @_builtins.property
+    def account_ref(self) -> _identity_pb2.ExternalAccountRef: ...
     @_builtins.property
     def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
     def __init__(
@@ -140,11 +143,12 @@ class ObservationContext(_message.Message):
         device_id: _builtins.str = ...,
         space_id: _builtins.str = ...,
         source: _builtins.str = ...,
+        account_ref: _identity_pb2.ExternalAccountRef | None = ...,
         metadata: _abc.Mapping[_builtins.str, _builtins.str] | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["actor", b"actor"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["account_ref", b"account_ref", "actor", b"actor"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["account_id", b"account_id", "actor", b"actor", "device_id", b"device_id", "metadata", b"metadata", "source", b"source", "space_id", b"space_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["account_id", b"account_id", "account_ref", b"account_ref", "actor", b"actor", "device_id", b"device_id", "metadata", b"metadata", "source", b"source", "space_id", b"space_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 

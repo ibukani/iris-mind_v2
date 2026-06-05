@@ -9,11 +9,12 @@ from iris.contracts.identity import ActorKind
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from iris.contracts.accounts import AccountProfile
     from iris.contracts.actions import ActionResult, AppAction
     from iris.contracts.identity import Identity
     from iris.contracts.observations import Observation
     from iris.contracts.spaces import InteractionSpace, SpaceKind
-    from iris.core.ids import AccountId, DeviceId, ExternalRef
+    from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 
 
 class AppGateway(Protocol):
@@ -31,7 +32,7 @@ class AppGateway(Protocol):
 class IdentityResolver(Protocol):
     """外部provider subjectをIris Identityへ解決するAppGateway境界port。"""
 
-    async def resolve_actor(  # noqa: PLR0913 -- resolver port mirrors typed external context fields
+    async def resolve_identity(  # noqa: PLR0913 -- resolver port mirrors typed external context fields
         self,
         *,
         provider: str,
@@ -42,7 +43,10 @@ class IdentityResolver(Protocol):
         device_id: DeviceId | None = None,
         metadata: Mapping[str, str] | None = None,
     ) -> Identity:
-        """外部provider subjectから型付きIdentityを返す。"""
+        """Resolve an external provider account into an Iris Identity.
+
+        The implementation may create or look up AccountProfile and link it to an Actor.
+        """
         ...
 
 
@@ -60,4 +64,47 @@ class SpaceResolver(Protocol):
         metadata: Mapping[str, str] | None = None,
     ) -> InteractionSpace:
         """外部provider space refから型付きInteractionSpaceを返す。"""
+        ...
+
+
+class AccountStore(Protocol):
+    """External account profile storage and linking protocol."""
+
+    async def get_by_external_ref(
+        self,
+        *,
+        provider: str,
+        provider_subject: ExternalRef,
+    ) -> AccountProfile | None:
+        """Get an account profile by provider and subject."""
+        ...
+
+    async def get_by_account_id(
+        self,
+        account_id: AccountId,
+    ) -> AccountProfile | None:
+        """Get an account profile by its internal AccountId."""
+        ...
+
+    async def put(
+        self,
+        account: AccountProfile,
+    ) -> AccountProfile:
+        """Create or update an account profile."""
+        ...
+
+    async def link_account_to_actor(
+        self,
+        *,
+        account_id: AccountId,
+        actor_id: ActorId,
+    ) -> AccountProfile:
+        """Link an account to an internal ActorId."""
+        ...
+
+    async def unlink_account(
+        self,
+        account_id: AccountId,
+    ) -> AccountProfile:
+        """Remove any actor linking from an account."""
         ...

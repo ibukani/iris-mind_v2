@@ -21,3 +21,11 @@ message Identity {
   string device_id = 7;
   map<string, string> metadata = 8;
 }
+
+message ExternalAccountRef {
+  string provider = 1;
+  string provider_subject = 2;
+  string display_name = 3;
+  ActorKind actor_kind = 4;
+  map<string, string> metadata = 5;
+}

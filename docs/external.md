@@ -70,9 +70,54 @@ proto DTOを `ObservationEnvelope` へ変換し、`IrisRuntimeService` へ委譲
 
 Proto構成。
 
-- `proto/iris/api/v1/` — 共有DTO（Identity, Observation, PresentedOutput）
+- `proto/iris/api/v1/` — 共有DTO（Identity, ExternalAccountRef, Observation, PresentedOutput）
 - `proto/iris/runtime/v1/` — service定義とRPC request/response
 - `make generate-protos` で `iris/generated/` 以下に再生成
+
+### ExternalAccountRef
+
+外部クライアントがIris内部の `AccountId` や `ActorId` を直接持たなくてよいよう、
+`iris.api.v1.ExternalAccountRef` を `ObservationContext.account_ref` 経由で受け取れる。
+
+```proto
+message ExternalAccountRef {
+  string provider = 1;
+  string provider_subject = 2;
+  string display_name = 3;
+  ActorKind actor_kind = 4;
+  map<string, string> metadata = 5;
+}
+```
+
+境界の責務と Identity / Account 解決モデル:
+
+- **Actor**: Iris内部の主体（Human, Device, Service, System, Iris）。
+- **Account**: 外部providerのアカウントバインディング（AccountProfile）。
+- **Identity**: 1回の観測に付随する、AccountProfileとリンク先Actorから構築されたスナップショット。
+- **AccountStore**: 外部アカウントバインディングと任意で設定される `linked_actor_id` を保存する。
+- **AccountService**: Runtime-level internal service for account lookup, link, and unlink operations. It wraps AccountStore and keeps higher-level account use cases away from storage adapters.
+- **SQLiteAccountStore**: Local/Server runtime向けの永続化 AccountStore 実装。
+- **IdentityResolver**: `ExternalAccountRef` を受け取り、`AccountStore` を通じて `Identity` へ解決する。
+
+解決の流れの例:
+```text
+ExternalAccountRef(provider="discord", provider_subject="123")
+→ AccountProfile(account_id="account-discord-...", linked_actor_id="actor-ibuki")
+→ Identity(actor_id="actor-ibuki", account_id="account-discord-...")
+```
+
+**注意事項**:
+- 複数のアカウントが同じ Actor に解決されるのは、明示的なリンクが設定されている場合のみである。
+- 自動的なアカウントマージはサポートされない。
+- アンリンク（unlink）は、今後のIdentity解決にのみ影響する。過去のメモリや関係性の履歴を遡って書き換えることはない。
+
+外部クライアントはIris内部の `AccountId` や `ActorId` を知らない場合、`ExternalAccountRef` を送信する。
+gRPC / AppGateway 境界が `IdentityResolver` で `ExternalAccountRef` を型付き `Identity` へ解決する。
+解決済みの `Identity` は `ObservationContext.actor` に格納され、そこから `account_id` もセットされる。
+cognitive 層は `IdentityResolver` も生成protoもimportせず、解決済みの `actor` と `account_id` だけを受け取る。
+
+resolverが未注入のservicerに `account_ref` が来た場合は `INVALID_ARGUMENT` を返す。
+`actor` と `account_ref` の両方が来た場合、および `account_ref` と `account_id` の両方が来た場合は `INVALID_ARGUMENT` を返す（曖昧状態）。
 
 AppGateway の責務。
 
