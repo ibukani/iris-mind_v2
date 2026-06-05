@@ -14,11 +14,17 @@ from iris.core.ids import AccountId, ActorId, ExternalRef
 
 
 class SQLiteAccountStore(AccountStore):
-    """SQLite-backed account store."""
+    """SQLite-backed account store.
+
+    Note: This is a simple/local adapter that executes synchronous sqlite3 I/O
+    directly. Long-term, this could be migrated to aiosqlite or asyncio.to_thread
+    if event loop blocking becomes a concern under high concurrent load.
+    """
 
     def __init__(self, db_path: str | Path) -> None:
         """Initialize the store and create tables if missing."""
         self._db_path = Path(db_path)
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     def _init_db(self) -> None:

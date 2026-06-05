@@ -70,7 +70,7 @@ proto DTOを `ObservationEnvelope` へ変換し、`IrisRuntimeService` へ委譲
 
 Proto構成。
 
-- `proto/iris/api/v1/` — 共有DTO（Identity, ExternalActorRef, Observation, PresentedOutput）
+- `proto/iris/api/v1/` — 共有DTO（Identity, ExternalAccountRef, Observation, PresentedOutput）
 - `proto/iris/runtime/v1/` — service定義とRPC request/response
 - `make generate-protos` で `iris/generated/` 以下に再生成
 

@@ -44,7 +44,7 @@ class GrpcMappingError(ValueError):
 class GrpcRuntimeMapper:
     """Async mapper for gRPC proto DTOs to Iris runtime contracts.
 
-    The mapper resolves ExternalActorRef into typed Identity at the gRPC
+    The mapper resolves ExternalAccountRef into typed Identity at the gRPC
     boundary so cognitive layers never see provider-subject strings.
     """
 
@@ -193,14 +193,19 @@ def identity_from_proto(identity: identity_pb2.Identity) -> Identity:
     actor_kind = _actor_kind_from_proto(identity.actor_kind)
     if not identity.actor_id:
         _raise_mapping_error("identity.actor_id is required")
-    if not identity.provider_subject:
-        _raise_mapping_error("identity.provider_subject is required")
+    provider = identity.provider or None
+    provider_subject = ExternalRef(identity.provider_subject) if identity.provider_subject else None
+
+    # Require provider_subject for external actors
+    if actor_kind not in {ActorKind.SYSTEM, ActorKind.IRIS} and not provider_subject:
+        _raise_mapping_error("identity.provider_subject is required for external actors")
+
     return Identity(
         actor_id=ActorId(identity.actor_id),
         actor_kind=actor_kind,
         display_name=identity.display_name,
-        provider=identity.provider,
-        provider_subject=ExternalRef(identity.provider_subject),
+        provider=provider,
+        provider_subject=provider_subject,
         account_id=AccountId(identity.account_id) if identity.account_id else None,
         device_id=DeviceId(identity.device_id) if identity.device_id else None,
         metadata=_metadata_dict(identity.metadata),

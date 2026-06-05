@@ -26,8 +26,8 @@ def add_iris_runtime_servicer(
     Args:
         server: gRPC aio server to register the servicer on.
         runtime_service: Runtime service that handles mapped observations.
-        identity_resolver: Optional resolver used to map ExternalActorRef into
-            typed Identity. If omitted, the mapper rejects ExternalActorRef
+        identity_resolver: Optional resolver used to map ExternalAccountRef into
+            typed Identity. If omitted, the mapper rejects ExternalAccountRef
             inputs.
     """
     mapper = GrpcRuntimeMapper(identity_resolver=identity_resolver)
