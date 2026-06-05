@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.contracts.observations import IdleTickObservation, ObservationKind
+from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.features import wire_proactive_talk_cognitive_cycle
@@ -18,8 +18,7 @@ def _idle_tick(idle_seconds: float) -> IdleTickObservation:
     return IdleTickObservation(
         observation_id=ObservationId("obs-proactive-idle-flow"),
         session_id=SessionId("session-proactive-idle-flow"),
-        actor=None,
-        space_id=None,
+        context=ObservationContext(),
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.IDLE_TICK,
         reason="test_idle",

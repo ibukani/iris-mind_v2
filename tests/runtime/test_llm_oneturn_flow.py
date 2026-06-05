@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
-from iris.contracts.observations import ActorMessageObservation, ObservationKind
+from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import wire_text_response_cognitive_cycle
@@ -39,8 +39,7 @@ def actor_message(text: str = "hello") -> ActorMessageObservation:
     return ActorMessageObservation(
         observation_id=ObservationId("obs-runtime"),
         session_id=SessionId("session-runtime"),
-        actor=None,
-        space_id=None,
+        context=ObservationContext(),
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text=text,

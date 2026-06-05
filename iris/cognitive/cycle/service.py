@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.cognitive.cycle.models import CycleResult, PipelineStepResult
-from iris.cognitive.workspace.frame import WorkspaceFrame
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from iris.cognitive.cycle.frame_builder import FrameBuilder
     from iris.cognitive.cycle.pipeline import PipelineStep
+    from iris.cognitive.workspace.frame import WorkspaceFrame
     from iris.contracts.actions import ActionPlan
     from iris.contracts.observations import Observation
 
@@ -42,7 +42,7 @@ class CognitiveCycle:
         Returns:
             CycleResult: パイプライン実行结果(最終フレームと選択アクションプラン)。
         """
-        frame = WorkspaceFrame(observation=observation)
+        frame = self._frame_builder.build_initial(observation)
 
         for step in self._steps:
             result = await step.run(frame)

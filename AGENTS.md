@@ -6,6 +6,31 @@ This repository is **Iris**, an AI companion cognitive runtime MVP. Treat this f
 
 These rules are embedded here, not delegated to another file, because they must be loaded at the start of every agent session.
 
+<!-- /headroom:rtk-instructions -->
+### Headroom CCR / retrieval policy
+
+When context is compressed, summarized, truncated, or marked as retrievable, do not guess missing details.
+
+Use Headroom retrieval tool when exact original content affects correctness.
+
+Prefer retrieval for:
+
+- test failures
+- stack traces
+- command outputs
+- diffs
+- file contents
+- search results
+- long logs
+- architecture rules
+- API contracts
+- verification output
+
+Do not retrieve for obvious background, already-visible code, or low-risk summaries.
+
+If retrieval tool is unavailable, say exact source was unavailable and proceed with visible context only.
+<!-- /headroom:rtk-instructions -->
+
 ### Primitive Prompt Mode
 
 When writing or compressing task prompts for coding agents, use **Primitive Prompt Mode**: short English fragments, strong nouns/verbs, no filler.
@@ -117,6 +142,31 @@ When context is limited, prefer this order:
 3. Architecture rules that can fail the task.
 4. Verification commands.
 5. Extra background only if it changes the implementation.
+
+<!-- /headroom:rtk-instructions -->
+### Prefix stability policy
+
+Keep stable instructions before dynamic task context.
+
+Stable prefix first:
+
+1. Repository identity.
+2. Architecture rules.
+3. Safety rules.
+4. Verification rules.
+5. Output format.
+
+Dynamic context later:
+
+- current branch
+- current task
+- date/time
+- recent failures
+- latest diff
+- temporary notes
+
+Do not place timestamps, branch names, or session-specific notes near the top of this file.
+<!-- /headroom:rtk-instructions -->
 
 ### Compact Japanese report format
 

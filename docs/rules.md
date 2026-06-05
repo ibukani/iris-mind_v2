@@ -143,7 +143,8 @@ if message.content.startswith("!"):
 理由。
 外部アプリ側が cognitive 判断を持ち始めるため。
 
-`actor` / `space_id` が決まらないケースは `None` を渡す。`actor.user_id` のようなユーザー中心フィールドは存在しない。
+`actor` / `account_id` / `device_id` / `space_id` が決まらないケースは `ObservationContext` 内で `None` を渡す。
+`Observation.actor` / `Observation.space_id` や `actor.user_id` のようなユーザー中心フィールドは存在しない。
 
 ---
 

@@ -15,7 +15,11 @@ from datetime import UTC, datetime
 import sys
 from typing import TYPE_CHECKING
 
-from iris.contracts.observations import ActorMessageObservation, ObservationKind
+from iris.contracts.observations import (
+    ActorMessageObservation,
+    ObservationContext,
+    ObservationKind,
+)
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.config import (
     CliConfigOverrides,
@@ -43,8 +47,7 @@ def build_observation(text: str) -> ActorMessageObservation:
         occurred_at=datetime.now(UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
-        actor=None,
-        space_id=None,
+        context=ObservationContext(source="cli"),
     )
 
 

@@ -65,7 +65,7 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
         Returns:
             RelationshipResult: 更新された関係情報。actor がない場合は SKIPPED。
         """
-        actor = frame.observation.actor
+        actor = frame.actor_context.actor
         if actor is None:
             return RelationshipResult(
                 step_name=self.name,

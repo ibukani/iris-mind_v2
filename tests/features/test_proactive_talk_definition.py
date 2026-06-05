@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from iris.contracts.observations import IdleTickObservation, ObservationKind
+from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.features.definition import FeatureDefinition
 from iris.features.proactive_talk import define_proactive_talk_feature
@@ -32,8 +32,7 @@ def test_idle_tick_observation_is_typed_and_provider_neutral() -> None:
     observation = IdleTickObservation(
         observation_id=ObservationId("obs-idle"),
         session_id=SessionId("session-idle"),
-        actor=None,
-        space_id=None,
+        context=ObservationContext(),
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.IDLE_TICK,
         reason="quiet_room",

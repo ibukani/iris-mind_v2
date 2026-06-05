@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 
 from iris.cognitive.workspace.frame import WorkspaceFrame
-from iris.contracts.observations import IdleTickObservation, ObservationKind
+from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.features.proactive_talk.definition import ProactiveActionSelectionStep
 from iris.features.proactive_talk.goals import GoalProposer
@@ -20,8 +20,7 @@ def _idle_frame(idle_seconds: float) -> WorkspaceFrame:
         observation=IdleTickObservation(
             observation_id=ObservationId("obs-proactive-goal"),
             session_id=SessionId("session-proactive-goal"),
-            actor=None,
-            space_id=None,
+            context=ObservationContext(),
             occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
             kind=ObservationKind.IDLE_TICK,
             idle_seconds=idle_seconds,
