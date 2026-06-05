@@ -37,9 +37,7 @@ def validate_server_config(config: RuntimeServerConfig) -> RuntimeServerConfig:
     """
     validate_server_port(config.port, source="server.port")
     if config.local_only and config.host not in {"127.0.0.1", "localhost", "::1"}:
-        raise ConfigError(
-            f"server.local_only=true requires a loopback host, got: {config.host}"
-        )
+        raise ConfigError(f"server.local_only=true requires a loopback host, got: {config.host}")
     return config
 
 

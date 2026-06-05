@@ -57,9 +57,9 @@ need to change.
 
 | Source | Role | Examples |
 |---|---|---|
-| Built-in defaults | Safe fallback for every value. | `provider = "fake"`, `base_url = "http://localhost:11434"` |
-| TOML | Structured non-secret developer configuration. | model names, timeouts, `ollama.base_url` |
-| Environment variables | Secrets, deployment overrides, and CI/container overrides. | `OPENAI_API_KEY`, `IRIS_DEFAULT_CHAT_MODEL` |
+| Built-in defaults | Safe fallback for every value. | `provider = "fake"`, `base_url = "http://localhost:11434"`, `state.backend = "memory"` |
+| TOML | Structured non-secret developer configuration. | model names, timeouts, `ollama.base_url`, `state.sqlite_path` |
+| Environment variables | Secrets, deployment overrides, and CI/container overrides. | `OPENAI_API_KEY`, `IRIS_STATE_BACKEND` |
 | CLI flags | Temporary experiment overrides. | `--config`, `--host`, `--port` |
 
 Do not store API keys, auth tokens, passwords, or other credentials in TOML files.

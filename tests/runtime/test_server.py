@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import socket
 from datetime import UTC, datetime
+import socket
 from typing import TYPE_CHECKING
 
 import grpc

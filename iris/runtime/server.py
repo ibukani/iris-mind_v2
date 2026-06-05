@@ -7,11 +7,12 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver, FakeSpaceResolver
+from iris.adapters.app_gateway.resolvers import AccountIdentityResolver, EphemeralSpaceResolver
 from iris.runtime.config import RuntimeConfigOverrides, load_runtime_config
 from iris.runtime.service import IrisRuntimeService
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.grpc import create_grpc_server
+from iris.runtime.wiring.state import wire_runtime_state
 
 if TYPE_CHECKING:
     import grpc
@@ -35,9 +36,12 @@ async def serve(
     app = build_app_from_config(config)
     runtime_service = IrisRuntimeService(app)
 
-    # Use fake resolvers for the initial MVP until persistence is wired.
-    identity_resolver = FakeIdentityResolver()
-    space_resolver = FakeSpaceResolver()
+    stores = wire_runtime_state(config)
+
+    identity_resolver = AccountIdentityResolver(
+        account_store=stores.account_store,
+    )
+    space_resolver = EphemeralSpaceResolver()
 
     server: grpc.aio.Server = create_grpc_server(
         runtime_service,

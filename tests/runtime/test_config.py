@@ -490,6 +490,7 @@ def test_config_package_exposes_stable_public_api() -> None:
         "RuntimeOllamaConfig",
         "RuntimeOpenAIConfig",
         "RuntimeServerConfig",
+        "RuntimeStateConfig",
         "apply_runtime_overrides",
         "default_runtime_config",
         "load_runtime_config",

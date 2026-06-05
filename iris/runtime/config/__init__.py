@@ -25,6 +25,7 @@ from iris.runtime.config.root import (
     parse_llm_provider,
 )
 from iris.runtime.config.server import RuntimeServerConfig
+from iris.runtime.config.state import RuntimeStateConfig
 
 __all__ = [
     "ConfigError",
@@ -37,6 +38,7 @@ __all__ = [
     "RuntimeOllamaConfig",
     "RuntimeOpenAIConfig",
     "RuntimeServerConfig",
+    "RuntimeStateConfig",
     "apply_runtime_overrides",
     "default_runtime_config",
     "load_runtime_config",

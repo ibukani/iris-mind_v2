@@ -37,6 +37,12 @@ from iris.runtime.config.server import (
     validate_server_port,
 )
 from iris.runtime.config.sources import apply_env, apply_toml, read_toml_file
+from iris.runtime.config.state import (
+    RuntimeStateConfig,
+    apply_state_env,
+    apply_state_toml,
+    validate_state_config,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -49,6 +55,7 @@ class IrisRuntimeConfig:
     """Runtime configuration used by application wiring."""
 
     server: RuntimeServerConfig
+    state: RuntimeStateConfig
     models: RuntimeModelsConfig
     ollama: RuntimeOllamaConfig
     openai: RuntimeOpenAIConfig
@@ -73,6 +80,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
     """
     return IrisRuntimeConfig(
         server=RuntimeServerConfig(),
+        state=RuntimeStateConfig(),
         models=RuntimeModelsConfig(
             default_chat=RuntimeModelConfig(provider="fake", model="fake-llm"),
             fast_judge=RuntimeModelConfig(
@@ -113,8 +121,9 @@ def load_runtime_config(
     config = _apply_env(config, os.environ if env is None else env)
     if overrides is not None:
         config = apply_runtime_overrides(config, overrides)
-        
+
     config = replace(config, server=validate_server_config(config.server))
+    config = replace(config, state=validate_state_config(config.state))
     return config
 
 
@@ -179,6 +188,7 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
         Runtime config with TOML values applied.
     """
     server = apply_server_toml(config.server, table_or_empty(table, "server"))
+    state = apply_state_toml(config.state, table_or_empty(table, "state"))
 
     models, ollama, openai = apply_toml(
         config.models,
@@ -186,7 +196,7 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
         config.openai,
         table,
     )
-    return replace(config, server=server, models=models, ollama=ollama, openai=openai)
+    return replace(config, server=server, state=state, models=models, ollama=ollama, openai=openai)
 
 
 def _apply_env(
@@ -203,6 +213,7 @@ def _apply_env(
         Runtime config with environment values applied.
     """
     server = apply_server_env(config.server, env)
+    state = apply_state_env(config.state, env)
 
     models, ollama, openai = apply_env(config.models, config.ollama, config.openai, env)
-    return replace(config, server=server, models=models, ollama=ollama, openai=openai)
+    return replace(config, server=server, state=state, models=models, ollama=ollama, openai=openai)
