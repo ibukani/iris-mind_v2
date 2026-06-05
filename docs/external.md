@@ -89,11 +89,24 @@ message ExternalAccountRef {
 }
 ```
 
-境界の責務と Identity 解決モデル:
+境界の責務と Identity / Account 解決モデル:
 
 - **Actor**: Iris内部の主体（Human, Device, Service, System, Iris）。
-- **Account**: 外部providerのアカウント（provider + provider_subjectで一意）。Iris Actorと紐づけ可能。
+- **Account**: 外部providerのアカウントバインディング（AccountProfile）。
 - **Identity**: 1回の観測に付随する、AccountProfileとリンク先Actorから構築されたスナップショット。
+- **AccountStore**: 外部アカウントバインディングと任意で設定される `linked_actor_id` を保存する。
+- **IdentityResolver**: `ExternalAccountRef` を受け取り、`AccountStore` を通じて `Identity` へ解決する。
+
+解決の流れの例:
+```text
+ExternalAccountRef(provider="discord", provider_subject="123")
+→ AccountProfile(account_id="account-discord-...", linked_actor_id="actor-ibuki")
+→ Identity(actor_id="actor-ibuki", account_id="account-discord-...")
+```
+
+**注意事項**:
+- 複数のアカウントが同じ Actor に解決されるのは、明示的なリンクが設定されている場合のみである。
+- 自動的なアカウントマージはサポートされない。
 
 外部クライアントはIris内部の `AccountId` や `ActorId` を知らない場合、`ExternalAccountRef` を送信する。
 gRPC / AppGateway 境界が `IdentityResolver` で `ExternalAccountRef` を型付き `Identity` へ解決する。

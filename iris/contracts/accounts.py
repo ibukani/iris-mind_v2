@@ -12,9 +12,17 @@ if TYPE_CHECKING:
     from iris.core.ids import AccountId, ActorId, ExternalRef
 
 
+class AccountStoreError(ValueError):
+    """Account storage or linking error."""
+
+
 @dataclass(frozen=True)
 class AccountProfile:
-    """External provider account profile linked to an Iris Actor.
+    """External provider account binding.
+
+    AccountProfile represents an external provider account binding.
+    It is not an Actor.
+    It may be linked to an Iris Actor through linked_actor_id.
 
     account_id: Iris internal ID for this external account binding.
     provider: External provider name (e.g., discord, github, cli, device).

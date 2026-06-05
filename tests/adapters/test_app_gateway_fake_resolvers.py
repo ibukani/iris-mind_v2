@@ -60,6 +60,29 @@ def test_fake_identity_resolver_returns_different_actor_id_for_different_subject
     assert first.account_id != second.account_id
 
 
+def test_fake_identity_resolver_different_provider_same_subject() -> None:
+    """異なるproviderで同じsubjectが異なるAccount/Actorへ解決されることを確認する。"""
+    resolver = FakeIdentityResolver()
+
+    first = asyncio.run(
+        resolver.resolve_identity(
+            provider="discord",
+            provider_subject=ExternalRef("123"),
+            display_name="Mina",
+        )
+    )
+    second = asyncio.run(
+        resolver.resolve_identity(
+            provider="slack",
+            provider_subject=ExternalRef("123"),
+            display_name="Mina",
+        )
+    )
+
+    assert first.actor_id != second.actor_id
+    assert first.account_id != second.account_id
+
+
 def test_fake_identity_resolver_links_multiple_accounts_to_same_actor() -> None:
     """同じActorIdに複数の外部アカウントがリンクされることを確認する。"""
     linked = {
