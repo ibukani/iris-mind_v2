@@ -50,6 +50,7 @@ def test_actor_message_observation_uses_observation_context() -> None:
             device_id=DeviceId("device-1"),
             space_id=SpaceId("space-dm-1"),
             source="test",
+            metadata={"provider": "test"},
         ),
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
@@ -63,6 +64,7 @@ def test_actor_message_observation_uses_observation_context() -> None:
     assert observation.context.device_id == DeviceId("device-1")
     assert observation.context.space_id == SpaceId("space-dm-1")
     assert observation.context.source == "test"
+    assert observation.context.metadata == {"provider": "test"}
 
 
 def test_idle_tick_observation_uses_observation_context() -> None:

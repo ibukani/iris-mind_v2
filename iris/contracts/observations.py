@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from datetime import datetime
 
     from iris.contracts.identity import Identity
@@ -39,6 +41,7 @@ class ObservationContext:
     device_id: DeviceId | None = None
     space_id: SpaceId | None = None
     source: str | None = None
+    metadata: Mapping[str, str] = MappingProxyType({})
 
 
 @dataclass(frozen=True)
