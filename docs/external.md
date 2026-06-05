@@ -95,6 +95,7 @@ message ExternalAccountRef {
 - **Account**: 外部providerのアカウントバインディング（AccountProfile）。
 - **Identity**: 1回の観測に付随する、AccountProfileとリンク先Actorから構築されたスナップショット。
 - **AccountStore**: 外部アカウントバインディングと任意で設定される `linked_actor_id` を保存する。
+- **AccountService**: Runtime-level internal service for account lookup, link, and unlink operations. It wraps AccountStore and keeps higher-level account use cases away from storage adapters.
 - **SQLiteAccountStore**: Local/Server runtime向けの永続化 AccountStore 実装。
 - **IdentityResolver**: `ExternalAccountRef` を受け取り、`AccountStore` を通じて `Identity` へ解決する。
 
