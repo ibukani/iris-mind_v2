@@ -61,6 +61,19 @@ iris-twitch-client = Stream App Runtime
 fake resolverはテストとローカルMVP用。
 決定論的 `ActorId` / `SpaceId` を返し、network call、database、global registry、auth、account mergingはしない。
 
+## gRPC ingress
+
+`adapters/grpc/` はtransport adapter。
+proto DTOを `ObservationEnvelope` へ変換し、`IrisRuntimeService` へ委譲し、
+`RuntimeResponse` をproto DTOへ戻す。
+認知判断、memory更新、relationship更新、policy判断、LLM呼び出しは持たない。
+
+Proto構成。
+
+- `proto/iris/api/v1/` — 共有DTO（Identity, Observation, PresentedOutput）
+- `proto/iris/runtime/v1/` — service定義とRPC request/response
+- `make generate-protos` で `iris/generated/` 以下に再生成
+
 AppGateway の責務。
 
 - 外部アプリから Observation を受け取る

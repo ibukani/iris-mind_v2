@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package iris.runtime.v1;
+
+import "iris/api/v1/observations.proto";
+import "iris/api/v1/outputs.proto";
+
+service IrisRuntimeService {
+  rpc SubmitObservation(SubmitObservationRequest) returns (SubmitObservationResponse);
+}
+
+message SubmitObservationRequest {
+  string correlation_id = 1;
+  iris.api.v1.Observation observation = 2;
+}
+
+message SubmitObservationResponse {
+  string correlation_id = 1;
+  iris.api.v1.PresentedOutput output = 2;
+}
