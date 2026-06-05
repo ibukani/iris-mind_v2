@@ -125,6 +125,18 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
         "iris.cognitive.cycle",
         "FeatureDefinition needs PipelineStep protocol",
     ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/mappers.py",
+        "iris.runtime.service",
+        "gRPC ingress maps transport DTOs to runtime service envelope/response",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/server.py",
+        "iris.runtime.service",
+        "gRPC transport adapter delegates to IrisRuntimeService boundary",
+    ),
 ]
 
 ENTRYPOINT_FILES: set[str] = {
