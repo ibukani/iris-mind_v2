@@ -43,8 +43,9 @@ uv run python main.py --text "hello" --llm ollama --model qwen3:8b --ollama-host
 
 ## Runtime LLM Config
 
-The recommended local runtime config path is `.iris/config/llm.toml`. Create it from the
-committed sample:
+Iris ships with built-in defaults, so you only need to write the values you want to
+override. The recommended local runtime config path is `.iris/config/llm.toml`.
+Create it from the committed sample:
 
 ```bash
 cp .iris/config/llm.example.toml .iris/config/llm.toml
@@ -57,52 +58,78 @@ uv run python main.py --config .iris/config/llm.toml --text "こんにちは"
 ```
 
 `.iris/config/llm.toml` is local developer config and should not be committed.
-`.iris/config/llm.example.toml` is the committed sample. OpenAI API keys must be supplied
-with `OPENAI_API_KEY`, not TOML.
+`.iris/config/llm.example.toml` is the committed sample. OpenAI credentials must
+be supplied with the `OPENAI_API_KEY` environment variable, never in TOML.
 
-Iris supports named model slots:
+### Configuration role split
 
-- `default_chat`: currently used by one-turn response generation.
-- `fast_judge`: parsed and validated for future lightweight judgment/appraisal.
-- `reasoning`: parsed and validated for future heavy reasoning.
+Each configuration source has a clear role. Pick the right tool for the value you
+need to change.
 
-```toml
-[models.default_chat]
-provider = "ollama"
-model = "qwen3:8b"
-temperature = 0.7
-max_output_tokens = 512
+| Source | Role | Examples |
+|---|---|---|
+| Built-in defaults | Safe fallback for every value. | `provider = "fake"`, `base_url = "http://localhost:11434"` |
+| TOML | Structured non-secret developer configuration. | model names, timeouts, `ollama.base_url` |
+| Environment variables | Secrets, deployment overrides, and CI/container overrides. | `OPENAI_API_KEY`, `IRIS_DEFAULT_CHAT_MODEL` |
+| CLI flags | Temporary experiment overrides. | `--llm`, `--model`, `--ollama-host` |
 
-[models.fast_judge]
-provider = "ollama"
-model = "qwen3:4b"
-temperature = 0.0
-max_output_tokens = 128
+Do not store API keys, auth tokens, passwords, or other credentials in TOML files.
+Use environment variables (or your secret manager) for those.
 
-[models.reasoning]
-provider = "ollama"
-model = "deepseek-r1:8b"
-temperature = 0.0
-max_output_tokens = 1024
+Purpose-specific example configs are committed under `examples/config/`:
 
-[ollama]
-base_url = "http://localhost:11434"
-timeout_seconds = 120.0
-keep_alive = "5m"
+- `examples/config/minimal.toml` — overrides `models.default_chat` only.
+- `examples/config/local-ollama.toml` — configures all model slots and the shared
+  `ollama` block.
+- `examples/config/openai.toml` — configures OpenAI model settings. Does not
+  include `OPENAI_API_KEY`; supply it via env.
 
-[openai]
-model = "gpt-5-mini"
-timeout_seconds = 60.0
-max_output_tokens = 512
-```
+### Config precedence
 
-Config precedence is:
+Iris applies configuration in this order, with later sources overriding earlier
+ones:
 
 1. CLI flags: `--llm`, `--model`, `--ollama-host`
-2. Environment variables such as `IRIS_DEFAULT_CHAT_PROVIDER`, `IRIS_DEFAULT_CHAT_MODEL`,
-   `IRIS_OLLAMA_HOST`, and `IRIS_OPENAI_MODEL`
+2. Environment variables such as `IRIS_DEFAULT_CHAT_PROVIDER`,
+   `IRIS_DEFAULT_CHAT_MODEL`, `IRIS_OLLAMA_HOST`, and `IRIS_OPENAI_MODEL`
 3. TOML file passed with `--config`
 4. Built-in defaults
+
+`OPENAI_API_KEY` must be provided through the environment, not TOML. Iris will
+read it directly from the process environment when constructing the OpenAI
+client.
+
+### Config module layout
+
+The runtime configuration lives under `iris/runtime/config/` as a small package
+so future domains (memory, affect, gRPC, scheduler) can grow without bloating a
+single file. The public import path is unchanged:
+
+```python
+from iris.runtime.config import (
+    CliConfigOverrides,
+    ConfigError,
+    IrisRuntimeConfig,
+    LLMProvider,
+    ModelSlotName,
+    RuntimeModelConfig,
+    RuntimeModelsConfig,
+    RuntimeOllamaConfig,
+    RuntimeOpenAIConfig,
+    default_runtime_config,
+    load_runtime_config,
+    parse_llm_provider,
+)
+```
+
+The submodules `iris.runtime.config.errors`, `iris.runtime.config.parsing`,
+`iris.runtime.config.llm`, `iris.runtime.config.sources`, and
+`iris.runtime.config.root` are private implementation details. Callers should
+import only from `iris.runtime.config` (or the public submodules only when
+extending the package itself). Direct `os.environ` reads outside
+`iris.runtime.config` are forbidden by an architecture guard test; the only
+current exception is `iris.adapters.llm.openai`, which still reads
+`OPENAI_API_KEY` until the adapter is migrated to the typed config.
 
 ## Target Architecture
 

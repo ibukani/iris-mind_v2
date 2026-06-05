@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+import tomllib
+from typing import TYPE_CHECKING, cast, override
 
 import pytest
 
@@ -14,20 +15,27 @@ from iris.adapters.memory.fake import FakeMemoryStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+import iris.runtime.config as config_pkg
 from iris.runtime.config import (
     CliConfigOverrides,
     ConfigError,
     IrisRuntimeConfig,
     RuntimeModelConfig,
+    RuntimeModelsConfig,
+    RuntimeOllamaConfig,
+    RuntimeOpenAIConfig,
     default_runtime_config,
     load_runtime_config,
+    parse_llm_provider,
 )
 import iris.runtime.wiring.app as app_wiring
+from iris.runtime.wiring.app import build_app_from_config
+from iris.runtime.wiring.llm import LLMClientFactory
 
 if TYPE_CHECKING:
     from iris.contracts.memory import MemoryQuery, MemorySearchResult
-from iris.runtime.wiring.app import build_app_from_config
-from iris.runtime.wiring.llm import LLMClientFactory
+
+from tests.helpers.approx import approx
 
 
 def test_default_config_uses_fake_default_chat() -> None:
@@ -452,3 +460,254 @@ def _actor_observation(text: str) -> ActorMessageObservation:
             ),
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Package structure and public import compatibility
+# ---------------------------------------------------------------------------
+
+
+def test_public_imports_are_available_from_package_root() -> None:
+    """All documented public symbols are re-exported from iris.runtime.config."""
+    for name in (
+        "ConfigError",
+        "RuntimeModelConfig",
+        "RuntimeModelsConfig",
+        "RuntimeOllamaConfig",
+        "RuntimeOpenAIConfig",
+        "IrisRuntimeConfig",
+        "CliConfigOverrides",
+        "LLMProvider",
+        "ModelSlotName",
+        "default_runtime_config",
+        "load_runtime_config",
+        "apply_cli_overrides",
+        "parse_llm_provider",
+    ):
+        assert hasattr(config_pkg, name), f"iris.runtime.config missing public symbol: {name}"
+
+
+def test_config_package_exposes_stable_public_api() -> None:
+    """The public config package __all__ is a stable contract."""
+    expected = {
+        "CliConfigOverrides",
+        "ConfigError",
+        "IrisRuntimeConfig",
+        "LLMProvider",
+        "ModelSlotName",
+        "RuntimeModelConfig",
+        "RuntimeModelsConfig",
+        "RuntimeOllamaConfig",
+        "RuntimeOpenAIConfig",
+        "apply_cli_overrides",
+        "default_runtime_config",
+        "load_runtime_config",
+        "parse_llm_provider",
+    }
+    assert set(config_pkg.__all__) == expected
+
+
+def test_parse_llm_provider_accepts_known_providers() -> None:
+    """parse_llm_provider round-trips the supported provider names."""
+    assert parse_llm_provider("fake") == "fake"
+    assert parse_llm_provider("ollama") == "ollama"
+    assert parse_llm_provider("openai") == "openai"
+
+
+def test_parse_llm_provider_rejects_unknown_provider() -> None:
+    """parse_llm_provider raises ConfigError for unknown provider names."""
+    with pytest.raises(ConfigError):
+        parse_llm_provider("anthropic")
+
+
+# ---------------------------------------------------------------------------
+# Example config files
+# ---------------------------------------------------------------------------
+
+
+def _example_config_paths() -> tuple[Path, ...]:
+    return tuple(sorted(_repo_path("examples/config").glob("*.toml")))
+
+
+def test_examples_directory_exists() -> None:
+    """A committed examples/config directory must exist."""
+    assert _repo_path("examples/config").is_dir()
+
+
+@pytest.mark.parametrize("config_path", _example_config_paths(), ids=lambda p: p.name)
+def test_example_config_parses_through_loader(config_path: Path) -> None:
+    """Every committed example config must parse via load_runtime_config."""
+    config = load_runtime_config(config_path, env={})
+
+    assert isinstance(config, IrisRuntimeConfig)
+    assert isinstance(config.models, RuntimeModelsConfig)
+    assert isinstance(config.ollama, RuntimeOllamaConfig)
+    assert isinstance(config.openai, RuntimeOpenAIConfig)
+
+
+@pytest.mark.parametrize("config_path", _example_config_paths(), ids=lambda p: p.name)
+def test_example_config_contains_no_secret_like_keys(config_path: Path) -> None:
+    """Committed example configs must not include API key or token fields."""
+    text = config_path.read_text(encoding="utf-8")
+    document = tomllib.loads(text)
+
+    forbidden_substrings = (
+        "api_key",
+        "apikey",
+        "secret",
+        "access_token",
+        "auth_token",
+        "bearer_token",
+        "password",
+        "credential",
+    )
+
+    def _walk(value: object, path: str) -> tuple[str, ...]:
+        if not isinstance(value, dict):
+            return ()
+        table = cast("dict[str, object]", value)
+        violations: list[str] = []
+        for key, child in table.items():
+            child_path = f"{path}.{key}" if path else key
+            if any(token in key.lower() for token in forbidden_substrings):
+                violations.append(child_path)
+            violations.extend(_walk(child, child_path))
+        return tuple(violations)
+
+    violations = _walk(document, "")
+    assert not violations, (
+        f"{config_path.name} contains forbidden secret-like keys: {', '.join(violations)}"
+    )
+
+
+def test_minimal_example_overrides_only_default_chat() -> None:
+    """The minimal example only overrides models.default_chat."""
+    minimal = _repo_path("examples/config/minimal.toml")
+
+    config = load_runtime_config(minimal, env={})
+
+    assert config.models.default_chat.provider == "ollama"
+    assert config.models.fast_judge.provider == "fake"
+    assert config.models.reasoning.provider == "fake"
+
+
+def test_local_ollama_example_configures_all_slots() -> None:
+    """The local Ollama example configures all model slots and shared ollama."""
+    local = _repo_path("examples/config/local-ollama.toml")
+
+    config = load_runtime_config(local, env={})
+
+    assert config.models.default_chat.model == "qwen3:8b"
+    assert config.models.fast_judge.model == "qwen3:4b"
+    assert config.models.reasoning.model == "deepseek-r1:8b"
+    assert config.ollama.base_url == "http://localhost:11434"
+
+
+def test_openai_example_uses_openai_provider() -> None:
+    """The OpenAI example configures OpenAI for every model slot."""
+    openai = _repo_path("examples/config/openai.toml")
+
+    config = load_runtime_config(openai, env={})
+
+    assert config.models.default_chat.provider == "openai"
+    assert config.models.fast_judge.provider == "openai"
+    assert config.models.reasoning.provider == "openai"
+
+
+# ---------------------------------------------------------------------------
+# Precedence regression coverage
+# ---------------------------------------------------------------------------
+
+
+def test_env_overrides_toml_and_cli_overrides_env(tmp_path: Path) -> None:
+    """Full precedence stack: defaults < TOML < env < CLI."""
+    config_path = _write_config(
+        tmp_path,
+        """
+        [models.default_chat]
+        provider = "fake"
+        model = "toml-model"
+        temperature = 0.1
+
+        [ollama]
+        base_url = "http://toml-host:11434"
+        """,
+    )
+    env = {
+        "IRIS_DEFAULT_CHAT_PROVIDER": "ollama",
+        "IRIS_DEFAULT_CHAT_MODEL": "env-model",
+        "IRIS_OLLAMA_HOST": "http://env-host:11434",
+    }
+
+    config = load_runtime_config(
+        config_path,
+        env=env,
+        cli_overrides=CliConfigOverrides(
+            llm="fake",
+            model="cli-model",
+            ollama_host="http://cli-host:11434",
+        ),
+    )
+
+    assert config.models.default_chat.provider == "fake"
+    assert config.models.default_chat.model == "cli-model"
+    assert config.ollama.base_url == "http://cli-host:11434"
+    assert config.models.default_chat.temperature == approx(0.1)
+
+
+def test_partial_toml_keeps_unset_fields_at_defaults(tmp_path: Path) -> None:
+    """A partial TOML only overrides the keys it declares."""
+    config_path = _write_config(
+        tmp_path,
+        """
+        [models.default_chat]
+        provider = "ollama"
+        """,
+    )
+
+    config = load_runtime_config(config_path, env={})
+
+    assert config.models.default_chat.provider == "ollama"
+    assert config.models.default_chat.model == "fake-llm"
+    assert config.ollama.base_url == "http://localhost:11434"
+    assert config.openai.model == "gpt-5-mini"
+
+
+# ---------------------------------------------------------------------------
+# Invalid input still raises ConfigError
+# ---------------------------------------------------------------------------
+
+
+def test_invalid_toml_section_type_raises_config_error(tmp_path: Path) -> None:
+    """A non-table value where a table is required raises ConfigError."""
+    config_path = _write_config(
+        tmp_path,
+        """
+        models = "not-a-table"
+        """,
+    )
+
+    with pytest.raises(ConfigError):
+        load_runtime_config(config_path, env={})
+
+
+def test_invalid_toml_field_type_raises_config_error(tmp_path: Path) -> None:
+    """A wrong-typed TOML field raises ConfigError."""
+    config_path = _write_config(
+        tmp_path,
+        """
+        [models.default_chat]
+        provider = "ollama"
+        model = "x"
+        temperature = "not-a-float"
+        """,
+    )
+
+    with pytest.raises(ConfigError):
+        load_runtime_config(config_path, env={})
+
+
+def test_invalid_env_provider_raises_config_error() -> None:
+    """An unknown provider in IRIS_DEFAULT_CHAT_PROVIDER raises ConfigError."""
+    with pytest.raises(ConfigError):
+        load_runtime_config(None, env={"IRIS_DEFAULT_CHAT_PROVIDER": "anthropic"})

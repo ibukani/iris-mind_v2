@@ -1,0 +1,12 @@
+# Iris minimal runtime config example.
+#
+# Only override the values you want to change from the built-in defaults.
+# This file is a partial override: every section is optional and any
+# omitted field falls back to the built-in default.
+#
+# Apply with:
+#   uv run python main.py --config examples/config/minimal.toml --text "hello"
+
+[models.default_chat]
+provider = "ollama"
+model = "qwen3:8b"
