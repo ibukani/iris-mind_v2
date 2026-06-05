@@ -38,7 +38,7 @@ def _idle_frame(
                     record=MemoryRecord(
                         id=MemoryId("memory-proactive"),
                         text="quiet room context",
-                        subject_id=ActorId("actor-proactive"),
+                        actor_id=ActorId("actor-proactive"),
                     ),
                     score=0.8,
                 ),

@@ -6,7 +6,7 @@ import pytest
 
 from iris.adapters.memory.vector import InMemoryVectorMemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord
-from iris.core.ids import ActorId
+from iris.core.ids import ActorId, SpaceId
 
 
 def embed_text(text: str) -> tuple[float, float]:
@@ -38,20 +38,37 @@ def test_in_memory_vector_store_search_is_deterministic() -> None:
     assert [result.score for result in results] == [1.0, 1.0]
 
 
-def test_in_memory_vector_store_filters_subject_id() -> None:
-    """ベクトル検索がsubject_idで結果をフィルタリングすることを確認する。"""
+def test_in_memory_vector_store_filters_actor_id() -> None:
+    """ベクトル検索がactor_idで結果をフィルタリングすることを確認する。"""
     actor_id = ActorId("actor-1")
     store = InMemoryVectorMemoryStore(
         embed_text,
         records=(
-            MemoryRecord(id=MemoryId("m1"), text="User likes tea.", subject_id=actor_id),
+            MemoryRecord(id=MemoryId("m1"), text="User likes tea.", actor_id=actor_id),
             MemoryRecord(id=MemoryId("m2"), text="Someone else likes tea."),
         ),
     )
 
-    results = store.search(MemoryQuery(text="tea", subject_id=actor_id))
+    results = store.search(MemoryQuery(text="tea", actor_id=actor_id))
 
     assert [result.record.id for result in results] == [MemoryId("m1")]
+
+
+def test_in_memory_vector_store_filters_space_id() -> None:
+    """ベクトル検索がspace_idで結果をフィルタリングすることを確認する。"""
+    store = InMemoryVectorMemoryStore(
+        embed_text,
+        records=(
+            MemoryRecord(id=MemoryId("m1"), text="Tea in one space.", space_id=SpaceId("space-1")),
+            MemoryRecord(
+                id=MemoryId("m2"), text="Tea in another space.", space_id=SpaceId("space-2")
+            ),
+        ),
+    )
+
+    results = store.search(MemoryQuery(text="tea", space_id=SpaceId("space-2")))
+
+    assert [result.record.id for result in results] == [MemoryId("m2")]
 
 
 def test_in_memory_vector_store_rejects_unstable_embedding_dimensions() -> None:

@@ -567,6 +567,26 @@ SpaceContextSnapshot
 `FrameBuilder.build_initial()` は `Observation.context` から `actor_context` と `space_context` を作る。
 `WorkspaceFrame` は frozen typed snapshot のまま。resolver、store、adapter、manager、mutable context bag は入れない。
 
+### Identity / Space resolution
+
+`IdentityResolver` と `SpaceResolver` は `adapters/app_gateway/ports.py` に置く。
+外部provider ref (`ExternalRef`) を `Identity` / `InteractionSpace` に変換するAppGateway境界portであり、`contracts/` と `cognitive/` はresolver protocolを知らない。
+
+fake resolverはテストとローカルMVP配線向けに決定論的 `ActorId` / `SpaceId` を返す。
+DB永続化、認証、認可、global registry、外部provider API callはしない。
+
+### Relationship / memory scope
+
+関係性は `ActorId` scope。
+`RelationshipStep` は `frame.actor_context.actor.actor_id` をkeyとして使う。
+`AccountId` と `DeviceId` はlink/context identifierであり、relationship owner keyではない。
+
+Memory retrievalは `ActorId | None` と `SpaceId | None` scopeを受け取る。
+`MemoryQuery.actor_id` は「誰に関するmemoryか」、`MemoryQuery.space_id` は「どのinteraction spaceで起きたmemoryか」を表す。
+`AccountId` と `DeviceId` はmemory owner keyではない。
+
+永続identity registry、account merging、DB永続化、認証/認可、長期memory consolidation jobはfuture work。
+
 ### `ActionPlan`
 
 Iris が「何をしたいか」を表す。
@@ -733,7 +753,7 @@ CLI / main.py / iris.runtime.cli
 - `MotivationResult` 型と `FrameBuilder` 対応は既存、step 実装は未着手
 - LearningHook / BackgroundJob は未実装
 - 外部アプリ連携 (Discord, Voice, Twitch) は未実装
-- AppGateway は Protocol のみ定義 (将来の外部アプリ用)
+- AppGateway は Protocol と決定論的fake resolverのみ定義 (将来の外部アプリ用)
 
 ---
 

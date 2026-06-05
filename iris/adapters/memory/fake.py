@@ -47,7 +47,9 @@ class FakeMemoryStore(MemoryStore):
         terms = tuple(term.casefold() for term in query.text.split() if term.strip())
         ranked: list[tuple[int, int, MemorySearchResult]] = []
         for index, record in enumerate(self._records):
-            if query.subject_id is not None and record.subject_id != query.subject_id:
+            if query.actor_id is not None and record.actor_id != query.actor_id:
+                continue
+            if query.space_id is not None and record.space_id != query.space_id:
                 continue
             score = _score_record(record, terms)
             if score <= 0:

@@ -44,7 +44,7 @@ async def test_affect_aware_one_turn_flow_includes_affect_relationship_and_memor
             MemoryRecord(
                 id=MemoryId("m1"),
                 text="Mina likes jasmine tea.",
-                subject_id=ActorId("actor-affect-runtime"),
+                actor_id=ActorId("actor-affect-runtime"),
             ),
         )
     )

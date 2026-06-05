@@ -9,10 +9,11 @@ if TYPE_CHECKING:
 
 from iris.adapters.memory.ports import MemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
-from iris.core.ids import ActorId
+from iris.core.ids import ActorId, SpaceId
 
 _MEMORY_ID_KEY = "iris_memory_id"
-_SUBJECT_ID_KEY = "iris_subject_id"
+_ACTOR_ID_KEY = "iris_actor_id"
+_SPACE_ID_KEY = "iris_space_id"
 _SALIENCE_KEY = "iris_salience"
 
 _ERR_REQUIRES_DOCUMENTS = (
@@ -156,11 +157,9 @@ class LangChainMemoryStore(MemoryStore):
         else:
             raise LangChainMemoryStoreError(_ERR_REQUIRES_SEARCH)
 
-        return tuple(
-            result
-            for result in results
-            if query.subject_id is None or result.record.subject_id == query.subject_id
-        )[: query.limit]
+        return tuple(result for result in results if _matches_scope(result.record, query))[
+            : query.limit
+        ]
 
 
 def _load_document_factory() -> DocumentFactory:
@@ -179,8 +178,10 @@ def _metadata_from_record(record: MemoryRecord) -> Mapping[str, object]:
         _MEMORY_ID_KEY: str(record.id),
         _SALIENCE_KEY: record.salience,
     }
-    if record.subject_id is not None:
-        metadata[_SUBJECT_ID_KEY] = str(record.subject_id)
+    if record.actor_id is not None:
+        metadata[_ACTOR_ID_KEY] = str(record.actor_id)
+    if record.space_id is not None:
+        metadata[_SPACE_ID_KEY] = str(record.space_id)
     return metadata
 
 
@@ -190,14 +191,27 @@ def _record_from_document(document: _DocumentLike) -> MemoryRecord:
         err_msg = f"LangChain document metadata must include '{_MEMORY_ID_KEY}'."
         raise LangChainMemoryStoreError(err_msg)
 
-    subject_id = _metadata_text(document.metadata, _SUBJECT_ID_KEY)
+    actor_id = _metadata_text(document.metadata, _ACTOR_ID_KEY)
+    space_id = _metadata_text(document.metadata, _SPACE_ID_KEY)
     salience = _metadata_float(document.metadata, _SALIENCE_KEY)
     return MemoryRecord(
         id=MemoryId(memory_id),
         text=document.page_content,
-        subject_id=ActorId(subject_id) if subject_id is not None else None,
+        actor_id=ActorId(actor_id) if actor_id is not None else None,
+        space_id=SpaceId(space_id) if space_id is not None else None,
         salience=salience,
     )
+
+
+def _matches_scope(record: MemoryRecord, query: MemoryQuery) -> bool:
+    """MemoryRecordが任意ActorId/SpaceId scopeに一致するか判定する。
+
+    Returns:
+        bool: 両方のscope条件を満たす場合はTrue。
+    """
+    if query.actor_id is not None and record.actor_id != query.actor_id:
+        return False
+    return not (query.space_id is not None and record.space_id != query.space_id)
 
 
 def _metadata_text(metadata: Mapping[str, object], key: str) -> str | None:

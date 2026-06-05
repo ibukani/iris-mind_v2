@@ -15,7 +15,7 @@ from iris.adapters.memory.langchain import (
     LangChainMemoryStoreUnavailableError,
 )
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
-from iris.core.ids import ActorId
+from iris.core.ids import ActorId, SpaceId
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -100,19 +100,23 @@ def test_langchain_memory_store_puts_and_searches_iris_records() -> None:
         MemoryRecord(
             id=MemoryId("m1"),
             text="User likes jasmine tea.",
-            subject_id=actor_id,
+            actor_id=actor_id,
+            space_id=SpaceId("space-1"),
             salience=0.7,
         )
     )
 
-    results = store.search(MemoryQuery(text="jasmine", subject_id=actor_id))
+    results = store.search(
+        MemoryQuery(text="jasmine", actor_id=actor_id, space_id=SpaceId("space-1"))
+    )
 
     assert results == (
         MemorySearchResult(
             record=MemoryRecord(
                 id=MemoryId("m1"),
                 text="User likes jasmine tea.",
-                subject_id=actor_id,
+                actor_id=actor_id,
+                space_id=SpaceId("space-1"),
                 salience=0.7,
             ),
             score=1.0,
@@ -120,26 +124,50 @@ def test_langchain_memory_store_puts_and_searches_iris_records() -> None:
     )
 
 
-def test_langchain_memory_store_filters_subject_id_after_vector_search() -> None:
-    """ベクトル類似度検索後にsubject_idフィルタリングが適用されることを確認する。"""
+def test_langchain_memory_store_filters_actor_id_after_vector_search() -> None:
+    """ベクトル類似度検索後にactor_idフィルタリングが適用されることを確認する。"""
     vector_store = StubVectorStore()
     store = LangChainMemoryStore(vector_store, document_factory=document_factory())
     store.put(
         MemoryRecord(
             id=MemoryId("m1"),
             text="User likes tea.",
-            subject_id=ActorId("actor-1"),
+            actor_id=ActorId("actor-1"),
         )
     )
     store.put(
         MemoryRecord(
             id=MemoryId("m2"),
             text="User likes tea.",
-            subject_id=ActorId("actor-2"),
+            actor_id=ActorId("actor-2"),
         )
     )
 
-    results = store.search(MemoryQuery(text="tea", subject_id=ActorId("actor-2")))
+    results = store.search(MemoryQuery(text="tea", actor_id=ActorId("actor-2")))
+
+    assert [result.record.id for result in results] == [MemoryId("m2")]
+
+
+def test_langchain_memory_store_filters_space_id_after_vector_search() -> None:
+    """ベクトル類似度検索後にspace_idフィルタリングが適用されることを確認する。"""
+    vector_store = StubVectorStore()
+    store = LangChainMemoryStore(vector_store, document_factory=document_factory())
+    store.put(
+        MemoryRecord(
+            id=MemoryId("m1"),
+            text="User likes tea.",
+            space_id=SpaceId("space-1"),
+        )
+    )
+    store.put(
+        MemoryRecord(
+            id=MemoryId("m2"),
+            text="User likes tea.",
+            space_id=SpaceId("space-2"),
+        )
+    )
+
+    results = store.search(MemoryQuery(text="tea", space_id=SpaceId("space-2")))
 
     assert [result.record.id for result in results] == [MemoryId("m2")]
 
