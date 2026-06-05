@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from iris.contracts.identity import Identity
-    from iris.core.ids import ActorId, SpaceId
+    from iris.core.ids import ActorId, ExternalRef, SpaceId
 
 
 class SpaceKind(StrEnum):
@@ -53,4 +53,20 @@ class InteractionSpace:
     space_kind: SpaceKind
     display_name: str
     participants: tuple[SpaceParticipant, ...] = ()
+    metadata: Mapping[str, str] = MappingProxyType({})
+
+
+class SpaceBindingStoreError(ValueError):
+    """Raised on SpaceBindingStore failures."""
+
+
+@dataclass(frozen=True)
+class SpaceBinding:
+    """External provider space binding to an Iris internal space_id."""
+
+    provider: str
+    provider_space_ref: ExternalRef
+    space_id: SpaceId
+    display_name: str
+    space_kind: SpaceKind
     metadata: Mapping[str, str] = MappingProxyType({})

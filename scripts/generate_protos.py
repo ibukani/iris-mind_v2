@@ -18,6 +18,7 @@ PROTO_FILES: tuple[str, ...] = (
     "iris/api/v1/identity.proto",
     "iris/api/v1/observations.proto",
     "iris/api/v1/outputs.proto",
+    "iris/api/v1/spaces.proto",
     "iris/runtime/v1/runtime.proto",
 )
 

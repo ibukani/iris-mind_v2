@@ -11,7 +11,7 @@ from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
 from iris.generated.iris.runtime.v1 import runtime_pb2_grpc
 
 if TYPE_CHECKING:
-    from iris.adapters.app_gateway.ports import IdentityResolver
+    from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
     from iris.runtime.service import IrisRuntimeService
 
 
@@ -20,6 +20,7 @@ def add_iris_runtime_servicer(
     runtime_service: IrisRuntimeService,
     *,
     identity_resolver: IdentityResolver | None = None,
+    space_resolver: SpaceResolver | None = None,
 ) -> None:
     """Register IrisRuntimeGrpcServicer on a gRPC aio server.
 
@@ -29,8 +30,13 @@ def add_iris_runtime_servicer(
         identity_resolver: Optional resolver used to map ExternalAccountRef into
             typed Identity. If omitted, the mapper rejects ExternalAccountRef
             inputs.
+        space_resolver: Optional resolver used to map ExternalSpaceRef into
+            InteractionSpace.
     """
-    mapper = GrpcRuntimeMapper(identity_resolver=identity_resolver)
+    mapper = GrpcRuntimeMapper(
+        identity_resolver=identity_resolver,
+        space_resolver=space_resolver,
+    )
     runtime_pb2_grpc.add_IrisRuntimeServiceServicer_to_server(
         IrisRuntimeGrpcServicer(runtime_service, mapper=mapper),
         server,
@@ -43,6 +49,7 @@ def create_grpc_server(
     host: str = "127.0.0.1",
     port: int = 50051,
     identity_resolver: IdentityResolver | None = None,
+    space_resolver: SpaceResolver | None = None,
 ) -> grpc.aio.Server:
     """Create a grpc.aio server with Iris runtime service registered.
 
@@ -51,6 +58,7 @@ def create_grpc_server(
         host: Bind host. Defaults to loopback.
         port: Bind port. Defaults to 50051.
         identity_resolver: Optional resolver injected into the gRPC mapper.
+        space_resolver: Optional resolver injected into the gRPC mapper.
 
     Returns:
         grpc.aio.Server: Configured but not started server.
@@ -59,7 +67,12 @@ def create_grpc_server(
         RuntimeError: If port binding fails.
     """
     server = grpc.aio.server()
-    add_iris_runtime_servicer(server, runtime_service, identity_resolver=identity_resolver)
+    add_iris_runtime_servicer(
+        server,
+        runtime_service,
+        identity_resolver=identity_resolver,
+        space_resolver=space_resolver,
+    )
     bound_port = server.add_insecure_port(f"{host}:{port}")
     if bound_port == 0:
         message = f"failed to bind gRPC port {host}:{port}"

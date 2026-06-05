@@ -15,6 +15,7 @@ from iris.contracts.observations import (
     ObservationContext,
     ObservationKind,
 )
+from iris.contracts.spaces import SpaceKind
 from iris.core.ids import (
     AccountId,
     ActorId,
@@ -25,15 +26,16 @@ from iris.core.ids import (
     SessionId,
     SpaceId,
 )
-from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2
+from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
 from iris.runtime.service import ObservationEnvelope
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
-    from iris.adapters.app_gateway.ports import IdentityResolver
+    from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
     from iris.contracts.actions import PresentedOutput
+    from iris.contracts.spaces import InteractionSpace
     from iris.runtime.service import RuntimeResponse
 
 
@@ -48,9 +50,14 @@ class GrpcRuntimeMapper:
     boundary so cognitive layers never see provider-subject strings.
     """
 
-    def __init__(self, identity_resolver: IdentityResolver | None = None) -> None:
-        """Create mapper with an optional IdentityResolver dependency."""
+    def __init__(
+        self,
+        identity_resolver: IdentityResolver | None = None,
+        space_resolver: SpaceResolver | None = None,
+    ) -> None:
+        """Create mapper with an optional resolvers."""
         self._identity_resolver = identity_resolver
+        self._space_resolver = space_resolver
 
     async def observation_envelope_from_proto(
         self,
@@ -121,6 +128,22 @@ class GrpcRuntimeMapper:
         Returns:
             ObservationContext: Typed observation context.
         """
+        actor, account_id = await self._resolve_actor_from_context(context)
+        space_id = await self._resolve_space_from_context(context, actor)
+
+        return ObservationContext(
+            actor=actor,
+            account_id=account_id,
+            device_id=DeviceId(context.device_id) if context.device_id else None,
+            space_id=space_id,
+            source=context.source or None,
+            metadata=dict(context.metadata.items()),
+        )
+
+    async def _resolve_actor_from_context(
+        self,
+        context: observations_pb2.ObservationContext,
+    ) -> tuple[Identity | None, AccountId | None]:
         has_actor = context.HasField("actor")
         has_account_ref = context.HasField("account_ref")
         if has_actor and has_account_ref:
@@ -140,18 +163,29 @@ class GrpcRuntimeMapper:
         else:
             actor = None
 
-        account_id = context.account_id
+        account_id = AccountId(context.account_id) if context.account_id else None
         if actor and actor.account_id:
             account_id = actor.account_id
 
-        return ObservationContext(
-            actor=actor,
-            account_id=AccountId(account_id) if account_id else None,
-            device_id=DeviceId(context.device_id) if context.device_id else None,
-            space_id=SpaceId(context.space_id) if context.space_id else None,
-            source=context.source or None,
-            metadata=dict(context.metadata.items()),
-        )
+        return actor, account_id
+
+    async def _resolve_space_from_context(
+        self,
+        context: observations_pb2.ObservationContext,
+        actor: Identity | None,
+    ) -> SpaceId | None:
+        has_space_ref = context.HasField("space_ref")
+        if has_space_ref:
+            if context.space_id:
+                _raise_mapping_error("context must not include both space_ref and space_id")
+            resolved_space = await self._resolve_space_ref(
+                context.space_ref,
+                participants=(actor,) if actor is not None else (),
+            )
+            return resolved_space.space_id
+        if context.space_id:
+            return SpaceId(context.space_id)
+        return None
 
     async def _resolve_account_ref(
         self,
@@ -181,6 +215,39 @@ class GrpcRuntimeMapper:
             account_id=None,
             device_id=device_id,
             metadata=dict(account_ref.metadata.items()),
+        )
+
+    async def _resolve_space_ref(
+        self,
+        space_ref: spaces_pb2.ExternalSpaceRef,
+        *,
+        participants: Sequence[Identity],
+    ) -> InteractionSpace:
+        """Resolve ExternalSpaceRef into an InteractionSpace via the resolver.
+
+        Returns:
+            InteractionSpace: Resolved typed space.
+        """
+        if self._space_resolver is None:
+            _raise_mapping_error("space resolver is required for space_ref")
+        if not space_ref.provider:
+            _raise_mapping_error("space_ref.provider is required")
+        if not space_ref.provider_space_ref:
+            _raise_mapping_error("space_ref.provider_space_ref is required")
+        if not space_ref.display_name:
+            _raise_mapping_error("space_ref.display_name is required")
+        if space_ref.space_kind == spaces_pb2.SPACE_KIND_UNSPECIFIED:
+            _raise_mapping_error("space_ref.space_kind must not be unspecified")
+
+        space_kind = _space_kind_from_proto(space_ref.space_kind)
+
+        return await self._space_resolver.resolve_space(
+            provider=space_ref.provider,
+            provider_space_ref=ExternalRef(space_ref.provider_space_ref),
+            display_name=space_ref.display_name,
+            space_kind=space_kind,
+            participants=participants,
+            metadata=dict(space_ref.metadata.items()),
         )
 
 
@@ -300,6 +367,20 @@ def _actor_kind_from_proto(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
         return mapping[kind]
     except KeyError:
         _raise_mapping_error(f"unsupported or unspecified actor kind: {kind}")
+
+
+def _space_kind_from_proto(kind: spaces_pb2.SpaceKind.ValueType) -> SpaceKind:
+    mapping = {
+        spaces_pb2.SPACE_KIND_DIRECT_MESSAGE: SpaceKind.DIRECT_MESSAGE,
+        spaces_pb2.SPACE_KIND_CHANNEL: SpaceKind.CHANNEL,
+        spaces_pb2.SPACE_KIND_THREAD: SpaceKind.THREAD,
+        spaces_pb2.SPACE_KIND_ROOM: SpaceKind.ROOM,
+        spaces_pb2.SPACE_KIND_BROADCAST: SpaceKind.BROADCAST,
+    }
+    try:
+        return mapping[kind]
+    except KeyError:
+        _raise_mapping_error(f"unsupported or unspecified space kind: {kind}")
 
 
 def _account_ref_kind_to_contract(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:

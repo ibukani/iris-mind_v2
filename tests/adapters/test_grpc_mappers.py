@@ -7,8 +7,11 @@ from typing import TYPE_CHECKING, override
 
 import pytest
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver
-from iris.adapters.app_gateway.ports import IdentityResolver
+from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
 from iris.adapters.grpc.mappers import (
     GrpcMappingError,
     GrpcRuntimeMapper,
@@ -19,6 +22,7 @@ from iris.adapters.grpc.mappers import (
 from iris.contracts.actions import PresentedOutput
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ActorMessageObservation, IdleTickObservation
+from iris.contracts.spaces import InteractionSpace, SpaceKind
 from iris.core.ids import (
     AccountId,
     ActorId,
@@ -29,7 +33,7 @@ from iris.core.ids import (
     SessionId,
     SpaceId,
 )
-from iris.generated.iris.api.v1 import identity_pb2, observations_pb2
+from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
 from iris.runtime.service import RuntimeResponse
 from tests.helpers.approx import approx
@@ -593,3 +597,224 @@ class _RecordingIdentityResolver(IdentityResolver):
             device_id=device_id,
             metadata=dict(metadata or {}),
         )
+
+
+class _RecordingSpaceResolver(SpaceResolver):
+    """SpaceResolver that records calls and returns deterministic InteractionSpace."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+        self.provider = ""
+        self.provider_space_ref = ExternalRef("")
+        self.display_name = ""
+        self.space_kind = SpaceKind.CHANNEL
+        self.participants: Sequence[Identity] = ()
+        self.metadata: Mapping[str, str] = {}
+
+    @override
+    async def resolve_space(
+        self,
+        *,
+        provider: str,
+        provider_space_ref: ExternalRef,
+        display_name: str,
+        space_kind: SpaceKind,
+        participants: Sequence[Identity] = (),
+        metadata: Mapping[str, str] | None = None,
+    ) -> InteractionSpace:
+        self.calls += 1
+        self.provider = provider
+        self.provider_space_ref = provider_space_ref
+        self.display_name = display_name
+        self.space_kind = space_kind
+        self.participants = tuple(participants)
+        self.metadata = dict(metadata or {})
+        return InteractionSpace(
+            space_id=SpaceId(f"resolved-space-{provider}-{provider_space_ref}"),
+            space_kind=space_kind,
+            display_name=display_name,
+            participants=(),
+            metadata=dict(metadata or {}),
+        )
+
+
+@pytest.mark.anyio
+async def test_space_ref_resolves_to_space_id_through_resolver() -> None:
+    """space_refがSpaceResolverで解決されspace_idになることを確認する。"""
+    resolver = _RecordingSpaceResolver()
+    context = observations_pb2.ObservationContext(
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref="chan-1",
+            display_name="General",
+            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+        )
+    )
+
+    mapper = GrpcRuntimeMapper(space_resolver=resolver)
+    result = await mapper.observation_context_from_proto(context)
+
+    assert result.space_id == SpaceId("resolved-space-discord-chan-1")
+    assert resolver.calls == 1
+
+
+@pytest.mark.anyio
+async def test_space_ref_passes_fields_to_resolver() -> None:
+    """space_refの各フィールドが正しくresolverに渡されることを確認する。"""
+    resolver = _RecordingSpaceResolver()
+    context = observations_pb2.ObservationContext(
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref="chan-1",
+            display_name="General",
+            space_kind=spaces_pb2.SPACE_KIND_ROOM,
+            metadata={"guild": "999"},
+        )
+    )
+
+    await GrpcRuntimeMapper(space_resolver=resolver).observation_context_from_proto(context)
+
+    assert resolver.provider == "discord"
+    assert resolver.provider_space_ref == ExternalRef("chan-1")
+    assert resolver.display_name == "General"
+    assert resolver.space_kind == SpaceKind.ROOM
+    assert resolver.metadata == {"guild": "999"}
+
+
+@pytest.mark.anyio
+async def test_space_ref_includes_actor_as_participant_when_account_ref_present() -> None:
+    """account_refが解決されたactorが、space_resolverのparticipantsに含まれることを確認する。"""
+    id_resolver = _RecordingIdentityResolver()
+    space_resolver = _RecordingSpaceResolver()
+    context = observations_pb2.ObservationContext(
+        account_ref=identity_pb2.ExternalAccountRef(
+            provider="discord",
+            provider_subject="user-1",
+            display_name="User",
+        ),
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref="chan-1",
+            display_name="General",
+            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+        ),
+    )
+
+    await GrpcRuntimeMapper(
+        identity_resolver=id_resolver,
+        space_resolver=space_resolver,
+    ).observation_context_from_proto(context)
+
+    assert len(space_resolver.participants) == 1
+    assert space_resolver.participants[0].actor_id == "resolved-discord-user-1"
+
+
+@pytest.mark.anyio
+async def test_space_ref_without_resolver_raises_mapping_error() -> None:
+    """space_resolverなしでspace_refを指定するとGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref="chan-1",
+            display_name="General",
+            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+        )
+    )
+
+    with pytest.raises(GrpcMappingError, match="space resolver is required for space_ref"):
+        await GrpcRuntimeMapper().observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_space_ref_and_space_id_together_raises_mapping_error() -> None:
+    """space_refとspace_idを同時に指定するとGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        space_id="space-x",
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref="chan-1",
+            display_name="General",
+            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+        ),
+    )
+
+    mapper = GrpcRuntimeMapper(space_resolver=_RecordingSpaceResolver())
+    with pytest.raises(GrpcMappingError, match="must not include both space_ref and space_id"):
+        await mapper.observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_space_ref_without_provider_raises_mapping_error() -> None:
+    """providerのないspace_refはGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider_space_ref="chan-1",
+            display_name="General",
+            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+        )
+    )
+
+    mapper = GrpcRuntimeMapper(space_resolver=_RecordingSpaceResolver())
+    with pytest.raises(GrpcMappingError, match=r"space_ref\.provider is required"):
+        await mapper.observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_space_ref_without_provider_space_ref_raises_mapping_error() -> None:
+    """provider_space_refのないspace_refはGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="discord",
+            display_name="General",
+            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+        )
+    )
+
+    mapper = GrpcRuntimeMapper(space_resolver=_RecordingSpaceResolver())
+    with pytest.raises(GrpcMappingError, match=r"space_ref\.provider_space_ref is required"):
+        await mapper.observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_space_ref_without_display_name_raises_mapping_error() -> None:
+    """display_nameのないspace_refはGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref="chan-1",
+            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+        )
+    )
+
+    mapper = GrpcRuntimeMapper(space_resolver=_RecordingSpaceResolver())
+    with pytest.raises(GrpcMappingError, match=r"space_ref\.display_name is required"):
+        await mapper.observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_space_ref_unspecified_kind_raises_mapping_error() -> None:
+    """space_kindがUNSPECIFIEDなspace_refはGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref="chan-1",
+            display_name="General",
+            space_kind=spaces_pb2.SPACE_KIND_UNSPECIFIED,
+        )
+    )
+
+    mapper = GrpcRuntimeMapper(space_resolver=_RecordingSpaceResolver())
+    with pytest.raises(GrpcMappingError, match=r"space_ref\.space_kind must not be unspecified"):
+        await mapper.observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_direct_space_id_mapping_works() -> None:
+    """space_idのみ指定された場合、そのままSpaceIdとしてマップされることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        space_id="space-x",
+    )
+
+    result = await GrpcRuntimeMapper().observation_context_from_proto(context)
+
+    assert result.space_id == SpaceId("space-x")

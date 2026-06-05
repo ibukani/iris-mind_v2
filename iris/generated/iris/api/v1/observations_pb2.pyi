@@ -10,6 +10,7 @@ from google.protobuf import timestamp_pb2 as _timestamp_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from iris.generated.iris.api.v1 import identity_pb2 as _identity_pb2
+from iris.generated.iris.api.v1 import spaces_pb2 as _spaces_pb2
 import builtins as _builtins
 import sys
 import typing as _typing
@@ -125,6 +126,7 @@ class ObservationContext(_message.Message):
     SOURCE_FIELD_NUMBER: _builtins.int
     ACCOUNT_REF_FIELD_NUMBER: _builtins.int
     METADATA_FIELD_NUMBER: _builtins.int
+    SPACE_REF_FIELD_NUMBER: _builtins.int
     account_id: _builtins.str
     device_id: _builtins.str
     space_id: _builtins.str
@@ -135,6 +137,8 @@ class ObservationContext(_message.Message):
     def account_ref(self) -> _identity_pb2.ExternalAccountRef: ...
     @_builtins.property
     def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
+    @_builtins.property
+    def space_ref(self) -> _spaces_pb2.ExternalSpaceRef: ...
     def __init__(
         self,
         *,
@@ -145,10 +149,11 @@ class ObservationContext(_message.Message):
         source: _builtins.str = ...,
         account_ref: _identity_pb2.ExternalAccountRef | None = ...,
         metadata: _abc.Mapping[_builtins.str, _builtins.str] | None = ...,
+        space_ref: _spaces_pb2.ExternalSpaceRef | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["account_ref", b"account_ref", "actor", b"actor"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["account_ref", b"account_ref", "actor", b"actor", "space_ref", b"space_ref"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["account_id", b"account_id", "account_ref", b"account_ref", "actor", b"actor", "device_id", b"device_id", "metadata", b"metadata", "source", b"source", "space_id", b"space_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["account_id", b"account_id", "account_ref", b"account_ref", "actor", b"actor", "device_id", b"device_id", "metadata", b"metadata", "source", b"source", "space_id", b"space_id", "space_ref", b"space_ref"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 

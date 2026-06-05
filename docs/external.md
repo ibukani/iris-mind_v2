@@ -119,6 +119,42 @@ cognitive 層は `IdentityResolver` も生成protoもimportせず、解決済み
 resolverが未注入のservicerに `account_ref` が来た場合は `INVALID_ARGUMENT` を返す。
 `actor` と `account_ref` の両方が来た場合、および `account_ref` と `account_id` の両方が来た場合は `INVALID_ARGUMENT` を返す（曖昧状態）。
 
+### ExternalSpaceRef
+
+Space は主要な永続的会話履歴ではなく、Observation のためのランタイムコンテキストです。
+外部クライアントが直接 Iris 内部の `SpaceId` を持たなくてよいよう、
+`iris.api.v1.ExternalSpaceRef` を `ObservationContext.space_ref` 経由で受け取れます。
+
+```proto
+message ExternalSpaceRef {
+  string provider = 1;
+  string provider_space_ref = 2;
+  string display_name = 3;
+  SpaceKind space_kind = 4;
+  map<string, string> metadata = 5;
+}
+```
+
+境界の責務と Space 解決モデル:
+
+- **InteractionSpace**: Iris 内部の会話コンテキスト。ランタイムのコンテキストラベルとして使われます。
+- **ExternalSpaceRef**: 外部プロバイダのロケーション情報（例: Discordのチャンネル、CLIルームなど）。
+- **SpaceBinding**: 外部プロバイダのロケーションと Iris 内部の `space_id` とのマッピング。
+- **SpaceBindingStore**: 非永続的、あるいは設定ベースのバインディングのルックアップソース。
+- **RawInteractionLog**: （将来構想）バックアップや再処理のために生のObservationとResponseを保存する場所。
+
+解決の流れの例:
+```text
+ExternalSpaceRef(provider="discord", provider_space_ref="123")
+→ SpaceBinding(space_id="bound-space-...") 
+→ 存在しない場合はフォールバックとして決定論的 SpaceId(space-discord-<hash>) を生成
+```
+
+**注意事項**:
+- この機能は `InteractionSpace` 自体の永続化を導入しません。
+- ルームの会話履歴（room conversation history）の保存機能も導入しません。
+- メモリと関係性（Relationship）の永続化は、引き続きアクター中心（Actor-centered）です。
+
 AppGateway の責務。
 
 - 外部アプリから Observation を受け取る

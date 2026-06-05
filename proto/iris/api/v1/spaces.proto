@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package iris.api.v1;
+
+enum SpaceKind {
+  SPACE_KIND_UNSPECIFIED = 0;
+  SPACE_KIND_DIRECT_MESSAGE = 1;
+  SPACE_KIND_CHANNEL = 2;
+  SPACE_KIND_THREAD = 3;
+  SPACE_KIND_ROOM = 4;
+  SPACE_KIND_BROADCAST = 5;
+}
+
+message ExternalSpaceRef {
+  string provider = 1;
+  string provider_space_ref = 2;
+  string display_name = 3;
+  SpaceKind space_kind = 4;
+  map<string, string> metadata = 5;
+}

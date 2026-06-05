@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from iris.contracts.actions import ActionResult, AppAction
     from iris.contracts.identity import Identity
     from iris.contracts.observations import Observation
-    from iris.contracts.spaces import InteractionSpace, SpaceKind
+    from iris.contracts.spaces import InteractionSpace, SpaceBinding, SpaceKind
     from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 
 
@@ -64,6 +64,26 @@ class SpaceResolver(Protocol):
         metadata: Mapping[str, str] | None = None,
     ) -> InteractionSpace:
         """外部provider space refから型付きInteractionSpaceを返す。"""
+        ...
+
+
+class SpaceBindingStore(Protocol):
+    """External provider space binding to internal space_id storage protocol."""
+
+    async def get_by_external_ref(
+        self,
+        *,
+        provider: str,
+        provider_space_ref: ExternalRef,
+    ) -> SpaceBinding | None:
+        """Get a space binding by provider and external space ref."""
+        ...
+
+    async def put(
+        self,
+        binding: SpaceBinding,
+    ) -> SpaceBinding:
+        """Create or replace a space binding."""
         ...
 
 
