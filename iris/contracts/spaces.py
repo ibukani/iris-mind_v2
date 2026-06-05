@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from iris.contracts.identity import Identity
-    from iris.core.ids import ActorId, SpaceId
+    from iris.core.ids import ActorId, ExternalRef, SpaceId
 
 
 class SpaceKind(StrEnum):
@@ -44,6 +44,12 @@ class SpaceParticipant:
     identity: Identity | None = None
     metadata: Mapping[str, str] = MappingProxyType({})
 
+    def __post_init__(self) -> None:
+        """Ensure metadata is strongly immutable."""
+        if not isinstance(self.metadata, MappingProxyType):
+            metadata_dict: dict[str, str] = dict(self.metadata)
+            object.__setattr__(self, "metadata", MappingProxyType[str, str](metadata_dict))
+
 
 @dataclass(frozen=True)
 class InteractionSpace:
@@ -54,3 +60,31 @@ class InteractionSpace:
     display_name: str
     participants: tuple[SpaceParticipant, ...] = ()
     metadata: Mapping[str, str] = MappingProxyType({})
+
+    def __post_init__(self) -> None:
+        """Ensure metadata is strongly immutable."""
+        if not isinstance(self.metadata, MappingProxyType):
+            metadata_dict: dict[str, str] = dict(self.metadata)
+            object.__setattr__(self, "metadata", MappingProxyType[str, str](metadata_dict))
+
+
+class SpaceBindingStoreError(ValueError):
+    """Raised on SpaceBindingStore failures."""
+
+
+@dataclass(frozen=True)
+class SpaceBinding:
+    """External provider space binding to an Iris internal space_id."""
+
+    provider: str
+    provider_space_ref: ExternalRef
+    space_id: SpaceId
+    display_name: str
+    space_kind: SpaceKind
+    metadata: Mapping[str, str] = MappingProxyType({})
+
+    def __post_init__(self) -> None:
+        """Ensure metadata is strongly immutable."""
+        if not isinstance(self.metadata, MappingProxyType):
+            metadata_dict: dict[str, str] = dict(self.metadata)
+            object.__setattr__(self, "metadata", MappingProxyType[str, str](metadata_dict))

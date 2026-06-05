@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast, override
 
@@ -10,10 +10,13 @@ import grpc
 import pytest
 
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver
+from iris.adapters.app_gateway.ports import SpaceResolver
 from iris.adapters.grpc.mappers import GrpcRuntimeMapper, timestamp_from_datetime
 from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
 from iris.contracts.actions import PresentedOutput
-from iris.generated.iris.api.v1 import identity_pb2, observations_pb2
+from iris.contracts.spaces import InteractionSpace, SpaceKind
+from iris.core.ids import ExternalRef, SpaceId
+from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from iris.runtime.service import IrisRuntimeService, RuntimeResponse
 
@@ -21,6 +24,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from iris.adapters.app_gateway.ports import IdentityResolver
+    from iris.contracts.identity import Identity
     from iris.runtime.service import ObservationEnvelope
 
 
@@ -174,6 +178,76 @@ async def test_submit_observation_account_ref_and_account_id_is_invalid() -> Non
     assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
 
 
+@pytest.mark.anyio
+async def test_submit_observation_with_space_ref_resolves_space() -> None:
+    """space_refを持つSubmitObservationがgRPC境界でInteractionSpaceへ解決されることを確認する。"""
+    runtime_service = _RecordingRuntimeService("space_ref response")
+    resolver = _RecordingSpaceResolver()
+
+    async with _GrpcRuntimeHarness(runtime_service, space_resolver=resolver) as submit_observation:
+        response = await submit_observation(_space_ref_request())
+
+    assert response.output.text == "space_ref response"
+    assert runtime_service.envelope is not None
+    assert runtime_service.envelope.observation.context.space_id == "resolved-space-discord-chan-1"
+
+
+@pytest.mark.anyio
+async def test_submit_observation_space_ref_without_resolver_is_invalid_argument() -> None:
+    """space_resolver未注入でspace_refを使うとINVALID_ARGUMENTになることを確認する。"""
+    async with _GrpcRuntimeHarness(_RecordingRuntimeService("unused")) as submit_observation:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await submit_observation(_space_ref_request())
+
+    assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
+
+
+@pytest.mark.anyio
+async def test_submit_observation_with_space_ref_and_space_id_returns_invalid_argument() -> None:
+    """space_refとspace_idの両方が設定された場合にINVALID_ARGUMENTになることを確認する。"""
+    resolver = _RecordingSpaceResolver()
+    request = _space_ref_request()
+    request.observation.context.space_id = "space-existing"
+
+    async with _GrpcRuntimeHarness(
+        _RecordingRuntimeService("unused"), space_resolver=resolver
+    ) as submit_observation:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await submit_observation(request)
+
+    assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
+
+
+@pytest.mark.anyio
+async def test_submit_observation_with_account_ref_and_space_ref_succeeds() -> None:
+    """account_refとspace_refの両方が設定され、両方のresolverが注入されている場合に成功することを確認する。"""
+    id_resolver = FakeIdentityResolver()
+    space_resolver = _RecordingSpaceResolver()
+    runtime_service = _RecordingRuntimeService("both response")
+
+    request = _space_ref_request()
+    request.observation.context.account_ref.CopyFrom(
+        identity_pb2.ExternalAccountRef(
+            provider="discord",
+            provider_subject="12345",
+            display_name="Mina",
+        )
+    )
+
+    async with _GrpcRuntimeHarness(
+        runtime_service,
+        identity_resolver=id_resolver,
+        space_resolver=space_resolver,
+    ) as submit_observation:
+        response = await submit_observation(request)
+
+    assert response.output.text == "both response"
+    assert runtime_service.envelope is not None
+    assert runtime_service.envelope.observation.context.space_id == "resolved-space-discord-chan-1"
+    assert runtime_service.envelope.observation.context.actor is not None
+    assert runtime_service.envelope.observation.context.actor.display_name == "Mina"
+
+
 def _actor_message_request() -> runtime_pb2.SubmitObservationRequest:
     """ActorMessage SubmitObservationRequest fixtureを作る。
 
@@ -210,6 +284,32 @@ def _account_ref_request() -> runtime_pb2.SubmitObservationRequest:
                     provider="discord",
                     provider_subject="12345",
                     display_name="Mina",
+                ),
+            ),
+            actor_message=observations_pb2.ActorMessagePayload(text="hello grpc"),
+        ),
+    )
+
+
+def _space_ref_request() -> runtime_pb2.SubmitObservationRequest:
+    """space_ref付きActorMessage SubmitObservationRequest fixtureを作る。
+
+    Returns:
+        runtime_pb2.SubmitObservationRequest: Actor message request DTO with space_ref。
+    """
+    return runtime_pb2.SubmitObservationRequest(
+        correlation_id="corr-1",
+        observation=observations_pb2.Observation(
+            observation_id="obs-1",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            context=observations_pb2.ObservationContext(
+                space_ref=spaces_pb2.ExternalSpaceRef(
+                    provider="discord",
+                    provider_space_ref="chan-1",
+                    display_name="General",
+                    space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
                 ),
             ),
             actor_message=observations_pb2.ActorMessagePayload(text="hello grpc"),
@@ -266,10 +366,12 @@ class _GrpcRuntimeHarness:
         runtime_service: IrisRuntimeService,
         *,
         identity_resolver: IdentityResolver | None = None,
+        space_resolver: SpaceResolver | None = None,
     ) -> None:
         """Create harness around a fake runtime service."""
         self._runtime_service = runtime_service
         self._identity_resolver = identity_resolver
+        self._space_resolver = space_resolver
         self._server: grpc.aio.Server | None = None
         self._channel: grpc.aio.Channel | None = None
 
@@ -280,7 +382,10 @@ class _GrpcRuntimeHarness:
             runtime_pb2_grpc.IrisRuntimeServiceStub: Connected gRPC stub.
         """
         server = grpc.aio.server()
-        mapper = GrpcRuntimeMapper(identity_resolver=self._identity_resolver)
+        mapper = GrpcRuntimeMapper(
+            identity_resolver=self._identity_resolver,
+            space_resolver=self._space_resolver,
+        )
         runtime_pb2_grpc.add_IrisRuntimeServiceServicer_to_server(
             IrisRuntimeGrpcServicer(self._runtime_service, mapper=mapper),
             server,
@@ -305,3 +410,27 @@ class _GrpcRuntimeHarness:
             await self._channel.close()
         if self._server is not None:
             await self._server.stop(0)
+
+
+class _RecordingSpaceResolver(SpaceResolver):
+    """Fake SpaceResolver that returns deterministic space."""
+
+    @override
+    async def resolve_space(
+        self,
+        *,
+        provider: str,
+        provider_space_ref: ExternalRef,
+        display_name: str,
+        space_kind: SpaceKind,
+        participants: Sequence[Identity] = (),
+        metadata: Mapping[str, str] | None = None,
+    ) -> InteractionSpace:
+        _ = participants
+        return InteractionSpace(
+            space_id=SpaceId(f"resolved-space-{provider}-{provider_space_ref}"),
+            space_kind=space_kind,
+            display_name=display_name,
+            participants=(),
+            metadata=dict(metadata or {}),
+        )

@@ -14,12 +14,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PROTO_DIR = REPO_ROOT / "proto"
 OUTPUT_DIR = REPO_ROOT / "iris" / "generated"
 
-PROTO_FILES: tuple[str, ...] = (
+MESSAGE_PROTOS: tuple[str, ...] = (
     "iris/api/v1/identity.proto",
     "iris/api/v1/observations.proto",
     "iris/api/v1/outputs.proto",
-    "iris/runtime/v1/runtime.proto",
+    "iris/api/v1/spaces.proto",
 )
+
+SERVICE_PROTOS: tuple[str, ...] = ("iris/runtime/v1/runtime.proto",)
 
 _IMPORT_FIXES: tuple[tuple[str, str], ...] = (
     ("from iris.api.v1 import", "from iris.generated.iris.api.v1 import"),
@@ -33,19 +35,34 @@ def main() -> int:
     Returns:
         int: Process exit code (0 on success).
     """
-    protoc_args = [
-        sys.executable,
-        "-m",
-        "grpc_tools.protoc",
-        f"--proto_path={PROTO_DIR}",
-        f"--python_out={OUTPUT_DIR}",
-        f"--grpc_python_out={OUTPUT_DIR}",
-        f"--mypy_out={OUTPUT_DIR}",
-        *[str(PROTO_DIR / p) for p in PROTO_FILES],
-    ]
-    result = subprocess.run(protoc_args, check=False)
-    if result.returncode != 0:
-        return result.returncode
+    if MESSAGE_PROTOS:
+        msg_args = [
+            sys.executable,
+            "-m",
+            "grpc_tools.protoc",
+            f"--proto_path={PROTO_DIR}",
+            f"--python_out={OUTPUT_DIR}",
+            f"--mypy_out={OUTPUT_DIR}",
+            *[str(PROTO_DIR / p) for p in MESSAGE_PROTOS],
+        ]
+        result = subprocess.run(msg_args, check=False)
+        if result.returncode != 0:
+            return result.returncode
+
+    if SERVICE_PROTOS:
+        svc_args = [
+            sys.executable,
+            "-m",
+            "grpc_tools.protoc",
+            f"--proto_path={PROTO_DIR}",
+            f"--python_out={OUTPUT_DIR}",
+            f"--grpc_python_out={OUTPUT_DIR}",
+            f"--mypy_out={OUTPUT_DIR}",
+            *[str(PROTO_DIR / p) for p in SERVICE_PROTOS],
+        ]
+        result = subprocess.run(svc_args, check=False)
+        if result.returncode != 0:
+            return result.returncode
 
     _fix_imports()
     return 0

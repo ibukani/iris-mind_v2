@@ -4,6 +4,7 @@ package iris.api.v1;
 
 import "google/protobuf/timestamp.proto";
 import "iris/api/v1/identity.proto";
+import "iris/api/v1/spaces.proto";
 
 enum ObservationKind {
   OBSERVATION_KIND_UNSPECIFIED = 0;
@@ -35,6 +36,7 @@ message ObservationContext {
   string source = 5;
   ExternalAccountRef account_ref = 6;
   map<string, string> metadata = 7;
+  ExternalSpaceRef space_ref = 8;
 }
 
 message Observation {

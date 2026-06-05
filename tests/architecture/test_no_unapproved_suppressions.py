@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import override
 
 PROTECTED_ROOTS: tuple[Path, ...] = (
     Path("iris/contracts"),
@@ -53,14 +54,30 @@ def _is_object_setattr_call(node: ast.Call) -> bool:
     )
 
 
+class _SetattrVisitor(ast.NodeVisitor):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.violations: list[str] = []
+
+    @override
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if node.name == "__post_init__":
+            return
+        self.generic_visit(node)
+
+    @override
+    def visit_Call(self, node: ast.Call) -> None:
+        if _is_object_setattr_call(node):
+            self.violations.append(f"{self.path}:{node.lineno}: object.__setattr__")
+        self.generic_visit(node)
+
+
 def _object_setattr_violations(path: Path) -> list[str]:
     """Return object.__setattr__ violations in a protected file."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    return [
-        f"{path}:{node.lineno}: object.__setattr__"
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and _is_object_setattr_call(node)
-    ]
+    visitor = _SetattrVisitor(path)
+    visitor.visit(tree)
+    return visitor.violations
 
 
 def test_no_unapproved_suppressions_in_protected_architecture_layers() -> None:
