@@ -70,9 +70,34 @@ proto DTOを `ObservationEnvelope` へ変換し、`IrisRuntimeService` へ委譲
 
 Proto構成。
 
-- `proto/iris/api/v1/` — 共有DTO（Identity, Observation, PresentedOutput）
+- `proto/iris/api/v1/` — 共有DTO（Identity, ExternalActorRef, Observation, PresentedOutput）
 - `proto/iris/runtime/v1/` — service定義とRPC request/response
 - `make generate-protos` で `iris/generated/` 以下に再生成
+
+### ExternalActorRef
+
+外部クライアントがIris内部の `ActorId` / `Identity` を直接持たなくてよいよう、
+`iris.api.v1.ExternalActorRef` を `ObservationContext.actor_ref` 経由で受け取れる。
+
+```proto
+message ExternalActorRef {
+  string provider = 1;
+  string provider_subject = 2;
+  string display_name = 3;
+  ActorKind actor_kind = 4;
+  map<string, string> metadata = 5;
+}
+```
+
+境界の責務。
+
+- 外部クライアントは `ExternalActorRef` を送るだけで、Iris内部の `Identity` / `ActorId` を知る必要はない。
+- gRPC / AppGateway 境界が `IdentityResolver` で `ExternalActorRef` を型付き `Identity` へ解決する。
+- 解決済み `Identity` は `ObservationContext.actor` に格納され、cognitive / runtime 層へ流れる。
+- cognitive 層は `IdentityResolver` も生成protoもimportせず、解決済み `actor` だけを受け取る。
+
+resolverが未注入のservicerに `actor_ref` が来た場合は `INVALID_ARGUMENT` を返す。
+`actor` と `actor_ref` の両方が来た場合も `INVALID_ARGUMENT` を返す（曖昧状態）。
 
 AppGateway の責務。
 

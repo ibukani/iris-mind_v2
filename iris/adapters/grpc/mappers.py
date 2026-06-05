@@ -32,6 +32,7 @@ from iris.runtime.service import ObservationEnvelope
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from iris.adapters.app_gateway.ports import IdentityResolver
     from iris.contracts.actions import PresentedOutput
     from iris.runtime.service import RuntimeResponse
 
@@ -40,80 +41,139 @@ class GrpcMappingError(ValueError):
     """Raised when gRPC DTOs cannot be mapped to Iris contracts."""
 
 
-def observation_envelope_from_proto(
-    request: runtime_pb2.SubmitObservationRequest,
-) -> ObservationEnvelope:
-    """Map SubmitObservationRequest proto to ObservationEnvelope.
+class GrpcRuntimeMapper:
+    """Async mapper for gRPC proto DTOs to Iris runtime contracts.
 
-    Returns:
-        ObservationEnvelope: Runtime service input envelope.
+    The mapper resolves ExternalActorRef into typed Identity at the gRPC
+    boundary so cognitive layers never see provider-subject strings.
     """
-    if not request.HasField("observation"):
-        _raise_mapping_error("observation is required")
-    correlation_id = CorrelationId(request.correlation_id) if request.correlation_id else None
-    return ObservationEnvelope(
-        observation=observation_from_proto(request.observation),
-        correlation_id=correlation_id,
-    )
 
+    def __init__(self, identity_resolver: IdentityResolver | None = None) -> None:
+        """Create mapper with an optional IdentityResolver dependency."""
+        self._identity_resolver = identity_resolver
 
-def observation_from_proto(observation: observations_pb2.Observation) -> Observation:
-    """Map Observation proto to an Iris Observation contract.
+    async def observation_envelope_from_proto(
+        self,
+        request: runtime_pb2.SubmitObservationRequest,
+    ) -> ObservationEnvelope:
+        """Map SubmitObservationRequest proto to ObservationEnvelope.
 
-    Returns:
-        Observation: ActorMessageObservation or IdleTickObservation.
-    """
-    kind = _observation_kind_from_proto(observation.kind)
-    occurred_at = _datetime_from_timestamp(observation)
-    context = observation_context_from_proto(observation.context)
-    if kind is ObservationKind.ACTOR_MESSAGE:
-        _require_payload(observation, "actor_message", kind)
-        actor_payload = observation.actor_message
-        return ActorMessageObservation(
-            observation_id=ObservationId(observation.observation_id),
-            session_id=SessionId(observation.session_id),
-            context=context,
-            occurred_at=occurred_at,
-            kind=kind,
-            text=actor_payload.text,
-            external_message_id=(
-                ExternalRef(actor_payload.external_message_id)
-                if actor_payload.external_message_id
-                else None
-            ),
+        Returns:
+            ObservationEnvelope: Runtime service input envelope.
+        """
+        if not request.HasField("observation"):
+            _raise_mapping_error("observation is required")
+        correlation_id = CorrelationId(request.correlation_id) if request.correlation_id else None
+        observation = await self.observation_from_proto(request.observation)
+        return ObservationEnvelope(
+            observation=observation,
+            correlation_id=correlation_id,
         )
-    if kind is ObservationKind.IDLE_TICK:
-        _require_payload(observation, "idle_tick", kind)
-        idle_payload = observation.idle_tick
-        return IdleTickObservation(
-            observation_id=ObservationId(observation.observation_id),
-            session_id=SessionId(observation.session_id),
-            context=context,
-            occurred_at=occurred_at,
-            kind=kind,
-            reason=idle_payload.reason or None,
-            idle_seconds=idle_payload.idle_seconds,
+
+    async def observation_from_proto(
+        self,
+        observation: observations_pb2.Observation,
+    ) -> Observation:
+        """Map Observation proto to an Iris Observation contract.
+
+        Returns:
+            Observation: ActorMessageObservation or IdleTickObservation.
+        """
+        kind = _observation_kind_from_proto(observation.kind)
+        occurred_at = _datetime_from_timestamp(observation)
+        context = await self.observation_context_from_proto(observation.context)
+        if kind is ObservationKind.ACTOR_MESSAGE:
+            _require_payload(observation, "actor_message", kind)
+            actor_payload = observation.actor_message
+            return ActorMessageObservation(
+                observation_id=ObservationId(observation.observation_id),
+                session_id=SessionId(observation.session_id),
+                context=context,
+                occurred_at=occurred_at,
+                kind=kind,
+                text=actor_payload.text,
+                external_message_id=(
+                    ExternalRef(actor_payload.external_message_id)
+                    if actor_payload.external_message_id
+                    else None
+                ),
+            )
+        if kind is ObservationKind.IDLE_TICK:
+            _require_payload(observation, "idle_tick", kind)
+            idle_payload = observation.idle_tick
+            return IdleTickObservation(
+                observation_id=ObservationId(observation.observation_id),
+                session_id=SessionId(observation.session_id),
+                context=context,
+                occurred_at=occurred_at,
+                kind=kind,
+                reason=idle_payload.reason or None,
+                idle_seconds=idle_payload.idle_seconds,
+            )
+        return _raise_mapping_error(f"unsupported observation kind: {kind.value}")
+
+    async def observation_context_from_proto(
+        self,
+        context: observations_pb2.ObservationContext,
+    ) -> ObservationContext:
+        """Map ObservationContext proto to Iris ObservationContext.
+
+        Returns:
+            ObservationContext: Typed observation context.
+        """
+        has_actor = context.HasField("actor")
+        has_actor_ref = context.HasField("actor_ref")
+        if has_actor and has_actor_ref:
+            _raise_mapping_error("context must not include both actor and actor_ref")
+        if has_actor_ref:
+            actor = await self._resolve_actor_ref(
+                context.actor_ref,
+                account_id=AccountId(context.account_id) if context.account_id else None,
+                device_id=DeviceId(context.device_id) if context.device_id else None,
+            )
+        elif has_actor:
+            actor = identity_from_proto(context.actor)
+        else:
+            actor = None
+        return ObservationContext(
+            actor=actor,
+            account_id=AccountId(context.account_id) if context.account_id else None,
+            device_id=DeviceId(context.device_id) if context.device_id else None,
+            space_id=SpaceId(context.space_id) if context.space_id else None,
+            source=context.source or None,
+            metadata=dict(context.metadata.items()),
         )
-    return _raise_mapping_error(f"unsupported observation kind: {kind.value}")
 
+    async def _resolve_actor_ref(
+        self,
+        actor_ref: identity_pb2.ExternalActorRef,
+        *,
+        account_id: AccountId | None,
+        device_id: DeviceId | None,
+    ) -> Identity:
+        """Resolve ExternalActorRef into a typed Identity via the resolver.
 
-def observation_context_from_proto(
-    context: observations_pb2.ObservationContext,
-) -> ObservationContext:
-    """Map ObservationContext proto to Iris ObservationContext.
-
-    Returns:
-        ObservationContext: Typed observation context.
-    """
-    actor = identity_from_proto(context.actor) if context.HasField("actor") else None
-    return ObservationContext(
-        actor=actor,
-        account_id=AccountId(context.account_id) if context.account_id else None,
-        device_id=DeviceId(context.device_id) if context.device_id else None,
-        space_id=SpaceId(context.space_id) if context.space_id else None,
-        source=context.source or None,
-        metadata=dict(context.metadata.items()),
-    )
+        Returns:
+            Identity: Resolved typed actor identity.
+        """
+        if self._identity_resolver is None:
+            _raise_mapping_error("identity resolver is required for actor_ref")
+        if not actor_ref.provider:
+            _raise_mapping_error("actor_ref.provider is required")
+        if not actor_ref.provider_subject:
+            _raise_mapping_error("actor_ref.provider_subject is required")
+        if not actor_ref.display_name:
+            _raise_mapping_error("actor_ref.display_name is required")
+        actor_kind = _actor_ref_kind_to_contract(actor_ref.actor_kind)
+        return await self._identity_resolver.resolve_actor(
+            provider=actor_ref.provider,
+            provider_subject=ExternalRef(actor_ref.provider_subject),
+            display_name=actor_ref.display_name,
+            actor_kind=actor_kind,
+            account_id=account_id,
+            device_id=device_id,
+            metadata=dict(actor_ref.metadata.items()),
+        )
 
 
 def identity_from_proto(identity: identity_pb2.Identity) -> Identity:
@@ -227,6 +287,17 @@ def _actor_kind_from_proto(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
         return mapping[kind]
     except KeyError:
         _raise_mapping_error(f"unsupported or unspecified actor kind: {kind}")
+
+
+def _actor_ref_kind_to_contract(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
+    """Map actor_ref actor_kind to contract, defaulting UNSPECIFIED to HUMAN.
+
+    Returns:
+        ActorKind: Contract actor kind (HUMAN for UNSPECIFIED, otherwise mapped).
+    """
+    if kind == identity_pb2.ACTOR_KIND_UNSPECIFIED:
+        return ActorKind.HUMAN
+    return _actor_kind_from_proto(kind)
 
 
 def _metadata_dict(metadata: Mapping[str, str]) -> dict[str, str]:

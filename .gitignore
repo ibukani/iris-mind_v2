@@ -30,5 +30,6 @@ logs/
 # coverage results
 .coverage
 .coverage.*
+*.py,cover
 htmlcov/
 coverage.xml

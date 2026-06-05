@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING, override
 
 import pytest
 
+from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver
+from iris.adapters.app_gateway.ports import IdentityResolver
 from iris.adapters.grpc.mappers import (
     GrpcMappingError,
-    observation_envelope_from_proto,
-    observation_from_proto,
+    GrpcRuntimeMapper,
+    identity_from_proto,
     runtime_response_to_proto,
     timestamp_from_datetime,
 )
 from iris.contracts.actions import PresentedOutput
-from iris.contracts.identity import ActorKind
+from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ActorMessageObservation, IdleTickObservation
 from iris.core.ids import (
     AccountId,
@@ -31,17 +34,21 @@ from iris.generated.iris.runtime.v1 import runtime_pb2
 from iris.runtime.service import RuntimeResponse
 from tests.helpers.approx import approx
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
 _OCCURRED_AT = datetime(2026, 6, 5, 12, 30, tzinfo=UTC)
 
 
-def test_actor_message_proto_maps_to_observation_envelope() -> None:
+@pytest.mark.anyio
+async def test_actor_message_proto_maps_to_observation_envelope() -> None:
     """ActorMessage protoがObservationEnvelopeへmapされることを確認する。"""
     request = runtime_pb2.SubmitObservationRequest(
         correlation_id="corr-1",
         observation=_actor_message_proto(),
     )
 
-    envelope = observation_envelope_from_proto(request)
+    envelope = await _mapper().observation_envelope_from_proto(request)
 
     assert envelope.correlation_id == CorrelationId("corr-1")
     assert isinstance(envelope.observation, ActorMessageObservation)
@@ -52,9 +59,10 @@ def test_actor_message_proto_maps_to_observation_envelope() -> None:
     assert envelope.observation.external_message_id == ExternalRef("message-1")
 
 
-def test_idle_tick_proto_maps_to_observation() -> None:
+@pytest.mark.anyio
+async def test_idle_tick_proto_maps_to_observation() -> None:
     """IdleTick protoがIdleTickObservationへmapされることを確認する。"""
-    observation = observation_from_proto(
+    observation = await _mapper().observation_from_proto(
         observations_pb2.Observation(
             observation_id="obs-idle",
             session_id="session-1",
@@ -69,9 +77,10 @@ def test_idle_tick_proto_maps_to_observation() -> None:
     assert observation.idle_seconds == approx(12.5)
 
 
-def test_observation_context_actor_maps_to_identity() -> None:
+@pytest.mark.anyio
+async def test_observation_context_actor_maps_to_identity() -> None:
     """ObservationContext actor protoがIdentityへmapされることを確認する。"""
-    observation = observation_from_proto(_actor_message_proto())
+    observation = await _mapper().observation_from_proto(_actor_message_proto())
 
     assert isinstance(observation, ActorMessageObservation)
     actor = observation.context.actor
@@ -118,16 +127,18 @@ def test_runtime_response_maps_to_proto() -> None:
     assert response.output.interruptible is False
 
 
-def test_invalid_observation_kind_raises_mapping_error() -> None:
+@pytest.mark.anyio
+async def test_invalid_observation_kind_raises_mapping_error() -> None:
     """Unsupported/unspecified kindがGrpcMappingErrorになることを確認する。"""
     request = _actor_message_proto()
     request.kind = observations_pb2.OBSERVATION_KIND_UNSPECIFIED
 
     with pytest.raises(GrpcMappingError, match="unsupported or unspecified observation kind"):
-        observation_from_proto(request)
+        await _mapper().observation_from_proto(request)
 
 
-def test_actor_message_kind_without_payload_raises_mapping_error() -> None:
+@pytest.mark.anyio
+async def test_actor_message_kind_without_payload_raises_mapping_error() -> None:
     """actor_message kindでpayloadがない場合にmapping errorになることを確認する。"""
     request = observations_pb2.Observation(
         observation_id="obs-1",
@@ -137,10 +148,11 @@ def test_actor_message_kind_without_payload_raises_mapping_error() -> None:
     )
 
     with pytest.raises(GrpcMappingError, match="requires actor_message payload"):
-        observation_from_proto(request)
+        await _mapper().observation_from_proto(request)
 
 
-def test_idle_tick_kind_without_payload_raises_mapping_error() -> None:
+@pytest.mark.anyio
+async def test_idle_tick_kind_without_payload_raises_mapping_error() -> None:
     """idle_tick kindでpayloadがない場合にmapping errorになることを確認する。"""
     request = observations_pb2.Observation(
         observation_id="obs-1",
@@ -150,7 +162,267 @@ def test_idle_tick_kind_without_payload_raises_mapping_error() -> None:
     )
 
     with pytest.raises(GrpcMappingError, match="requires idle_tick payload"):
-        observation_from_proto(request)
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_actor_ref_maps_to_resolved_identity() -> None:
+    """actor_refがIdentityResolverで解決されIdentityになることを確認する。"""
+    resolver = _RecordingIdentityResolver()
+    request = _actor_message_request_with_actor_ref(
+        provider="discord",
+        provider_subject="12345",
+        display_name="Mina",
+    )
+
+    envelope = await GrpcRuntimeMapper(identity_resolver=resolver).observation_envelope_from_proto(
+        request
+    )
+
+    assert isinstance(envelope.observation, ActorMessageObservation)
+    actor = envelope.observation.context.actor
+    assert actor is not None
+    assert actor.provider == "discord"
+    assert actor.provider_subject == ExternalRef("12345")
+    assert actor.display_name == "Mina"
+    assert resolver.calls == 1
+
+
+@pytest.mark.anyio
+async def test_actor_ref_passes_context_account_and_device_to_resolver() -> None:
+    """actor_ref解決時にcontextのaccount_id/device_idがresolverへ渡されることを確認する。"""
+    resolver = _RecordingIdentityResolver()
+    context = observations_pb2.ObservationContext(
+        actor_ref=identity_pb2.ExternalActorRef(
+            provider="discord",
+            provider_subject="12345",
+            display_name="Mina",
+        ),
+        account_id="account-1",
+        device_id="device-1",
+    )
+
+    await GrpcRuntimeMapper(identity_resolver=resolver).observation_context_from_proto(context)
+
+    assert resolver.account_id == AccountId("account-1")
+    assert resolver.device_id == DeviceId("device-1")
+
+
+@pytest.mark.anyio
+async def test_actor_ref_passes_metadata_to_resolver() -> None:
+    """actor_ref metadataがresolverへ渡されることを確認する。"""
+    resolver = _RecordingIdentityResolver()
+    context = observations_pb2.ObservationContext(
+        actor_ref=identity_pb2.ExternalActorRef(
+            provider="discord",
+            provider_subject="12345",
+            display_name="Mina",
+            metadata={"role": "tester", "lang": "ja"},
+        ),
+    )
+
+    await GrpcRuntimeMapper(identity_resolver=resolver).observation_context_from_proto(context)
+
+    assert resolver.metadata == {"role": "tester", "lang": "ja"}
+
+
+@pytest.mark.anyio
+async def test_actor_ref_without_resolver_raises_mapping_error() -> None:
+    """actor_refがあるがresolverが未設定の場合にGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        actor_ref=identity_pb2.ExternalActorRef(
+            provider="discord",
+            provider_subject="12345",
+            display_name="Mina",
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="identity resolver is required for actor_ref"):
+        await GrpcRuntimeMapper().observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_actor_and_actor_ref_together_raises_mapping_error() -> None:
+    """actorとactor_refの両方が設定された場合にGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        actor=identity_pb2.Identity(
+            actor_id="actor-1",
+            actor_kind=identity_pb2.ACTOR_KIND_HUMAN,
+            display_name="Mina",
+            provider="test",
+            provider_subject="provider-actor-1",
+        ),
+        actor_ref=identity_pb2.ExternalActorRef(
+            provider="discord",
+            provider_subject="12345",
+            display_name="Mina",
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="must not include both actor and actor_ref"):
+        await _mapper_with_resolver().observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_actor_ref_without_provider_raises_mapping_error() -> None:
+    """actor_ref.providerが空の場合にGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        actor_ref=identity_pb2.ExternalActorRef(
+            provider="",
+            provider_subject="12345",
+            display_name="Mina",
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match=r"actor_ref\.provider is required"):
+        await _mapper_with_resolver().observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_actor_ref_without_provider_subject_raises_mapping_error() -> None:
+    """actor_ref.provider_subjectが空の場合にGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        actor_ref=identity_pb2.ExternalActorRef(
+            provider="discord",
+            provider_subject="",
+            display_name="Mina",
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match=r"actor_ref\.provider_subject is required"):
+        await _mapper_with_resolver().observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_actor_ref_without_display_name_raises_mapping_error() -> None:
+    """actor_ref.display_nameが空の場合にGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        actor_ref=identity_pb2.ExternalActorRef(
+            provider="discord",
+            provider_subject="12345",
+            display_name="",
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match=r"actor_ref\.display_name is required"):
+        await _mapper_with_resolver().observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_actor_ref_unspecified_actor_kind_defaults_to_human() -> None:
+    """actor_ref.actor_kindがUNSPECIFIEDの場合にHUMANへdefaultされることを確認する。"""
+    resolver = _RecordingIdentityResolver()
+    context = observations_pb2.ObservationContext(
+        actor_ref=identity_pb2.ExternalActorRef(
+            provider="discord",
+            provider_subject="12345",
+            display_name="Mina",
+            actor_kind=identity_pb2.ACTOR_KIND_UNSPECIFIED,
+        ),
+    )
+
+    await GrpcRuntimeMapper(identity_resolver=resolver).observation_context_from_proto(context)
+
+    assert resolver.actor_kind == ActorKind.HUMAN
+
+
+@pytest.mark.anyio
+async def test_actor_ref_explicit_actor_kind_passes_to_resolver() -> None:
+    """actor_ref.actor_kindが明示された場合にresolverへ渡されることを確認する。"""
+    resolver = _RecordingIdentityResolver()
+    context = observations_pb2.ObservationContext(
+        actor_ref=identity_pb2.ExternalActorRef(
+            provider="discord",
+            provider_subject="12345",
+            display_name="Mina",
+            actor_kind=identity_pb2.ACTOR_KIND_DEVICE,
+        ),
+    )
+
+    await GrpcRuntimeMapper(identity_resolver=resolver).observation_context_from_proto(context)
+
+    assert resolver.actor_kind == ActorKind.DEVICE
+
+
+def test_direct_identity_unspecified_actor_kind_raises_mapping_error() -> None:
+    """直接渡されたIdentityのactor_kindがUNSPECIFIEDの場合にGrpcMappingErrorになることを確認する。"""
+    identity = identity_pb2.Identity(
+        actor_id="actor-1",
+        actor_kind=identity_pb2.ACTOR_KIND_UNSPECIFIED,
+        display_name="Mina",
+        provider="test",
+        provider_subject="provider-actor-1",
+    )
+
+    with pytest.raises(GrpcMappingError, match="unsupported or unspecified actor kind"):
+        identity_from_proto(identity)
+
+
+@pytest.mark.anyio
+async def test_envelope_without_observation_raises_mapping_error() -> None:
+    """observationがないrequestがGrpcMappingErrorになることを確認する。"""
+    request = runtime_pb2.SubmitObservationRequest(correlation_id="corr-1")
+
+    with pytest.raises(GrpcMappingError, match="observation is required"):
+        await _mapper().observation_envelope_from_proto(request)
+
+
+def test_identity_without_actor_id_raises_mapping_error() -> None:
+    """actor_idがないIdentityがGrpcMappingErrorになることを確認する。"""
+    identity = identity_pb2.Identity(
+        actor_kind=identity_pb2.ACTOR_KIND_HUMAN,
+        display_name="Mina",
+        provider="test",
+        provider_subject="provider-actor-1",
+    )
+
+    with pytest.raises(GrpcMappingError, match=r"identity\.actor_id is required"):
+        identity_from_proto(identity)
+
+
+def test_identity_without_provider_subject_raises_mapping_error() -> None:
+    """provider_subjectがないIdentityがGrpcMappingErrorになることを確認する。"""
+    identity = identity_pb2.Identity(
+        actor_id="actor-1",
+        actor_kind=identity_pb2.ACTOR_KIND_HUMAN,
+        display_name="Mina",
+        provider="test",
+    )
+
+    with pytest.raises(GrpcMappingError, match=r"identity\.provider_subject is required"):
+        identity_from_proto(identity)
+
+
+@pytest.mark.anyio
+async def test_observation_without_occurred_at_raises_mapping_error() -> None:
+    """occurred_atがないObservationがGrpcMappingErrorになることを確認する。"""
+    observation = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
+        actor_message=observations_pb2.ActorMessagePayload(text="hello"),
+    )
+
+    with pytest.raises(GrpcMappingError, match="occurred_at is required"):
+        await _mapper().observation_from_proto(observation)
+
+
+@pytest.mark.anyio
+async def test_observation_with_invalid_occurred_at_raises_mapping_error() -> None:
+    """不正なoccurred_atがGrpcMappingErrorになることを確認する。"""
+    observation = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
+        actor_message=observations_pb2.ActorMessagePayload(text="hello"),
+    )
+    timestamp = timestamp_from_datetime(datetime(9999, 12, 31, 23, 59, 59, tzinfo=UTC))
+    timestamp.seconds = (1 << 63) - 1
+    timestamp.nanos = 0
+    observation.occurred_at.CopyFrom(timestamp)
+
+    with pytest.raises(GrpcMappingError, match="occurred_at is invalid"):
+        await _mapper().observation_from_proto(observation)
 
 
 def _actor_message_proto() -> observations_pb2.Observation:
@@ -186,3 +458,102 @@ def _actor_message_proto() -> observations_pb2.Observation:
             external_message_id="message-1",
         ),
     )
+
+
+def _actor_message_request_with_actor_ref(
+    *,
+    provider: str,
+    provider_subject: str,
+    display_name: str,
+) -> runtime_pb2.SubmitObservationRequest:
+    """actor_ref付きActorMessage SubmitObservationRequest fixtureを作る。
+
+    Returns:
+        runtime_pb2.SubmitObservationRequest: Actor message request DTO with actor_ref.
+    """
+    return runtime_pb2.SubmitObservationRequest(
+        correlation_id="corr-1",
+        observation=observations_pb2.Observation(
+            observation_id="obs-1",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            context=observations_pb2.ObservationContext(
+                actor_ref=identity_pb2.ExternalActorRef(
+                    provider=provider,
+                    provider_subject=provider_subject,
+                    display_name=display_name,
+                ),
+            ),
+            actor_message=observations_pb2.ActorMessagePayload(text="hello grpc"),
+        ),
+    )
+
+
+def _mapper() -> GrpcRuntimeMapper:
+    """ResolverなしのGrpcRuntimeMapper factory for tests。
+
+    Returns:
+        GrpcRuntimeMapper: Mapper without identity resolver.
+    """
+    return GrpcRuntimeMapper()
+
+
+def _mapper_with_resolver() -> GrpcRuntimeMapper:
+    """FakeIdentityResolver付きGrpcRuntimeMapper factory for tests。
+
+    Returns:
+        GrpcRuntimeMapper: Mapper with a deterministic fake resolver.
+    """
+    return GrpcRuntimeMapper(identity_resolver=FakeIdentityResolver())
+
+
+class _RecordingIdentityResolver(IdentityResolver):
+    """IdentityResolver that records every resolve_actor call and returns Identity."""
+
+    def __init__(self) -> None:
+        """Initialize recorder with empty call list and default fields."""
+        self.calls = 0
+        self.provider = ""
+        self.provider_subject = ExternalRef("")
+        self.display_name = ""
+        self.actor_kind = ActorKind.HUMAN
+        self.account_id: AccountId | None = None
+        self.device_id: DeviceId | None = None
+        self.metadata: Mapping[str, str] = {}
+
+    @override
+    async def resolve_actor(
+        self,
+        *,
+        provider: str,
+        provider_subject: ExternalRef,
+        display_name: str,
+        actor_kind: ActorKind = ActorKind.HUMAN,
+        account_id: AccountId | None = None,
+        device_id: DeviceId | None = None,
+        metadata: Mapping[str, str] | None = None,
+    ) -> Identity:
+        """Record call and return deterministic Identity.
+
+        Returns:
+            Identity: Identity with provider-derived actor_id.
+        """
+        self.calls += 1
+        self.provider = provider
+        self.provider_subject = provider_subject
+        self.display_name = display_name
+        self.actor_kind = actor_kind
+        self.account_id = account_id
+        self.device_id = device_id
+        self.metadata = dict(metadata or {})
+        return Identity(
+            actor_id=ActorId(f"resolved-{provider}-{provider_subject}"),
+            actor_kind=actor_kind,
+            display_name=display_name,
+            provider=provider,
+            provider_subject=provider_subject,
+            account_id=account_id,
+            device_id=device_id,
+            metadata=dict(metadata or {}),
+        )

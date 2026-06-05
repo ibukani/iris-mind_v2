@@ -9,7 +9,7 @@ import grpc
 
 from iris.adapters.grpc.mappers import (
     GrpcMappingError,
-    observation_envelope_from_proto,
+    GrpcRuntimeMapper,
     runtime_response_to_proto,
 )
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
@@ -21,11 +21,21 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
-    """gRPC adapter that delegates SubmitObservation to IrisRuntimeService."""
+    """gRPC adapter that delegates SubmitObservation to IrisRuntimeService.
 
-    def __init__(self, runtime_service: IrisRuntimeService) -> None:
-        """Create servicer with an explicit runtime service dependency."""
+    The servicer holds no policy; it only routes proto DTOs through a mapper
+    and forwards the resulting envelope to the runtime service.
+    """
+
+    def __init__(
+        self,
+        runtime_service: IrisRuntimeService,
+        *,
+        mapper: GrpcRuntimeMapper | None = None,
+    ) -> None:
+        """Create servicer with an explicit runtime service and optional mapper."""
         self._runtime_service = runtime_service
+        self._mapper = mapper or GrpcRuntimeMapper()
 
     @override
     async def SubmitObservation(
@@ -42,7 +52,7 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
             runtime_pb2.SubmitObservationResponse: Proto runtime response.
         """
         try:
-            envelope = observation_envelope_from_proto(request)
+            envelope = await self._mapper.observation_envelope_from_proto(request)
             response = await self._runtime_service.handle_observation(envelope)
             return runtime_response_to_proto(response)
         except GrpcMappingError as exc:
