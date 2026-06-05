@@ -62,7 +62,11 @@ class FakeLLMClient:
 
 
 def _actor_text_from_prompt(prompt: str) -> str:
-    """Structured response promptからactor message本文を取り出す。
+    r"""Structured response promptからactor message本文を取り出す。
+
+    セクション間は ``\n\n`` で区切られていることを前提とし、marker直後から
+    次のセクション区切りまでのテキストを返す。将来 ``_build_user_content``
+    でactor message以降に別セクションが追加されても影響を受けない。
 
     Returns:
         str: Actor message sectionがあればその本文、なければ元prompt。
@@ -70,4 +74,6 @@ def _actor_text_from_prompt(prompt: str) -> str:
     marker = "Actor message:\n"
     if marker not in prompt:
         return prompt
-    return prompt.rsplit(marker, maxsplit=1)[-1]
+    after = prompt.split(marker, maxsplit=1)[-1]
+    idx = after.find("\n\n")
+    return after[:idx] if idx != -1 else after
