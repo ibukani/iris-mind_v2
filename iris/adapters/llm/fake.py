@@ -58,4 +58,16 @@ class FakeLLMClient:
         )
         if not user_messages:
             return ""
-        return f"fake response: {user_messages[-1]}"
+        return f"fake response: {_actor_text_from_prompt(user_messages[-1])}"
+
+
+def _actor_text_from_prompt(prompt: str) -> str:
+    """Structured response promptからactor message本文を取り出す。
+
+    Returns:
+        str: Actor message sectionがあればその本文、なければ元prompt。
+    """
+    marker = "Actor message:\n"
+    if marker not in prompt:
+        return prompt
+    return prompt.rsplit(marker, maxsplit=1)[-1]

@@ -10,8 +10,12 @@ from typing import TYPE_CHECKING
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
+from iris.adapters.memory.fake import FakeMemoryStore
 from iris.runtime.app import IrisApp
-from iris.runtime.wiring.cognitive import wire_text_response_cognitive_cycle
+from iris.runtime.wiring.cognitive import (
+    wire_policy_affect_memory_aware_text_response_cognitive_cycle,
+    wire_text_response_cognitive_cycle,
+)
 from iris.runtime.wiring.llm import LLMClientFactory
 
 if TYPE_CHECKING:
@@ -111,7 +115,7 @@ def build_app_from_config(
 ) -> IrisApp:
     """Build an IrisApp from runtime configuration.
 
-    Only the ``default_chat`` model slot is wired into the current one-turn response path.
+    The ``default_chat`` model slot is wired into the full cognitive cycle.
 
     Args:
         config: Runtime configuration.
@@ -124,9 +128,11 @@ def build_app_from_config(
     factory = client_factory or LLMClientFactory()
     client = factory.create_client(model_config, config)
     model = factory.resolve_model(model_config, config)
-    return wire_default_app(
-        client,
+    cycle = wire_policy_affect_memory_aware_text_response_cognitive_cycle(
+        memory_store=FakeMemoryStore(),
+        llm_client=client,
         model=model,
         temperature=model_config.temperature,
         max_tokens=model_config.max_output_tokens,
     )
+    return IrisApp(cycle=cycle)
