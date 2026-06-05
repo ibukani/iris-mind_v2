@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from hashlib import blake2b
 from typing import TYPE_CHECKING, override
 
@@ -23,7 +24,16 @@ if TYPE_CHECKING:
 
 
 def _stable_id(prefix: str, provider: str, external_ref: str) -> str:
-    """Generate a short deterministic ID string for resolvers."""
+    """Generate a short deterministic ID string for resolvers.
+
+    Args:
+        prefix: Prefix for the ID (e.g., "actor", "account", "space").
+        provider: The provider name.
+        external_ref: The external reference from the provider.
+
+    Returns:
+        str: A deterministic short ID string.
+    """
     digest = blake2b(
         f"{provider}:{external_ref}".encode(),
         digest_size=12,
@@ -32,7 +42,14 @@ def _stable_id(prefix: str, provider: str, external_ref: str) -> str:
 
 
 def _space_participant(identity: Identity) -> SpaceParticipant:
-    """Create a SpaceParticipant snapshot from an Identity."""
+    """Create a SpaceParticipant snapshot from an Identity.
+
+    Args:
+        identity: The identity to snapshot.
+
+    Returns:
+        SpaceParticipant: A snapshot of the participant.
+    """
     return SpaceParticipant(
         actor_id=identity.actor_id,
         participant_kind=SpaceParticipantKind(identity.actor_kind.value),
@@ -45,6 +62,11 @@ class AccountIdentityResolver(IdentityResolver):
     """Identity resolver backed by an AccountStore."""
 
     def __init__(self, account_store: AccountStore) -> None:
+        """Initialize the resolver with an AccountStore.
+
+        Args:
+            account_store: Store to persist and lookup accounts.
+        """
         self._account_store = account_store
 
     @override
@@ -82,8 +104,6 @@ class AccountIdentityResolver(IdentityResolver):
             )
             profile = await self._account_store.put(profile)
         elif profile.display_name != display_name:
-            import dataclasses
-
             profile = dataclasses.replace(profile, display_name=display_name)
             profile = await self._account_store.put(profile)
 

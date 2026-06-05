@@ -34,6 +34,11 @@ class IrisRuntimeServiceStub:
         Args:
             channel: A grpc.Channel.
         """
+        self.GetRuntimeInfo = channel.unary_unary(
+                '/iris.runtime.v1.IrisRuntimeService/GetRuntimeInfo',
+                request_serializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.GetRuntimeInfoRequest.SerializeToString,
+                response_deserializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.GetRuntimeInfoResponse.FromString,
+                _registered_method=True)
         self.SubmitObservation = channel.unary_unary(
                 '/iris.runtime.v1.IrisRuntimeService/SubmitObservation',
                 request_serializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.SubmitObservationRequest.SerializeToString,
@@ -44,6 +49,12 @@ class IrisRuntimeServiceStub:
 class IrisRuntimeServiceServicer:
     """Missing associated documentation comment in .proto file."""
 
+    def GetRuntimeInfo(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def SubmitObservation(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -53,6 +64,11 @@ class IrisRuntimeServiceServicer:
 
 def add_IrisRuntimeServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'GetRuntimeInfo': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetRuntimeInfo,
+                    request_deserializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.GetRuntimeInfoRequest.FromString,
+                    response_serializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.GetRuntimeInfoResponse.SerializeToString,
+            ),
             'SubmitObservation': grpc.unary_unary_rpc_method_handler(
                     servicer.SubmitObservation,
                     request_deserializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.SubmitObservationRequest.FromString,
@@ -68,6 +84,33 @@ def add_IrisRuntimeServiceServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class IrisRuntimeService:
     """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def GetRuntimeInfo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/iris.runtime.v1.IrisRuntimeService/GetRuntimeInfo',
+            iris_dot_runtime_dot_v1_dot_runtime__pb2.GetRuntimeInfoRequest.SerializeToString,
+            iris_dot_runtime_dot_v1_dot_runtime__pb2.GetRuntimeInfoResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
 
     @staticmethod
     def SubmitObservation(request,

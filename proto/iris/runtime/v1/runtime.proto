@@ -6,11 +6,26 @@ import "iris/api/v1/observations.proto";
 import "iris/api/v1/outputs.proto";
 
 service IrisRuntimeService {
+  rpc GetRuntimeInfo(GetRuntimeInfoRequest) returns (GetRuntimeInfoResponse);
   rpc SubmitObservation(SubmitObservationRequest) returns (SubmitObservationResponse);
 }
 
+message GetRuntimeInfoRequest {}
+
+message GetRuntimeInfoResponse {
+  string runtime_name = 1;
+  string runtime_version = 2;
+  string api_version = 3;
+  repeated string supported_features = 4;
+}
+
 message SubmitObservationRequest {
+  // Client-generated request correlation ID.
+  // The server echoes this value in SubmitObservationResponse.
   string correlation_id = 1;
+
+  // One external observation submitted by a client.
+  // CLI clients should usually send OBSERVATION_KIND_ACTOR_MESSAGE.
   iris.api.v1.Observation observation = 2;
 }
 

@@ -44,6 +44,12 @@ Global___SpaceKind: _TypeAlias = SpaceKind  # noqa: Y015
 
 @_typing.final
 class ExternalSpaceRef(_message.Message):
+    """Represents an external interaction context.
+    Accepted by the server but not persisted.
+    For CLI prompt, it may be omitted.
+    For CLI REPL, it is recommended to send a stable session-specific space_ref.
+    """
+
     DESCRIPTOR: _descriptor.Descriptor
 
     @_typing.final

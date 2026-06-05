@@ -3,10 +3,15 @@ syntax = "proto3";
 package iris.api.v1;
 
 message PresentedOutput {
+  // The main user-visible response.
   string text = 1;
+
+  // Optional UI presentation hints.
   string style_hint = 2;
   string emotion_hint = 3;
   string expression_hint = 4;
+
+  // Presentation hints; CLI may ignore them initially.
   int32 delay_ms = 5;
   int32 priority = 6;
   bool interruptible = 7;

@@ -10,7 +10,7 @@ uv run python -m iris.runtime.server --config .iris/config/llm.toml
 uv run python -m iris.runtime.server --host 127.0.0.1 --port 50051
 ```
 
-**Note:** `iris-mind_v2` is a server-only runtime. User-facing CLI functionality belongs to `iris-cli_v2`. The former one-turn CLI entrypoint (`iris/runtime/cli.py`) has been intentionally removed. External clients communicate with the runtime using the gRPC `SubmitObservation` RPC. Model and provider configuration should be done through TOML or environment variables.
+**Note:** `iris-mind_v2` is a server-only runtime. User-facing CLI functionality belongs to `iris-cli_v2`. The former one-turn CLI entrypoint (`iris/runtime/cli.py`) has been intentionally removed. External clients should use the gRPC Runtime API. See [`docs/runtime-api.md`](docs/runtime-api.md) for the CLI-facing `SubmitObservation` contract. Model and provider configuration should be done through TOML or environment variables.
 
 - `--config`: Loads one explicit runtime TOML file, usually `.iris/config/llm.toml`.
 - `--host`: Overrides `server.host`.

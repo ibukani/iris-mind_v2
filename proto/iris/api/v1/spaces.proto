@@ -11,6 +11,10 @@ enum SpaceKind {
   SPACE_KIND_BROADCAST = 5;
 }
 
+// Represents an external interaction context.
+// Accepted by the server but not persisted.
+// For CLI prompt, it may be omitted.
+// For CLI REPL, it is recommended to send a stable session-specific space_ref.
 message ExternalSpaceRef {
   string provider = 1;
   string provider_space_ref = 2;

@@ -6,11 +6,14 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from iris.runtime.config import RuntimeConfigOverrides
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.root import apply_runtime_overrides, default_runtime_config
 from iris.runtime.config.server import (
     RuntimeServerConfig,
     apply_server_env,
     apply_server_toml,
+    validate_server_config,
 )
 
 if TYPE_CHECKING:
@@ -82,10 +85,6 @@ def test_apply_server_env_invalid_port() -> None:
 
 def test_validate_server_port_bounds() -> None:
     """Server port validation enforces bounds."""
-    from iris.runtime.config import RuntimeConfigOverrides
-    from iris.runtime.config.root import apply_runtime_overrides, default_runtime_config
-    from iris.runtime.config.server import RuntimeServerConfig, apply_server_env, apply_server_toml
-
     config = RuntimeServerConfig()
 
     # 0 is invalid
@@ -106,10 +105,8 @@ def test_validate_server_port_bounds() -> None:
 
 def test_validate_local_only() -> None:
     """local_only=True requires a loopback host."""
-    from iris.runtime.config.server import RuntimeServerConfig, validate_server_config
-
     # Invalid
-    config = RuntimeServerConfig(local_only=True, host="0.0.0.0")
+    config = RuntimeServerConfig(local_only=True, host="0.0.0.0")  # noqa: S104 -- intentional invalid host for test
     with pytest.raises(ConfigError, match="requires a loopback host"):
         validate_server_config(config)
 
@@ -118,14 +115,12 @@ def test_validate_local_only() -> None:
     validate_server_config(config)
 
     # Valid non-local
-    config = RuntimeServerConfig(local_only=False, host="0.0.0.0")
+    config = RuntimeServerConfig(local_only=False, host="0.0.0.0")  # noqa: S104 -- intentional 0.0.0.0 for test
     validate_server_config(config)
 
 
 def test_apply_server_toml_strict_bool() -> None:
     """TOML parser strictly requires boolean for local_only."""
-    from iris.runtime.config.server import RuntimeServerConfig, apply_server_toml
-
     config = RuntimeServerConfig()
     table = {"local_only": "false"}
     with pytest.raises(ConfigError, match="must be a boolean"):

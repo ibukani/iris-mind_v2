@@ -23,10 +23,26 @@ class RuntimeServerConfig:
     shutdown_grace_seconds: float = 5.0
 
 
+_MIN_PORT = 1
+_MAX_PORT = 65535
+
+
 def validate_server_port(value: int, *, source: str) -> int:
-    """Validate that a server port is within the valid range."""
-    if not 1 <= value <= 65535:
-        raise ConfigError(f"Invalid {source}: port must be between 1 and 65535: {value}")
+    """Validate that a server port is within the valid range.
+
+    Args:
+        value: Port number to validate.
+        source: Configuration path for error messages.
+
+    Returns:
+        int: The validated port number.
+
+    Raises:
+        ConfigError: If the port is out of valid bounds.
+    """
+    if not _MIN_PORT <= value <= _MAX_PORT:
+        message = f"Invalid {source}: port must be between {_MIN_PORT} and {_MAX_PORT}: {value}"
+        raise ConfigError(message)
     return value
 
 
@@ -34,10 +50,20 @@ def validate_server_config(config: RuntimeServerConfig) -> RuntimeServerConfig:
     """Validate server configuration constraints.
 
     Ensures port is valid and local_only enforces loopback host.
+
+    Args:
+        config: Server config to validate.
+
+    Returns:
+        RuntimeServerConfig: Validated server config.
+
+    Raises:
+        ConfigError: If config violates constraints.
     """
     validate_server_port(config.port, source="server.port")
     if config.local_only and config.host not in {"127.0.0.1", "localhost", "::1"}:
-        raise ConfigError(f"server.local_only=true requires a loopback host, got: {config.host}")
+        message = f"server.local_only=true requires a loopback host, got: {config.host}"
+        raise ConfigError(message)
     return config
 
 
@@ -74,7 +100,8 @@ def apply_server_toml(
     if "local_only" in table:
         value = table["local_only"]
         if not isinstance(value, bool):
-            raise ConfigError("server.local_only must be a boolean")
+            message = "server.local_only must be a boolean"
+            raise ConfigError(message)
         local_only = value
 
     shutdown_grace = config.shutdown_grace_seconds

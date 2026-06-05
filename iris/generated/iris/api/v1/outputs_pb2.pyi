@@ -28,10 +28,13 @@ class PresentedOutput(_message.Message):
     PRIORITY_FIELD_NUMBER: _builtins.int
     INTERRUPTIBLE_FIELD_NUMBER: _builtins.int
     text: _builtins.str
+    """The main user-visible response."""
     style_hint: _builtins.str
+    """Optional UI presentation hints."""
     emotion_hint: _builtins.str
     expression_hint: _builtins.str
     delay_ms: _builtins.int
+    """Presentation hints; CLI may ignore them initially."""
     priority: _builtins.int
     interruptible: _builtins.bool
     def __init__(

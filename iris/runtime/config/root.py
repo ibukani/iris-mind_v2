@@ -123,8 +123,7 @@ def load_runtime_config(
         config = apply_runtime_overrides(config, overrides)
 
     config = replace(config, server=validate_server_config(config.server))
-    config = replace(config, state=validate_state_config(config.state))
-    return config
+    return replace(config, state=validate_state_config(config.state))
 
 
 def apply_runtime_overrides(

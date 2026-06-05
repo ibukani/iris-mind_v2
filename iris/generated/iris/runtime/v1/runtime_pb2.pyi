@@ -3,8 +3,10 @@
 isort:skip_file
 """
 
+from collections import abc as _abc
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
+from google.protobuf.internal import containers as _containers
 from iris.generated.iris.api.v1 import observations_pb2 as _observations_pb2
 from iris.generated.iris.api.v1 import outputs_pb2 as _outputs_pb2
 import builtins as _builtins
@@ -19,14 +21,65 @@ else:
 DESCRIPTOR: _descriptor.FileDescriptor
 
 @_typing.final
+class GetRuntimeInfoRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    def __init__(
+        self,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___GetRuntimeInfoRequest: _TypeAlias = GetRuntimeInfoRequest  # noqa: Y015
+
+@_typing.final
+class GetRuntimeInfoResponse(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    RUNTIME_NAME_FIELD_NUMBER: _builtins.int
+    RUNTIME_VERSION_FIELD_NUMBER: _builtins.int
+    API_VERSION_FIELD_NUMBER: _builtins.int
+    SUPPORTED_FEATURES_FIELD_NUMBER: _builtins.int
+    runtime_name: _builtins.str
+    runtime_version: _builtins.str
+    api_version: _builtins.str
+    @_builtins.property
+    def supported_features(self) -> _containers.RepeatedScalarFieldContainer[_builtins.str]: ...
+    def __init__(
+        self,
+        *,
+        runtime_name: _builtins.str = ...,
+        runtime_version: _builtins.str = ...,
+        api_version: _builtins.str = ...,
+        supported_features: _abc.Iterable[_builtins.str] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["api_version", b"api_version", "runtime_name", b"runtime_name", "runtime_version", b"runtime_version", "supported_features", b"supported_features"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___GetRuntimeInfoResponse: _TypeAlias = GetRuntimeInfoResponse  # noqa: Y015
+
+@_typing.final
 class SubmitObservationRequest(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     CORRELATION_ID_FIELD_NUMBER: _builtins.int
     OBSERVATION_FIELD_NUMBER: _builtins.int
     correlation_id: _builtins.str
+    """Client-generated request correlation ID.
+    The server echoes this value in SubmitObservationResponse.
+    """
     @_builtins.property
-    def observation(self) -> _observations_pb2.Observation: ...
+    def observation(self) -> _observations_pb2.Observation:
+        """One external observation submitted by a client.
+        CLI clients should usually send OBSERVATION_KIND_ACTOR_MESSAGE.
+        """
+
     def __init__(
         self,
         *,

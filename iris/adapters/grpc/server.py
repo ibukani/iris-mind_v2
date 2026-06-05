@@ -38,6 +38,31 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         self._mapper = mapper or GrpcRuntimeMapper()
 
     @override
+    async def GetRuntimeInfo(
+        self,
+        request: runtime_pb2.GetRuntimeInfoRequest,
+        context: grpc.aio.ServicerContext[
+            runtime_pb2.GetRuntimeInfoRequest,
+            runtime_pb2.GetRuntimeInfoResponse,
+        ],
+    ) -> runtime_pb2.GetRuntimeInfoResponse:
+        """Handle unary GetRuntimeInfo RPC.
+
+        Returns:
+            runtime_pb2.GetRuntimeInfoResponse: Proto runtime info response.
+        """
+        return runtime_pb2.GetRuntimeInfoResponse(
+            runtime_name="iris-mind",
+            runtime_version="0.1.0",
+            api_version="iris.runtime.v1",
+            supported_features=[
+                "submit_observation",
+                "persistent_account",
+                "ephemeral_space",
+            ],
+        )
+
+    @override
     async def SubmitObservation(
         self,
         request: runtime_pb2.SubmitObservationRequest,

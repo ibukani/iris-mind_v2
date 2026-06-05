@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal
-from collections.abc import Mapping
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from iris.runtime.config.errors import ConfigError
 
@@ -21,16 +23,38 @@ class RuntimeStateConfig:
 
 
 def validate_backend(value: str, path: str) -> Literal["memory", "sqlite"]:
-    """Validate a backend name and return the typed literal."""
+    """Validate a backend name and return the typed literal.
+
+    Args:
+        value: Backend name to validate.
+        path: Configuration path for error messages.
+
+    Returns:
+        Literal["memory", "sqlite"]: Validated backend name.
+
+    Raises:
+        ConfigError: If backend name is invalid.
+    """
     if value == "memory":
         return "memory"
     if value == "sqlite":
         return "sqlite"
-    raise ConfigError(f"Invalid {path}: {value}")
+    message = f"Invalid {path}: {value}"
+    raise ConfigError(message)
 
 
 def validate_state_config(config: RuntimeStateConfig) -> RuntimeStateConfig:
-    """Validate state configuration constraints."""
+    """Validate state configuration constraints.
+
+    Args:
+        config: The state config to validate.
+
+    Returns:
+        RuntimeStateConfig: The validated config.
+
+    Raises:
+        ConfigError: If constraints are violated.
+    """
     if config.backend not in {"memory", "sqlite"}:
         message = f"Invalid state.backend: {config.backend}"
         raise ConfigError(message)
@@ -42,11 +66,11 @@ def validate_state_config(config: RuntimeStateConfig) -> RuntimeStateConfig:
 
 def apply_state_toml(config: RuntimeStateConfig, table: TomlTable) -> RuntimeStateConfig:
     """Apply TOML overrides to state config.
-    
+
     Args:
         config: Base state config.
         table: Parsed TOML table for state.
-        
+
     Returns:
         State config with TOML values applied.
     """
@@ -69,11 +93,11 @@ def apply_state_env(
     env: Mapping[str, str],
 ) -> RuntimeStateConfig:
     """Apply environment overrides to state config.
-    
+
     Args:
         config: Base state config.
         env: Environment variable mapping.
-        
+
     Returns:
         State config with environment values applied.
     """
