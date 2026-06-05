@@ -49,7 +49,9 @@ class InMemoryVectorMemoryStore(MemoryStore):
         query_vector = _vector_from_embedding(self._embed_text(query.text))
         ranked: list[tuple[float, int, MemorySearchResult]] = []
         for index, (record, record_vector) in enumerate(self._entries):
-            if query.subject_id is not None and record.subject_id != query.subject_id:
+            if query.actor_id is not None and record.actor_id != query.actor_id:
+                continue
+            if query.space_id is not None and record.space_id != query.space_id:
                 continue
             score = _cosine_similarity(query_vector, record_vector)
             ranked.append((score, index, MemorySearchResult(record=record, score=score)))

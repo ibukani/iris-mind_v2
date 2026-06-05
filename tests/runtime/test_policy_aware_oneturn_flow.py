@@ -47,7 +47,7 @@ async def test_policy_aware_one_turn_flow_includes_policy_context() -> None:
             MemoryRecord(
                 id=MemoryId("policy-memory"),
                 text="Mina said hello before.",
-                subject_id=ActorId("actor-policy-runtime"),
+                actor_id=ActorId("actor-policy-runtime"),
             ),
         )
     )

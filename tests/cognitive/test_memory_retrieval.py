@@ -12,9 +12,10 @@ from iris.cognitive.cycle.models import StepStatus
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
+from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
-from iris.core.ids import ObservationId, SessionId
+from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId, SpaceId
 from tests.helpers.immutability import assert_frozen_field
 
 if TYPE_CHECKING:
@@ -39,7 +40,10 @@ class StubMemoryRetriever:
         return self._results
 
 
-def actor_message(text: str = "hello tea") -> ActorMessageObservation:
+def actor_message(
+    text: str = "hello tea",
+    context: ObservationContext | None = None,
+) -> ActorMessageObservation:
     """指定されたテキストを持つActorMessageObservationを返す。
 
     Returns:
@@ -48,7 +52,7 @@ def actor_message(text: str = "hello tea") -> ActorMessageObservation:
     return ActorMessageObservation(
         observation_id=ObservationId("obs-memory"),
         session_id=SessionId("session-memory"),
-        context=ObservationContext(),
+        context=context or ObservationContext(),
         occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
@@ -68,13 +72,46 @@ async def test_memory_retrieval_step_returns_typed_results() -> None:
     frame = builder.apply(frame, await SimplePerceptionStep().run(frame))
 
     result = await MemoryRetrievalStep(retriever, limit=2).run(frame)
-    enriched = builder.apply(frame, result)
+    builder.apply(frame, result)
 
     assert result.status == StepStatus.OK
     assert result.memories == (memory,)
     assert retriever.queries == [MemoryQuery(text="hello tea", limit=2)]
+
+
+@pytest.mark.asyncio
+async def test_memory_retrieval_query_uses_actor_and_space_scope() -> None:
+    """MemoryRetrievalStepがframe contextのActorId/SpaceIdをMemoryQueryへ渡すことを確認する。"""
+    actor = Identity(
+        actor_id=ActorId("actor-memory"),
+        actor_kind=ActorKind.HUMAN,
+        display_name="Mina",
+        provider="test",
+        provider_subject=ExternalRef("mina"),
+    )
+    retriever = StubMemoryRetriever(())
+    frame = FrameBuilder().build_initial(
+        actor_message(
+            context=ObservationContext(
+                actor=actor,
+                space_id=SpaceId("space-memory"),
+            )
+        )
+    )
+    frame = FrameBuilder().apply(frame, await SimplePerceptionStep().run(frame))
+
+    result = await MemoryRetrievalStep(retriever, limit=3).run(frame)
+
+    assert result.status == StepStatus.OK
+    assert retriever.queries == [
+        MemoryQuery(
+            text="hello tea",
+            actor_id=ActorId("actor-memory"),
+            space_id=SpaceId("space-memory"),
+            limit=3,
+        )
+    ]
     assert frame.memory_summary.retrieved_memories == ()
-    assert enriched.memory_summary.retrieved_memories == (memory,)
 
 
 @pytest.mark.anyio

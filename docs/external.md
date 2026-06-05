@@ -54,6 +54,13 @@ iris-twitch-client = Stream App Runtime
 
 `adapters/app_gateway/` の責務は、外部アプリとの `Observation / AppAction / ActionResult` protocol boundary である。
 
+`IdentityResolver` と `SpaceResolver` は `adapters/app_gateway/ports.py` のport。
+`provider` と `ExternalRef` を `Identity` / `InteractionSpace` へ変換する。
+これは外部境界の責務であり、`contracts/` や `cognitive/` はresolver protocolを知らない。
+
+fake resolverはテストとローカルMVP用。
+決定論的 `ActorId` / `SpaceId` を返し、network call、database、global registry、auth、account mergingはしない。
+
 AppGateway の責務。
 
 - 外部アプリから Observation を受け取る

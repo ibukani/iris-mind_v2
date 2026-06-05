@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from iris.adapters.memory.fake import FakeMemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
-from iris.core.ids import ActorId
+from iris.core.ids import ActorId, SpaceId
 
 
 def test_fake_memory_store_returns_deterministic_text_matches() -> None:
@@ -23,13 +23,31 @@ def test_fake_memory_store_returns_deterministic_text_matches() -> None:
     assert tuple(result.score for result in results) == (2.0, 1.0)
 
 
-def test_fake_memory_store_filters_by_subject_and_supports_put() -> None:
-    """FakeMemoryStoreがsubject_idで検索結果をフィルタリングし、put()をサポートすることを確認する。"""
+def test_fake_memory_store_filters_by_actor_and_supports_put() -> None:
+    """FakeMemoryStoreがactor_idで検索結果をフィルタリングし、put()をサポートすることを確認する。"""
     store = FakeMemoryStore()
-    store.put(MemoryRecord(id=MemoryId("m1"), text="Alice likes tea.", subject_id=ActorId("alice")))
-    store.put(MemoryRecord(id=MemoryId("m2"), text="Bob likes tea.", subject_id=ActorId("bob")))
+    store.put(MemoryRecord(id=MemoryId("m1"), text="Alice likes tea.", actor_id=ActorId("alice")))
+    store.put(MemoryRecord(id=MemoryId("m2"), text="Bob likes tea.", actor_id=ActorId("bob")))
 
-    results = store.search(MemoryQuery(text="tea", subject_id=ActorId("bob")))
+    results = store.search(MemoryQuery(text="tea", actor_id=ActorId("bob")))
+
+    assert tuple(result.record.id for result in results) == (MemoryId("m2"),)
+
+
+def test_fake_memory_store_filters_by_space() -> None:
+    """FakeMemoryStoreがspace_idで検索結果をフィルタリングすることを確認する。"""
+    store = FakeMemoryStore(
+        records=(
+            MemoryRecord(
+                id=MemoryId("m1"), text="Tea in channel one.", space_id=SpaceId("space-1")
+            ),
+            MemoryRecord(
+                id=MemoryId("m2"), text="Tea in channel two.", space_id=SpaceId("space-2")
+            ),
+        )
+    )
+
+    results = store.search(MemoryQuery(text="tea", space_id=SpaceId("space-2")))
 
     assert tuple(result.record.id for result in results) == (MemoryId("m2"),)
 

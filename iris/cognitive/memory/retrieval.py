@@ -55,7 +55,8 @@ class MemoryRetrievalStep(PipelineStep[MemoryRetrievalResult]):
 
         query = MemoryQuery(
             text=frame.interpreted_input.text,
-            subject_id=(frame.actor_context.actor.actor_id if frame.actor_context.actor else None),
+            actor_id=(frame.actor_context.actor.actor_id if frame.actor_context.actor else None),
+            space_id=frame.space_context.space_id,
             limit=self._limit,
         )
         memories = tuple(self._retriever.search(query))
