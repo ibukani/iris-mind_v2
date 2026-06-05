@@ -5,12 +5,14 @@ AI コンパニオン — Cognitive Runtime Architecture v0.1 ターゲット MV
 ## Usage
 
 ```bash
-uv run python main.py --text "hello"
-uv run python main.py --text "hello" --llm ollama --model qwen3:8b
-uv run python main.py --config .iris/config/llm.toml --text "こんにちは"
-uv run python main.py --config .iris/config/llm.toml --text "hello" --model qwen3:14b
-uv run python -m iris.runtime.cli --text "hello"
+uv run python -m iris.runtime.server
+uv run python -m iris.runtime.server --llm fake
+uv run python -m iris.runtime.server --llm openai
+uv run python -m iris.runtime.server --llm ollama --model qwen3:8b
+uv run python -m iris.runtime.server --config .iris/config/llm.toml
 ```
+
+**Note:** `iris-mind_v2` is a server-only runtime. User-facing CLI functionality belongs to `iris-cli_v2`. The former one-turn CLI entrypoint (`iris/runtime/cli.py`) has been intentionally removed. External clients communicate with the runtime using the gRPC `SubmitObservation` RPC.
 
 - `--llm`: Overrides `models.default_chat.provider` with `fake`, `openai`, or `ollama`.
 - `--model`: Overrides `models.default_chat.model`.
@@ -32,13 +34,13 @@ ollama pull deepseek-r1:8b
 Run Iris against the default local Ollama host:
 
 ```bash
-uv run python main.py --text "hello" --llm ollama --model qwen3:8b
+uv run python -m iris.runtime.server --llm ollama --model qwen3:8b
 ```
 
 Use `--ollama-host` when Ollama is listening somewhere else:
 
 ```bash
-uv run python main.py --text "hello" --llm ollama --model qwen3:8b --ollama-host http://localhost:11434
+uv run python -m iris.runtime.server --llm ollama --model qwen3:8b --ollama-host http://localhost:11434
 ```
 
 ## Runtime LLM Config
@@ -54,7 +56,7 @@ cp .iris/config/llm.example.toml .iris/config/llm.toml
 Edit model names if needed, then run:
 
 ```bash
-uv run python main.py --config .iris/config/llm.toml --text "こんにちは"
+uv run python -m iris.runtime.server --config .iris/config/llm.toml
 ```
 
 `.iris/config/llm.toml` is local developer config and should not be committed.
@@ -134,12 +136,12 @@ current exception is `iris.adapters.llm.openai`, which still reads
 ## Target Architecture
 
 ```text
-main.py / iris.runtime.cli
+iris.runtime.server / main.py
 → IrisApp
 → CognitiveCycle (perception → memory → affect → policy → response)
 → target LLM adapter (FakeLLMClient, OpenAI adapter, or Ollama adapter)
 → Presenter / Safety gates
-→ stdout
+→ PresentedOutput (returned to gRPC client)
 ```
 
 Available pipeline configurations:
@@ -173,7 +175,8 @@ iris/
 │   ├── app_gateway/    External app protocol boundary
 │   ├── llm/            FakeLLM, OpenAI, Ollama clients
 │   └── memory/         Fake, vector, LangChain memory stores
-└── runtime/            App composition, CLI entrypoint, wiring
+└── runtime/            App composition, Server entrypoint, wiring
+    ├── server.py       gRPC Server entrypoint
     └── wiring/         Constructor-injection wiring (app, cognitive, features, llm, memory, presentation)
 ├── tests/
 │   ├── architecture/   Guard tests (18+ files)
@@ -187,7 +190,7 @@ iris/
 │   ├── verify.py       Repository verification entry point
 │   ├── ai_context.py   AI harness context dump
 │   └── ai_report.py    Completion report skeleton
-└── main.py             CLI entrypoint
+└── main.py             Redirects to iris.runtime.server
 ```
 
 ## Development

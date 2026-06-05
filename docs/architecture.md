@@ -75,8 +75,8 @@ iris/
 │
 ├── runtime/
 │   ├── app.py
-│   ├── cli.py
 │   ├── config.py
+│   ├── server.py
 │   └── wiring/
 │       ├── app.py
 │       ├── cognitive.py
@@ -715,7 +715,7 @@ adapters → cognitive 原則禁止
 ## Runtime Flow
 
 ```text
-CLI / main.py / iris.runtime.cli
+CLI / main.py / iris.runtime.server
 → Observation
 → CognitiveCycle (cognitive/cycle/)
    → SimplePerceptionStep (cognitive/perception/)

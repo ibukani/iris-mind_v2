@@ -17,9 +17,9 @@ from iris.contracts.observations import ActorMessageObservation, ObservationCont
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 import iris.runtime.config as config_pkg
 from iris.runtime.config import (
-    CliConfigOverrides,
     ConfigError,
     IrisRuntimeConfig,
+    RuntimeConfigOverrides,
     RuntimeModelConfig,
     RuntimeModelsConfig,
     RuntimeOllamaConfig,
@@ -237,7 +237,7 @@ def test_cli_args_override_env_values(tmp_path: Path) -> None:
     config = load_runtime_config(
         config_path,
         env=env,
-        cli_overrides=CliConfigOverrides(
+        overrides=RuntimeConfigOverrides(
             llm="ollama",
             model="cli-model",
             ollama_host="http://cli-host:11434",
@@ -471,17 +471,7 @@ def test_public_imports_are_available_from_package_root() -> None:
     """All documented public symbols are re-exported from iris.runtime.config."""
     for name in (
         "ConfigError",
-        "RuntimeModelConfig",
-        "RuntimeModelsConfig",
-        "RuntimeOllamaConfig",
-        "RuntimeOpenAIConfig",
-        "IrisRuntimeConfig",
-        "CliConfigOverrides",
-        "LLMProvider",
-        "ModelSlotName",
-        "default_runtime_config",
-        "load_runtime_config",
-        "apply_cli_overrides",
+        "apply_runtime_overrides",
         "parse_llm_provider",
     ):
         assert hasattr(config_pkg, name), f"iris.runtime.config missing public symbol: {name}"
@@ -490,7 +480,7 @@ def test_public_imports_are_available_from_package_root() -> None:
 def test_config_package_exposes_stable_public_api() -> None:
     """The public config package __all__ is a stable contract."""
     expected = {
-        "CliConfigOverrides",
+        "RuntimeConfigOverrides",
         "ConfigError",
         "IrisRuntimeConfig",
         "LLMProvider",
@@ -499,7 +489,8 @@ def test_config_package_exposes_stable_public_api() -> None:
         "RuntimeModelsConfig",
         "RuntimeOllamaConfig",
         "RuntimeOpenAIConfig",
-        "apply_cli_overrides",
+        "RuntimeServerConfig",
+        "apply_runtime_overrides",
         "default_runtime_config",
         "load_runtime_config",
         "parse_llm_provider",
@@ -642,7 +633,7 @@ def test_env_overrides_toml_and_cli_overrides_env(tmp_path: Path) -> None:
     config = load_runtime_config(
         config_path,
         env=env,
-        cli_overrides=CliConfigOverrides(
+        overrides=RuntimeConfigOverrides(
             llm="fake",
             model="cli-model",
             ollama_host="http://cli-host:11434",

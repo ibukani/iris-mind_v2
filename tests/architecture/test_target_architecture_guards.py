@@ -141,7 +141,7 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
 
 ENTRYPOINT_FILES: set[str] = {
     "main.py",
-    "iris/runtime/cli.py",
+    "iris/runtime/server.py",
     "iris/runtime/app.py",
 }
 
@@ -331,15 +331,6 @@ def test_main_py_delegates_to_target_runtime() -> None:
     """main.pyがiris.runtimeからインポートすることを確認する。"""
     text = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
     assert "iris.runtime" in text, "main.py must import from iris.runtime"
-
-
-def test_cli_exports_run_one_turn_and_main() -> None:
-    """cli.pyがrun_one_turnとmain関数をエクスポートすることを確認する。"""
-    cli_path = PROJECT_ROOT / "iris" / "runtime" / "cli.py"
-    assert cli_path.is_file()
-    text = cli_path.read_text(encoding="utf-8")
-    assert "def run_one_turn" in text
-    assert "def main()" in text
 
 
 def test_wiring_uses_constructor_injection() -> None:  # noqa: C901 -- branches per forbidden service-locator call pattern for exhaustive wiring check

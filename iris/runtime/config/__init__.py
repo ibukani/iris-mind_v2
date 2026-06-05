@@ -17,25 +17,27 @@ from iris.runtime.config.llm import (
     RuntimeOpenAIConfig,
 )
 from iris.runtime.config.root import (
-    CliConfigOverrides,
     IrisRuntimeConfig,
-    apply_cli_overrides,
+    RuntimeConfigOverrides,
+    apply_runtime_overrides,
     default_runtime_config,
     load_runtime_config,
     parse_llm_provider,
 )
+from iris.runtime.config.server import RuntimeServerConfig
 
 __all__ = [
-    "CliConfigOverrides",
     "ConfigError",
     "IrisRuntimeConfig",
     "LLMProvider",
     "ModelSlotName",
+    "RuntimeConfigOverrides",
     "RuntimeModelConfig",
     "RuntimeModelsConfig",
     "RuntimeOllamaConfig",
     "RuntimeOpenAIConfig",
-    "apply_cli_overrides",
+    "RuntimeServerConfig",
+    "apply_runtime_overrides",
     "default_runtime_config",
     "load_runtime_config",
     "parse_llm_provider",
