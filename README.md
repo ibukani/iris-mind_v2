@@ -86,14 +86,14 @@ Purpose-specific example configs are committed under `examples/config/`:
 
 ### Config precedence
 
-Iris applies configuration in this order, with later sources overriding earlier
-ones:
+Iris applies configuration from lowest to highest precedence; later steps
+override earlier ones:
 
-1. CLI flags: `--llm`, `--model`, `--ollama-host`
-2. Environment variables such as `IRIS_DEFAULT_CHAT_PROVIDER`,
+1. Built-in defaults
+2. TOML file passed with `--config`
+3. Environment variables such as `IRIS_DEFAULT_CHAT_PROVIDER`,
    `IRIS_DEFAULT_CHAT_MODEL`, `IRIS_OLLAMA_HOST`, and `IRIS_OPENAI_MODEL`
-3. TOML file passed with `--config`
-4. Built-in defaults
+4. CLI flags: `--llm`, `--model`, `--ollama-host`
 
 `OPENAI_API_KEY` must be provided through the environment, not TOML. Iris will
 read it directly from the process environment when constructing the OpenAI
