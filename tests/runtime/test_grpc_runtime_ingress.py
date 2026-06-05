@@ -77,17 +77,17 @@ async def test_submit_observation_runtime_failure_returns_internal() -> None:
 
 
 @pytest.mark.anyio
-async def test_submit_observation_with_actor_ref_resolves_identity() -> None:
-    """actor_refを持つSubmitObservationがgRPC境界でIdentityへ解決されることを確認する。"""
-    runtime_service = _RecordingRuntimeService("actor_ref response")
+async def test_submit_observation_with_account_ref_resolves_identity() -> None:
+    """account_refを持つSubmitObservationがgRPC境界でIdentityへ解決されることを確認する。"""
+    runtime_service = _RecordingRuntimeService("account_ref response")
     resolver = FakeIdentityResolver()
 
     async with _GrpcRuntimeHarness(
         runtime_service, identity_resolver=resolver
     ) as submit_observation:
-        response = await submit_observation(_actor_ref_request())
+        response = await submit_observation(_account_ref_request())
 
-    assert response.output.text == "actor_ref response"
+    assert response.output.text == "account_ref response"
     assert runtime_service.envelope is not None
     actor = runtime_service.envelope.observation.context.actor
     assert actor is not None
@@ -96,18 +96,18 @@ async def test_submit_observation_with_actor_ref_resolves_identity() -> None:
 
 
 @pytest.mark.anyio
-async def test_submit_observation_actor_ref_without_resolver_is_invalid_argument() -> None:
-    """resolver未注入でactor_refを使うとINVALID_ARGUMENTになることを確認する。"""
+async def test_submit_observation_account_ref_without_resolver_is_invalid_argument() -> None:
+    """resolver未注入でaccount_refを使うとINVALID_ARGUMENTになることを確認する。"""
     async with _GrpcRuntimeHarness(_RecordingRuntimeService("unused")) as submit_observation:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await submit_observation(_actor_ref_request())
+            await submit_observation(_account_ref_request())
 
     assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
 
 
 @pytest.mark.anyio
-async def test_submit_observation_with_actor_and_actor_ref_returns_invalid_argument() -> None:
-    """actorとactor_refの両方が設定された場合にINVALID_ARGUMENTになることを確認する。"""
+async def test_submit_observation_with_actor_and_account_ref_returns_invalid_argument() -> None:
+    """actorとaccount_refの両方が設定された場合にINVALID_ARGUMENTになることを確認する。"""
     resolver = FakeIdentityResolver()
     request = runtime_pb2.SubmitObservationRequest(
         correlation_id="corr-1",
@@ -124,7 +124,7 @@ async def test_submit_observation_with_actor_and_actor_ref_returns_invalid_argum
                     provider="test",
                     provider_subject="provider-actor-1",
                 ),
-                actor_ref=identity_pb2.ExternalActorRef(
+                account_ref=identity_pb2.ExternalAccountRef(
                     provider="discord",
                     provider_subject="12345",
                     display_name="Mina",
@@ -136,6 +136,37 @@ async def test_submit_observation_with_actor_and_actor_ref_returns_invalid_argum
 
     async with _GrpcRuntimeHarness(
         _RecordingRuntimeService("unused"), identity_resolver=resolver
+    ) as submit_observation:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await submit_observation(request)
+
+    assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
+
+
+@pytest.mark.anyio
+async def test_submit_observation_account_ref_and_account_id_is_invalid() -> None:
+    """account_refとaccount_idの両方が設定された場合にINVALID_ARGUMENTになることを確認する。"""
+    request = runtime_pb2.SubmitObservationRequest(
+        correlation_id="corr-1",
+        observation=observations_pb2.Observation(
+            observation_id="obs-1",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            context=observations_pb2.ObservationContext(
+                account_ref=identity_pb2.ExternalAccountRef(
+                    provider="discord",
+                    provider_subject="12345",
+                    display_name="Mina",
+                ),
+                account_id="account-1",
+            ),
+            actor_message=observations_pb2.ActorMessagePayload(text="hello grpc"),
+        ),
+    )
+
+    async with _GrpcRuntimeHarness(
+        _RecordingRuntimeService("unused"), identity_resolver=FakeIdentityResolver()
     ) as submit_observation:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await submit_observation(request)
@@ -161,11 +192,11 @@ def _actor_message_request() -> runtime_pb2.SubmitObservationRequest:
     )
 
 
-def _actor_ref_request() -> runtime_pb2.SubmitObservationRequest:
-    """actor_ref付きActorMessage SubmitObservationRequest fixtureを作る。
+def _account_ref_request() -> runtime_pb2.SubmitObservationRequest:
+    """account_ref付きActorMessage SubmitObservationRequest fixtureを作る。
 
     Returns:
-        runtime_pb2.SubmitObservationRequest: Actor message request DTO with actor_ref。
+        runtime_pb2.SubmitObservationRequest: Actor message request DTO with account_ref。
     """
     return runtime_pb2.SubmitObservationRequest(
         correlation_id="corr-1",
@@ -175,7 +206,7 @@ def _actor_ref_request() -> runtime_pb2.SubmitObservationRequest:
             kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
             occurred_at=timestamp_from_datetime(_OCCURRED_AT),
             context=observations_pb2.ObservationContext(
-                actor_ref=identity_pb2.ExternalActorRef(
+                account_ref=identity_pb2.ExternalAccountRef(
                     provider="discord",
                     provider_subject="12345",
                     display_name="Mina",

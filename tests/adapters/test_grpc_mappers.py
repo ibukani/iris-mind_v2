@@ -90,7 +90,7 @@ async def test_observation_context_actor_maps_to_identity() -> None:
     assert actor.display_name == "Mina"
     assert actor.provider == "test"
     assert actor.provider_subject == ExternalRef("provider-actor-1")
-    assert actor.account_id == AccountId("account-actor")
+    assert actor.account_id == AccountId("account-1")
     assert actor.device_id == DeviceId("device-actor")
     assert actor.metadata == {"role": "tester"}
     assert observation.context.account_id == AccountId("account-1")
@@ -166,10 +166,10 @@ async def test_idle_tick_kind_without_payload_raises_mapping_error() -> None:
 
 
 @pytest.mark.anyio
-async def test_actor_ref_maps_to_resolved_identity() -> None:
-    """actor_refがIdentityResolverで解決されIdentityになることを確認する。"""
+async def test_account_ref_maps_to_resolved_identity() -> None:
+    """account_refがIdentityResolverで解決されIdentityになることを確認する。"""
     resolver = _RecordingIdentityResolver()
-    request = _actor_message_request_with_actor_ref(
+    request = _actor_message_request_with_account_ref(
         provider="discord",
         provider_subject="12345",
         display_name="Mina",
@@ -189,31 +189,29 @@ async def test_actor_ref_maps_to_resolved_identity() -> None:
 
 
 @pytest.mark.anyio
-async def test_actor_ref_passes_context_account_and_device_to_resolver() -> None:
-    """actor_ref解決時にcontextのaccount_id/device_idがresolverへ渡されることを確認する。"""
+async def test_account_ref_passes_context_device_to_resolver() -> None:
+    """account_ref解決時にcontextのdevice_idがresolverへ渡されることを確認する。"""
     resolver = _RecordingIdentityResolver()
     context = observations_pb2.ObservationContext(
-        actor_ref=identity_pb2.ExternalActorRef(
+        account_ref=identity_pb2.ExternalAccountRef(
             provider="discord",
             provider_subject="12345",
             display_name="Mina",
         ),
-        account_id="account-1",
         device_id="device-1",
     )
 
     await GrpcRuntimeMapper(identity_resolver=resolver).observation_context_from_proto(context)
 
-    assert resolver.account_id == AccountId("account-1")
     assert resolver.device_id == DeviceId("device-1")
 
 
 @pytest.mark.anyio
-async def test_actor_ref_passes_metadata_to_resolver() -> None:
-    """actor_ref metadataがresolverへ渡されることを確認する。"""
+async def test_account_ref_passes_metadata_to_resolver() -> None:
+    """account_ref metadataがresolverへ渡されることを確認する。"""
     resolver = _RecordingIdentityResolver()
     context = observations_pb2.ObservationContext(
-        actor_ref=identity_pb2.ExternalActorRef(
+        account_ref=identity_pb2.ExternalAccountRef(
             provider="discord",
             provider_subject="12345",
             display_name="Mina",
@@ -227,23 +225,23 @@ async def test_actor_ref_passes_metadata_to_resolver() -> None:
 
 
 @pytest.mark.anyio
-async def test_actor_ref_without_resolver_raises_mapping_error() -> None:
-    """actor_refがあるがresolverが未設定の場合にGrpcMappingErrorになることを確認する。"""
+async def test_account_ref_without_resolver_raises_mapping_error() -> None:
+    """account_refがあるがresolverが未設定の場合にGrpcMappingErrorになることを確認する。"""
     context = observations_pb2.ObservationContext(
-        actor_ref=identity_pb2.ExternalActorRef(
+        account_ref=identity_pb2.ExternalAccountRef(
             provider="discord",
             provider_subject="12345",
             display_name="Mina",
         ),
     )
 
-    with pytest.raises(GrpcMappingError, match="identity resolver is required for actor_ref"):
+    with pytest.raises(GrpcMappingError, match="identity resolver is required for account_ref"):
         await GrpcRuntimeMapper().observation_context_from_proto(context)
 
 
 @pytest.mark.anyio
-async def test_actor_and_actor_ref_together_raises_mapping_error() -> None:
-    """actorとactor_refの両方が設定された場合にGrpcMappingErrorになることを確認する。"""
+async def test_actor_and_account_ref_together_raises_mapping_error() -> None:
+    """actorとaccount_refの両方が設定された場合にGrpcMappingErrorになることを確認する。"""
     context = observations_pb2.ObservationContext(
         actor=identity_pb2.Identity(
             actor_id="actor-1",
@@ -252,68 +250,84 @@ async def test_actor_and_actor_ref_together_raises_mapping_error() -> None:
             provider="test",
             provider_subject="provider-actor-1",
         ),
-        actor_ref=identity_pb2.ExternalActorRef(
+        account_ref=identity_pb2.ExternalAccountRef(
             provider="discord",
             provider_subject="12345",
             display_name="Mina",
         ),
     )
 
-    with pytest.raises(GrpcMappingError, match="must not include both actor and actor_ref"):
+    with pytest.raises(GrpcMappingError, match="must not include both actor and account_ref"):
         await _mapper_with_resolver().observation_context_from_proto(context)
 
 
 @pytest.mark.anyio
-async def test_actor_ref_without_provider_raises_mapping_error() -> None:
-    """actor_ref.providerが空の場合にGrpcMappingErrorになることを確認する。"""
+async def test_account_ref_and_account_id_together_raises_mapping_error() -> None:
+    """account_refとaccount_idの両方が設定された場合にGrpcMappingErrorになることを確認する。"""
     context = observations_pb2.ObservationContext(
-        actor_ref=identity_pb2.ExternalActorRef(
+        account_ref=identity_pb2.ExternalAccountRef(
+            provider="discord",
+            provider_subject="12345",
+            display_name="Mina",
+        ),
+        account_id="account-1",
+    )
+
+    with pytest.raises(GrpcMappingError, match="must not include both account_ref and account_id"):
+        await _mapper_with_resolver().observation_context_from_proto(context)
+
+
+@pytest.mark.anyio
+async def test_account_ref_without_provider_raises_mapping_error() -> None:
+    """account_ref.providerが空の場合にGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        account_ref=identity_pb2.ExternalAccountRef(
             provider="",
             provider_subject="12345",
             display_name="Mina",
         ),
     )
 
-    with pytest.raises(GrpcMappingError, match=r"actor_ref\.provider is required"):
+    with pytest.raises(GrpcMappingError, match=r"account_ref\.provider is required"):
         await _mapper_with_resolver().observation_context_from_proto(context)
 
 
 @pytest.mark.anyio
-async def test_actor_ref_without_provider_subject_raises_mapping_error() -> None:
-    """actor_ref.provider_subjectが空の場合にGrpcMappingErrorになることを確認する。"""
+async def test_account_ref_without_provider_subject_raises_mapping_error() -> None:
+    """account_ref.provider_subjectが空の場合にGrpcMappingErrorになることを確認する。"""
     context = observations_pb2.ObservationContext(
-        actor_ref=identity_pb2.ExternalActorRef(
+        account_ref=identity_pb2.ExternalAccountRef(
             provider="discord",
             provider_subject="",
             display_name="Mina",
         ),
     )
 
-    with pytest.raises(GrpcMappingError, match=r"actor_ref\.provider_subject is required"):
+    with pytest.raises(GrpcMappingError, match=r"account_ref\.provider_subject is required"):
         await _mapper_with_resolver().observation_context_from_proto(context)
 
 
 @pytest.mark.anyio
-async def test_actor_ref_without_display_name_raises_mapping_error() -> None:
-    """actor_ref.display_nameが空の場合にGrpcMappingErrorになることを確認する。"""
+async def test_account_ref_without_display_name_raises_mapping_error() -> None:
+    """account_ref.display_nameが空の場合にGrpcMappingErrorになることを確認する。"""
     context = observations_pb2.ObservationContext(
-        actor_ref=identity_pb2.ExternalActorRef(
+        account_ref=identity_pb2.ExternalAccountRef(
             provider="discord",
             provider_subject="12345",
             display_name="",
         ),
     )
 
-    with pytest.raises(GrpcMappingError, match=r"actor_ref\.display_name is required"):
+    with pytest.raises(GrpcMappingError, match=r"account_ref\.display_name is required"):
         await _mapper_with_resolver().observation_context_from_proto(context)
 
 
 @pytest.mark.anyio
-async def test_actor_ref_unspecified_actor_kind_defaults_to_human() -> None:
-    """actor_ref.actor_kindがUNSPECIFIEDの場合にHUMANへdefaultされることを確認する。"""
+async def test_account_ref_unspecified_actor_kind_defaults_to_human() -> None:
+    """account_ref.actor_kindがUNSPECIFIEDの場合にHUMANへdefaultされることを確認する。"""
     resolver = _RecordingIdentityResolver()
     context = observations_pb2.ObservationContext(
-        actor_ref=identity_pb2.ExternalActorRef(
+        account_ref=identity_pb2.ExternalAccountRef(
             provider="discord",
             provider_subject="12345",
             display_name="Mina",
@@ -327,11 +341,11 @@ async def test_actor_ref_unspecified_actor_kind_defaults_to_human() -> None:
 
 
 @pytest.mark.anyio
-async def test_actor_ref_explicit_actor_kind_passes_to_resolver() -> None:
-    """actor_ref.actor_kindが明示された場合にresolverへ渡されることを確認する。"""
+async def test_account_ref_explicit_actor_kind_passes_to_resolver() -> None:
+    """account_ref.actor_kindが明示された場合にresolverへ渡されることを確認する。"""
     resolver = _RecordingIdentityResolver()
     context = observations_pb2.ObservationContext(
-        actor_ref=identity_pb2.ExternalActorRef(
+        account_ref=identity_pb2.ExternalAccountRef(
             provider="discord",
             provider_subject="12345",
             display_name="Mina",
@@ -356,6 +370,28 @@ def test_direct_identity_unspecified_actor_kind_raises_mapping_error() -> None:
 
     with pytest.raises(GrpcMappingError, match="unsupported or unspecified actor kind"):
         identity_from_proto(identity)
+
+
+@pytest.mark.anyio
+async def test_direct_identity_with_mismatched_account_id_raises_mapping_error() -> None:
+    """直接渡されたIdentityのaccount_idがcontext.account_idと異なる場合にGrpcMappingErrorになることを確認する。"""
+    context = observations_pb2.ObservationContext(
+        actor=identity_pb2.Identity(
+            actor_id="actor-1",
+            actor_kind=identity_pb2.ACTOR_KIND_HUMAN,
+            display_name="Mina",
+            provider="test",
+            provider_subject="provider-actor-1",
+            account_id="account-a",
+        ),
+        account_id="account-b",
+    )
+
+    with pytest.raises(
+        GrpcMappingError,
+        match=r"context\.account_id and actor\.account_id do not match",
+    ):
+        await _mapper().observation_context_from_proto(context)
 
 
 @pytest.mark.anyio
@@ -443,7 +479,7 @@ def _actor_message_proto() -> observations_pb2.Observation:
                 display_name="Mina",
                 provider="test",
                 provider_subject="provider-actor-1",
-                account_id="account-actor",
+                account_id="account-1",
                 device_id="device-actor",
                 metadata={"role": "tester"},
             ),
@@ -460,16 +496,16 @@ def _actor_message_proto() -> observations_pb2.Observation:
     )
 
 
-def _actor_message_request_with_actor_ref(
+def _actor_message_request_with_account_ref(
     *,
     provider: str,
     provider_subject: str,
     display_name: str,
 ) -> runtime_pb2.SubmitObservationRequest:
-    """actor_ref付きActorMessage SubmitObservationRequest fixtureを作る。
+    """account_ref付きActorMessage SubmitObservationRequest fixtureを作る。
 
     Returns:
-        runtime_pb2.SubmitObservationRequest: Actor message request DTO with actor_ref.
+        runtime_pb2.SubmitObservationRequest: Actor message request DTO with account_ref.
     """
     return runtime_pb2.SubmitObservationRequest(
         correlation_id="corr-1",
@@ -479,7 +515,7 @@ def _actor_message_request_with_actor_ref(
             kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
             occurred_at=timestamp_from_datetime(_OCCURRED_AT),
             context=observations_pb2.ObservationContext(
-                actor_ref=identity_pb2.ExternalActorRef(
+                account_ref=identity_pb2.ExternalAccountRef(
                     provider=provider,
                     provider_subject=provider_subject,
                     display_name=display_name,
@@ -509,7 +545,7 @@ def _mapper_with_resolver() -> GrpcRuntimeMapper:
 
 
 class _RecordingIdentityResolver(IdentityResolver):
-    """IdentityResolver that records every resolve_actor call and returns Identity."""
+    """IdentityResolver that records every resolve_identity call and returns Identity."""
 
     def __init__(self) -> None:
         """Initialize recorder with empty call list and default fields."""
@@ -523,7 +559,7 @@ class _RecordingIdentityResolver(IdentityResolver):
         self.metadata: Mapping[str, str] = {}
 
     @override
-    async def resolve_actor(
+    async def resolve_identity(
         self,
         *,
         provider: str,

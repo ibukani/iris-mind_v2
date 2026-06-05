@@ -104,7 +104,7 @@ class Identity(_message.Message):
 Global___Identity: _TypeAlias = Identity  # noqa: Y015
 
 @_typing.final
-class ExternalActorRef(_message.Message):
+class ExternalAccountRef(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     @_typing.final
@@ -153,4 +153,4 @@ class ExternalActorRef(_message.Message):
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-Global___ExternalActorRef: _TypeAlias = ExternalActorRef  # noqa: Y015
+Global___ExternalAccountRef: _TypeAlias = ExternalAccountRef  # noqa: Y015

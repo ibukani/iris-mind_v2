@@ -86,7 +86,7 @@ class ObservationFactory:
             ActorMessageObservation: resolver済みcontextを持つ観測。
         """
         context_metadata = dict(metadata or {})
-        actor = await self._identity_resolver.resolve_actor(
+        actor = await self._identity_resolver.resolve_identity(
             provider=provider,
             provider_subject=provider_subject,
             display_name=display_name,

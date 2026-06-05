@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver, FakeSpaceResolver
 from iris.contracts.identity import ActorKind
 from iris.contracts.spaces import SpaceKind
-from iris.core.ids import AccountId, DeviceId, ExternalRef
+from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 
 if TYPE_CHECKING:
     from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
@@ -19,14 +19,14 @@ def test_fake_identity_resolver_returns_stable_actor_id_for_same_external_ref() 
     resolver = FakeIdentityResolver()
 
     first = asyncio.run(
-        resolver.resolve_actor(
+        resolver.resolve_identity(
             provider="discord",
             provider_subject=ExternalRef("123"),
             display_name="Mina",
         )
     )
     second = asyncio.run(
-        resolver.resolve_actor(
+        resolver.resolve_identity(
             provider="discord",
             provider_subject=ExternalRef("123"),
             display_name="Mina Renamed",
@@ -34,6 +34,7 @@ def test_fake_identity_resolver_returns_stable_actor_id_for_same_external_ref() 
     )
 
     assert first.actor_id == second.actor_id
+    assert first.account_id == second.account_id
 
 
 def test_fake_identity_resolver_returns_different_actor_id_for_different_subject() -> None:
@@ -41,14 +42,14 @@ def test_fake_identity_resolver_returns_different_actor_id_for_different_subject
     resolver = FakeIdentityResolver()
 
     first = asyncio.run(
-        resolver.resolve_actor(
+        resolver.resolve_identity(
             provider="discord",
             provider_subject=ExternalRef("123"),
             display_name="Mina",
         )
     )
     second = asyncio.run(
-        resolver.resolve_actor(
+        resolver.resolve_identity(
             provider="discord",
             provider_subject=ExternalRef("456"),
             display_name="Nao",
@@ -56,6 +57,35 @@ def test_fake_identity_resolver_returns_different_actor_id_for_different_subject
     )
 
     assert first.actor_id != second.actor_id
+    assert first.account_id != second.account_id
+
+
+def test_fake_identity_resolver_links_multiple_accounts_to_same_actor() -> None:
+    """同じActorIdに複数の外部アカウントがリンクされることを確認する。"""
+    linked = {
+        ("discord", "123"): ActorId("actor-ibuki"),
+        ("cli", "ibuki"): ActorId("actor-ibuki"),
+    }
+    resolver = FakeIdentityResolver(linked_actor_ids=linked)
+
+    discord_identity = asyncio.run(
+        resolver.resolve_identity(
+            provider="discord",
+            provider_subject=ExternalRef("123"),
+            display_name="Ibuki Discord",
+        )
+    )
+    cli_identity = asyncio.run(
+        resolver.resolve_identity(
+            provider="cli",
+            provider_subject=ExternalRef("ibuki"),
+            display_name="Ibuki CLI",
+        )
+    )
+
+    assert discord_identity.actor_id == "actor-ibuki"
+    assert cli_identity.actor_id == "actor-ibuki"
+    assert discord_identity.account_id != cli_identity.account_id
 
 
 def test_fake_identity_resolver_preserves_identity_context_fields() -> None:
@@ -63,7 +93,7 @@ def test_fake_identity_resolver_preserves_identity_context_fields() -> None:
     resolver: IdentityResolver = FakeIdentityResolver()
 
     identity = asyncio.run(
-        resolver.resolve_actor(
+        resolver.resolve_identity(
             provider="discord",
             provider_subject=ExternalRef("123"),
             display_name="Mina",
@@ -110,7 +140,7 @@ def test_fake_space_resolver_returns_stable_space_id_for_same_external_ref() -> 
 def test_fake_space_resolver_preserves_space_fields_and_participants() -> None:
     """SpaceResolverがspace kind/display name/participants/metadataを保持することを確認する。"""
     identity = asyncio.run(
-        FakeIdentityResolver().resolve_actor(
+        FakeIdentityResolver().resolve_identity(
             provider="discord",
             provider_subject=ExternalRef("123"),
             display_name="Mina",

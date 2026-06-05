@@ -31,7 +31,7 @@ class AppGateway(Protocol):
 class IdentityResolver(Protocol):
     """外部provider subjectをIris Identityへ解決するAppGateway境界port。"""
 
-    async def resolve_actor(  # noqa: PLR0913 -- resolver port mirrors typed external context fields
+    async def resolve_identity(  # noqa: PLR0913 -- resolver port mirrors typed external context fields
         self,
         *,
         provider: str,
@@ -42,7 +42,10 @@ class IdentityResolver(Protocol):
         device_id: DeviceId | None = None,
         metadata: Mapping[str, str] | None = None,
     ) -> Identity:
-        """外部provider subjectから型付きIdentityを返す。"""
+        """Resolve an external provider account into an Iris Identity.
+
+        The implementation may create or look up AccountProfile and link it to an Actor.
+        """
         ...
 
 

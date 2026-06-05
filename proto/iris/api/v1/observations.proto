@@ -33,7 +33,7 @@ message ObservationContext {
   string device_id = 3;
   string space_id = 4;
   string source = 5;
-  ExternalActorRef actor_ref = 6;
+  ExternalAccountRef account_ref = 6;
   map<string, string> metadata = 7;
 }
 

@@ -122,57 +122,65 @@ class GrpcRuntimeMapper:
             ObservationContext: Typed observation context.
         """
         has_actor = context.HasField("actor")
-        has_actor_ref = context.HasField("actor_ref")
-        if has_actor and has_actor_ref:
-            _raise_mapping_error("context must not include both actor and actor_ref")
-        if has_actor_ref:
-            actor = await self._resolve_actor_ref(
-                context.actor_ref,
-                account_id=AccountId(context.account_id) if context.account_id else None,
+        has_account_ref = context.HasField("account_ref")
+        if has_actor and has_account_ref:
+            _raise_mapping_error("context must not include both actor and account_ref")
+        if has_account_ref and context.account_id:
+            _raise_mapping_error("context must not include both account_ref and account_id")
+
+        if has_account_ref:
+            actor = await self._resolve_account_ref(
+                context.account_ref,
                 device_id=DeviceId(context.device_id) if context.device_id else None,
             )
         elif has_actor:
             actor = identity_from_proto(context.actor)
+            if context.account_id and actor.account_id and context.account_id != actor.account_id:
+                _raise_mapping_error("context.account_id and actor.account_id do not match")
         else:
             actor = None
+
+        account_id = context.account_id
+        if actor and actor.account_id:
+            account_id = actor.account_id
+
         return ObservationContext(
             actor=actor,
-            account_id=AccountId(context.account_id) if context.account_id else None,
+            account_id=AccountId(account_id) if account_id else None,
             device_id=DeviceId(context.device_id) if context.device_id else None,
             space_id=SpaceId(context.space_id) if context.space_id else None,
             source=context.source or None,
             metadata=dict(context.metadata.items()),
         )
 
-    async def _resolve_actor_ref(
+    async def _resolve_account_ref(
         self,
-        actor_ref: identity_pb2.ExternalActorRef,
+        account_ref: identity_pb2.ExternalAccountRef,
         *,
-        account_id: AccountId | None,
         device_id: DeviceId | None,
     ) -> Identity:
-        """Resolve ExternalActorRef into a typed Identity via the resolver.
+        """Resolve ExternalAccountRef into a typed Identity via the resolver.
 
         Returns:
             Identity: Resolved typed actor identity.
         """
         if self._identity_resolver is None:
-            _raise_mapping_error("identity resolver is required for actor_ref")
-        if not actor_ref.provider:
-            _raise_mapping_error("actor_ref.provider is required")
-        if not actor_ref.provider_subject:
-            _raise_mapping_error("actor_ref.provider_subject is required")
-        if not actor_ref.display_name:
-            _raise_mapping_error("actor_ref.display_name is required")
-        actor_kind = _actor_ref_kind_to_contract(actor_ref.actor_kind)
-        return await self._identity_resolver.resolve_actor(
-            provider=actor_ref.provider,
-            provider_subject=ExternalRef(actor_ref.provider_subject),
-            display_name=actor_ref.display_name,
+            _raise_mapping_error("identity resolver is required for account_ref")
+        if not account_ref.provider:
+            _raise_mapping_error("account_ref.provider is required")
+        if not account_ref.provider_subject:
+            _raise_mapping_error("account_ref.provider_subject is required")
+        if not account_ref.display_name:
+            _raise_mapping_error("account_ref.display_name is required")
+        actor_kind = _account_ref_kind_to_contract(account_ref.actor_kind)
+        return await self._identity_resolver.resolve_identity(
+            provider=account_ref.provider,
+            provider_subject=ExternalRef(account_ref.provider_subject),
+            display_name=account_ref.display_name,
             actor_kind=actor_kind,
-            account_id=account_id,
+            account_id=None,
             device_id=device_id,
-            metadata=dict(actor_ref.metadata.items()),
+            metadata=dict(account_ref.metadata.items()),
         )
 
 
@@ -289,8 +297,8 @@ def _actor_kind_from_proto(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
         _raise_mapping_error(f"unsupported or unspecified actor kind: {kind}")
 
 
-def _actor_ref_kind_to_contract(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
-    """Map actor_ref actor_kind to contract, defaulting UNSPECIFIED to HUMAN.
+def _account_ref_kind_to_contract(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
+    """Map account_ref actor_kind to contract, defaulting UNSPECIFIED to HUMAN.
 
     Returns:
         ActorKind: Contract actor kind (HUMAN for UNSPECIFIED, otherwise mapped).

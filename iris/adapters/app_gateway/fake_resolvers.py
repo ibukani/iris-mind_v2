@@ -13,19 +13,27 @@ from iris.contracts.spaces import (
     SpaceParticipant,
     SpaceParticipantKind,
 )
-from iris.core.ids import ActorId, SpaceId
+from iris.core.ids import AccountId, ActorId, SpaceId
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from iris.core.ids import AccountId, DeviceId, ExternalRef
+    from iris.core.ids import DeviceId, ExternalRef
 
 
 class FakeIdentityResolver(IdentityResolver):
     """テストとローカル配線向けの決定論的IdentityResolver。"""
 
+    def __init__(
+        self,
+        *,
+        linked_actor_ids: Mapping[tuple[str, str], ActorId] | None = None,
+    ) -> None:
+        """テスト用のリンクリストを使ってresolverを初期化する。"""
+        self._linked_actor_ids = dict(linked_actor_ids or {})
+
     @override
-    async def resolve_actor(
+    async def resolve_identity(
         self,
         *,
         provider: str,
@@ -41,13 +49,21 @@ class FakeIdentityResolver(IdentityResolver):
         Returns:
             Identity: 外部refから決定論的に解決されたIdentity。
         """
+        # Determine account_id
+        resolved_account_id = AccountId(account_id or f"account-{provider}-{provider_subject}")
+
+        # Determine actor_id from configured links or fallback to account-based stable ID
+        actor_id = self._linked_actor_ids.get((provider, str(provider_subject)))
+        if not actor_id:
+            actor_id = ActorId(_stable_id("actor", "", str(resolved_account_id)))
+
         return Identity(
-            actor_id=ActorId(_stable_id("actor", provider, str(provider_subject))),
+            actor_id=actor_id,
             actor_kind=actor_kind,
             display_name=display_name,
             provider=provider,
             provider_subject=provider_subject,
-            account_id=account_id,
+            account_id=resolved_account_id,
             device_id=device_id,
             metadata=dict(metadata or {}),
         )

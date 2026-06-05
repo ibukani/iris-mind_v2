@@ -26,7 +26,7 @@ _OCCURRED_AT = datetime(2026, 6, 5, 14, 0, tzinfo=UTC)
 
 @pytest.mark.anyio
 async def test_add_iris_runtime_servicer_registers_servicer_without_resolver() -> None:
-    """resolver未注入でもservicerが登録され、actor_refはINVALID_ARGUMENTになることを確認する。"""
+    """resolver未注入でもservicerが登録され、account_refはINVALID_ARGUMENTになることを確認する。"""
     server = grpc.aio.server()
     add_iris_runtime_servicer(server, _RecordingRuntimeService("ok"))
     port = server.add_insecure_port("127.0.0.1:0")
@@ -35,7 +35,7 @@ async def test_add_iris_runtime_servicer_registers_servicer_without_resolver() -
         async with grpc.aio.insecure_channel(f"127.0.0.1:{port}") as channel:
             stub = runtime_pb2_grpc.IrisRuntimeServiceStub(channel)
             with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-                await stub.SubmitObservation(_actor_ref_request())
+                await stub.SubmitObservation(_account_ref_request())
         assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
     finally:
         await server.stop(0)
@@ -43,13 +43,13 @@ async def test_add_iris_runtime_servicer_registers_servicer_without_resolver() -
 
 @pytest.mark.anyio
 async def test_add_iris_runtime_servicer_uses_injected_resolver() -> None:
-    """注入されたresolverでactor_refが解決されることを確認する。"""
+    """注入されたresolverでaccount_refが解決されることを確認する。"""
     runtime_service = _RecordingRuntimeService("resolved")
     server = grpc.aio.server()
     add_iris_runtime_servicer(server, runtime_service, identity_resolver=FakeIdentityResolver())
     port = server.add_insecure_port("127.0.0.1:0")
     await server.start()
-    response = await _submit_actor_ref(port)
+    response = await _submit_account_ref(port)
     try:
         assert response.output.text == "resolved"
         assert runtime_service.envelope is not None
@@ -75,7 +75,7 @@ async def test_create_grpc_server_returns_started_server() -> None:
 
 @pytest.mark.anyio
 async def test_servicer_construction_uses_injected_mapper() -> None:
-    """constructorへ渡したmapperがactor_ref解決に使われることを確認する。"""
+    """constructorへ渡したmapperがaccount_ref解決に使われることを確認する。"""
     runtime_service = _RecordingRuntimeService("mapper")
     mapper = GrpcRuntimeMapper(identity_resolver=FakeIdentityResolver())
     servicer = IrisRuntimeGrpcServicer(runtime_service, mapper=mapper)
@@ -83,15 +83,15 @@ async def test_servicer_construction_uses_injected_mapper() -> None:
     runtime_pb2_grpc.add_IrisRuntimeServiceServicer_to_server(servicer, server)
     port = server.add_insecure_port("127.0.0.1:0")
     await server.start()
-    response = await _submit_actor_ref(port)
+    response = await _submit_account_ref(port)
     try:
         assert response.output.text == "mapper"
     finally:
         await server.stop(0)
 
 
-async def _submit_actor_ref(port: int) -> runtime_pb2.SubmitObservationResponse:
-    """actor_ref付きSubmitObservationをinsecure channel経由で送信する。
+async def _submit_account_ref(port: int) -> runtime_pb2.SubmitObservationResponse:
+    """account_ref付きSubmitObservationをinsecure channel経由で送信する。
 
     Args:
         port: insecure gRPC serverのバインドport。
@@ -101,14 +101,14 @@ async def _submit_actor_ref(port: int) -> runtime_pb2.SubmitObservationResponse:
     """
     async with grpc.aio.insecure_channel(f"127.0.0.1:{port}") as channel:
         stub = runtime_pb2_grpc.IrisRuntimeServiceStub(channel)
-        return await stub.SubmitObservation(_actor_ref_request())
+        return await stub.SubmitObservation(_account_ref_request())
 
 
-def _actor_ref_request() -> runtime_pb2.SubmitObservationRequest:
-    """actor_ref付きActorMessage SubmitObservationRequest fixtureを作る。
+def _account_ref_request() -> runtime_pb2.SubmitObservationRequest:
+    """account_ref付きActorMessage SubmitObservationRequest fixtureを作る。
 
     Returns:
-        runtime_pb2.SubmitObservationRequest: Actor message request DTO with actor_ref.
+        runtime_pb2.SubmitObservationRequest: Actor message request DTO with account_ref.
     """
     return runtime_pb2.SubmitObservationRequest(
         correlation_id="corr-1",
@@ -118,7 +118,7 @@ def _actor_ref_request() -> runtime_pb2.SubmitObservationRequest:
             kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
             occurred_at=timestamp_from_datetime(_OCCURRED_AT),
             context=observations_pb2.ObservationContext(
-                actor_ref=identity_pb2.ExternalActorRef(
+                account_ref=identity_pb2.ExternalAccountRef(
                     provider="discord",
                     provider_subject="12345",
                     display_name="Mina",

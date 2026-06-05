@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1airis/api/v1/identity.proto\x12\x0biris.api.v1\"\x99\x02\n\x08Identity\x12\x10\n\x08\x61\x63tor_id\x18\x01 \x01(\t\x12*\n\nactor_kind\x18\x02 \x01(\x0e\x32\x16.iris.api.v1.ActorKind\x12\x14\n\x0c\x64isplay_name\x18\x03 \x01(\t\x12\x10\n\x08provider\x18\x04 \x01(\t\x12\x18\n\x10provider_subject\x18\x05 \x01(\t\x12\x12\n\naccount_id\x18\x06 \x01(\t\x12\x11\n\tdevice_id\x18\x07 \x01(\t\x12\x35\n\x08metadata\x18\x08 \x03(\x0b\x32#.iris.api.v1.Identity.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xf0\x01\n\x10\x45xternalActorRef\x12\x10\n\x08provider\x18\x01 \x01(\t\x12\x18\n\x10provider_subject\x18\x02 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x03 \x01(\t\x12*\n\nactor_kind\x18\x04 \x01(\x0e\x32\x16.iris.api.v1.ActorKind\x12=\n\x08metadata\x18\x05 \x03(\x0b\x32+.iris.api.v1.ExternalActorRef.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01*\x98\x01\n\tActorKind\x12\x1a\n\x16\x41\x43TOR_KIND_UNSPECIFIED\x10\x00\x12\x14\n\x10\x41\x43TOR_KIND_HUMAN\x10\x01\x12\x15\n\x11\x41\x43TOR_KIND_DEVICE\x10\x02\x12\x16\n\x12\x41\x43TOR_KIND_SERVICE\x10\x03\x12\x15\n\x11\x41\x43TOR_KIND_SYSTEM\x10\x04\x12\x13\n\x0f\x41\x43TOR_KIND_IRIS\x10\x05\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1airis/api/v1/identity.proto\x12\x0biris.api.v1\"\x99\x02\n\x08Identity\x12\x10\n\x08\x61\x63tor_id\x18\x01 \x01(\t\x12*\n\nactor_kind\x18\x02 \x01(\x0e\x32\x16.iris.api.v1.ActorKind\x12\x14\n\x0c\x64isplay_name\x18\x03 \x01(\t\x12\x10\n\x08provider\x18\x04 \x01(\t\x12\x18\n\x10provider_subject\x18\x05 \x01(\t\x12\x12\n\naccount_id\x18\x06 \x01(\t\x12\x11\n\tdevice_id\x18\x07 \x01(\t\x12\x35\n\x08metadata\x18\x08 \x03(\x0b\x32#.iris.api.v1.Identity.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xf4\x01\n\x12\x45xternalAccountRef\x12\x10\n\x08provider\x18\x01 \x01(\t\x12\x18\n\x10provider_subject\x18\x02 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x03 \x01(\t\x12*\n\nactor_kind\x18\x04 \x01(\x0e\x32\x16.iris.api.v1.ActorKind\x12?\n\x08metadata\x18\x05 \x03(\x0b\x32-.iris.api.v1.ExternalAccountRef.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01*\x98\x01\n\tActorKind\x12\x1a\n\x16\x41\x43TOR_KIND_UNSPECIFIED\x10\x00\x12\x14\n\x10\x41\x43TOR_KIND_HUMAN\x10\x01\x12\x15\n\x11\x41\x43TOR_KIND_DEVICE\x10\x02\x12\x16\n\x12\x41\x43TOR_KIND_SERVICE\x10\x03\x12\x15\n\x11\x41\x43TOR_KIND_SYSTEM\x10\x04\x12\x13\n\x0f\x41\x43TOR_KIND_IRIS\x10\x05\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,16 +33,16 @@ if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_IDENTITY_METADATAENTRY']._loaded_options = None
   _globals['_IDENTITY_METADATAENTRY']._serialized_options = b'8\001'
-  _globals['_EXTERNALACTORREF_METADATAENTRY']._loaded_options = None
-  _globals['_EXTERNALACTORREF_METADATAENTRY']._serialized_options = b'8\001'
-  _globals['_ACTORKIND']._serialized_start=571
-  _globals['_ACTORKIND']._serialized_end=723
+  _globals['_EXTERNALACCOUNTREF_METADATAENTRY']._loaded_options = None
+  _globals['_EXTERNALACCOUNTREF_METADATAENTRY']._serialized_options = b'8\001'
+  _globals['_ACTORKIND']._serialized_start=575
+  _globals['_ACTORKIND']._serialized_end=727
   _globals['_IDENTITY']._serialized_start=44
   _globals['_IDENTITY']._serialized_end=325
   _globals['_IDENTITY_METADATAENTRY']._serialized_start=278
   _globals['_IDENTITY_METADATAENTRY']._serialized_end=325
-  _globals['_EXTERNALACTORREF']._serialized_start=328
-  _globals['_EXTERNALACTORREF']._serialized_end=568
-  _globals['_EXTERNALACTORREF_METADATAENTRY']._serialized_start=278
-  _globals['_EXTERNALACTORREF_METADATAENTRY']._serialized_end=325
+  _globals['_EXTERNALACCOUNTREF']._serialized_start=328
+  _globals['_EXTERNALACCOUNTREF']._serialized_end=572
+  _globals['_EXTERNALACCOUNTREF_METADATAENTRY']._serialized_start=278
+  _globals['_EXTERNALACCOUNTREF_METADATAENTRY']._serialized_end=325
 # @@protoc_insertion_point(module_scope)

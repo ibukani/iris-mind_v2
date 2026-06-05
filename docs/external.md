@@ -74,13 +74,13 @@ Proto構成。
 - `proto/iris/runtime/v1/` — service定義とRPC request/response
 - `make generate-protos` で `iris/generated/` 以下に再生成
 
-### ExternalActorRef
+### ExternalAccountRef
 
-外部クライアントがIris内部の `ActorId` / `Identity` を直接持たなくてよいよう、
-`iris.api.v1.ExternalActorRef` を `ObservationContext.actor_ref` 経由で受け取れる。
+外部クライアントがIris内部の `AccountId` や `ActorId` を直接持たなくてよいよう、
+`iris.api.v1.ExternalAccountRef` を `ObservationContext.account_ref` 経由で受け取れる。
 
 ```proto
-message ExternalActorRef {
+message ExternalAccountRef {
   string provider = 1;
   string provider_subject = 2;
   string display_name = 3;
@@ -89,15 +89,19 @@ message ExternalActorRef {
 }
 ```
 
-境界の責務。
+境界の責務と Identity 解決モデル:
 
-- 外部クライアントは `ExternalActorRef` を送るだけで、Iris内部の `Identity` / `ActorId` を知る必要はない。
-- gRPC / AppGateway 境界が `IdentityResolver` で `ExternalActorRef` を型付き `Identity` へ解決する。
-- 解決済み `Identity` は `ObservationContext.actor` に格納され、cognitive / runtime 層へ流れる。
-- cognitive 層は `IdentityResolver` も生成protoもimportせず、解決済み `actor` だけを受け取る。
+- **Actor**: Iris内部の主体（Human, Device, Service, System, Iris）。
+- **Account**: 外部providerのアカウント（provider + provider_subjectで一意）。Iris Actorと紐づけ可能。
+- **Identity**: 1回の観測に付随する、AccountProfileとリンク先Actorから構築されたスナップショット。
 
-resolverが未注入のservicerに `actor_ref` が来た場合は `INVALID_ARGUMENT` を返す。
-`actor` と `actor_ref` の両方が来た場合も `INVALID_ARGUMENT` を返す（曖昧状態）。
+外部クライアントはIris内部の `AccountId` や `ActorId` を知らない場合、`ExternalAccountRef` を送信する。
+gRPC / AppGateway 境界が `IdentityResolver` で `ExternalAccountRef` を型付き `Identity` へ解決する。
+解決済みの `Identity` は `ObservationContext.actor` に格納され、そこから `account_id` もセットされる。
+cognitive 層は `IdentityResolver` も生成protoもimportせず、解決済みの `actor` と `account_id` だけを受け取る。
+
+resolverが未注入のservicerに `account_ref` が来た場合は `INVALID_ARGUMENT` を返す。
+`actor` と `account_ref` の両方が来た場合、および `account_ref` と `account_id` の両方が来た場合は `INVALID_ARGUMENT` を返す（曖昧状態）。
 
 AppGateway の責務。
 

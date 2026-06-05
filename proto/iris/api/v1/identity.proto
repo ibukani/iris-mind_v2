@@ -22,7 +22,7 @@ message Identity {
   map<string, string> metadata = 8;
 }
 
-message ExternalActorRef {
+message ExternalAccountRef {
   string provider = 1;
   string provider_subject = 2;
   string display_name = 3;
