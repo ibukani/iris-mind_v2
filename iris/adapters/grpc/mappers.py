@@ -25,6 +25,7 @@ from iris.core.ids import (
     SessionId,
     SpaceId,
 )
+from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
 from iris.runtime.service import ObservationEnvelope
 
@@ -56,7 +57,7 @@ def observation_envelope_from_proto(
     )
 
 
-def observation_from_proto(observation: runtime_pb2.Observation) -> Observation:
+def observation_from_proto(observation: observations_pb2.Observation) -> Observation:
     """Map Observation proto to an Iris Observation contract.
 
     Returns:
@@ -96,7 +97,9 @@ def observation_from_proto(observation: runtime_pb2.Observation) -> Observation:
     return _raise_mapping_error(f"unsupported observation kind: {kind.value}")
 
 
-def observation_context_from_proto(context: runtime_pb2.ObservationContext) -> ObservationContext:
+def observation_context_from_proto(
+    context: observations_pb2.ObservationContext,
+) -> ObservationContext:
     """Map ObservationContext proto to Iris ObservationContext.
 
     Returns:
@@ -112,7 +115,7 @@ def observation_context_from_proto(context: runtime_pb2.ObservationContext) -> O
     )
 
 
-def identity_from_proto(identity: runtime_pb2.Identity) -> Identity:
+def identity_from_proto(identity: identity_pb2.Identity) -> Identity:
     """Map Identity proto to Iris Identity.
 
     Returns:
@@ -149,13 +152,13 @@ def runtime_response_to_proto(
     )
 
 
-def presented_output_to_proto(output: PresentedOutput) -> runtime_pb2.PresentedOutput:
+def presented_output_to_proto(output: PresentedOutput) -> outputs_pb2.PresentedOutput:
     """Map PresentedOutput contract to proto DTO.
 
     Returns:
-        runtime_pb2.PresentedOutput: Proto presented output.
+        outputs_pb2.PresentedOutput: Proto presented output.
     """
-    return runtime_pb2.PresentedOutput(
+    return outputs_pb2.PresentedOutput(
         text=output.text or "",
         style_hint=output.style_hint or "",
         emotion_hint=output.emotion_hint or "",
@@ -177,7 +180,7 @@ def timestamp_from_datetime(value: datetime) -> Timestamp:
     return timestamp
 
 
-def _datetime_from_timestamp(observation: runtime_pb2.Observation) -> datetime:
+def _datetime_from_timestamp(observation: observations_pb2.Observation) -> datetime:
     if not observation.HasField("occurred_at"):
         _raise_mapping_error("occurred_at is required")
     try:
@@ -190,7 +193,7 @@ def _datetime_from_timestamp(observation: runtime_pb2.Observation) -> datetime:
 
 
 def _require_payload(
-    observation: runtime_pb2.Observation,
+    observation: observations_pb2.Observation,
     payload_name: str,
     kind: ObservationKind,
 ) -> None:
@@ -198,10 +201,12 @@ def _require_payload(
         _raise_mapping_error(f"{kind.value} requires {payload_name} payload")
 
 
-def _observation_kind_from_proto(kind: runtime_pb2.ObservationKind.ValueType) -> ObservationKind:
+def _observation_kind_from_proto(
+    kind: observations_pb2.ObservationKind.ValueType,
+) -> ObservationKind:
     mapping = {
-        runtime_pb2.OBSERVATION_KIND_ACTOR_MESSAGE: ObservationKind.ACTOR_MESSAGE,
-        runtime_pb2.OBSERVATION_KIND_IDLE_TICK: ObservationKind.IDLE_TICK,
+        observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE: ObservationKind.ACTOR_MESSAGE,
+        observations_pb2.OBSERVATION_KIND_IDLE_TICK: ObservationKind.IDLE_TICK,
     }
     try:
         return mapping[kind]
@@ -209,13 +214,13 @@ def _observation_kind_from_proto(kind: runtime_pb2.ObservationKind.ValueType) ->
         _raise_mapping_error(f"unsupported or unspecified observation kind: {kind}")
 
 
-def _actor_kind_from_proto(kind: runtime_pb2.ActorKind.ValueType) -> ActorKind:
+def _actor_kind_from_proto(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
     mapping = {
-        runtime_pb2.ACTOR_KIND_HUMAN: ActorKind.HUMAN,
-        runtime_pb2.ACTOR_KIND_DEVICE: ActorKind.DEVICE,
-        runtime_pb2.ACTOR_KIND_SERVICE: ActorKind.SERVICE,
-        runtime_pb2.ACTOR_KIND_SYSTEM: ActorKind.SYSTEM,
-        runtime_pb2.ACTOR_KIND_IRIS: ActorKind.IRIS,
+        identity_pb2.ACTOR_KIND_HUMAN: ActorKind.HUMAN,
+        identity_pb2.ACTOR_KIND_DEVICE: ActorKind.DEVICE,
+        identity_pb2.ACTOR_KIND_SERVICE: ActorKind.SERVICE,
+        identity_pb2.ACTOR_KIND_SYSTEM: ActorKind.SYSTEM,
+        identity_pb2.ACTOR_KIND_IRIS: ActorKind.IRIS,
     }
     try:
         return mapping[kind]

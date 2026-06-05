@@ -2,7 +2,8 @@ syntax = "proto3";
 
 package iris.runtime.v1;
 
-import "google/protobuf/timestamp.proto";
+import "iris/api/v1/observations.proto";
+import "iris/api/v1/outputs.proto";
 
 service IrisRuntimeService {
   rpc SubmitObservation(SubmitObservationRequest) returns (SubmitObservationResponse);
@@ -10,80 +11,10 @@ service IrisRuntimeService {
 
 message SubmitObservationRequest {
   string correlation_id = 1;
-  Observation observation = 2;
+  iris.api.v1.Observation observation = 2;
 }
 
 message SubmitObservationResponse {
   string correlation_id = 1;
-  PresentedOutput output = 2;
-}
-
-message Observation {
-  string observation_id = 1;
-  string session_id = 2;
-  ObservationKind kind = 3;
-  google.protobuf.Timestamp occurred_at = 4;
-  ObservationContext context = 5;
-
-  oneof payload {
-    ActorMessagePayload actor_message = 10;
-    IdleTickPayload idle_tick = 11;
-  }
-}
-
-enum ObservationKind {
-  OBSERVATION_KIND_UNSPECIFIED = 0;
-  OBSERVATION_KIND_ACTOR_MESSAGE = 1;
-  OBSERVATION_KIND_TRANSCRIPT = 2;
-  OBSERVATION_KIND_IDLE_TICK = 3;
-  OBSERVATION_KIND_AUDIENCE_MESSAGE = 4;
-  OBSERVATION_KIND_GAME_EVENT = 5;
-}
-
-message ActorMessagePayload {
-  string text = 1;
-  string external_message_id = 2;
-}
-
-message IdleTickPayload {
-  string reason = 1;
-  double idle_seconds = 2;
-}
-
-message ObservationContext {
-  Identity actor = 1;
-  string account_id = 2;
-  string device_id = 3;
-  string space_id = 4;
-  string source = 5;
-}
-
-message Identity {
-  string actor_id = 1;
-  ActorKind actor_kind = 2;
-  string display_name = 3;
-  string provider = 4;
-  string provider_subject = 5;
-  string account_id = 6;
-  string device_id = 7;
-  map<string, string> metadata = 8;
-}
-
-enum ActorKind {
-  ACTOR_KIND_UNSPECIFIED = 0;
-  ACTOR_KIND_HUMAN = 1;
-  ACTOR_KIND_DEVICE = 2;
-  ACTOR_KIND_SERVICE = 3;
-  ACTOR_KIND_SYSTEM = 4;
-  ACTOR_KIND_IRIS = 5;
-}
-
-message PresentedOutput {
-  string text = 1;
-  string style_hint = 2;
-  string emotion_hint = 3;
-  string expression_hint = 4;
-  int32 delay_ms = 5;
-  int32 priority = 6;
-  bool interruptible = 7;
+  iris.api.v1.PresentedOutput output = 2;
 }

@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package iris.api.v1;
+
+import "google/protobuf/timestamp.proto";
+import "iris/api/v1/identity.proto";
+
+enum ObservationKind {
+  OBSERVATION_KIND_UNSPECIFIED = 0;
+  OBSERVATION_KIND_ACTOR_MESSAGE = 1;
+  OBSERVATION_KIND_TRANSCRIPT = 2;
+  OBSERVATION_KIND_IDLE_TICK = 3;
+  OBSERVATION_KIND_AUDIENCE_MESSAGE = 4;
+  OBSERVATION_KIND_GAME_EVENT = 5;
+}
+
+message ActorMessagePayload {
+  string text = 1;
+  string external_message_id = 2;
+}
+
+message IdleTickPayload {
+  string reason = 1;
+  double idle_seconds = 2;
+}
+
+message ObservationContext {
+  Identity actor = 1;
+  string account_id = 2;
+  string device_id = 3;
+  string space_id = 4;
+  string source = 5;
+}
+
+message Observation {
+  string observation_id = 1;
+  string session_id = 2;
+  ObservationKind kind = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  ObservationContext context = 5;
+
+  oneof payload {
+    ActorMessagePayload actor_message = 10;
+    IdleTickPayload idle_tick = 11;
+  }
+}

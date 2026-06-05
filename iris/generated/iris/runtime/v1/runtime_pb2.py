@@ -22,40 +22,21 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
+from iris.generated.iris.api.v1 import observations_pb2 as iris_dot_api_dot_v1_dot_observations__pb2
+from iris.generated.iris.api.v1 import outputs_pb2 as iris_dot_api_dot_v1_dot_outputs__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1diris/runtime/v1/runtime.proto\x12\x0firis.runtime.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"e\n\x18SubmitObservationRequest\x12\x16\n\x0e\x63orrelation_id\x18\x01 \x01(\t\x12\x31\n\x0bobservation\x18\x02 \x01(\x0b\x32\x1c.iris.runtime.v1.Observation\"e\n\x19SubmitObservationResponse\x12\x16\n\x0e\x63orrelation_id\x18\x01 \x01(\t\x12\x30\n\x06output\x18\x02 \x01(\x0b\x32 .iris.runtime.v1.PresentedOutput\"\xd1\x02\n\x0bObservation\x12\x16\n\x0eobservation_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12.\n\x04kind\x18\x03 \x01(\x0e\x32 .iris.runtime.v1.ObservationKind\x12/\n\x0boccurred_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x34\n\x07\x63ontext\x18\x05 \x01(\x0b\x32#.iris.runtime.v1.ObservationContext\x12=\n\ractor_message\x18\n \x01(\x0b\x32$.iris.runtime.v1.ActorMessagePayloadH\x00\x12\x35\n\tidle_tick\x18\x0b \x01(\x0b\x32 .iris.runtime.v1.IdleTickPayloadH\x00\x42\t\n\x07payload\"@\n\x13\x41\x63torMessagePayload\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x1b\n\x13\x65xternal_message_id\x18\x02 \x01(\t\"7\n\x0fIdleTickPayload\x12\x0e\n\x06reason\x18\x01 \x01(\t\x12\x14\n\x0cidle_seconds\x18\x02 \x01(\x01\"\x87\x01\n\x12ObservationContext\x12(\n\x05\x61\x63tor\x18\x01 \x01(\x0b\x32\x19.iris.runtime.v1.Identity\x12\x12\n\naccount_id\x18\x02 \x01(\t\x12\x11\n\tdevice_id\x18\x03 \x01(\t\x12\x10\n\x08space_id\x18\x04 \x01(\t\x12\x0e\n\x06source\x18\x05 \x01(\t\"\xa1\x02\n\x08Identity\x12\x10\n\x08\x61\x63tor_id\x18\x01 \x01(\t\x12.\n\nactor_kind\x18\x02 \x01(\x0e\x32\x1a.iris.runtime.v1.ActorKind\x12\x14\n\x0c\x64isplay_name\x18\x03 \x01(\t\x12\x10\n\x08provider\x18\x04 \x01(\t\x12\x18\n\x10provider_subject\x18\x05 \x01(\t\x12\x12\n\naccount_id\x18\x06 \x01(\t\x12\x11\n\tdevice_id\x18\x07 \x01(\t\x12\x39\n\x08metadata\x18\x08 \x03(\x0b\x32\'.iris.runtime.v1.Identity.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x9d\x01\n\x0fPresentedOutput\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x12\n\nstyle_hint\x18\x02 \x01(\t\x12\x14\n\x0c\x65motion_hint\x18\x03 \x01(\t\x12\x17\n\x0f\x65xpression_hint\x18\x04 \x01(\t\x12\x10\n\x08\x64\x65lay_ms\x18\x05 \x01(\x05\x12\x10\n\x08priority\x18\x06 \x01(\x05\x12\x15\n\rinterruptible\x18\x07 \x01(\x08*\xe0\x01\n\x0fObservationKind\x12 \n\x1cOBSERVATION_KIND_UNSPECIFIED\x10\x00\x12\"\n\x1eOBSERVATION_KIND_ACTOR_MESSAGE\x10\x01\x12\x1f\n\x1bOBSERVATION_KIND_TRANSCRIPT\x10\x02\x12\x1e\n\x1aOBSERVATION_KIND_IDLE_TICK\x10\x03\x12%\n!OBSERVATION_KIND_AUDIENCE_MESSAGE\x10\x04\x12\x1f\n\x1bOBSERVATION_KIND_GAME_EVENT\x10\x05*\x98\x01\n\tActorKind\x12\x1a\n\x16\x41\x43TOR_KIND_UNSPECIFIED\x10\x00\x12\x14\n\x10\x41\x43TOR_KIND_HUMAN\x10\x01\x12\x15\n\x11\x41\x43TOR_KIND_DEVICE\x10\x02\x12\x16\n\x12\x41\x43TOR_KIND_SERVICE\x10\x03\x12\x15\n\x11\x41\x43TOR_KIND_SYSTEM\x10\x04\x12\x13\n\x0f\x41\x43TOR_KIND_IRIS\x10\x05\x32\x80\x01\n\x12IrisRuntimeService\x12j\n\x11SubmitObservation\x12).iris.runtime.v1.SubmitObservationRequest\x1a*.iris.runtime.v1.SubmitObservationResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1diris/runtime/v1/runtime.proto\x12\x0firis.runtime.v1\x1a\x1eiris/api/v1/observations.proto\x1a\x19iris/api/v1/outputs.proto\"a\n\x18SubmitObservationRequest\x12\x16\n\x0e\x63orrelation_id\x18\x01 \x01(\t\x12-\n\x0bobservation\x18\x02 \x01(\x0b\x32\x18.iris.api.v1.Observation\"a\n\x19SubmitObservationResponse\x12\x16\n\x0e\x63orrelation_id\x18\x01 \x01(\t\x12,\n\x06output\x18\x02 \x01(\x0b\x32\x1c.iris.api.v1.PresentedOutput2\x80\x01\n\x12IrisRuntimeService\x12j\n\x11SubmitObservation\x12).iris.runtime.v1.SubmitObservationRequest\x1a*.iris.runtime.v1.SubmitObservationResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'iris.runtime.v1.runtime_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_IDENTITY_METADATAENTRY']._loaded_options = None
-  _globals['_IDENTITY_METADATAENTRY']._serialized_options = b'8\001'
-  _globals['_OBSERVATIONKIND']._serialized_start=1343
-  _globals['_OBSERVATIONKIND']._serialized_end=1567
-  _globals['_ACTORKIND']._serialized_start=1570
-  _globals['_ACTORKIND']._serialized_end=1722
-  _globals['_SUBMITOBSERVATIONREQUEST']._serialized_start=83
-  _globals['_SUBMITOBSERVATIONREQUEST']._serialized_end=184
-  _globals['_SUBMITOBSERVATIONRESPONSE']._serialized_start=186
-  _globals['_SUBMITOBSERVATIONRESPONSE']._serialized_end=287
-  _globals['_OBSERVATION']._serialized_start=290
-  _globals['_OBSERVATION']._serialized_end=627
-  _globals['_ACTORMESSAGEPAYLOAD']._serialized_start=629
-  _globals['_ACTORMESSAGEPAYLOAD']._serialized_end=693
-  _globals['_IDLETICKPAYLOAD']._serialized_start=695
-  _globals['_IDLETICKPAYLOAD']._serialized_end=750
-  _globals['_OBSERVATIONCONTEXT']._serialized_start=753
-  _globals['_OBSERVATIONCONTEXT']._serialized_end=888
-  _globals['_IDENTITY']._serialized_start=891
-  _globals['_IDENTITY']._serialized_end=1180
-  _globals['_IDENTITY_METADATAENTRY']._serialized_start=1133
-  _globals['_IDENTITY_METADATAENTRY']._serialized_end=1180
-  _globals['_PRESENTEDOUTPUT']._serialized_start=1183
-  _globals['_PRESENTEDOUTPUT']._serialized_end=1340
-  _globals['_IRISRUNTIMESERVICE']._serialized_start=1725
-  _globals['_IRISRUNTIMESERVICE']._serialized_end=1853
+  _globals['_SUBMITOBSERVATIONREQUEST']._serialized_start=109
+  _globals['_SUBMITOBSERVATIONREQUEST']._serialized_end=206
+  _globals['_SUBMITOBSERVATIONRESPONSE']._serialized_start=208
+  _globals['_SUBMITOBSERVATIONRESPONSE']._serialized_end=305
+  _globals['_IRISRUNTIMESERVICE']._serialized_start=308
+  _globals['_IRISRUNTIMESERVICE']._serialized_end=436
 # @@protoc_insertion_point(module_scope)

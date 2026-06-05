@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package iris.api.v1;
+
+enum ActorKind {
+  ACTOR_KIND_UNSPECIFIED = 0;
+  ACTOR_KIND_HUMAN = 1;
+  ACTOR_KIND_DEVICE = 2;
+  ACTOR_KIND_SERVICE = 3;
+  ACTOR_KIND_SYSTEM = 4;
+  ACTOR_KIND_IRIS = 5;
+}
+
+message Identity {
+  string actor_id = 1;
+  ActorKind actor_kind = 2;
+  string display_name = 3;
+  string provider = 4;
+  string provider_subject = 5;
+  string account_id = 6;
+  string device_id = 7;
+  map<string, string> metadata = 8;
+}

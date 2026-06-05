@@ -1,4 +1,4 @@
-.PHONY: check verify quick ai-check ai-quick ai-context ai-report ai-arch ai-test-target lint lint-fix format format-write type pyright arch test coverage deps doctor ci help
+.PHONY: check verify quick ai-check ai-quick ai-context ai-report ai-arch ai-test-target lint lint-fix format format-write type pyright arch test coverage deps doctor ci generate-protos help
 
 help:
 	@echo "Iris strict AI-coding verification targets:"
@@ -20,6 +20,7 @@ help:
 	@echo "  make arch         - run architecture tests"
 	@echo "  make test         - run all tests without coverage"
 	@echo "  make coverage     - run coverage gate and HTML report"
+	@echo "  make generate-protos - regenerate protobuf and gRPC code from proto definitions"
 	@echo "  make deps         - sync project dependencies with uv"
 	@echo "  make doctor       - print local tool versions"
 	@echo "  make ci           - sync dependencies and run make check"
@@ -80,6 +81,9 @@ coverage:
 
 deps:
 	uv sync --all-groups
+
+generate-protos:
+	uv run python scripts/generate_protos.py
 
 doctor:
 	uv --version

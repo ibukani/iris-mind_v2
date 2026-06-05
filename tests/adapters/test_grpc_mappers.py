@@ -26,6 +26,7 @@ from iris.core.ids import (
     SessionId,
     SpaceId,
 )
+from iris.generated.iris.api.v1 import identity_pb2, observations_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
 from iris.runtime.service import RuntimeResponse
 from tests.helpers.approx import approx
@@ -54,12 +55,12 @@ def test_actor_message_proto_maps_to_observation_envelope() -> None:
 def test_idle_tick_proto_maps_to_observation() -> None:
     """IdleTick protoがIdleTickObservationへmapされることを確認する。"""
     observation = observation_from_proto(
-        runtime_pb2.Observation(
+        observations_pb2.Observation(
             observation_id="obs-idle",
             session_id="session-1",
-            kind=runtime_pb2.OBSERVATION_KIND_IDLE_TICK,
+            kind=observations_pb2.OBSERVATION_KIND_IDLE_TICK,
             occurred_at=timestamp_from_datetime(_OCCURRED_AT),
-            idle_tick=runtime_pb2.IdleTickPayload(reason="quiet", idle_seconds=12.5),
+            idle_tick=observations_pb2.IdleTickPayload(reason="quiet", idle_seconds=12.5),
         )
     )
 
@@ -119,7 +120,7 @@ def test_runtime_response_maps_to_proto() -> None:
 def test_invalid_observation_kind_raises_mapping_error() -> None:
     """Unsupported/unspecified kindがGrpcMappingErrorになることを確認する。"""
     request = _actor_message_proto()
-    request.kind = runtime_pb2.OBSERVATION_KIND_UNSPECIFIED
+    request.kind = observations_pb2.OBSERVATION_KIND_UNSPECIFIED
 
     with pytest.raises(GrpcMappingError, match="unsupported or unspecified observation kind"):
         observation_from_proto(request)
@@ -127,10 +128,10 @@ def test_invalid_observation_kind_raises_mapping_error() -> None:
 
 def test_actor_message_kind_without_payload_raises_mapping_error() -> None:
     """actor_message kindでpayloadがない場合にmapping errorになることを確認する。"""
-    request = runtime_pb2.Observation(
+    request = observations_pb2.Observation(
         observation_id="obs-1",
         session_id="session-1",
-        kind=runtime_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
+        kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
         occurred_at=timestamp_from_datetime(_OCCURRED_AT),
     )
 
@@ -140,10 +141,10 @@ def test_actor_message_kind_without_payload_raises_mapping_error() -> None:
 
 def test_idle_tick_kind_without_payload_raises_mapping_error() -> None:
     """idle_tick kindでpayloadがない場合にmapping errorになることを確認する。"""
-    request = runtime_pb2.Observation(
+    request = observations_pb2.Observation(
         observation_id="obs-1",
         session_id="session-1",
-        kind=runtime_pb2.OBSERVATION_KIND_IDLE_TICK,
+        kind=observations_pb2.OBSERVATION_KIND_IDLE_TICK,
         occurred_at=timestamp_from_datetime(_OCCURRED_AT),
     )
 
@@ -151,21 +152,21 @@ def test_idle_tick_kind_without_payload_raises_mapping_error() -> None:
         observation_from_proto(request)
 
 
-def _actor_message_proto() -> runtime_pb2.Observation:
+def _actor_message_proto() -> observations_pb2.Observation:
     """Actor message proto test fixtureを作る。
 
     Returns:
-        runtime_pb2.Observation: Actor message observation DTO。
+        observations_pb2.Observation: Actor message observation DTO。
     """
-    return runtime_pb2.Observation(
+    return observations_pb2.Observation(
         observation_id="obs-1",
         session_id="session-1",
-        kind=runtime_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
+        kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
         occurred_at=timestamp_from_datetime(_OCCURRED_AT),
-        context=runtime_pb2.ObservationContext(
-            actor=runtime_pb2.Identity(
+        context=observations_pb2.ObservationContext(
+            actor=identity_pb2.Identity(
                 actor_id="actor-1",
-                actor_kind=runtime_pb2.ACTOR_KIND_HUMAN,
+                actor_kind=identity_pb2.ACTOR_KIND_HUMAN,
                 display_name="Mina",
                 provider="test",
                 provider_subject="provider-actor-1",
@@ -178,7 +179,7 @@ def _actor_message_proto() -> runtime_pb2.Observation:
             space_id="space-1",
             source="grpc-test",
         ),
-        actor_message=runtime_pb2.ActorMessagePayload(
+        actor_message=observations_pb2.ActorMessagePayload(
             text="hello grpc",
             external_message_id="message-1",
         ),

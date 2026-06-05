@@ -12,6 +12,7 @@ import pytest
 from iris.adapters.grpc.mappers import timestamp_from_datetime
 from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
 from iris.contracts.actions import PresentedOutput
+from iris.generated.iris.api.v1 import observations_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from iris.runtime.service import IrisRuntimeService, RuntimeResponse
 
@@ -51,10 +52,10 @@ async def test_submit_observation_invalid_request_returns_invalid_argument() -> 
             await submit_observation(
                 runtime_pb2.SubmitObservationRequest(
                     correlation_id="corr-1",
-                    observation=runtime_pb2.Observation(
+                    observation=observations_pb2.Observation(
                         observation_id="obs-1",
                         session_id="session-1",
-                        kind=runtime_pb2.OBSERVATION_KIND_UNSPECIFIED,
+                        kind=observations_pb2.OBSERVATION_KIND_UNSPECIFIED,
                         occurred_at=timestamp_from_datetime(_OCCURRED_AT),
                     ),
                 )
@@ -81,12 +82,12 @@ def _actor_message_request() -> runtime_pb2.SubmitObservationRequest:
     """
     return runtime_pb2.SubmitObservationRequest(
         correlation_id="corr-1",
-        observation=runtime_pb2.Observation(
+        observation=observations_pb2.Observation(
             observation_id="obs-1",
             session_id="session-1",
-            kind=runtime_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
+            kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
             occurred_at=timestamp_from_datetime(_OCCURRED_AT),
-            actor_message=runtime_pb2.ActorMessagePayload(text="hello grpc"),
+            actor_message=observations_pb2.ActorMessagePayload(text="hello grpc"),
         ),
     )
 
