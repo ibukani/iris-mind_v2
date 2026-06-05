@@ -2,10 +2,10 @@
 
 The precedence order is:
 
-1. CLI overrides
-2. Environment variables
-3. TOML config file
-4. Built-in defaults
+1. Built-in defaults
+2. TOML config file
+3. Environment variables
+4. CLI overrides
 
 TOML is the structured developer configuration. Environment variables are
 intended for secrets, deployment overrides, and CI/container overrides. CLI
