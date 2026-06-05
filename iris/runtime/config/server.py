@@ -23,6 +23,26 @@ class RuntimeServerConfig:
     shutdown_grace_seconds: float = 5.0
 
 
+def validate_server_port(value: int, *, source: str) -> int:
+    """Validate that a server port is within the valid range."""
+    if not 1 <= value <= 65535:
+        raise ConfigError(f"Invalid {source}: port must be between 1 and 65535: {value}")
+    return value
+
+
+def validate_server_config(config: RuntimeServerConfig) -> RuntimeServerConfig:
+    """Validate server configuration constraints.
+
+    Ensures port is valid and local_only enforces loopback host.
+    """
+    validate_server_port(config.port, source="server.port")
+    if config.local_only and config.host not in {"127.0.0.1", "localhost", "::1"}:
+        raise ConfigError(
+            f"server.local_only=true requires a loopback host, got: {config.host}"
+        )
+    return config
+
+
 def apply_server_toml(
     config: RuntimeServerConfig,
     table: TomlTable,
@@ -50,10 +70,14 @@ def apply_server_toml(
         except (ValueError, TypeError) as err:
             message = f"Invalid server port: {table['port']}"
             raise ConfigError(message) from err
+        port = validate_server_port(port, source="server.port")
 
     local_only = config.local_only
     if "local_only" in table:
-        local_only = bool(table["local_only"])
+        value = table["local_only"]
+        if not isinstance(value, bool):
+            raise ConfigError("server.local_only must be a boolean")
+        local_only = value
 
     shutdown_grace = config.shutdown_grace_seconds
     if "shutdown_grace_seconds" in table:
@@ -99,5 +123,6 @@ def apply_server_env(
         except ValueError as err:
             message = f"Invalid IRIS_SERVER_PORT: {env['IRIS_SERVER_PORT']}"
             raise ConfigError(message) from err
+        port = validate_server_port(port, source="IRIS_SERVER_PORT")
 
     return replace(config, host=host, port=port)

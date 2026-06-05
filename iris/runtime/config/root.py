@@ -29,7 +29,13 @@ from iris.runtime.config.llm import (
     validate_provider,
 )
 from iris.runtime.config.parsing import table_or_empty
-from iris.runtime.config.server import RuntimeServerConfig, apply_server_env, apply_server_toml
+from iris.runtime.config.server import (
+    RuntimeServerConfig,
+    apply_server_env,
+    apply_server_toml,
+    validate_server_config,
+    validate_server_port,
+)
 from iris.runtime.config.sources import apply_env, apply_toml, read_toml_file
 
 if TYPE_CHECKING:
@@ -107,6 +113,8 @@ def load_runtime_config(
     config = _apply_env(config, os.environ if env is None else env)
     if overrides is not None:
         config = apply_runtime_overrides(config, overrides)
+        
+    config = replace(config, server=validate_server_config(config.server))
     return config
 
 
@@ -137,7 +145,8 @@ def apply_runtime_overrides(
     if overrides.server_host is not None:
         server = replace(server, host=overrides.server_host)
     if overrides.server_port is not None:
-        server = replace(server, port=overrides.server_port)
+        port = validate_server_port(overrides.server_port, source="server_port override")
+        server = replace(server, port=port)
 
     return replace(
         config,

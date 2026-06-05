@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import socket
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -32,8 +33,6 @@ async def background_server(port: int) -> AsyncGenerator[None]:
             ),
         )
     )
-    # Yield to let the server start
-    await asyncio.sleep(0.5)
     try:
         yield
     finally:
@@ -42,12 +41,20 @@ async def background_server(port: int) -> AsyncGenerator[None]:
             await task
 
 
+def _free_tcp_port() -> int:
+    """Return an available local TCP port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
 @pytest.mark.anyio
 async def test_server_starts_and_handles_observation() -> None:
     """Test the server starts and handles a basic gRPC observation submission."""
-    port = 50052
+    port = _free_tcp_port()
     async with background_server(port):
         channel = grpc.aio.insecure_channel(f"127.0.0.1:{port}")
+        await channel.channel_ready()
         stub = runtime_pb2_grpc.IrisRuntimeServiceStub(channel)
 
         request = runtime_pb2.SubmitObservationRequest(
