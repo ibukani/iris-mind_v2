@@ -5,13 +5,15 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import override
+from typing import TYPE_CHECKING, override
 
 import pytest
 
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
+from iris.adapters.memory.fake import FakeMemoryStore
+from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
-from iris.core.ids import ObservationId, SessionId
+from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from iris.runtime.config import (
     CliConfigOverrides,
     ConfigError,
@@ -20,6 +22,10 @@ from iris.runtime.config import (
     default_runtime_config,
     load_runtime_config,
 )
+import iris.runtime.wiring.app as app_wiring
+
+if TYPE_CHECKING:
+    from iris.contracts.memory import MemoryQuery, MemorySearchResult
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.llm import LLMClientFactory
 
@@ -281,10 +287,14 @@ def test_invalid_env_values_raise_config_error(env: dict[str, str], error_key: s
 
 
 @pytest.mark.anyio
-async def test_build_app_from_config_uses_default_chat() -> None:
-    """build_app_from_config wires only default_chat into response generation."""
+async def test_build_app_from_config_uses_default_chat_and_full_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """build_app_from_config wires default_chat into the full cognitive cycle."""
     client = _RecordingLLMClient()
     factory = _RecordingFactory(client)
+    memory_store = _RecordingEmptyMemoryStore()
+    monkeypatch.setattr(app_wiring, "FakeMemoryStore", lambda: memory_store)
     base = default_runtime_config()
     config = replace(
         base,
@@ -300,16 +310,37 @@ async def test_build_app_from_config_uses_default_chat() -> None:
             reasoning=RuntimeModelConfig(provider="fake", model="unused-reasoning"),
         ),
     )
-    app = build_app_from_config(config, client_factory=factory)
+    app = app_wiring.build_app_from_config(config, client_factory=factory)
 
-    await app.process_observation(_observation("hello"))
+    cycle = app._cycle  # pyright: ignore[reportPrivateUsage] -- wiring test  # noqa: SLF001 -- wiring test
+    step_names = tuple(
+        type(step).__name__
+        for step in cycle._steps  # pyright: ignore[reportPrivateUsage] -- wiring test  # noqa: SLF001 -- wiring test
+    )
+    await app.process_observation(_actor_observation("I need help with suicide and tea"))
 
     assert factory.model_config == config.models.default_chat
+    assert step_names == (
+        "SimplePerceptionStep",
+        "MemoryRetrievalStep",
+        "AppraisalStep",
+        "RelationshipStep",
+        "PolicyInhibitionStep",
+        "ResponseGenerationStep",
+    )
+    assert memory_store.query is not None
+    assert memory_store.query.text == "I need help with suicide and tea"
     assert client.request is not None
     assert client.request.model == "slot-model"
     assert client.request.temperature is not None
     assert abs(client.request.temperature - 0.3) < 0.001
     assert client.request.max_tokens == 77
+    user_message = client.request.messages[1].content
+    assert "Affect context:" in user_message
+    assert "Relationship context:" in user_message
+    assert "Mina relationship" in user_message
+    assert "Policy constraints:" in user_message
+    assert "avoid escalating beyond the safety layer" in user_message
 
 
 @pytest.mark.anyio
@@ -340,6 +371,25 @@ class _RecordingLLMClient:
     async def generate(self, request: LLMRequest) -> LLMResponse:
         self.request = request
         return LLMResponse(text="recorded", model=request.model)
+
+
+class _RecordingEmptyMemoryStore(FakeMemoryStore):
+    """Empty FakeMemoryStore that records the query passed by default runtime wiring."""
+
+    def __init__(self) -> None:
+        """Initialize empty recording memory store."""
+        super().__init__()
+        self.query: MemoryQuery | None = None
+
+    @override
+    def search(self, query: MemoryQuery) -> tuple[MemorySearchResult, ...]:
+        """Record query and return empty fake memory results.
+
+        Returns:
+            tuple[MemorySearchResult, ...]: Empty memory search results.
+        """
+        self.query = query
+        return tuple(super().search(query))
 
 
 class _RecordingFactory(LLMClientFactory):
@@ -382,4 +432,23 @@ def _observation(text: str) -> ActorMessageObservation:
         kind=ObservationKind.ACTOR_MESSAGE,
         text=text,
         context=ObservationContext(),
+    )
+
+
+def _actor_observation(text: str) -> ActorMessageObservation:
+    return ActorMessageObservation(
+        observation_id=ObservationId("config-test-actor"),
+        session_id=SessionId("config-test"),
+        occurred_at=datetime(2026, 6, 4, tzinfo=UTC),
+        kind=ObservationKind.ACTOR_MESSAGE,
+        text=text,
+        context=ObservationContext(
+            actor=Identity(
+                actor_id=ActorId("actor-config"),
+                actor_kind=ActorKind.HUMAN,
+                display_name="Mina",
+                provider="test",
+                provider_subject=ExternalRef("mina"),
+            ),
+        ),
     )
