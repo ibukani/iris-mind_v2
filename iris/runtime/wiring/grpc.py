@@ -34,8 +34,14 @@ def create_grpc_server(
 
     Returns:
         grpc.aio.Server: Configured but not started server.
+
+    Raises:
+        RuntimeError: If port binding fails.
     """
     server = grpc.aio.server()
     add_iris_runtime_servicer(server, runtime_service)
-    server.add_insecure_port(f"{host}:{port}")
+    bound_port = server.add_insecure_port(f"{host}:{port}")
+    if bound_port == 0:
+        message = f"failed to bind gRPC port {host}:{port}"
+        raise RuntimeError(message)
     return server

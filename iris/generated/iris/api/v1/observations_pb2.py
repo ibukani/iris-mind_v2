@@ -26,21 +26,25 @@ from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__
 from iris.generated.iris.api.v1 import identity_pb2 as iris_dot_api_dot_v1_dot_identity__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1eiris/api/v1/observations.proto\x12\x0biris.api.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1airis/api/v1/identity.proto\"@\n\x13\x41\x63torMessagePayload\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x1b\n\x13\x65xternal_message_id\x18\x02 \x01(\t\"7\n\x0fIdleTickPayload\x12\x0e\n\x06reason\x18\x01 \x01(\t\x12\x14\n\x0cidle_seconds\x18\x02 \x01(\x01\"\x83\x01\n\x12ObservationContext\x12$\n\x05\x61\x63tor\x18\x01 \x01(\x0b\x32\x15.iris.api.v1.Identity\x12\x12\n\naccount_id\x18\x02 \x01(\t\x12\x11\n\tdevice_id\x18\x03 \x01(\t\x12\x10\n\x08space_id\x18\x04 \x01(\t\x12\x0e\n\x06source\x18\x05 \x01(\t\"\xc1\x02\n\x0bObservation\x12\x16\n\x0eobservation_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12*\n\x04kind\x18\x03 \x01(\x0e\x32\x1c.iris.api.v1.ObservationKind\x12/\n\x0boccurred_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x07\x63ontext\x18\x05 \x01(\x0b\x32\x1f.iris.api.v1.ObservationContext\x12\x39\n\ractor_message\x18\n \x01(\x0b\x32 .iris.api.v1.ActorMessagePayloadH\x00\x12\x31\n\tidle_tick\x18\x0b \x01(\x0b\x32\x1c.iris.api.v1.IdleTickPayloadH\x00\x42\t\n\x07payload*\xe0\x01\n\x0fObservationKind\x12 \n\x1cOBSERVATION_KIND_UNSPECIFIED\x10\x00\x12\"\n\x1eOBSERVATION_KIND_ACTOR_MESSAGE\x10\x01\x12\x1f\n\x1bOBSERVATION_KIND_TRANSCRIPT\x10\x02\x12\x1e\n\x1aOBSERVATION_KIND_IDLE_TICK\x10\x03\x12%\n!OBSERVATION_KIND_AUDIENCE_MESSAGE\x10\x04\x12\x1f\n\x1bOBSERVATION_KIND_GAME_EVENT\x10\x05\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1eiris/api/v1/observations.proto\x12\x0biris.api.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1airis/api/v1/identity.proto\"@\n\x13\x41\x63torMessagePayload\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x1b\n\x13\x65xternal_message_id\x18\x02 \x01(\t\"7\n\x0fIdleTickPayload\x12\x0e\n\x06reason\x18\x01 \x01(\t\x12\x14\n\x0cidle_seconds\x18\x02 \x01(\x01\"\xf5\x01\n\x12ObservationContext\x12$\n\x05\x61\x63tor\x18\x01 \x01(\x0b\x32\x15.iris.api.v1.Identity\x12\x12\n\naccount_id\x18\x02 \x01(\t\x12\x11\n\tdevice_id\x18\x03 \x01(\t\x12\x10\n\x08space_id\x18\x04 \x01(\t\x12\x0e\n\x06source\x18\x05 \x01(\t\x12?\n\x08metadata\x18\x06 \x03(\x0b\x32-.iris.api.v1.ObservationContext.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xc1\x02\n\x0bObservation\x12\x16\n\x0eobservation_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12*\n\x04kind\x18\x03 \x01(\x0e\x32\x1c.iris.api.v1.ObservationKind\x12/\n\x0boccurred_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x30\n\x07\x63ontext\x18\x05 \x01(\x0b\x32\x1f.iris.api.v1.ObservationContext\x12\x39\n\ractor_message\x18\n \x01(\x0b\x32 .iris.api.v1.ActorMessagePayloadH\x00\x12\x31\n\tidle_tick\x18\x0b \x01(\x0b\x32\x1c.iris.api.v1.IdleTickPayloadH\x00\x42\t\n\x07payload*\xe0\x01\n\x0fObservationKind\x12 \n\x1cOBSERVATION_KIND_UNSPECIFIED\x10\x00\x12\"\n\x1eOBSERVATION_KIND_ACTOR_MESSAGE\x10\x01\x12\x1f\n\x1bOBSERVATION_KIND_TRANSCRIPT\x10\x02\x12\x1e\n\x1aOBSERVATION_KIND_IDLE_TICK\x10\x03\x12%\n!OBSERVATION_KIND_AUDIENCE_MESSAGE\x10\x04\x12\x1f\n\x1bOBSERVATION_KIND_GAME_EVENT\x10\x05\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'iris.api.v1.observations_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_OBSERVATIONKIND']._serialized_start=690
-  _globals['_OBSERVATIONKIND']._serialized_end=914
+  _globals['_OBSERVATIONCONTEXT_METADATAENTRY']._loaded_options = None
+  _globals['_OBSERVATIONCONTEXT_METADATAENTRY']._serialized_options = b'8\001'
+  _globals['_OBSERVATIONKIND']._serialized_start=804
+  _globals['_OBSERVATIONKIND']._serialized_end=1028
   _globals['_ACTORMESSAGEPAYLOAD']._serialized_start=108
   _globals['_ACTORMESSAGEPAYLOAD']._serialized_end=172
   _globals['_IDLETICKPAYLOAD']._serialized_start=174
   _globals['_IDLETICKPAYLOAD']._serialized_end=229
   _globals['_OBSERVATIONCONTEXT']._serialized_start=232
-  _globals['_OBSERVATIONCONTEXT']._serialized_end=363
-  _globals['_OBSERVATION']._serialized_start=366
-  _globals['_OBSERVATION']._serialized_end=687
+  _globals['_OBSERVATIONCONTEXT']._serialized_end=477
+  _globals['_OBSERVATIONCONTEXT_METADATAENTRY']._serialized_start=430
+  _globals['_OBSERVATIONCONTEXT_METADATAENTRY']._serialized_end=477
+  _globals['_OBSERVATION']._serialized_start=480
+  _globals['_OBSERVATION']._serialized_end=801
 # @@protoc_insertion_point(module_scope)

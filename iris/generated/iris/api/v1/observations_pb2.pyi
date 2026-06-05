@@ -3,9 +3,11 @@
 isort:skip_file
 """
 
+from collections import abc as _abc
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import timestamp_pb2 as _timestamp_pb2
+from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from iris.generated.iris.api.v1 import identity_pb2 as _identity_pb2
 import builtins as _builtins
@@ -28,18 +30,24 @@ class _ObservationKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Obser
     OBSERVATION_KIND_UNSPECIFIED: _ObservationKind.ValueType  # 0
     OBSERVATION_KIND_ACTOR_MESSAGE: _ObservationKind.ValueType  # 1
     OBSERVATION_KIND_TRANSCRIPT: _ObservationKind.ValueType  # 2
+    """Reserved: not yet mapped in gRPC adapter."""
     OBSERVATION_KIND_IDLE_TICK: _ObservationKind.ValueType  # 3
     OBSERVATION_KIND_AUDIENCE_MESSAGE: _ObservationKind.ValueType  # 4
+    """Reserved: not yet mapped in gRPC adapter."""
     OBSERVATION_KIND_GAME_EVENT: _ObservationKind.ValueType  # 5
+    """Reserved: not yet mapped in gRPC adapter."""
 
 class ObservationKind(_ObservationKind, metaclass=_ObservationKindEnumTypeWrapper): ...
 
 OBSERVATION_KIND_UNSPECIFIED: ObservationKind.ValueType  # 0
 OBSERVATION_KIND_ACTOR_MESSAGE: ObservationKind.ValueType  # 1
 OBSERVATION_KIND_TRANSCRIPT: ObservationKind.ValueType  # 2
+"""Reserved: not yet mapped in gRPC adapter."""
 OBSERVATION_KIND_IDLE_TICK: ObservationKind.ValueType  # 3
 OBSERVATION_KIND_AUDIENCE_MESSAGE: ObservationKind.ValueType  # 4
+"""Reserved: not yet mapped in gRPC adapter."""
 OBSERVATION_KIND_GAME_EVENT: ObservationKind.ValueType  # 5
+"""Reserved: not yet mapped in gRPC adapter."""
 Global___ObservationKind: _TypeAlias = ObservationKind  # noqa: Y015
 
 @_typing.final
@@ -90,17 +98,40 @@ Global___IdleTickPayload: _TypeAlias = IdleTickPayload  # noqa: Y015
 class ObservationContext(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
+    @_typing.final
+    class MetadataEntry(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: _builtins.int
+        VALUE_FIELD_NUMBER: _builtins.int
+        key: _builtins.str
+        value: _builtins.str
+        def __init__(
+            self,
+            *,
+            key: _builtins.str = ...,
+            value: _builtins.str = ...,
+        ) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "value", b"value"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
+
     ACTOR_FIELD_NUMBER: _builtins.int
     ACCOUNT_ID_FIELD_NUMBER: _builtins.int
     DEVICE_ID_FIELD_NUMBER: _builtins.int
     SPACE_ID_FIELD_NUMBER: _builtins.int
     SOURCE_FIELD_NUMBER: _builtins.int
+    METADATA_FIELD_NUMBER: _builtins.int
     account_id: _builtins.str
     device_id: _builtins.str
     space_id: _builtins.str
     source: _builtins.str
     @_builtins.property
     def actor(self) -> _identity_pb2.Identity: ...
+    @_builtins.property
+    def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
     def __init__(
         self,
         *,
@@ -109,10 +140,11 @@ class ObservationContext(_message.Message):
         device_id: _builtins.str = ...,
         space_id: _builtins.str = ...,
         source: _builtins.str = ...,
+        metadata: _abc.Mapping[_builtins.str, _builtins.str] | None = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["actor", b"actor"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["account_id", b"account_id", "actor", b"actor", "device_id", b"device_id", "source", b"source", "space_id", b"space_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["account_id", b"account_id", "actor", b"actor", "device_id", b"device_id", "metadata", b"metadata", "source", b"source", "space_id", b"space_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 

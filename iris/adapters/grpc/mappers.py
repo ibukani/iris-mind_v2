@@ -112,6 +112,7 @@ def observation_context_from_proto(
         device_id=DeviceId(context.device_id) if context.device_id else None,
         space_id=SpaceId(context.space_id) if context.space_id else None,
         source=context.source or None,
+        metadata=dict(context.metadata.items()),
     )
 
 

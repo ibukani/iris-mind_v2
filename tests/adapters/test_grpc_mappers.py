@@ -88,6 +88,7 @@ def test_observation_context_actor_maps_to_identity() -> None:
     assert observation.context.device_id == DeviceId("device-1")
     assert observation.context.space_id == SpaceId("space-1")
     assert observation.context.source == "grpc-test"
+    assert observation.context.metadata == {"trace_id": "abc-123"}
 
 
 def test_runtime_response_maps_to_proto() -> None:
@@ -178,6 +179,7 @@ def _actor_message_proto() -> observations_pb2.Observation:
             device_id="device-1",
             space_id="space-1",
             source="grpc-test",
+            metadata={"trace_id": "abc-123"},
         ),
         actor_message=observations_pb2.ActorMessagePayload(
             text="hello grpc",
