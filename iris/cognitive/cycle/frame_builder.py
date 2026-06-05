@@ -101,7 +101,10 @@ class FrameBuilder:
             case MotivationResult():
                 updated = replace(
                     frame,
-                    goals=tuple(GoalCandidate(name=goal) for goal in result.goals),
+                    goals=tuple(
+                        GoalCandidate(name=goal, reason="pipeline", priority=index)
+                        for index, goal in enumerate(result.goals)
+                    ),
                 )
             case PolicyResult():
                 updated = replace(

@@ -58,8 +58,8 @@ class GoalCandidate:
     """Candidate goal considered by the cognitive cycle."""
 
     name: str
-    priority: float = 0.0
-    rationale: str | None = None
+    reason: str
+    priority: int
 
 
 @dataclass(frozen=True)
