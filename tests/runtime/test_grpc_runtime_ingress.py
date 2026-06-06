@@ -23,8 +23,8 @@ from iris.runtime.service import IrisRuntimeService, RuntimeResponse
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from iris.adapters.app_gateway.ingress import ExternalSpaceRef
     from iris.adapters.app_gateway.ports import IdentityResolver
+    from iris.contracts.external_refs import ExternalSpaceRef
     from iris.contracts.identity import Identity
     from iris.runtime.service import ObservationEnvelope
 

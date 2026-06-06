@@ -2,31 +2,18 @@
 
 from __future__ import annotations
 
-from hashlib import blake2b
+import dataclasses
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.app_gateway.ports import IdentityResolver
+from iris.adapters.app_gateway.stable_ids import stable_account_id, stable_actor_id
 from iris.contracts.accounts import AccountProfile
 from iris.contracts.identity import Identity
-from iris.core.ids import AccountId, ActorId
 
 if TYPE_CHECKING:
-    from iris.adapters.app_gateway.ingress import ExternalAccountRef
     from iris.adapters.app_gateway.ports import AccountStore
+    from iris.contracts.external_refs import ExternalAccountRef
     from iris.core.ids import DeviceId
-
-
-def _stable_id(prefix: str, provider: str, external_ref: str) -> str:
-    """Create a short deterministic ID string.
-
-    Returns:
-        str: A deterministic ID prefixed with the given string.
-    """
-    digest = blake2b(
-        f"{provider}:{external_ref}".encode(),
-        digest_size=12,
-    ).hexdigest()
-    return f"{prefix}-{provider}-{digest}"
 
 
 class AccountBackedIdentityResolver(IdentityResolver):
@@ -56,9 +43,8 @@ class AccountBackedIdentityResolver(IdentityResolver):
 
         if not profile:
             # Create a deterministic AccountProfile
-            resolved_account_id = AccountId(
-                account_ref.account_id
-                or _stable_id("account", account_ref.provider, str(account_ref.provider_subject))
+            resolved_account_id = account_ref.account_id or stable_account_id(
+                account_ref.provider, account_ref.provider_subject
             )
             profile = AccountProfile(
                 account_id=resolved_account_id,
@@ -68,12 +54,12 @@ class AccountBackedIdentityResolver(IdentityResolver):
                 metadata=dict(account_ref.metadata),
             )
             profile = await self._account_store.put(profile)
+        elif profile.display_name != account_ref.display_name:
+            profile = dataclasses.replace(profile, display_name=account_ref.display_name)
+            profile = await self._account_store.put(profile)
 
         # Determine actor_id
-        if profile.linked_actor_id:
-            actor_id = profile.linked_actor_id
-        else:
-            actor_id = ActorId(_stable_id("actor", "", str(profile.account_id)))
+        actor_id = profile.linked_actor_id or stable_actor_id(profile.account_id)
 
         return Identity(
             actor_id=actor_id,

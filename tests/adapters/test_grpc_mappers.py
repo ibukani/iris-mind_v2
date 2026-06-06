@@ -10,7 +10,7 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from iris.adapters.app_gateway.ingress import ExternalAccountRef, ExternalSpaceRef
+    from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver
 from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver

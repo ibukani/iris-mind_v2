@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from iris.adapters.app_gateway.ingress import ExternalAccountRef, ExternalSpaceRef
     from iris.contracts.accounts import AccountProfile
     from iris.contracts.actions import ActionResult, AppAction
+    from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
     from iris.contracts.identity import Identity
     from iris.contracts.observations import Observation
     from iris.contracts.spaces import InteractionSpace, SpaceBinding

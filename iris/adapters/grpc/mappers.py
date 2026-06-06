@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, NoReturn
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from iris.adapters.app_gateway.ingress import ExternalAccountRef, ExternalSpaceRef
+from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActorMessageObservation,

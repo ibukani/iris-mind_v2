@@ -10,9 +10,9 @@ from iris.adapters.app_gateway.fake_gateway import FakeAppGateway
 from iris.adapters.app_gateway.ingress import (
     ActorMessageIngress,
     ActorMessagePayload,
-    ExternalAccountRef,
 )
 from iris.contracts.actions import ActionStatus, AppAction
+from iris.contracts.external_refs import ExternalAccountRef
 from iris.core.ids import ActionId, CorrelationId, ExternalRef, SessionId
 
 _CLOCK_AT = datetime(2026, 6, 5, 15, 0, tzinfo=UTC)

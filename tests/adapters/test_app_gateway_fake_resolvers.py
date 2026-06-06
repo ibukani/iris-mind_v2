@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver, FakeSpaceResolver
-from iris.adapters.app_gateway.ingress import ExternalAccountRef, ExternalSpaceRef
+from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 from iris.contracts.identity import ActorKind
 from iris.contracts.spaces import SpaceKind
 from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef

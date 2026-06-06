@@ -2,25 +2,21 @@
 
 from __future__ import annotations
 
-from hashlib import blake2b
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.app_gateway.ports import AccountStore, IdentityResolver, SpaceResolver
+from iris.adapters.app_gateway.space_participants import space_participant_from_identity
+from iris.adapters.app_gateway.stable_ids import stable_account_id, stable_actor_id, stable_space_id
 from iris.contracts.accounts import AccountProfile
 from iris.contracts.identity import Identity
-from iris.contracts.spaces import (
-    InteractionSpace,
-    SpaceParticipant,
-    SpaceParticipantKind,
-)
-from iris.core.ids import AccountId, ActorId, SpaceId
+from iris.contracts.spaces import InteractionSpace
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from iris.adapters.app_gateway.ingress import ExternalAccountRef, ExternalSpaceRef
-    from iris.core.ids import DeviceId
+    from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
+    from iris.core.ids import ActorId, DeviceId
 
 
 class FakeIdentityResolver(IdentityResolver):
@@ -56,9 +52,8 @@ class FakeIdentityResolver(IdentityResolver):
 
         if not profile:
             # Create a deterministic AccountProfile
-            resolved_account_id = AccountId(
-                account_ref.account_id
-                or _stable_id("account", account_ref.provider, str(account_ref.provider_subject))
+            resolved_account_id = account_ref.account_id or stable_account_id(
+                account_ref.provider, account_ref.provider_subject
             )
             profile = AccountProfile(
                 account_id=resolved_account_id,
@@ -79,10 +74,7 @@ class FakeIdentityResolver(IdentityResolver):
             )
 
         # Determine actor_id
-        if profile.linked_actor_id:
-            actor_id = profile.linked_actor_id
-        else:
-            actor_id = ActorId(_stable_id("actor", "", str(profile.account_id)))
+        actor_id = profile.linked_actor_id or stable_actor_id(profile.account_id)
 
         return Identity(
             actor_id=actor_id,
@@ -111,38 +103,13 @@ class FakeSpaceResolver(SpaceResolver):
         Returns:
             InteractionSpace: 外部refから決定論的に解決されたInteractionSpace。
         """
-        space_id_str = _stable_id("space", space_ref.provider, str(space_ref.provider_space_ref))
+        space_id = stable_space_id(space_ref.provider, space_ref.provider_space_ref)
         return InteractionSpace(
-            space_id=SpaceId(space_id_str),
+            space_id=space_id,
             space_kind=space_ref.space_kind,
             display_name=space_ref.display_name,
-            participants=tuple(_space_participant(identity) for identity in participants),
+            participants=tuple(
+                space_participant_from_identity(identity) for identity in participants
+            ),
             metadata=dict(space_ref.metadata),
         )
-
-
-def _stable_id(prefix: str, provider: str, external_ref: str) -> str:
-    """Resolver用の短い決定論的ID文字列を作る。
-
-    Returns:
-        str: prefix付きの決定論的ID。
-    """
-    digest = blake2b(
-        f"{provider}:{external_ref}".encode(),
-        digest_size=12,
-    ).hexdigest()
-    return f"{prefix}-{provider}-{digest}"
-
-
-def _space_participant(identity: Identity) -> SpaceParticipant:
-    """IdentityからSpaceParticipant snapshotを作る。
-
-    Returns:
-        SpaceParticipant: Identityを含む参加者snapshot。
-    """
-    return SpaceParticipant(
-        actor_id=identity.actor_id,
-        participant_kind=SpaceParticipantKind(identity.actor_kind.value),
-        display_name=identity.display_name,
-        identity=identity,
-    )

@@ -10,13 +10,12 @@ from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver, FakeS
 from iris.adapters.app_gateway.ingress import (
     ActorMessageIngress,
     ActorMessagePayload,
-    ExternalAccountRef,
-    ExternalSpaceRef,
 )
 from iris.adapters.app_gateway.observation_factory import (
     ObservationFactory,
     SequentialObservationIdFactory,
 )
+from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 from iris.contracts.identity import ActorKind
 from iris.contracts.observations import ObservationKind
 from iris.contracts.spaces import SpaceKind

@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
-from iris.adapters.app_gateway.ingress import ExternalAccountRef
-from iris.core.ids import ActorId, ExternalRef
+from iris.contracts.external_refs import ExternalAccountRef
+from iris.core.ids import ActorId, DeviceId, ExternalRef
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -92,3 +92,56 @@ def test_account_backed_resolver_uses_linked_actor_id(tmp_path: Path) -> None:
 
     assert identity2.account_id == identity1.account_id
     assert identity2.actor_id == ActorId("actor-mina")
+
+
+def test_account_backed_resolver_updates_display_name(tmp_path: Path) -> None:
+    """Resolver should update display_name if it changes in external ref."""
+    db_path = tmp_path / "accounts.db"
+
+    store = SQLiteAccountStore(db_path)
+    resolver = AccountBackedIdentityResolver(store)
+
+    identity1 = asyncio.run(
+        resolver.resolve_identity(
+            ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("123"),
+                display_name="Mina Old",
+            )
+        )
+    )
+
+    assert identity1.display_name == "Mina Old"
+
+    identity2 = asyncio.run(
+        resolver.resolve_identity(
+            ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("123"),
+                display_name="Mina New",
+            )
+        )
+    )
+
+    assert identity2.display_name == "Mina New"
+
+
+def test_account_backed_resolver_passes_device_id(tmp_path: Path) -> None:
+    """Resolver should pass device_id to Identity."""
+    db_path = tmp_path / "accounts.db"
+
+    store = SQLiteAccountStore(db_path)
+    resolver = AccountBackedIdentityResolver(store)
+
+    identity = asyncio.run(
+        resolver.resolve_identity(
+            ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("123"),
+                display_name="Mina",
+            ),
+            device_id=DeviceId("dev-1"),
+        )
+    )
+
+    assert identity.device_id == "dev-1"
