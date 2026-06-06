@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from types import MappingProxyType
 from typing import TYPE_CHECKING
+
+from iris.core.metadata import EMPTY_METADATA, immutable_metadata
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -29,7 +30,11 @@ class DeviceCapability:
     """Capability advertised by a device."""
 
     name: str
-    metadata: Mapping[str, str] = MappingProxyType({})
+    metadata: Mapping[str, str] = EMPTY_METADATA
+
+    def __post_init__(self) -> None:
+        """Defensively copy metadata as an immutable mapping proxy."""
+        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
 
 
 @dataclass(frozen=True)
@@ -41,4 +46,8 @@ class DeviceProfile:
     display_name: str
     owner_actor_id: ActorId | None = None
     capabilities: tuple[DeviceCapability, ...] = ()
-    metadata: Mapping[str, str] = MappingProxyType({})
+    metadata: Mapping[str, str] = EMPTY_METADATA
+
+    def __post_init__(self) -> None:
+        """Defensively copy metadata as an immutable mapping proxy."""
+        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))

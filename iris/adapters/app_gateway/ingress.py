@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import TYPE_CHECKING
+
+from iris.core.metadata import EMPTY_METADATA, immutable_metadata
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -33,9 +34,8 @@ class ActorMessageIngress:
     space: ExternalSpaceRef | None = None
     device_id: DeviceId | None = None
     source: str | None = None
-    metadata: Mapping[str, str] = MappingProxyType({})
+    metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
         """Defensively copy metadata as an immutable mapping proxy."""
-        if not isinstance(self.metadata, MappingProxyType):
-            object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
+        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
