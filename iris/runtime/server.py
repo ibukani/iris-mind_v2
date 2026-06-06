@@ -25,7 +25,7 @@ async def serve(
     config_path: str | None = None,
     overrides: RuntimeConfigOverrides | None = None,
 ) -> None:
-    """gRPC ランタイムサーバーを起動する。
+    """GRPC ランタイムサーバーを起動する。
 
     Args:
         config_path: 任意の TOML 設定ファイルパス。

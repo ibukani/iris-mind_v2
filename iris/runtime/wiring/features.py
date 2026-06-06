@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefinition:
-    """proactive talk 機能の定義を組み立てる。
+    """Proactive talk 機能の定義を組み立てる。
 
     Args:
         salience_threshold: 能動的開始を行うためのサリエンス最小値。
@@ -37,7 +37,7 @@ def wire_proactive_talk_cognitive_cycle(
     relationship_state: InMemoryRelationshipState | None = None,
     salience_threshold: float = 0.5,
 ) -> CognitiveCycle:
-    """proactive talk 機能で拡張された認知サイクルを組み立てる。
+    """Proactive talk 機能で拡張された認知サイクルを組み立てる。
 
     Args:
         memory_store: 任意の取得用メモリストア。
