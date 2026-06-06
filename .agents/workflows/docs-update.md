@@ -2,7 +2,7 @@
 
 
 Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
-Use this workflow when changing README, docs, agent rules, prompts, or checklists.
+Use this workflow when changing README, docs, agent rules, prompts, checklists, comments, or docstrings.
 
 ## Documentation rules
 
@@ -10,6 +10,7 @@ Use this workflow when changing README, docs, agent rules, prompts, or checklist
 - Put detailed instructions under `.agents/`.
 - Apply `.agents/rules/documentation-language.md` when choosing Japanese or English.
 - Write human-facing documentation in Japanese by default.
+- Write human-facing docstrings and explanatory comments in Japanese by default.
 - Agent-facing prompts, harness rules, and machine-oriented contracts may stay English when useful.
 - Do not duplicate long rule text across many files.
 - Update docs with code behavior when architecture changes.
@@ -26,6 +27,8 @@ When editing docs, compare against:
 - `docs/tests.md`
 - `.agents/rules/documentation-language.md`
 - `tests/architecture/`
+
+When editing comments or docstrings, compare against the surrounding code style and preserve identifiers, protocol names, commands, and external API names exactly.
 
 ## Do not invent commands
 
