@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import inspect
 from dataclasses import replace
+import inspect
 from pathlib import Path
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
