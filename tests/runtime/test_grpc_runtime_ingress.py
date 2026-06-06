@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast, override
 
@@ -14,8 +14,8 @@ from iris.adapters.app_gateway.ports import SpaceResolver
 from iris.adapters.grpc.mappers import GrpcRuntimeMapper, timestamp_from_datetime
 from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
 from iris.contracts.actions import PresentedOutput
-from iris.contracts.spaces import InteractionSpace, SpaceKind
-from iris.core.ids import ExternalRef, SpaceId
+from iris.contracts.spaces import InteractionSpace
+from iris.core.ids import SpaceId
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from iris.runtime.service import IrisRuntimeService, RuntimeResponse
@@ -23,6 +23,7 @@ from iris.runtime.service import IrisRuntimeService, RuntimeResponse
 if TYPE_CHECKING:
     from types import TracebackType
 
+    from iris.adapters.app_gateway.ingress import ExternalSpaceRef
     from iris.adapters.app_gateway.ports import IdentityResolver
     from iris.contracts.identity import Identity
     from iris.runtime.service import ObservationEnvelope
@@ -495,19 +496,15 @@ class _RecordingSpaceResolver(SpaceResolver):
     @override
     async def resolve_space(
         self,
+        space_ref: ExternalSpaceRef,
         *,
-        provider: str,
-        provider_space_ref: ExternalRef,
-        display_name: str,
-        space_kind: SpaceKind,
         participants: Sequence[Identity] = (),
-        metadata: Mapping[str, str] | None = None,
     ) -> InteractionSpace:
         _ = participants
         return InteractionSpace(
-            space_id=SpaceId(f"resolved-space-{provider}-{provider_space_ref}"),
-            space_kind=space_kind,
-            display_name=display_name,
+            space_id=SpaceId(f"resolved-space-{space_ref.provider}-{space_ref.provider_space_ref}"),
+            space_kind=space_ref.space_kind,
+            display_name=space_ref.display_name,
             participants=(),
-            metadata=dict(metadata or {}),
+            metadata=dict(space_ref.metadata),
         )

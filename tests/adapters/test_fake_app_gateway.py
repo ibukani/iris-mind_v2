@@ -7,6 +7,11 @@ from datetime import UTC, datetime
 import pytest
 
 from iris.adapters.app_gateway.fake_gateway import FakeAppGateway
+from iris.adapters.app_gateway.ingress import (
+    ActorMessageIngress,
+    ActorMessagePayload,
+    ExternalAccountRef,
+)
 from iris.contracts.actions import ActionStatus, AppAction
 from iris.core.ids import ActionId, CorrelationId, ExternalRef, SessionId
 
@@ -18,20 +23,32 @@ async def test_fake_app_gateway_receive_observation_is_fifo() -> None:
     """FakeAppGatewayがingest順にObservationを返すことを確認する。"""
     gateway = FakeAppGateway(clock=lambda: _CLOCK_AT)
     first = await gateway.ingest_actor_message(
-        provider="discord",
-        provider_subject=ExternalRef("actor-1"),
-        display_name="Mina",
-        text="first",
-        session_id=SessionId("session-1"),
-        external_message_id=ExternalRef("message-1"),
+        ActorMessageIngress(
+            actor=ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("actor-1"),
+                display_name="Mina",
+            ),
+            message=ActorMessagePayload(
+                text="first",
+                external_message_id=ExternalRef("message-1"),
+            ),
+            session_id=SessionId("session-1"),
+        )
     )
     second = await gateway.ingest_actor_message(
-        provider="discord",
-        provider_subject=ExternalRef("actor-2"),
-        display_name="Nao",
-        text="second",
-        session_id=SessionId("session-1"),
-        external_message_id=ExternalRef("message-2"),
+        ActorMessageIngress(
+            actor=ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("actor-2"),
+                display_name="Nao",
+            ),
+            message=ActorMessagePayload(
+                text="second",
+                external_message_id=ExternalRef("message-2"),
+            ),
+            session_id=SessionId("session-1"),
+        )
     )
 
     assert await gateway.receive_observation() == first

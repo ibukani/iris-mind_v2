@@ -14,14 +14,10 @@ from iris.adapters.app_gateway.observation_factory import (
 )
 from iris.adapters.app_gateway.ports import AppGateway
 from iris.contracts.actions import ActionResult, ActionStatus, AppAction
-from iris.contracts.identity import ActorKind
-from iris.contracts.spaces import SpaceKind
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
+    from iris.adapters.app_gateway.ingress import ActorMessageIngress
     from iris.contracts.observations import ActorMessageObservation, Observation
-    from iris.core.ids import AccountId, DeviceId, ExternalRef, SessionId
 
 
 class FakeAppGateway(AppGateway):
@@ -43,47 +39,16 @@ class FakeAppGateway(AppGateway):
         )
         self._queue: deque[Observation] = deque()
 
-    async def ingest_actor_message(  # noqa: PLR0913 -- typed app gateway event fields stay explicit
+    async def ingest_actor_message(
         self,
-        *,
-        provider: str,
-        provider_subject: ExternalRef,
-        display_name: str,
-        text: str,
-        session_id: SessionId,
-        provider_space_ref: ExternalRef | None = None,
-        space_display_name: str | None = None,
-        space_kind: SpaceKind = SpaceKind.CHANNEL,
-        account_id: AccountId | None = None,
-        device_id: DeviceId | None = None,
-        actor_kind: ActorKind = ActorKind.HUMAN,
-        source: str | None = None,
-        occurred_at: datetime | None = None,
-        external_message_id: ExternalRef | None = None,
-        metadata: Mapping[str, str] | None = None,
+        ingress: ActorMessageIngress,
     ) -> ActorMessageObservation:
         """Actor message観測を作ってFIFO queueへ追加する。
 
         Returns:
             ActorMessageObservation: queueへ追加した観測。
         """
-        observation = await self._observation_factory.create_actor_message(
-            provider=provider,
-            provider_subject=provider_subject,
-            display_name=display_name,
-            text=text,
-            session_id=session_id,
-            provider_space_ref=provider_space_ref,
-            space_display_name=space_display_name,
-            space_kind=space_kind,
-            account_id=account_id,
-            device_id=device_id,
-            actor_kind=actor_kind,
-            source=source,
-            occurred_at=occurred_at,
-            external_message_id=external_message_id,
-            metadata=metadata,
-        )
+        observation = await self._observation_factory.create_actor_message(ingress)
         self._queue.append(observation)
         return observation
 

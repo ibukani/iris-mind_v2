@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
+from iris.adapters.app_gateway.ingress import ExternalAccountRef
 from iris.core.ids import ActorId, ExternalRef
 
 if TYPE_CHECKING:
@@ -23,9 +24,11 @@ def test_account_backed_resolver_persists_identity_across_restarts(tmp_path: Pat
     # First resolve creates the account
     identity1 = asyncio.run(
         resolver1.resolve_identity(
-            provider="discord",
-            provider_subject=ExternalRef("123"),
-            display_name="Mina",
+            ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("123"),
+                display_name="Mina",
+            )
         )
     )
 
@@ -36,9 +39,11 @@ def test_account_backed_resolver_persists_identity_across_restarts(tmp_path: Pat
     # Second resolve should fetch the same account
     identity2 = asyncio.run(
         resolver2.resolve_identity(
-            provider="discord",
-            provider_subject=ExternalRef("123"),
-            display_name="Mina Updated",
+            ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("123"),
+                display_name="Mina Updated",
+            )
         )
     )
 
@@ -56,9 +61,11 @@ def test_account_backed_resolver_uses_linked_actor_id(tmp_path: Path) -> None:
     # Create the account by resolving it once
     identity1 = asyncio.run(
         resolver.resolve_identity(
-            provider="discord",
-            provider_subject=ExternalRef("123"),
-            display_name="Mina",
+            ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("123"),
+                display_name="Mina",
+            )
         )
     )
 
@@ -75,9 +82,11 @@ def test_account_backed_resolver_uses_linked_actor_id(tmp_path: Path) -> None:
 
     identity2 = asyncio.run(
         resolver2.resolve_identity(
-            provider="discord",
-            provider_subject=ExternalRef("123"),
-            display_name="Mina",
+            ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("123"),
+                display_name="Mina",
+            )
         )
     )
 

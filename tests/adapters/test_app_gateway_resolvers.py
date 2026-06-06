@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from iris.adapters.accounts.memory import InMemoryAccountStore
+from iris.adapters.app_gateway.ingress import ExternalAccountRef, ExternalSpaceRef
 from iris.adapters.app_gateway.resolvers import AccountIdentityResolver, EphemeralSpaceResolver
 from iris.contracts.spaces import SpaceKind
 from iris.core.ids import ActorId, ExternalRef
@@ -17,9 +18,11 @@ async def test_account_identity_resolver_creates_account() -> None:
     resolver = AccountIdentityResolver(store)
 
     identity = await resolver.resolve_identity(
-        provider="discord",
-        provider_subject=ExternalRef("u1"),
-        display_name="User1",
+        ExternalAccountRef(
+            provider="discord",
+            provider_subject=ExternalRef("u1"),
+            display_name="User1",
+        )
     )
 
     assert identity.provider == "discord"
@@ -30,9 +33,11 @@ async def test_account_identity_resolver_creates_account() -> None:
 
     # Resolving again returns the same account
     identity2 = await resolver.resolve_identity(
-        provider="discord",
-        provider_subject=ExternalRef("u1"),
-        display_name="User1_Updated",
+        ExternalAccountRef(
+            provider="discord",
+            provider_subject=ExternalRef("u1"),
+            display_name="User1_Updated",
+        )
     )
 
     assert identity.account_id == identity2.account_id
@@ -46,9 +51,11 @@ async def test_account_identity_resolver_respects_linked_actor() -> None:
     resolver = AccountIdentityResolver(store)
 
     identity = await resolver.resolve_identity(
-        provider="discord",
-        provider_subject=ExternalRef("u1"),
-        display_name="User1",
+        ExternalAccountRef(
+            provider="discord",
+            provider_subject=ExternalRef("u1"),
+            display_name="User1",
+        )
     )
 
     assert identity.account_id is not None
@@ -56,9 +63,11 @@ async def test_account_identity_resolver_respects_linked_actor() -> None:
     await store.link_account_to_actor(account_id=identity.account_id, actor_id=custom_actor_id)
 
     identity2 = await resolver.resolve_identity(
-        provider="discord",
-        provider_subject=ExternalRef("u1"),
-        display_name="User1",
+        ExternalAccountRef(
+            provider="discord",
+            provider_subject=ExternalRef("u1"),
+            display_name="User1",
+        )
     )
 
     assert identity2.actor_id == custom_actor_id
@@ -70,10 +79,12 @@ async def test_ephemeral_space_resolver() -> None:
     resolver = EphemeralSpaceResolver()
 
     space = await resolver.resolve_space(
-        provider="discord",
-        provider_space_ref=ExternalRef("c1"),
-        display_name="Channel 1",
-        space_kind=SpaceKind.CHANNEL,
+        ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref=ExternalRef("c1"),
+            display_name="Channel 1",
+            space_kind=SpaceKind.CHANNEL,
+        )
     )
 
     assert space.space_kind == SpaceKind.CHANNEL
@@ -83,9 +94,11 @@ async def test_ephemeral_space_resolver() -> None:
 
     # Resolving again returns the same space_id
     space2 = await resolver.resolve_space(
-        provider="discord",
-        provider_space_ref=ExternalRef("c1"),
-        display_name="Channel 1",
-        space_kind=SpaceKind.CHANNEL,
+        ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref=ExternalRef("c1"),
+            display_name="Channel 1",
+            space_kind=SpaceKind.CHANNEL,
+        )
     )
     assert space.space_id == space2.space_id

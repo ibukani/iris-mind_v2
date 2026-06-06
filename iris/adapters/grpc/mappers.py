@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, NoReturn
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
+from iris.adapters.app_gateway.ingress import ExternalAccountRef, ExternalSpaceRef
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActorMessageObservation,
@@ -200,21 +201,11 @@ class GrpcRuntimeMapper:
         """
         if self._identity_resolver is None:
             _raise_mapping_error("identity resolver is required for account_ref")
-        if not account_ref.provider:
-            _raise_mapping_error("account_ref.provider is required")
-        if not account_ref.provider_subject:
-            _raise_mapping_error("account_ref.provider_subject is required")
-        if not account_ref.display_name:
-            _raise_mapping_error("account_ref.display_name is required")
-        actor_kind = _account_ref_kind_to_contract(account_ref.actor_kind)
+
+        dto = external_account_ref_from_proto(account_ref)
         return await self._identity_resolver.resolve_identity(
-            provider=account_ref.provider,
-            provider_subject=ExternalRef(account_ref.provider_subject),
-            display_name=account_ref.display_name,
-            actor_kind=actor_kind,
-            account_id=None,
+            dto,
             device_id=device_id,
-            metadata=dict(account_ref.metadata.items()),
         )
 
     async def _resolve_space_ref(
@@ -230,25 +221,66 @@ class GrpcRuntimeMapper:
         """
         if self._space_resolver is None:
             _raise_mapping_error("space resolver is required for space_ref")
-        if not space_ref.provider:
-            _raise_mapping_error("space_ref.provider is required")
-        if not space_ref.provider_space_ref:
-            _raise_mapping_error("space_ref.provider_space_ref is required")
-        if not space_ref.display_name:
-            _raise_mapping_error("space_ref.display_name is required")
-        if space_ref.space_kind == spaces_pb2.SPACE_KIND_UNSPECIFIED:
-            _raise_mapping_error("space_ref.space_kind must not be unspecified")
 
-        space_kind = _space_kind_from_proto(space_ref.space_kind)
+        dto = external_space_ref_from_proto(space_ref)
 
         return await self._space_resolver.resolve_space(
-            provider=space_ref.provider,
-            provider_space_ref=ExternalRef(space_ref.provider_space_ref),
-            display_name=space_ref.display_name,
-            space_kind=space_kind,
+            dto,
             participants=participants,
-            metadata=dict(space_ref.metadata.items()),
         )
+
+
+def external_account_ref_from_proto(
+    account_ref: identity_pb2.ExternalAccountRef,
+) -> ExternalAccountRef:
+    """Map ExternalAccountRef proto to DTO.
+
+    Returns:
+        ExternalAccountRef: Mapped DTO.
+    """
+    if not account_ref.provider:
+        _raise_mapping_error("account_ref.provider is required")
+    if not account_ref.provider_subject:
+        _raise_mapping_error("account_ref.provider_subject is required")
+    if not account_ref.display_name:
+        _raise_mapping_error("account_ref.display_name is required")
+    actor_kind = _account_ref_kind_to_contract(account_ref.actor_kind)
+    return ExternalAccountRef(
+        provider=account_ref.provider,
+        provider_subject=ExternalRef(account_ref.provider_subject),
+        display_name=account_ref.display_name,
+        actor_kind=actor_kind,
+        account_id=None,
+        metadata=dict(account_ref.metadata.items()),
+    )
+
+
+def external_space_ref_from_proto(
+    space_ref: spaces_pb2.ExternalSpaceRef,
+) -> ExternalSpaceRef:
+    """Map ExternalSpaceRef proto to DTO.
+
+    Returns:
+        ExternalSpaceRef: Mapped DTO.
+    """
+    if not space_ref.provider:
+        _raise_mapping_error("space_ref.provider is required")
+    if not space_ref.provider_space_ref:
+        _raise_mapping_error("space_ref.provider_space_ref is required")
+    if not space_ref.display_name:
+        _raise_mapping_error("space_ref.display_name is required")
+    if space_ref.space_kind == spaces_pb2.SPACE_KIND_UNSPECIFIED:
+        _raise_mapping_error("space_ref.space_kind must not be unspecified")
+
+    space_kind = _space_kind_from_proto(space_ref.space_kind)
+
+    return ExternalSpaceRef(
+        provider=space_ref.provider,
+        provider_space_ref=ExternalRef(space_ref.provider_space_ref),
+        display_name=space_ref.display_name,
+        space_kind=space_kind,
+        metadata=dict(space_ref.metadata.items()),
+    )
 
 
 def identity_from_proto(identity: identity_pb2.Identity) -> Identity:

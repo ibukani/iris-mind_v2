@@ -7,14 +7,13 @@ from typing import TYPE_CHECKING, override
 
 from iris.adapters.app_gateway.ports import IdentityResolver
 from iris.contracts.accounts import AccountProfile
-from iris.contracts.identity import ActorKind, Identity
+from iris.contracts.identity import Identity
 from iris.core.ids import AccountId, ActorId
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
+    from iris.adapters.app_gateway.ingress import ExternalAccountRef
     from iris.adapters.app_gateway.ports import AccountStore
-    from iris.core.ids import DeviceId, ExternalRef
+    from iris.core.ids import DeviceId
 
 
 def _stable_id(prefix: str, provider: str, external_ref: str) -> str:
@@ -40,14 +39,9 @@ class AccountBackedIdentityResolver(IdentityResolver):
     @override
     async def resolve_identity(
         self,
+        account_ref: ExternalAccountRef,
         *,
-        provider: str,
-        provider_subject: ExternalRef,
-        display_name: str,
-        actor_kind: ActorKind = ActorKind.HUMAN,
-        account_id: AccountId | None = None,
         device_id: DeviceId | None = None,
-        metadata: Mapping[str, str] | None = None,
     ) -> Identity:
         """Resolve Identity using AccountProfile from AccountStore.
 
@@ -56,21 +50,22 @@ class AccountBackedIdentityResolver(IdentityResolver):
         """
         # Look up AccountProfile
         profile = await self._account_store.get_by_external_ref(
-            provider=provider,
-            provider_subject=provider_subject,
+            provider=account_ref.provider,
+            provider_subject=account_ref.provider_subject,
         )
 
         if not profile:
             # Create a deterministic AccountProfile
             resolved_account_id = AccountId(
-                account_id or _stable_id("account", provider, str(provider_subject))
+                account_ref.account_id
+                or _stable_id("account", account_ref.provider, str(account_ref.provider_subject))
             )
             profile = AccountProfile(
                 account_id=resolved_account_id,
-                provider=provider,
-                provider_subject=provider_subject,
-                display_name=display_name,
-                metadata=dict(metadata or {}),
+                provider=account_ref.provider,
+                provider_subject=account_ref.provider_subject,
+                display_name=account_ref.display_name,
+                metadata=dict(account_ref.metadata),
             )
             profile = await self._account_store.put(profile)
 
@@ -82,7 +77,7 @@ class AccountBackedIdentityResolver(IdentityResolver):
 
         return Identity(
             actor_id=actor_id,
-            actor_kind=actor_kind,
+            actor_kind=account_ref.actor_kind,
             display_name=profile.display_name,
             provider=profile.provider,
             provider_subject=profile.provider_subject,
