@@ -9,6 +9,7 @@ It exists to make agent work repeatable by supplying:
 - completion checklists
 - reusable prompts
 - token-saving prompt policy embedded in `AGENTS.md`
+- documentation language policy
 - on-demand skills
 
 Root entry files:
@@ -32,9 +33,10 @@ Root entry files:
 1. Start from `AGENTS.md` or `CLAUDE.md`.
 2. Read the relevant rule files.
 3. Apply the Primitive Prompt Mode and token/language policy embedded in `AGENTS.md`.
-4. Pick one workflow from `.agents/workflows/`.
-5. Use `.agents/checklists/pre-change.md` before editing.
-6. Use `.agents/checklists/done.md` before reporting completion.
+4. Apply `.agents/rules/documentation-language.md` for documentation language choice.
+5. Pick one workflow from `.agents/workflows/`.
+6. Use `.agents/checklists/pre-change.md` before editing.
+7. Use `.agents/checklists/done.md` before reporting completion.
 
 ## Standard verification
 
@@ -61,6 +63,12 @@ Prefer the structured files under this directory for new agent sessions. Keep th
 ## Token-saving mode
 
 Primitive Prompt Mode and the token/language policy are embedded directly in `AGENTS.md` so every agent session loads them. Do not move those mandatory rules into optional prompt files.
+
+## Documentation language
+
+Use `.agents/rules/documentation-language.md` when changing README, docs, design notes, review summaries, implementation explanations, PR text, prompts, or harness rules.
+
+Human-facing documentation is Japanese by default. Agent-facing prompts and machine-oriented rules may stay English when useful.
 
 ## AI harness additions
 
