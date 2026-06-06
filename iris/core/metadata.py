@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-EMPTY_METADATA: Mapping[str, str] = MappingProxyType[str, str]({})
+EMPTY_METADATA: Mapping[str, str] = MappingProxyType({})
 
 
 def immutable_metadata(metadata: Mapping[str, str] | None = None) -> Mapping[str, str]:
@@ -17,4 +17,4 @@ def immutable_metadata(metadata: Mapping[str, str] | None = None) -> Mapping[str
         return EMPTY_METADATA
     if isinstance(metadata, MappingProxyType):
         return metadata
-    return MappingProxyType[str, str](dict[str, str](metadata))
+    return MappingProxyType(dict(metadata))

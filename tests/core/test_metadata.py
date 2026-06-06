@@ -1,11 +1,16 @@
 """Tests for core metadata helpers."""
+
 from __future__ import annotations
 
 from types import MappingProxyType
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from iris.core.metadata import EMPTY_METADATA, immutable_metadata
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 
 def test_immutable_metadata_returns_empty_when_none() -> None:
@@ -31,4 +36,4 @@ def test_immutable_metadata_copies_dict_into_proxy() -> None:
     assert result["source"] == "discord"
 
     with pytest.raises(TypeError):
-        result["new"] = "value"  # type: ignore[index]  # testing immutability
+        cast("MutableMapping[str, str]", result)["new"] = "value"

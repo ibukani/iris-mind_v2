@@ -761,7 +761,7 @@ CLI / main.py / iris.runtime.server
 - `MotivationResult` 型と `FrameBuilder` 対応は既存、step 実装は未着手
 - LearningHook / BackgroundJob は未実装
 - 外部アプリ連携 (Discord, Voice, Twitch) は未実装
-- AppGateway は Protocol と `AccountIdentityResolver` / `EphemeralSpaceResolver` を定義済み (外部アプリのidentity永続化用)
+- AppGateway は Protocol とサーバーサイドの Identity Resolver / Space Resolver を定義済み (外部アプリのidentity永続化用)
 
 ---
 
