@@ -23,9 +23,17 @@ message Identity {
 }
 
 message ExternalAccountRef {
+  // Should be "cli" for iris-cli_v2.
   string provider = 1;
+
+  // A stable user identifier from the client side.
   string provider_subject = 2;
+
+  // Required by the current server mapper.
   string display_name = 3;
+
+  // Should usually be ACTOR_KIND_HUMAN for a human user.
   ActorKind actor_kind = 4;
+  
   map<string, string> metadata = 5;
 }

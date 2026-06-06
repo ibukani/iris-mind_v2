@@ -5,17 +5,16 @@ AI コンパニオン — Cognitive Runtime Architecture v0.1 ターゲット MV
 ## Usage
 
 ```bash
-uv run python main.py --text "hello"
-uv run python main.py --text "hello" --llm ollama --model qwen3:8b
-uv run python main.py --config .iris/config/llm.toml --text "こんにちは"
-uv run python main.py --config .iris/config/llm.toml --text "hello" --model qwen3:14b
-uv run python -m iris.runtime.cli --text "hello"
+uv run python -m iris.runtime.server
+uv run python -m iris.runtime.server --config .iris/config/llm.toml
+uv run python -m iris.runtime.server --host 127.0.0.1 --port 50051
 ```
 
-- `--llm`: Overrides `models.default_chat.provider` with `fake`, `openai`, or `ollama`.
-- `--model`: Overrides `models.default_chat.model`.
-- `--ollama-host`: Overrides `ollama.base_url`.
+**Note:** `iris-mind_v2` is a server-only runtime. User-facing CLI functionality belongs to `iris-cli_v2`. The former one-turn CLI entrypoint (`iris/runtime/cli.py`) has been intentionally removed. External clients should use the gRPC Runtime API. See [`docs/runtime-api.md`](docs/runtime-api.md) for the CLI-facing `SubmitObservation` contract. Model and provider configuration should be done through TOML or environment variables.
+
 - `--config`: Loads one explicit runtime TOML file, usually `.iris/config/llm.toml`.
+- `--host`: Overrides `server.host`.
+- `--port`: Overrides `server.port`.
 
 The fake LLM remains the default and does not require external services or API keys.
 
@@ -29,17 +28,7 @@ ollama pull qwen3:4b
 ollama pull deepseek-r1:8b
 ```
 
-Run Iris against the default local Ollama host:
 
-```bash
-uv run python main.py --text "hello" --llm ollama --model qwen3:8b
-```
-
-Use `--ollama-host` when Ollama is listening somewhere else:
-
-```bash
-uv run python main.py --text "hello" --llm ollama --model qwen3:8b --ollama-host http://localhost:11434
-```
 
 ## Runtime LLM Config
 
@@ -54,7 +43,7 @@ cp .iris/config/llm.example.toml .iris/config/llm.toml
 Edit model names if needed, then run:
 
 ```bash
-uv run python main.py --config .iris/config/llm.toml --text "こんにちは"
+uv run python -m iris.runtime.server --config .iris/config/llm.toml
 ```
 
 `.iris/config/llm.toml` is local developer config and should not be committed.
@@ -68,10 +57,10 @@ need to change.
 
 | Source | Role | Examples |
 |---|---|---|
-| Built-in defaults | Safe fallback for every value. | `provider = "fake"`, `base_url = "http://localhost:11434"` |
-| TOML | Structured non-secret developer configuration. | model names, timeouts, `ollama.base_url` |
-| Environment variables | Secrets, deployment overrides, and CI/container overrides. | `OPENAI_API_KEY`, `IRIS_DEFAULT_CHAT_MODEL` |
-| CLI flags | Temporary experiment overrides. | `--llm`, `--model`, `--ollama-host` |
+| Built-in defaults | Safe fallback for every value. | `provider = "fake"`, `base_url = "http://localhost:11434"`, `state.backend = "memory"` |
+| TOML | Structured non-secret developer configuration. | model names, timeouts, `ollama.base_url`, `state.sqlite_path` |
+| Environment variables | Secrets, deployment overrides, and CI/container overrides. | `OPENAI_API_KEY`, `IRIS_STATE_BACKEND` |
+| CLI flags | Temporary experiment overrides. | `--host`, `--port` |
 
 Do not store API keys, auth tokens, passwords, or other credentials in TOML files.
 Use environment variables (or your secret manager) for those.
@@ -93,7 +82,7 @@ override earlier ones:
 2. TOML file passed with `--config`
 3. Environment variables such as `IRIS_DEFAULT_CHAT_PROVIDER`,
    `IRIS_DEFAULT_CHAT_MODEL`, `IRIS_OLLAMA_HOST`, and `IRIS_OPENAI_MODEL`
-4. CLI flags: `--llm`, `--model`, `--ollama-host`
+4. CLI flags: `--host`, `--port`
 
 `OPENAI_API_KEY` must be provided through the environment, not TOML. Iris will
 read it directly from the process environment when constructing the OpenAI
@@ -107,15 +96,16 @@ single file. The public import path is unchanged:
 
 ```python
 from iris.runtime.config import (
-    CliConfigOverrides,
     ConfigError,
     IrisRuntimeConfig,
     LLMProvider,
     ModelSlotName,
+    RuntimeConfigOverrides,
     RuntimeModelConfig,
     RuntimeModelsConfig,
     RuntimeOllamaConfig,
     RuntimeOpenAIConfig,
+    RuntimeServerConfig,
     default_runtime_config,
     load_runtime_config,
     parse_llm_provider,
@@ -134,12 +124,12 @@ current exception is `iris.adapters.llm.openai`, which still reads
 ## Target Architecture
 
 ```text
-main.py / iris.runtime.cli
+iris.runtime.server / main.py
 → IrisApp
 → CognitiveCycle (perception → memory → affect → policy → response)
 → target LLM adapter (FakeLLMClient, OpenAI adapter, or Ollama adapter)
 → Presenter / Safety gates
-→ stdout
+→ PresentedOutput (returned to gRPC client)
 ```
 
 Available pipeline configurations:
@@ -173,7 +163,8 @@ iris/
 │   ├── app_gateway/    External app protocol boundary
 │   ├── llm/            FakeLLM, OpenAI, Ollama clients
 │   └── memory/         Fake, vector, LangChain memory stores
-└── runtime/            App composition, CLI entrypoint, wiring
+└── runtime/            App composition, Server entrypoint, wiring
+    ├── server.py       gRPC Server entrypoint
     └── wiring/         Constructor-injection wiring (app, cognitive, features, llm, memory, presentation)
 ├── tests/
 │   ├── architecture/   Guard tests (18+ files)
@@ -187,7 +178,7 @@ iris/
 │   ├── verify.py       Repository verification entry point
 │   ├── ai_context.py   AI harness context dump
 │   └── ai_report.py    Completion report skeleton
-└── main.py             CLI entrypoint
+└── main.py             Redirects to iris.runtime.server
 ```
 
 ## Development

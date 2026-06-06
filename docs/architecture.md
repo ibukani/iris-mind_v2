@@ -75,8 +75,8 @@ iris/
 │
 ├── runtime/
 │   ├── app.py
-│   ├── cli.py
 │   ├── config.py
+│   ├── server.py
 │   └── wiring/
 │       ├── app.py
 │       ├── cognitive.py
@@ -715,7 +715,7 @@ adapters → cognitive 原則禁止
 ## Runtime Flow
 
 ```text
-CLI / main.py / iris.runtime.cli
+CLI / main.py / iris.runtime.server
 → Observation
 → CognitiveCycle (cognitive/cycle/)
    → SimplePerceptionStep (cognitive/perception/)
@@ -749,11 +749,11 @@ CLI / main.py / iris.runtime.cli
 - FakeLLM デフォルト (OpenAI / Ollama 切替可)
 - 認識・メモリ検索・感情評価・関係性・ポリシー抑制 PipelineStep 実装済み (配線選択可能)
 - proactive_talk feature 実装済み (salience scoring, goal proposal, policy)
-- 永続ストレージは未実装 (InMemoryStore / FakeMemoryStore のみ)
+- 永続ストレージ: SQLiteベースのアカウント永続化を実装済み (`SQLiteAccountStore`)。ただし対話スペースはエフェメラル (`EphemeralSpaceResolver`)。
 - `MotivationResult` 型と `FrameBuilder` 対応は既存、step 実装は未着手
 - LearningHook / BackgroundJob は未実装
 - 外部アプリ連携 (Discord, Voice, Twitch) は未実装
-- AppGateway は Protocol と決定論的fake resolverのみ定義 (将来の外部アプリ用)
+- AppGateway は Protocol と `AccountIdentityResolver` / `EphemeralSpaceResolver` を定義済み (外部アプリのidentity永続化用)
 
 ---
 

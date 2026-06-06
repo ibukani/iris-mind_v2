@@ -26,17 +26,21 @@ from iris.generated.iris.api.v1 import observations_pb2 as iris_dot_api_dot_v1_d
 from iris.generated.iris.api.v1 import outputs_pb2 as iris_dot_api_dot_v1_dot_outputs__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1diris/runtime/v1/runtime.proto\x12\x0firis.runtime.v1\x1a\x1eiris/api/v1/observations.proto\x1a\x19iris/api/v1/outputs.proto\"a\n\x18SubmitObservationRequest\x12\x16\n\x0e\x63orrelation_id\x18\x01 \x01(\t\x12-\n\x0bobservation\x18\x02 \x01(\x0b\x32\x18.iris.api.v1.Observation\"a\n\x19SubmitObservationResponse\x12\x16\n\x0e\x63orrelation_id\x18\x01 \x01(\t\x12,\n\x06output\x18\x02 \x01(\x0b\x32\x1c.iris.api.v1.PresentedOutput2\x80\x01\n\x12IrisRuntimeService\x12j\n\x11SubmitObservation\x12).iris.runtime.v1.SubmitObservationRequest\x1a*.iris.runtime.v1.SubmitObservationResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1diris/runtime/v1/runtime.proto\x12\x0firis.runtime.v1\x1a\x1eiris/api/v1/observations.proto\x1a\x19iris/api/v1/outputs.proto\"\x17\n\x15GetRuntimeInfoRequest\"x\n\x16GetRuntimeInfoResponse\x12\x14\n\x0cruntime_name\x18\x01 \x01(\t\x12\x17\n\x0fruntime_version\x18\x02 \x01(\t\x12\x13\n\x0b\x61pi_version\x18\x03 \x01(\t\x12\x1a\n\x12supported_features\x18\x04 \x03(\t\"a\n\x18SubmitObservationRequest\x12\x16\n\x0e\x63orrelation_id\x18\x01 \x01(\t\x12-\n\x0bobservation\x18\x02 \x01(\x0b\x32\x18.iris.api.v1.Observation\"a\n\x19SubmitObservationResponse\x12\x16\n\x0e\x63orrelation_id\x18\x01 \x01(\t\x12,\n\x06output\x18\x02 \x01(\x0b\x32\x1c.iris.api.v1.PresentedOutput2\xe3\x01\n\x12IrisRuntimeService\x12\x61\n\x0eGetRuntimeInfo\x12&.iris.runtime.v1.GetRuntimeInfoRequest\x1a\'.iris.runtime.v1.GetRuntimeInfoResponse\x12j\n\x11SubmitObservation\x12).iris.runtime.v1.SubmitObservationRequest\x1a*.iris.runtime.v1.SubmitObservationResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'iris.runtime.v1.runtime_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_SUBMITOBSERVATIONREQUEST']._serialized_start=109
-  _globals['_SUBMITOBSERVATIONREQUEST']._serialized_end=206
-  _globals['_SUBMITOBSERVATIONRESPONSE']._serialized_start=208
-  _globals['_SUBMITOBSERVATIONRESPONSE']._serialized_end=305
-  _globals['_IRISRUNTIMESERVICE']._serialized_start=308
-  _globals['_IRISRUNTIMESERVICE']._serialized_end=436
+  _globals['_GETRUNTIMEINFOREQUEST']._serialized_start=109
+  _globals['_GETRUNTIMEINFOREQUEST']._serialized_end=132
+  _globals['_GETRUNTIMEINFORESPONSE']._serialized_start=134
+  _globals['_GETRUNTIMEINFORESPONSE']._serialized_end=254
+  _globals['_SUBMITOBSERVATIONREQUEST']._serialized_start=256
+  _globals['_SUBMITOBSERVATIONREQUEST']._serialized_end=353
+  _globals['_SUBMITOBSERVATIONRESPONSE']._serialized_start=355
+  _globals['_SUBMITOBSERVATIONRESPONSE']._serialized_end=452
+  _globals['_IRISRUNTIMESERVICE']._serialized_start=455
+  _globals['_IRISRUNTIMESERVICE']._serialized_end=682
 # @@protoc_insertion_point(module_scope)

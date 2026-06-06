@@ -58,6 +58,7 @@ def main() -> int:
             f"--python_out={OUTPUT_DIR}",
             f"--grpc_python_out={OUTPUT_DIR}",
             f"--mypy_out={OUTPUT_DIR}",
+            f"--mypy_grpc_out={OUTPUT_DIR}",
             *[str(PROTO_DIR / p) for p in SERVICE_PROTOS],
         ]
         result = subprocess.run(svc_args, check=False)

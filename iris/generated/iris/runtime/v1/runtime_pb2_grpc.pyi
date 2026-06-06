@@ -31,14 +31,23 @@ class IrisRuntimeServiceStub:
     def __new__(cls, channel: _grpc.Channel) -> _Self: ...
     @_typing.overload
     def __new__(cls, channel: _aio.Channel) -> IrisRuntimeServiceAsyncStub: ...
+    GetRuntimeInfo: _grpc.UnaryUnaryMultiCallable[_runtime_pb2.GetRuntimeInfoRequest, _runtime_pb2.GetRuntimeInfoResponse]
     SubmitObservation: _grpc.UnaryUnaryMultiCallable[_runtime_pb2.SubmitObservationRequest, _runtime_pb2.SubmitObservationResponse]
 
 @_typing.type_check_only
 class IrisRuntimeServiceAsyncStub(IrisRuntimeServiceStub):
     def __init__(self, channel: _aio.Channel) -> None: ...
+    GetRuntimeInfo: _aio.UnaryUnaryMultiCallable[_runtime_pb2.GetRuntimeInfoRequest, _runtime_pb2.GetRuntimeInfoResponse]  # type: ignore[assignment]
     SubmitObservation: _aio.UnaryUnaryMultiCallable[_runtime_pb2.SubmitObservationRequest, _runtime_pb2.SubmitObservationResponse]  # type: ignore[assignment]
 
 class IrisRuntimeServiceServicer(metaclass=_abc_1.ABCMeta):
+    @_abc_1.abstractmethod
+    def GetRuntimeInfo(
+        self,
+        request: _runtime_pb2.GetRuntimeInfoRequest,
+        context: _ServicerContext,
+    ) -> _typing.Union[_runtime_pb2.GetRuntimeInfoResponse, _abc.Awaitable[_runtime_pb2.GetRuntimeInfoResponse]]: ...
+
     @_abc_1.abstractmethod
     def SubmitObservation(
         self,

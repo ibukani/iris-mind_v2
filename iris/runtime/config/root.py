@@ -28,7 +28,21 @@ from iris.runtime.config.llm import (
     RuntimeOpenAIConfig,
     validate_provider,
 )
+from iris.runtime.config.parsing import table_or_empty
+from iris.runtime.config.server import (
+    RuntimeServerConfig,
+    apply_server_env,
+    apply_server_toml,
+    validate_server_config,
+    validate_server_port,
+)
 from iris.runtime.config.sources import apply_env, apply_toml, read_toml_file
+from iris.runtime.config.state import (
+    RuntimeStateConfig,
+    apply_state_env,
+    apply_state_toml,
+    validate_state_config,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -40,18 +54,22 @@ if TYPE_CHECKING:
 class IrisRuntimeConfig:
     """Runtime configuration used by application wiring."""
 
+    server: RuntimeServerConfig
+    state: RuntimeStateConfig
     models: RuntimeModelsConfig
     ollama: RuntimeOllamaConfig
     openai: RuntimeOpenAIConfig
 
 
 @dataclass(frozen=True)
-class CliConfigOverrides:
-    """Configuration overrides supplied by CLI flags."""
+class RuntimeConfigOverrides:
+    """Configuration overrides supplied at runtime initialization."""
 
     llm: LLMProvider | None = None
     model: str | None = None
     ollama_host: str | None = None
+    server_host: str | None = None
+    server_port: int | None = None
 
 
 def default_runtime_config() -> IrisRuntimeConfig:
@@ -61,6 +79,8 @@ def default_runtime_config() -> IrisRuntimeConfig:
         Default runtime configuration.
     """
     return IrisRuntimeConfig(
+        server=RuntimeServerConfig(),
+        state=RuntimeStateConfig(),
         models=RuntimeModelsConfig(
             default_chat=RuntimeModelConfig(provider="fake", model="fake-llm"),
             fast_judge=RuntimeModelConfig(
@@ -83,14 +103,14 @@ def load_runtime_config(
     config_path: str | Path | None = None,
     *,
     env: Mapping[str, str] | None = None,
-    cli_overrides: CliConfigOverrides | None = None,
+    overrides: RuntimeConfigOverrides | None = None,
 ) -> IrisRuntimeConfig:
-    """Load runtime config from defaults, TOML, environment, and CLI overrides.
+    """Load runtime config from defaults, TOML, environment, and overrides.
 
     Args:
         config_path: Optional explicit TOML file path.
         env: Environment mapping. Defaults to ``os.environ``.
-        cli_overrides: Optional CLI override values.
+        overrides: Optional override values.
 
     Returns:
         Validated runtime configuration.
@@ -99,23 +119,25 @@ def load_runtime_config(
     if config_path is not None:
         config = _apply_toml(config, read_toml_file(Path(config_path)))
     config = _apply_env(config, os.environ if env is None else env)
-    if cli_overrides is not None:
-        config = apply_cli_overrides(config, cli_overrides)
-    return config
+    if overrides is not None:
+        config = apply_runtime_overrides(config, overrides)
+
+    config = replace(config, server=validate_server_config(config.server))
+    return replace(config, state=validate_state_config(config.state))
 
 
-def apply_cli_overrides(
+def apply_runtime_overrides(
     config: IrisRuntimeConfig,
-    overrides: CliConfigOverrides,
+    overrides: RuntimeConfigOverrides,
 ) -> IrisRuntimeConfig:
-    """Apply CLI overrides to an existing runtime config.
+    """Apply overrides to an existing runtime config.
 
     Args:
         config: Base runtime config.
-        overrides: CLI override values.
+        overrides: Override values.
 
     Returns:
-        Runtime config with CLI values applied.
+        Runtime config with overrides applied.
     """
     default_chat = config.models.default_chat
     if overrides.llm is not None:
@@ -127,8 +149,16 @@ def apply_cli_overrides(
     if overrides.ollama_host is not None:
         ollama = replace(ollama, base_url=overrides.ollama_host)
 
+    server = config.server
+    if overrides.server_host is not None:
+        server = replace(server, host=overrides.server_host)
+    if overrides.server_port is not None:
+        port = validate_server_port(overrides.server_port, source="server_port override")
+        server = replace(server, port=port)
+
     return replace(
         config,
+        server=server,
         models=replace(config.models, default_chat=default_chat),
         ollama=ollama,
     )
@@ -156,13 +186,16 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     Returns:
         Runtime config with TOML values applied.
     """
+    server = apply_server_toml(config.server, table_or_empty(table, "server"))
+    state = apply_state_toml(config.state, table_or_empty(table, "state"))
+
     models, ollama, openai = apply_toml(
         config.models,
         config.ollama,
         config.openai,
         table,
     )
-    return replace(config, models=models, ollama=ollama, openai=openai)
+    return replace(config, server=server, state=state, models=models, ollama=ollama, openai=openai)
 
 
 def _apply_env(
@@ -178,5 +211,8 @@ def _apply_env(
     Returns:
         Runtime config with environment values applied.
     """
+    server = apply_server_env(config.server, env)
+    state = apply_state_env(config.state, env)
+
     models, ollama, openai = apply_env(config.models, config.ollama, config.openai, env)
-    return replace(config, models=models, ollama=ollama, openai=openai)
+    return replace(config, server=server, state=state, models=models, ollama=ollama, openai=openai)

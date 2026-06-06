@@ -133,9 +133,13 @@ class ExternalAccountRef(_message.Message):
     ACTOR_KIND_FIELD_NUMBER: _builtins.int
     METADATA_FIELD_NUMBER: _builtins.int
     provider: _builtins.str
+    """Should be "cli" for iris-cli_v2."""
     provider_subject: _builtins.str
+    """A stable user identifier from the client side."""
     display_name: _builtins.str
+    """Required by the current server mapper."""
     actor_kind: Global___ActorKind.ValueType
+    """Should usually be ACTOR_KIND_HUMAN for a human user."""
     @_builtins.property
     def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
     def __init__(
