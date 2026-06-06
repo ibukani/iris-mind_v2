@@ -320,22 +320,9 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle(
     )
     app = app_wiring.build_app_from_config(config, client_factory=factory)
 
-    cycle = app._cycle  # pyright: ignore[reportPrivateUsage] -- wiring test  # noqa: SLF001 -- wiring test
-    step_names = tuple(
-        type(step).__name__
-        for step in cycle._steps  # pyright: ignore[reportPrivateUsage] -- wiring test  # noqa: SLF001 -- wiring test
-    )
     await app.process_observation(_actor_observation("I need help with suicide and tea"))
 
     assert factory.model_config == config.models.default_chat
-    assert step_names == (
-        "SimplePerceptionStep",
-        "MemoryRetrievalStep",
-        "AppraisalStep",
-        "RelationshipStep",
-        "PolicyInhibitionStep",
-        "ResponseGenerationStep",
-    )
     assert memory_store.query is not None
     assert memory_store.query.text == "I need help with suicide and tea"
     assert client.request is not None

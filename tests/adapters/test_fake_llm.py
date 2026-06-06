@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from iris.adapters.llm.fake import (
-    FakeLLMClient,
-    _actor_text_from_prompt,  # noqa: PLC2701 -- unit-test of internal helper  # pyright: ignore[reportPrivateUsage] -- unit-test of internal helper
-)
+from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
 
@@ -47,30 +44,38 @@ async def test_fake_llm_default_response_uses_last_user_message() -> None:
     assert response == LLMResponse(text="fake response: hello", model="fake-llm")
 
 
-def test_actor_text_from_prompt_extracts_actor_message() -> None:
-    """_actor_text_from_prompt が構造化プロンプトから actor message のみを返すことを確認する。"""
+@pytest.mark.anyio
+async def test_fake_llm_extracts_actor_message_from_structured_prompt() -> None:
+    """構造化プロンプトからactor messageのみ抽出しレスポンスに含める。"""
+    client = FakeLLMClient()
     prompt = (
         "Relevant memories:\n- memory1\n\nPolicy constraints: rule1\n\nActor message:\nこんにちは"
     )
-    assert _actor_text_from_prompt(prompt) == "こんにちは"
+    request = LLMRequest(model="fake-llm", messages=(LLMMessage(role="user", content=prompt),))
+    response = await client.generate(request)
+    assert response.text == "fake response: こんにちは"
 
 
-def test_actor_text_from_prompt_ignores_sections_after_marker() -> None:
-    """Actor message 以降に別セクションがあっても marker 直後のテキストのみ返すことを確認する。
-
-    将来 _build_user_content が末尾に別セクションを追加した場合の安全策。
-    """
+@pytest.mark.anyio
+async def test_fake_llm_ignores_sections_after_marker() -> None:
+    """Actor message以降の別セクションを無視しmarker直後のテキストのみ抽出する。"""
+    client = FakeLLMClient()
     prompt = (
         "Relevant memories:\n- memory1\n\n"
         "Actor message:\nhello\n\n"
         "Extra section:\nshould not appear"
     )
-    result = _actor_text_from_prompt(prompt)
-    assert "should not appear" not in result
-    assert result.strip() == "hello"
+    request = LLMRequest(model="fake-llm", messages=(LLMMessage(role="user", content=prompt),))
+    response = await client.generate(request)
+    assert "should not appear" not in response.text
+    assert response.text == "fake response: hello"
 
 
-def test_actor_text_from_prompt_fallback_when_marker_missing() -> None:
-    """Actor message marker がない場合はプロンプト全体を返す。"""
+@pytest.mark.anyio
+async def test_fake_llm_fallback_when_marker_missing() -> None:
+    """Actor message marker がない場合はプロンプト全体が抽出される。"""
+    client = FakeLLMClient()
     prompt = "Just a plain text prompt"
-    assert _actor_text_from_prompt(prompt) == prompt
+    request = LLMRequest(model="fake-llm", messages=(LLMMessage(role="user", content=prompt),))
+    response = await client.generate(request)
+    assert response.text == "fake response: Just a plain text prompt"

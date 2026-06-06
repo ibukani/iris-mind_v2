@@ -6,11 +6,14 @@ import contextlib
 import json
 from pathlib import Path
 import sqlite3
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from iris.adapters.app_gateway.ports import AccountStore
 from iris.contracts.accounts import AccountProfile, AccountStoreError
 from iris.core.ids import AccountId, ActorId, ExternalRef
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class SQLiteAccountStore(AccountStore):
@@ -42,9 +45,8 @@ class SQLiteAccountStore(AccountStore):
             UNIQUE(provider, provider_subject)
         );
         """
-        with contextlib.closing(self._connect()) as conn:  # noqa: SIM117 -- contextlib.closing triggers ResourceWarning if combined
-            with conn:
-                conn.execute(query)
+        with self._transaction() as conn:
+            conn.execute(query)
 
     def _connect(self) -> sqlite3.Connection:
         """Get a configured sqlite3 connection.
@@ -55,6 +57,16 @@ class SQLiteAccountStore(AccountStore):
         conn = sqlite3.connect(self._db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
         return conn
+
+    @contextlib.contextmanager
+    def _transaction(self) -> Generator[sqlite3.Connection]:
+        """Provide a transactional sqlite connection that closes when done.
+
+        Yields:
+            sqlite3.Connection: An open, managed connection.
+        """
+        with contextlib.closing(self._connect()) as conn, conn:
+            yield conn
 
     @staticmethod
     def _row_to_profile(row: sqlite3.Row) -> AccountProfile:
@@ -86,13 +98,12 @@ class SQLiteAccountStore(AccountStore):
             AccountProfile | None: The found account profile, or None.
         """
         query = "SELECT * FROM accounts WHERE provider = ? AND provider_subject = ?"
-        with contextlib.closing(self._connect()) as conn:  # noqa: SIM117 -- contextlib.closing triggers ResourceWarning if combined
-            with conn:
-                cursor = conn.execute(query, (provider, str(provider_subject)))
-                row = cursor.fetchone()
-                if not row:
-                    return None
-                return self._row_to_profile(row)
+        with self._transaction() as conn:
+            cursor = conn.execute(query, (provider, str(provider_subject)))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self._row_to_profile(row)
 
     @override
     async def get_by_account_id(
@@ -105,13 +116,12 @@ class SQLiteAccountStore(AccountStore):
             AccountProfile | None: The found account profile, or None.
         """
         query = "SELECT * FROM accounts WHERE account_id = ?"
-        with contextlib.closing(self._connect()) as conn:  # noqa: SIM117 -- contextlib.closing triggers ResourceWarning if combined
-            with conn:
-                cursor = conn.execute(query, (str(account_id),))
-                row = cursor.fetchone()
-                if not row:
-                    return None
-                return self._row_to_profile(row)
+        with self._transaction() as conn:
+            cursor = conn.execute(query, (str(account_id),))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self._row_to_profile(row)
 
     @override
     async def put(
@@ -127,58 +137,57 @@ class SQLiteAccountStore(AccountStore):
             AccountStoreError: On duplicate account ID with different refs,
                 or duplicate ref with different account ID.
         """
-        with contextlib.closing(self._connect()) as conn:  # noqa: SIM117 -- contextlib.closing triggers ResourceWarning if combined
-            with conn:
-                # Check for existing by account_id
-                cursor = conn.execute(
-                    "SELECT provider, provider_subject FROM accounts WHERE account_id = ?",
-                    (str(account.account_id),),
-                )
-                existing_by_id = cursor.fetchone()
-                if existing_by_id and (
-                    existing_by_id["provider"] != account.provider
-                    or existing_by_id["provider_subject"] != account.provider_subject
-                ):
-                    msg = "account_id conflict: already exists with different external refs"
-                    raise AccountStoreError(msg)
+        with self._transaction() as conn:
+            # Check for existing by account_id
+            cursor = conn.execute(
+                "SELECT provider, provider_subject FROM accounts WHERE account_id = ?",
+                (str(account.account_id),),
+            )
+            existing_by_id = cursor.fetchone()
+            if existing_by_id and (
+                existing_by_id["provider"] != account.provider
+                or existing_by_id["provider_subject"] != account.provider_subject
+            ):
+                msg = "account_id conflict: already exists with different external refs"
+                raise AccountStoreError(msg)
 
-                # Check for existing by external ref
-                cursor = conn.execute(
-                    "SELECT account_id FROM accounts WHERE provider = ? AND provider_subject = ?",
-                    (account.provider, str(account.provider_subject)),
-                )
-                existing_by_ref = cursor.fetchone()
-                if existing_by_ref and existing_by_ref["account_id"] != account.account_id:
-                    msg = "external ref conflict: already exists with different account_id"
-                    raise AccountStoreError(msg)
+            # Check for existing by external ref
+            cursor = conn.execute(
+                "SELECT account_id FROM accounts WHERE provider = ? AND provider_subject = ?",
+                (account.provider, str(account.provider_subject)),
+            )
+            existing_by_ref = cursor.fetchone()
+            if existing_by_ref and existing_by_ref["account_id"] != account.account_id:
+                msg = "external ref conflict: already exists with different account_id"
+                raise AccountStoreError(msg)
 
-                # Insert or update
-                metadata_json = json.dumps(dict(account.metadata))
-                linked_id = str(account.linked_actor_id) if account.linked_actor_id else None
+            # Insert or update
+            metadata_json = json.dumps(dict(account.metadata))
+            linked_id = str(account.linked_actor_id) if account.linked_actor_id else None
 
-                # SQLite UPSERT
-                query = """
-                INSERT INTO accounts (
-                    account_id, provider, provider_subject, display_name,
-                    linked_actor_id, metadata_json, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(account_id) DO UPDATE SET
-                    display_name=excluded.display_name,
-                    linked_actor_id=excluded.linked_actor_id,
-                    metadata_json=excluded.metadata_json,
-                    updated_at=CURRENT_TIMESTAMP
-                """
-                conn.execute(
-                    query,
-                    (
-                        str(account.account_id),
-                        account.provider,
-                        str(account.provider_subject),
-                        account.display_name,
-                        linked_id,
-                        metadata_json,
-                    ),
-                )
+            # SQLite UPSERT
+            query = """
+            INSERT INTO accounts (
+                account_id, provider, provider_subject, display_name,
+                linked_actor_id, metadata_json, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(account_id) DO UPDATE SET
+                display_name=excluded.display_name,
+                linked_actor_id=excluded.linked_actor_id,
+                metadata_json=excluded.metadata_json,
+                updated_at=CURRENT_TIMESTAMP
+            """
+            conn.execute(
+                query,
+                (
+                    str(account.account_id),
+                    account.provider,
+                    str(account.provider_subject),
+                    account.display_name,
+                    linked_id,
+                    metadata_json,
+                ),
+            )
 
         return account
 
@@ -197,27 +206,22 @@ class SQLiteAccountStore(AccountStore):
         Raises:
             AccountStoreError: If the account_id does not exist.
         """
-        with contextlib.closing(self._connect()) as conn:  # noqa: SIM117 -- contextlib.closing triggers ResourceWarning if combined
-            with conn:
-                cursor = conn.execute(
-                    "SELECT * FROM accounts WHERE account_id = ?", (str(account_id),)
-                )
-                row = cursor.fetchone()
-                if not row:
-                    msg = f"Account not found: {account_id}"
-                    raise AccountStoreError(msg)
+        with self._transaction() as conn:
+            cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
+            row = cursor.fetchone()
+            if not row:
+                msg = f"Account not found: {account_id}"
+                raise AccountStoreError(msg)
 
-                query = (
-                    "UPDATE accounts SET linked_actor_id = ?, updated_at = CURRENT_TIMESTAMP "
-                    "WHERE account_id = ?"
-                )
-                conn.execute(query, (str(actor_id), str(account_id)))
+            query = (
+                "UPDATE accounts SET linked_actor_id = ?, updated_at = CURRENT_TIMESTAMP "
+                "WHERE account_id = ?"
+            )
+            conn.execute(query, (str(actor_id), str(account_id)))
 
-                cursor = conn.execute(
-                    "SELECT * FROM accounts WHERE account_id = ?", (str(account_id),)
-                )
-                updated_row = cursor.fetchone()
-                return self._row_to_profile(updated_row)
+            cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
+            updated_row = cursor.fetchone()
+            return self._row_to_profile(updated_row)
 
     @override
     async def unlink_account(
@@ -232,24 +236,19 @@ class SQLiteAccountStore(AccountStore):
         Raises:
             AccountStoreError: If the account_id does not exist.
         """
-        with contextlib.closing(self._connect()) as conn:  # noqa: SIM117 -- contextlib.closing triggers ResourceWarning if combined
-            with conn:
-                cursor = conn.execute(
-                    "SELECT * FROM accounts WHERE account_id = ?", (str(account_id),)
-                )
-                row = cursor.fetchone()
-                if not row:
-                    msg = f"Account not found: {account_id}"
-                    raise AccountStoreError(msg)
+        with self._transaction() as conn:
+            cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
+            row = cursor.fetchone()
+            if not row:
+                msg = f"Account not found: {account_id}"
+                raise AccountStoreError(msg)
 
-                query = (
-                    "UPDATE accounts SET linked_actor_id = NULL, updated_at = CURRENT_TIMESTAMP "
-                    "WHERE account_id = ?"
-                )
-                conn.execute(query, (str(account_id),))
+            query = (
+                "UPDATE accounts SET linked_actor_id = NULL, updated_at = CURRENT_TIMESTAMP "
+                "WHERE account_id = ?"
+            )
+            conn.execute(query, (str(account_id),))
 
-                cursor = conn.execute(
-                    "SELECT * FROM accounts WHERE account_id = ?", (str(account_id),)
-                )
-                updated_row = cursor.fetchone()
-                return self._row_to_profile(updated_row)
+            cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
+            updated_row = cursor.fetchone()
+            return self._row_to_profile(updated_row)

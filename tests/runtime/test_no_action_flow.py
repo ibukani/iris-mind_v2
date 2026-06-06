@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from iris.cognitive.cycle.frame_builder import FrameBuilder
+from iris.cognitive.cycle.service import CognitiveCycle
 from iris.contracts.actions import ActionPlan, PresentedOutput
 from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
@@ -17,12 +19,13 @@ from iris.runtime.wiring.features import wire_proactive_talk_cognitive_cycle
 class FailingPresenter:
     """Presenter stub that raises if called."""
 
-    async def present(self, plan: ActionPlan) -> PresentedOutput:  # noqa: PLR6301, ARG002 -- test sentinel implements Presenter protocol; raise-only body must keep protocol signature
+    async def present(self, plan: ActionPlan) -> PresentedOutput:
         """Raise an error to verify presenter is not invoked.
 
         Raises:
             AssertionError: 常に呼び出しを検証するために発生。
         """
+        _ = self, plan
         msg = "presenter should not be called for no_action"
         raise AssertionError(msg)
 
@@ -114,14 +117,6 @@ async def test_low_salience_proactive_produces_no_action() -> None:
 @pytest.mark.anyio
 async def test_fallback_plan_is_no_action_and_skips_presenter() -> None:
     """Verify CognitiveCycle fallback plan produces no_action and skips presenter."""
-    from iris.cognitive.cycle.frame_builder import (  # noqa: PLC0415  # test-specific cycle wiring
-        FrameBuilder,
-    )
-    from iris.cognitive.cycle.service import (  # noqa: PLC0415  # test-specific cycle wiring
-        CognitiveCycle,
-    )
-    from iris.contracts.actions import ActionPlan  # noqa: PLC0415  # test-specific override
-
     cycle = CognitiveCycle(
         steps=(),
         frame_builder=FrameBuilder(),
