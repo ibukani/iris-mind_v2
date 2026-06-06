@@ -60,7 +60,7 @@ need to change.
 | Built-in defaults | Safe fallback for every value. | `provider = "fake"`, `base_url = "http://localhost:11434"`, `state.backend = "memory"` |
 | TOML | Structured non-secret developer configuration. | model names, timeouts, `ollama.base_url`, `state.sqlite_path` |
 | Environment variables | Secrets, deployment overrides, and CI/container overrides. | `OPENAI_API_KEY`, `IRIS_STATE_BACKEND` |
-| CLI flags | Temporary experiment overrides. | `--config`, `--host`, `--port` |
+| CLI flags | Temporary experiment overrides. | `--host`, `--port` |
 
 Do not store API keys, auth tokens, passwords, or other credentials in TOML files.
 Use environment variables (or your secret manager) for those.
@@ -82,7 +82,7 @@ override earlier ones:
 2. TOML file passed with `--config`
 3. Environment variables such as `IRIS_DEFAULT_CHAT_PROVIDER`,
    `IRIS_DEFAULT_CHAT_MODEL`, `IRIS_OLLAMA_HOST`, and `IRIS_OPENAI_MODEL`
-4. CLI flags: `--host`, `--port`, `--config`
+4. CLI flags: `--host`, `--port`
 
 `OPENAI_API_KEY` must be provided through the environment, not TOML. Iris will
 read it directly from the process environment when constructing the OpenAI

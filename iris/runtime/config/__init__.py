@@ -1,7 +1,7 @@
 """Iris runtime configuration package.
 
 Public re-exports for ``iris.runtime.config``. Internal submodules
-(``errors``, ``llm``, ``parsing``, ``root``, ``sources``) are private
+(``errors``, ``llm``, ``parsing``, ``root``, ``server``, ``sources``, ``state``) are private
 implementation details and should not be imported directly by consumers.
 """
 
