@@ -26,7 +26,10 @@ def configure_runtime_logging(config: RuntimeLoggingConfig) -> None:
     logger.add(
         sys.stderr,
         level=config.level,
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
+        format=(
+            "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | "
+            "{extra} - {message}"
+        )
         if not serialize
         else "{message}",
         serialize=serialize,
@@ -39,7 +42,10 @@ def configure_runtime_logging(config: RuntimeLoggingConfig) -> None:
         logger.add(
             file_path,
             level=config.level,
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}"
+            format=(
+                "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | "
+                "{extra} - {message}"
+            )
             if not serialize
             else "{message}",
             serialize=serialize,
