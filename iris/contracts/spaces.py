@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from types import MappingProxyType
 from typing import TYPE_CHECKING
+
+from iris.core.metadata import EMPTY_METADATA, immutable_metadata
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -42,13 +43,11 @@ class SpaceParticipant:
     participant_kind: SpaceParticipantKind
     display_name: str
     identity: Identity | None = None
-    metadata: Mapping[str, str] = MappingProxyType({})
+    metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
         """Ensure metadata is strongly immutable."""
-        if not isinstance(self.metadata, MappingProxyType):
-            metadata_dict: dict[str, str] = dict(self.metadata)
-            object.__setattr__(self, "metadata", MappingProxyType[str, str](metadata_dict))
+        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
 
 
 @dataclass(frozen=True)
@@ -59,13 +58,11 @@ class InteractionSpace:
     space_kind: SpaceKind
     display_name: str
     participants: tuple[SpaceParticipant, ...] = ()
-    metadata: Mapping[str, str] = MappingProxyType({})
+    metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
         """Ensure metadata is strongly immutable."""
-        if not isinstance(self.metadata, MappingProxyType):
-            metadata_dict: dict[str, str] = dict(self.metadata)
-            object.__setattr__(self, "metadata", MappingProxyType[str, str](metadata_dict))
+        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
 
 
 class SpaceBindingStoreError(ValueError):
@@ -81,10 +78,8 @@ class SpaceBinding:
     space_id: SpaceId
     display_name: str
     space_kind: SpaceKind
-    metadata: Mapping[str, str] = MappingProxyType({})
+    metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
         """Ensure metadata is strongly immutable."""
-        if not isinstance(self.metadata, MappingProxyType):
-            metadata_dict: dict[str, str] = dict(self.metadata)
-            object.__setattr__(self, "metadata", MappingProxyType[str, str](metadata_dict))
+        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))

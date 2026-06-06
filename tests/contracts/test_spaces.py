@@ -1,18 +1,25 @@
-"""相互作用スペース契約のテスト。"""
+"""Tests for Spaces contracts."""
 
 from __future__ import annotations
 
 from types import MappingProxyType
+from typing import TYPE_CHECKING, cast
+
+import pytest
 
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.spaces import (
     InteractionSpace,
+    SpaceBinding,
     SpaceKind,
     SpaceParticipant,
     SpaceParticipantKind,
 )
 from iris.core.ids import ActorId, ExternalRef, SpaceId
 from tests.helpers.immutability import assert_frozen_field
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 
 def test_space_kind_enum_exposes_required_values() -> None:
@@ -104,7 +111,7 @@ def test_interaction_space_carries_participants_and_metadata() -> None:
     )
 
     assert space.participants == participants
-    assert space.metadata is metadata
+    assert space.metadata == metadata
     assert space.participants[1].identity is identity
 
 
@@ -148,3 +155,56 @@ def test_space_participant_supports_each_kind() -> None:
             display_name=f"display-{kind.value}",
         )
         assert participant.participant_kind is kind
+
+
+def test_space_participant_metadata_is_defensively_copied() -> None:
+    """SpaceParticipant defensively copies metadata."""
+    metadata = {"role": "admin"}
+    participant = SpaceParticipant(
+        actor_id=ActorId("actor-1"),
+        participant_kind=SpaceParticipantKind.HUMAN,
+        display_name="Mina",
+        metadata=metadata,
+    )
+
+    metadata["role"] = "changed"
+
+    assert participant.metadata["role"] == "admin"
+    with pytest.raises(TypeError):
+        cast("MutableMapping[str, str]", participant.metadata)["new"] = "value"
+
+
+def test_interaction_space_metadata_is_defensively_copied() -> None:
+    """InteractionSpace defensively copies metadata."""
+    metadata = {"topic": "general"}
+    space = InteractionSpace(
+        space_id=SpaceId("space-1"),
+        space_kind=SpaceKind.CHANNEL,
+        display_name="general",
+        metadata=metadata,
+    )
+
+    metadata["topic"] = "changed"
+
+    assert space.metadata["topic"] == "general"
+    with pytest.raises(TypeError):
+        cast("MutableMapping[str, str]", space.metadata)["new"] = "value"
+
+
+def test_space_binding_metadata_is_defensively_copied() -> None:
+    """SpaceBinding defensively copies metadata."""
+    metadata = {"region": "us-east"}
+    binding = SpaceBinding(
+        provider="discord",
+        provider_space_ref=ExternalRef("guild-1/channel-1"),
+        space_id=SpaceId("space-1"),
+        display_name="general",
+        space_kind=SpaceKind.CHANNEL,
+        metadata=metadata,
+    )
+
+    metadata["region"] = "changed"
+
+    assert binding.metadata["region"] == "us-east"
+    with pytest.raises(TypeError):
+        cast("MutableMapping[str, str]", binding.metadata)["new"] = "value"

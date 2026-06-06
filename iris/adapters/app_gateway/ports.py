@@ -4,16 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
-from iris.contracts.identity import ActorKind
-
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
     from iris.contracts.accounts import AccountProfile
     from iris.contracts.actions import ActionResult, AppAction
+    from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
     from iris.contracts.identity import Identity
     from iris.contracts.observations import Observation
-    from iris.contracts.spaces import InteractionSpace, SpaceBinding, SpaceKind
+    from iris.contracts.spaces import InteractionSpace, SpaceBinding
     from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 
 
@@ -32,16 +31,11 @@ class AppGateway(Protocol):
 class IdentityResolver(Protocol):
     """外部provider subjectをIris Identityへ解決するAppGateway境界port。"""
 
-    async def resolve_identity(  # noqa: PLR0913 -- resolver port mirrors typed external context fields
+    async def resolve_identity(
         self,
+        account_ref: ExternalAccountRef,
         *,
-        provider: str,
-        provider_subject: ExternalRef,
-        display_name: str,
-        actor_kind: ActorKind = ActorKind.HUMAN,
-        account_id: AccountId | None = None,
         device_id: DeviceId | None = None,
-        metadata: Mapping[str, str] | None = None,
     ) -> Identity:
         """Resolve an external provider account into an Iris Identity.
 
@@ -55,13 +49,9 @@ class SpaceResolver(Protocol):
 
     async def resolve_space(
         self,
+        space_ref: ExternalSpaceRef,
         *,
-        provider: str,
-        provider_space_ref: ExternalRef,
-        display_name: str,
-        space_kind: SpaceKind,
         participants: Sequence[Identity] = (),
-        metadata: Mapping[str, str] | None = None,
     ) -> InteractionSpace:
         """外部provider space refから型付きInteractionSpaceを返す。"""
         ...

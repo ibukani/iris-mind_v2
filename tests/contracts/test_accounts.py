@@ -1,10 +1,17 @@
-"""Account contract tests."""
+"""Tests for Account contracts."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
+
+import pytest
 
 from iris.contracts.accounts import AccountProfile
 from iris.core.ids import AccountId, ActorId, ExternalRef
 from tests.helpers.immutability import assert_frozen_field
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 
 def test_account_profile_stores_provider_identity() -> None:
@@ -35,3 +42,21 @@ def test_account_profile_is_frozen() -> None:
     )
 
     assert_frozen_field(profile, "display_name", "Renamed")
+
+
+def test_account_profile_metadata_is_defensively_copied() -> None:
+    """AccountProfile defensively copies metadata."""
+    metadata = {"key": "value"}
+    profile = AccountProfile(
+        account_id=AccountId("account-1"),
+        provider="discord",
+        provider_subject=ExternalRef("discord-user-1"),
+        display_name="Mina",
+        metadata=metadata,
+    )
+
+    metadata["key"] = "changed"
+
+    assert profile.metadata["key"] == "value"
+    with pytest.raises(TypeError):
+        cast("MutableMapping[str, str]", profile.metadata)["new"] = "value"

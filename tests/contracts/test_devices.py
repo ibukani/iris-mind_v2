@@ -1,10 +1,17 @@
-"""Device contract tests."""
+"""Tests for Device contracts."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
+
+import pytest
 
 from iris.contracts.devices import DeviceCapability, DeviceKind, DeviceProfile
 from iris.core.ids import ActorId, DeviceId
 from tests.helpers.immutability import assert_frozen_field
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 
 def test_device_profile_stores_kind_and_capabilities() -> None:
@@ -43,3 +50,32 @@ def test_device_capability_is_frozen() -> None:
     capability = DeviceCapability(name="audio_output")
 
     assert_frozen_field(capability, "name", "renamed")
+
+
+def test_device_capability_metadata_is_defensively_copied() -> None:
+    """DeviceCapability defensively copies metadata."""
+    metadata = {"version": "1.0"}
+    capability = DeviceCapability(name="audio_input", metadata=metadata)
+
+    metadata["version"] = "2.0"
+
+    assert capability.metadata["version"] == "1.0"
+    with pytest.raises(TypeError):
+        cast("MutableMapping[str, str]", capability.metadata)["new"] = "value"
+
+
+def test_device_profile_metadata_is_defensively_copied() -> None:
+    """DeviceProfile defensively copies metadata."""
+    metadata = {"os": "linux"}
+    profile = DeviceProfile(
+        device_id=DeviceId("device-1"),
+        device_kind=DeviceKind.MICROPHONE,
+        display_name="Desk Mic",
+        metadata=metadata,
+    )
+
+    metadata["os"] = "changed"
+
+    assert profile.metadata["os"] == "linux"
+    with pytest.raises(TypeError):
+        cast("MutableMapping[str, str]", profile.metadata)["new"] = "value"

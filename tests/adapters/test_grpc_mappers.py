@@ -10,6 +10,8 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
+
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver
 from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
 from iris.adapters.grpc.mappers import (
@@ -565,14 +567,9 @@ class _RecordingIdentityResolver(IdentityResolver):
     @override
     async def resolve_identity(
         self,
+        account_ref: ExternalAccountRef,
         *,
-        provider: str,
-        provider_subject: ExternalRef,
-        display_name: str,
-        actor_kind: ActorKind = ActorKind.HUMAN,
-        account_id: AccountId | None = None,
         device_id: DeviceId | None = None,
-        metadata: Mapping[str, str] | None = None,
     ) -> Identity:
         """Record call and return deterministic Identity.
 
@@ -580,22 +577,22 @@ class _RecordingIdentityResolver(IdentityResolver):
             Identity: Identity with provider-derived actor_id.
         """
         self.calls += 1
-        self.provider = provider
-        self.provider_subject = provider_subject
-        self.display_name = display_name
-        self.actor_kind = actor_kind
-        self.account_id = account_id
+        self.provider = account_ref.provider
+        self.provider_subject = account_ref.provider_subject
+        self.display_name = account_ref.display_name
+        self.actor_kind = account_ref.actor_kind
+        self.account_id = account_ref.account_id
         self.device_id = device_id
-        self.metadata = dict(metadata or {})
+        self.metadata = dict(account_ref.metadata)
         return Identity(
-            actor_id=ActorId(f"resolved-{provider}-{provider_subject}"),
-            actor_kind=actor_kind,
-            display_name=display_name,
-            provider=provider,
-            provider_subject=provider_subject,
-            account_id=account_id,
+            actor_id=ActorId(f"resolved-{account_ref.provider}-{account_ref.provider_subject}"),
+            actor_kind=account_ref.actor_kind,
+            display_name=account_ref.display_name,
+            provider=account_ref.provider,
+            provider_subject=account_ref.provider_subject,
+            account_id=account_ref.account_id,
             device_id=device_id,
-            metadata=dict(metadata or {}),
+            metadata=dict(account_ref.metadata),
         )
 
 
@@ -614,27 +611,23 @@ class _RecordingSpaceResolver(SpaceResolver):
     @override
     async def resolve_space(
         self,
+        space_ref: ExternalSpaceRef,
         *,
-        provider: str,
-        provider_space_ref: ExternalRef,
-        display_name: str,
-        space_kind: SpaceKind,
         participants: Sequence[Identity] = (),
-        metadata: Mapping[str, str] | None = None,
     ) -> InteractionSpace:
         self.calls += 1
-        self.provider = provider
-        self.provider_space_ref = provider_space_ref
-        self.display_name = display_name
-        self.space_kind = space_kind
+        self.provider = space_ref.provider
+        self.provider_space_ref = space_ref.provider_space_ref
+        self.display_name = space_ref.display_name
+        self.space_kind = space_ref.space_kind
         self.participants = tuple(participants)
-        self.metadata = dict(metadata or {})
+        self.metadata = dict(space_ref.metadata)
         return InteractionSpace(
-            space_id=SpaceId(f"resolved-space-{provider}-{provider_space_ref}"),
-            space_kind=space_kind,
-            display_name=display_name,
+            space_id=SpaceId(f"resolved-space-{space_ref.provider}-{space_ref.provider_space_ref}"),
+            space_kind=space_ref.space_kind,
+            display_name=space_ref.display_name,
             participants=(),
-            metadata=dict(metadata or {}),
+            metadata=dict(space_ref.metadata),
         )
 
 

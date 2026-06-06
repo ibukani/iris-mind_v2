@@ -52,7 +52,7 @@ message SubmitObservationRequest {
 - **`space_ref`** *(Recommended)*: Contextual space representation. Resolved ephemerally.
 
 ### `ExternalAccountRef`
-Used by the server's `AccountIdentityResolver` to lookup or implicitly create an internal Identity.
+Used by the server-side identity resolver to lookup or implicitly create an internal Identity.
 - **`provider`**: Should be `"cli"`.
 - **`provider_subject`**: A stable identifier for the local user on the client side (e.g., local OS username or fixed CLI ID).
 - **`display_name`**: Required by the mapper. The user's visible name.

@@ -71,7 +71,8 @@ iris/
 │   ├── identity.py
 │   ├── spaces.py
 │   ├── memory.py
-│   └── policy.py
+│   ├── policy.py
+│   └── external_refs.py
 │
 ├── runtime/
 │   ├── app.py
@@ -126,7 +127,12 @@ iris/
 │
 ├── adapters/
 │   ├── app_gateway/
-│   │   └── ports.py
+│   │   ├── ingress.py
+│   │   ├── identity_resolver.py
+│   │   ├── ports.py
+│   │   ├── space_participants.py
+│   │   ├── space_resolver.py
+│   │   └── stable_ids.py
 │   ├── llm/
 │   │   ├── fake.py
 │   │   ├── ollama.py
@@ -408,6 +414,8 @@ AppGateway の責務。
 - ActionResult を受け取る
 - correlation_id / turn_id / session_id を管理する
 - external ref と Iris internal ref を対応づける
+
+注意点として、複数層で共有される外部プロバイダ参照 (`ExternalAccountRef`, `ExternalSpaceRef`) は `contracts/` に置くが、AppGateway 固有の入力コマンド DTO (`ActorMessageIngress` 等) は `adapters/app_gateway/` に留める。
 
 AppGateway がやってはいけないこと。
 
@@ -753,7 +761,7 @@ CLI / main.py / iris.runtime.server
 - `MotivationResult` 型と `FrameBuilder` 対応は既存、step 実装は未着手
 - LearningHook / BackgroundJob は未実装
 - 外部アプリ連携 (Discord, Voice, Twitch) は未実装
-- AppGateway は Protocol と `AccountIdentityResolver` / `EphemeralSpaceResolver` を定義済み (外部アプリのidentity永続化用)
+- AppGateway は Protocol とサーバーサイドの Identity Resolver / Space Resolver を定義済み (外部アプリのidentity永続化用)
 
 ---
 

@@ -11,7 +11,8 @@ from loguru import logger
 if TYPE_CHECKING:
     import grpc
 
-from iris.adapters.app_gateway.resolvers import AccountIdentityResolver, EphemeralSpaceResolver
+from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
+from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.runtime.config import RuntimeConfigOverrides, load_runtime_config
 from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.service import IrisRuntimeService
@@ -47,7 +48,7 @@ async def serve(
 
     stores = wire_runtime_state(config)
 
-    identity_resolver = AccountIdentityResolver(
+    identity_resolver = AccountBackedIdentityResolver(
         account_store=stores.account_store,
     )
     space_resolver = EphemeralSpaceResolver()

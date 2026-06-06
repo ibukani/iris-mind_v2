@@ -7,10 +7,15 @@ from datetime import UTC, datetime
 import pytest
 
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver, FakeSpaceResolver
+from iris.adapters.app_gateway.ingress import (
+    ActorMessageIngress,
+    ActorMessagePayload,
+)
 from iris.adapters.app_gateway.observation_factory import (
     ObservationFactory,
     SequentialObservationIdFactory,
 )
+from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 from iris.contracts.identity import ActorKind
 from iris.contracts.observations import ObservationKind
 from iris.contracts.spaces import SpaceKind
@@ -37,13 +42,21 @@ def _factory() -> ObservationFactory:
 @pytest.mark.anyio
 async def test_observation_factory_resolves_actor_into_context() -> None:
     """resolverが返したIdentityがobservation.context.actorへ入ることを確認する。"""
-    observation = await _factory().create_actor_message(
-        provider="discord",
-        provider_subject=ExternalRef("actor-1"),
-        display_name="Mina",
-        text="hello",
-        session_id=SessionId("session-1"),
-        metadata={"mood": "calm"},
+    factory = _factory()
+    observation = await factory.create_actor_message(
+        ActorMessageIngress(
+            actor=ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("actor-1"),
+                display_name="Mina",
+                metadata={"mood": "calm"},
+            ),
+            message=ActorMessagePayload(
+                text="hello",
+            ),
+            session_id=SessionId("session-1"),
+            metadata={"mood": "calm"},
+        )
     )
 
     assert observation.observation_id == ObservationId("test-obs-1")
@@ -60,15 +73,22 @@ async def test_observation_factory_resolves_actor_into_context() -> None:
 @pytest.mark.anyio
 async def test_observation_factory_preserves_account_device_source() -> None:
     """account_id/device_id/sourceがObservationContextに保持されることを確認する。"""
-    observation = await _factory().create_actor_message(
-        provider="discord",
-        provider_subject=ExternalRef("actor-1"),
-        display_name="Mina",
-        text="hello",
-        session_id=SessionId("session-1"),
-        account_id=AccountId("account-1"),
-        device_id=DeviceId("device-1"),
-        source="discord-gateway",
+    factory = _factory()
+    observation = await factory.create_actor_message(
+        ActorMessageIngress(
+            actor=ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("actor-1"),
+                display_name="Mina",
+                account_id=AccountId("account-1"),
+            ),
+            message=ActorMessagePayload(
+                text="hello",
+            ),
+            session_id=SessionId("session-1"),
+            device_id=DeviceId("device-1"),
+            source="discord-gateway",
+        )
     )
 
     assert observation.context.account_id == AccountId("account-1")
@@ -79,21 +99,33 @@ async def test_observation_factory_preserves_account_device_source() -> None:
 @pytest.mark.anyio
 async def test_observation_factory_resolves_space_id_when_ref_present() -> None:
     """provider_space_refがある場合にSpaceResolverのSpaceIdがcontextへ入ることを確認する。"""
-    observation = await _factory().create_actor_message(
-        provider="discord",
-        provider_subject=ExternalRef("actor-1"),
-        display_name="Mina",
-        text="hello",
-        session_id=SessionId("session-1"),
-        provider_space_ref=ExternalRef("channel-1"),
-        space_display_name="general",
-        space_kind=SpaceKind.CHANNEL,
+    factory = _factory()
+    observation = await factory.create_actor_message(
+        ActorMessageIngress(
+            actor=ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("user-1"),
+                display_name="Ibuki",
+            ),
+            space=ExternalSpaceRef(
+                provider="discord",
+                provider_space_ref=ExternalRef("channel-1"),
+                display_name="general",
+                space_kind=SpaceKind.CHANNEL,
+            ),
+            message=ActorMessagePayload(
+                text="Hello in space!",
+            ),
+            session_id=SessionId("sess-1"),
+        )
     )
     expected_space = await FakeSpaceResolver().resolve_space(
-        provider="discord",
-        provider_space_ref=ExternalRef("channel-1"),
-        display_name="general",
-        space_kind=SpaceKind.CHANNEL,
+        ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref=ExternalRef("channel-1"),
+            display_name="general",
+            space_kind=SpaceKind.CHANNEL,
+        )
     )
 
     assert observation.context.space_id == expected_space.space_id
@@ -102,12 +134,19 @@ async def test_observation_factory_resolves_space_id_when_ref_present() -> None:
 @pytest.mark.anyio
 async def test_observation_factory_leaves_space_id_none_without_space_ref() -> None:
     """provider_space_refがない場合にspace_idがNoneのままであることを確認する。"""
-    observation = await _factory().create_actor_message(
-        provider="discord",
-        provider_subject=ExternalRef("actor-1"),
-        display_name="Mina",
-        text="hello",
-        session_id=SessionId("session-1"),
+    factory = _factory()
+    observation = await factory.create_actor_message(
+        ActorMessageIngress(
+            actor=ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("user-1"),
+                display_name="Ibuki",
+            ),
+            message=ActorMessagePayload(
+                text="Hello Iris!",
+            ),
+            session_id=SessionId("sess-1"),
+        )
     )
 
     assert observation.context.space_id is None
@@ -117,20 +156,32 @@ async def test_observation_factory_leaves_space_id_none_without_space_ref() -> N
 async def test_observation_factory_preserves_message_fields_and_uses_clock() -> None:
     """text/external_message_id/occurred_atの保持とclock fallbackを確認する。"""
     explicit = await _factory().create_actor_message(
-        provider="discord",
-        provider_subject=ExternalRef("actor-1"),
-        display_name="Mina",
-        text="hello",
-        session_id=SessionId("session-1"),
-        occurred_at=_OCCURRED_AT,
-        external_message_id=ExternalRef("message-1"),
+        ActorMessageIngress(
+            actor=ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("actor-1"),
+                display_name="Mina",
+            ),
+            message=ActorMessagePayload(
+                text="hello",
+                occurred_at=_OCCURRED_AT,
+                external_message_id=ExternalRef("message-1"),
+            ),
+            session_id=SessionId("session-1"),
+        )
     )
     fallback = await _factory().create_actor_message(
-        provider="discord",
-        provider_subject=ExternalRef("actor-1"),
-        display_name="Mina",
-        text="from clock",
-        session_id=SessionId("session-1"),
+        ActorMessageIngress(
+            actor=ExternalAccountRef(
+                provider="discord",
+                provider_subject=ExternalRef("actor-1"),
+                display_name="Mina",
+            ),
+            message=ActorMessagePayload(
+                text="from clock",
+            ),
+            session_id=SessionId("session-1"),
+        )
     )
 
     assert explicit.text == "hello"

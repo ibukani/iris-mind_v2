@@ -1,35 +1,29 @@
-"""Device identity context contracts."""
+"""Shared external reference DTOs."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from iris.contracts.identity import ActorKind
 from iris.core.metadata import EMPTY_METADATA, immutable_metadata
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from iris.core.ids import ActorId, DeviceId
-
-
-class DeviceKind(StrEnum):
-    """Kinds of devices that may contribute observation context."""
-
-    CLIENT = "client"
-    MICROPHONE = "microphone"
-    SPEAKER = "speaker"
-    AVATAR = "avatar"
-    RUNTIME = "runtime"
-    SENSOR = "sensor"
+    from iris.contracts.spaces import SpaceKind
+    from iris.core.ids import AccountId, ExternalRef
 
 
 @dataclass(frozen=True)
-class DeviceCapability:
-    """Capability advertised by a device."""
+class ExternalAccountRef:
+    """Represents an external provider account/user reference."""
 
-    name: str
+    provider: str
+    provider_subject: ExternalRef
+    display_name: str
+    actor_kind: ActorKind = ActorKind.HUMAN
+    account_id: AccountId | None = None
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
@@ -38,14 +32,13 @@ class DeviceCapability:
 
 
 @dataclass(frozen=True)
-class DeviceProfile:
-    """Device profile linked to an optional owning actor."""
+class ExternalSpaceRef:
+    """Represents an external provider interaction space."""
 
-    device_id: DeviceId
-    device_kind: DeviceKind
+    provider: str
+    provider_space_ref: ExternalRef
     display_name: str
-    owner_actor_id: ActorId | None = None
-    capabilities: tuple[DeviceCapability, ...] = ()
+    space_kind: SpaceKind
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:

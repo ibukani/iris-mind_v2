@@ -1,14 +1,18 @@
-"""アクター中心のIdentity契約のテスト。"""
+"""Tests for Identity contracts."""
 
 from __future__ import annotations
 
 from types import MappingProxyType
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from iris.contracts.identity import ActorKind, Identity
 from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 from tests.helpers.immutability import assert_frozen_field
+
+if TYPE_CHECKING:
+    from collections.abc import MutableMapping
 
 
 def _identity(*, actor_kind: ActorKind, actor_id: str = "actor-1") -> Identity:
@@ -110,7 +114,7 @@ def test_identity_accepts_custom_metadata() -> None:
         metadata=custom,
     )
 
-    assert identity.metadata is custom
+    assert identity.metadata == custom
     assert identity.metadata["locale"] == "ja-JP"
 
 
@@ -140,3 +144,20 @@ def test_actor_kinds_are_distinct() -> None:
 
     assert human != device
     assert human.actor_kind != device.actor_kind
+
+
+def test_identity_metadata_is_defensively_copied() -> None:
+    """Identity defensively copies metadata."""
+    metadata = {"source": "discord"}
+    identity = Identity(
+        actor_id=ActorId("actor-1"),
+        actor_kind=ActorKind.HUMAN,
+        display_name="Mina",
+        metadata=metadata,
+    )
+
+    metadata["source"] = "changed"
+
+    assert identity.metadata["source"] == "discord"
+    with pytest.raises(TypeError):
+        cast("MutableMapping[str, str]", identity.metadata)["new"] = "value"
