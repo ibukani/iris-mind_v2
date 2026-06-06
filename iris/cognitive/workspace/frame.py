@@ -1,4 +1,4 @@
-"""WorkspaceFrame and related snapshot data types for the cognitive pipeline."""
+"""認知パイプライン向けの WorkspaceFrame と関連スナップショット型。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class InterpretedInput:
-    """Interpreted text input extracted from an observation."""
+    """観測から抽出された、解釈済みテキスト入力。"""
 
     text: str | None = None
     language: str | None = None
@@ -26,14 +26,14 @@ class InterpretedInput:
 
 @dataclass(frozen=True)
 class MemorySummary:
-    """Retrieved memories for the current turn."""
+    """現在のターンで取得したメモリ。"""
 
     retrieved_memories: tuple[MemorySearchResult, ...] = ()
 
 
 @dataclass(frozen=True)
 class AffectSnapshot:
-    """Current affect state."""
+    """現在の感情状態。"""
 
     mood_label: str | None = None
     arousal: float = 0.0
@@ -44,7 +44,7 @@ class AffectSnapshot:
 
 @dataclass(frozen=True)
 class RelationshipSnapshot:
-    """Relationship state with the current actor."""
+    """現在のアクターとの関係状態。"""
 
     actor_label: str | None = None
     affinity: float = 0.0
@@ -55,7 +55,7 @@ class RelationshipSnapshot:
 
 @dataclass(frozen=True)
 class GoalCandidate:
-    """Candidate goal considered by the cognitive cycle."""
+    """認知サイクルが考慮する候補ゴール。"""
 
     name: str
     reason: str
@@ -64,7 +64,7 @@ class GoalCandidate:
 
 @dataclass(frozen=True)
 class ActorContextSnapshot:
-    """Actor, account, and device context available to one turn."""
+    """1 ターンで参照可能なアクター・アカウント・デバイスコンテキスト。"""
 
     actor: Identity | None = None
     account_id: AccountId | None = None
@@ -73,7 +73,7 @@ class ActorContextSnapshot:
 
 @dataclass(frozen=True)
 class SpaceContextSnapshot:
-    """Space context available to one turn."""
+    """1 ターンで参照可能なスペースコンテキスト。"""
 
     space_id: SpaceId | None = None
     space: InteractionSpace | None = None
@@ -82,7 +82,7 @@ class SpaceContextSnapshot:
 
 @dataclass(frozen=True)
 class WorkspaceFrame:
-    """Typed immutable working-memory snapshot for one cognitive turn."""
+    """1 ターン分の、型付きで不変なワーキングメモリスナップショット。"""
 
     observation: Observation
     interpreted_input: InterpretedInput | None = None

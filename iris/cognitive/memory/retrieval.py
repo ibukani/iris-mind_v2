@@ -29,11 +29,11 @@ class MemoryRetrievalStep(PipelineStep[MemoryRetrievalResult]):
     name = "memory_retrieval"
 
     def __init__(self, retriever: MemoryRetriever, *, limit: int = 5) -> None:
-        """Initialize with a retriever and result limit.
+        """レトリーバーと結果上限で初期化する。
 
         Args:
-            retriever: The memory retriever backend.
-            limit: Maximum number of memory results to retrieve.
+            retriever: メモリ検索バックエンド。
+            limit: 取得するメモリ結果の最大件数。
         """
         self._retriever = retriever
         self._limit = limit

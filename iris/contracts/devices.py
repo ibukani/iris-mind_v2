@@ -1,4 +1,4 @@
-"""Device identity context contracts."""
+"""Device アイデンティティコンテキストの契約。"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class DeviceKind(StrEnum):
-    """Kinds of devices that may contribute observation context."""
+    """観測コンテキストを提供し得るデバイスの種類。"""
 
     CLIENT = "client"
     MICROPHONE = "microphone"
@@ -27,19 +27,19 @@ class DeviceKind(StrEnum):
 
 @dataclass(frozen=True)
 class DeviceCapability:
-    """Capability advertised by a device."""
+    """デバイスが公開する capability。"""
 
     name: str
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
-        """Defensively copy metadata as an immutable mapping proxy."""
+        """メタデータを不変な mapping proxy として防御的にコピーする。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
 
 
 @dataclass(frozen=True)
 class DeviceProfile:
-    """Device profile linked to an optional owning actor."""
+    """任意の所有 Actor にリンクされた Device プロファイル。"""
 
     device_id: DeviceId
     device_kind: DeviceKind
@@ -49,5 +49,5 @@ class DeviceProfile:
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
-        """Defensively copy metadata as an immutable mapping proxy."""
+        """メタデータを不変な mapping proxy として防御的にコピーする。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))

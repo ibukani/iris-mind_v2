@@ -105,7 +105,7 @@ class AppraisalStep(PipelineStep[AppraisalResult]):
         """前回のアプレイザルからの経過時間で初期化する。
 
         Args:
-            elapsed_seconds: Seconds since the last appraisal for mood decay.
+            elapsed_seconds: 気分減衰に用いる、前回アプレイザルからの経過秒数。
         """
         self._elapsed_seconds = elapsed_seconds
 

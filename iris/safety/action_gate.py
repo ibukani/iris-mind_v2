@@ -1,4 +1,4 @@
-"""Action safety gate protocol and pass-through implementations."""
+"""アクション安全性ゲートプロトコルとパススルー実装。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 class GateDecision(StrEnum):
-    """Enumeration of possible gate decisions."""
+    """ゲート判定の取りうる値。"""
 
     ALLOW = "allow"
     BLOCK = "block"
@@ -19,31 +19,31 @@ class GateDecision(StrEnum):
 
 @dataclass(frozen=True)
 class SafetyDecision:
-    """Result of a safety gate check."""
+    """安全性ゲート判定の結果。"""
 
     decision: GateDecision
     reason: str | None = None
 
 
 class ActionSafetyGate(Protocol):
-    """Protocol for gates that inspect and potentially block action plans."""
+    """ActionPlan を検査し、必要ならブロックするゲートのプロトコル。"""
 
     async def check_plan(self, plan: ActionPlan) -> SafetyDecision:
-        """Evaluate an action plan and return a safety decision."""
+        """ActionPlan を評価し、安全性判定を返す。"""
         ...
 
 
 class AllowAllActionGate:
-    """Pass-through action gate that allows every plan."""
+    """すべての ActionPlan を許可するパススルーゲート。"""
 
     async def check_plan(self, plan: ActionPlan) -> SafetyDecision:
-        """Allow all action plans unconditionally.
+        """すべての ActionPlan を無条件で許可する。
 
         Args:
-            plan: The action plan to check.
+            plan: 検査対象の ActionPlan。
 
         Returns:
-            A SafetyDecision with decision ALLOW.
+            decision=ALLOW の SafetyDecision。
         """
         _ = self, plan
         return SafetyDecision(decision=GateDecision.ALLOW)

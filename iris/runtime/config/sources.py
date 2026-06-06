@@ -1,4 +1,4 @@
-"""TOML file loading and top-level source application for runtime config."""
+"""ランタイム設定向けの TOML ファイル読み込みと最上位ソースの適用。"""
 
 from __future__ import annotations
 
@@ -27,16 +27,16 @@ if TYPE_CHECKING:
 
 
 def read_toml_file(path: Path) -> TomlTable:
-    """Read a TOML config file from disk.
+    """ディスクから TOML 設定ファイルを読み込む。
 
     Args:
-        path: Path to the TOML file.
+        path: TOML ファイルへのパス。
 
     Returns:
-        Parsed top-level TOML table.
+        解析済みの最上位 TOML テーブル。
 
     Raises:
-        ConfigError: If the file does not exist.
+        ConfigError: ファイルが存在しない場合。
     """
     if not path.exists():
         message = f"Runtime config file does not exist: {path}"
@@ -52,17 +52,17 @@ def apply_toml(
     logging: RuntimeLoggingConfig,
     table: TomlTable,
 ) -> tuple[RuntimeModelsConfig, RuntimeOllamaConfig, RuntimeOpenAIConfig, RuntimeLoggingConfig]:
-    """Apply a top-level TOML table to the LLM config sections.
+    """LLM 設定セクションに最上位 TOML テーブルを適用する。
 
     Args:
-        models: Models configuration to update.
-        ollama: Ollama configuration to update.
-        openai: OpenAI configuration to update.
-        logging: Logging configuration to update.
-        table: Top-level TOML table.
+        models: 更新対象の models 設定。
+        ollama: 更新対象の Ollama 設定。
+        openai: 更新対象の OpenAI 設定。
+        logging: 更新対象のロギング設定。
+        table: 最上位 TOML テーブル。
 
     Returns:
-        Updated models, Ollama, and OpenAI configs.
+        更新後の models / Ollama / OpenAI / logging 設定。
     """
     updated_models = apply_llm_toml(models, table_or_empty(table, "models"))
     updated_ollama = apply_ollama_toml(ollama, table_or_empty(table, "ollama"))
@@ -78,17 +78,17 @@ def apply_env(
     logging: RuntimeLoggingConfig,
     env: Mapping[str, str],
 ) -> tuple[RuntimeModelsConfig, RuntimeOllamaConfig, RuntimeOpenAIConfig, RuntimeLoggingConfig]:
-    """Apply environment variable overrides to the LLM config sections.
+    """LLM 設定セクションに環境変数オーバーライドを適用する。
 
     Args:
-        models: Base models config.
-        ollama: Base Ollama config.
-        openai: Base OpenAI config.
-        logging: Base logging config.
-        env: Environment variable mapping.
+        models: ベースとなる models 設定。
+        ollama: ベースとなる Ollama 設定。
+        openai: ベースとなる OpenAI 設定。
+        logging: ベースとなるロギング設定。
+        env: 環境変数のマッピング。
 
     Returns:
-        Updated models, Ollama, and OpenAI configs.
+        更新後の models / Ollama / OpenAI / logging 設定。
     """
     models, ollama, openai = apply_llm_env(models, ollama, openai, env)
     updated_logging = apply_logging_env(logging, env)

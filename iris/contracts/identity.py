@@ -38,5 +38,5 @@ class Identity:
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
-        """Defensively copy metadata as an immutable mapping proxy."""
+        """メタデータを不変な mapping proxy として防御的にコピーする。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))

@@ -1,2 +1,2 @@
 # Copyright 2025 Iris Mind
-"""Cognitive processing pipeline: perception, memory, affect, policy, and action selection."""
+"""認知処理パイプライン: 知覚、記憶、感情、ポリシーの各モジュールと行動選択。"""

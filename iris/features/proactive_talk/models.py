@@ -16,7 +16,7 @@ class ProactiveMemoryContext(Protocol):
 
     @property
     def retrieved_memories(self) -> tuple[MemorySearchResult, ...]:
-        """Retrieve the memories selected for the current turn."""
+        """現在のターンで選択されたメモリを返す。"""
         ...
 
 
@@ -25,12 +25,12 @@ class ProactiveAffectContext(Protocol):
 
     @property
     def arousal(self) -> float:
-        """Return the current arousal level on a bounded scale."""
+        """現在の覚醒度を bounded スケールで返す。"""
         ...
 
     @property
     def valence(self) -> float:
-        """Return the current valence level on a bounded scale."""
+        """現在の感情価を bounded スケールで返す。"""
         ...
 
 
@@ -39,12 +39,12 @@ class ProactiveRelationshipContext(Protocol):
 
     @property
     def actor_label(self) -> str | None:
-        """Return the actor label associated with the current session, if any."""
+        """現在のセッションに関連するアクターラベルを返す（存在する場合）。"""
         ...
 
     @property
     def familiarity(self) -> float:
-        """Return the familiarity level for the current actor on a bounded scale."""
+        """現在のアクターに対する familiarity を bounded スケールで返す。"""
         ...
 
 
@@ -53,32 +53,32 @@ class ProactiveFrameContext(Protocol):
 
     @property
     def observation(self) -> Observation:
-        """Return the current observation feeding the cognitive cycle."""
+        """認知サイクルへ供給される現在の観測を返す。"""
         ...
 
     @property
     def memory_summary(self) -> ProactiveMemoryContext:
-        """Return the memory summary used for proactive scoring."""
+        """プロアクティブスコアリングに用いるメモリサマリーを返す。"""
         ...
 
     @property
     def affect(self) -> ProactiveAffectContext:
-        """Return the affect snapshot used for proactive scoring."""
+        """プロアクティブスコアリングに用いる affect スナップショットを返す。"""
         ...
 
     @property
     def relationship(self) -> ProactiveRelationshipContext:
-        """Return the relationship snapshot used for proactive scoring."""
+        """プロアクティブスコアリングに用いる relationship スナップショットを返す。"""
         ...
 
     @property
     def constraints(self) -> tuple[PolicyConstraint, ...]:
-        """Return the active policy constraints for the current turn."""
+        """現在のターンで有効なポリシー制約を返す。"""
         ...
 
     @property
     def action_preferences(self) -> tuple[ActionPreference, ...]:
-        """Return the action preferences emitted by upstream policy steps."""
+        """上流のポリシーステップが出力したアクション優先度を返す。"""
         ...
 
 

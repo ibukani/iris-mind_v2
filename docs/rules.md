@@ -150,23 +150,23 @@ if message.content.startswith("!"):
 
 ## エージェントガイドライン
 
-### Wiring rules
+### Wiring ルール
 
-- Use explicit constructor injection in wiring files
-- Wiring files must not call `resolve()`, `get_service()`, or `locate()`
-- Wiring files must not define domain classes (CognitiveCycle, PipelineStep, etc.)
+- wiring ファイルでは明示的な constructor injection を使う
+- wiring ファイルは `resolve()`、`get_service()`、`locate()` を呼び出さない
+- wiring ファイルはドメインクラス (`CognitiveCycle`、`PipelineStep` など) を定義しない
 
-### Adding features
+### 機能追加
 
-- Add features as target-native implementations in `iris/features/`
-- Use `FeatureDefinition` protocol from `iris/features/definition.py`
-- Features must not mutate `WorkspaceFrame` directly
-- Features must not import from `iris/adapters`, `iris/runtime`, `iris/presentation`, `iris/safety`
+- 機能は `iris/features/` 配下にターゲットネイティブな実装として追加する
+- `iris/features/definition.py` の `FeatureDefinition` プロトコルを使う
+- 機能は `WorkspaceFrame` を直接 mutate しない
+- 機能は `iris/adapters`、`iris/runtime`、`iris/presentation`、`iris/safety` を import しない
 - 実装例: `iris/features/proactive_talk/` (salience scoring, goal proposal, policy, definition)
 
-### Testing rules
+### テストルール
 
-- Architecture guards in `tests/architecture/` must remain passing
+- `tests/architecture/` の architecture guard は合格状態を維持する
 
 ---
 

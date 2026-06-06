@@ -1,5 +1,5 @@
 # Copyright 2025 Iris Mind
-"""Simple perception pipeline step."""
+"""シンプルな知覚パイプラインステップ。"""
 
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ if TYPE_CHECKING:
 
 
 class SimplePerceptionStep(PipelineStep[PerceptionResult]):
-    """Pipeline step that extracts text from the observation."""
+    """観測からテキストを抽出するパイプラインステップ。"""
 
     name = "perception"
 
     @override
     async def run(self, frame: WorkspaceFrame) -> PerceptionResult:
-        """Extract text from the frame's observation and return a perception result.
+        """フレームの観測からテキストを抽出し、知覚結果を返す。
 
         Returns:
             PerceptionResult: 観測から抽出されたテキストとメタデータ。

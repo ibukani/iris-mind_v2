@@ -80,8 +80,8 @@ class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):
         """応答生成器とオプションの優先度で初期化する。
 
         Args:
-            generator: The response generator to use.
-            priority: Priority for the resulting action plan.
+            generator: 使用する応答生成器。
+            priority: 生成される ActionPlan の優先度。
         """
         self._generator = generator
         self._priority = priority

@@ -10,17 +10,17 @@ uv run python -m iris.runtime.server --config .iris/config/llm.toml
 uv run python -m iris.runtime.server --host 127.0.0.1 --port 50051
 ```
 
-**Note:** `iris-mind_v2` is a server-only runtime. User-facing CLI functionality belongs to `iris-cli_v2`. The former one-turn CLI entrypoint (`iris/runtime/cli.py`) has been intentionally removed. External clients should use the gRPC Runtime API. See [`docs/runtime-api.md`](docs/runtime-api.md) for the CLI-facing `SubmitObservation` contract. Model and provider configuration should be done through TOML or environment variables.
+**Note:** `iris-mind_v2` はサーバ専用ランタイムである。ユーザ向け CLI 機能 は `iris-cli_v2` 側に属する。以前のワンターン CLI エントリポイント (`iris/runtime/cli.py`) は意図的に削除済み。外部クライアントは gRPC Runtime API を利用する。CLI 向けの `SubmitObservation` 契約は [`docs/runtime-api.md`](docs/runtime-api.md) を参照。モデルとプロバイダの設定は TOML または環境変数で行う。
 
-- `--config`: Loads one explicit runtime TOML file, usually `.iris/config/llm.toml`.
-- `--host`: Overrides `server.host`.
-- `--port`: Overrides `server.port`.
+- `--config`: ランタイムの TOML ファイル（通常は `.iris/config/llm.toml`）を 1 つ指定して読み込む。
+- `--host`: `server.host` を上書きする。
+- `--port`: `server.port` を上書きする。
 
-The fake LLM remains the default and does not require external services or API keys.
+Fake LLM がデフォルトであり、外部サービスや API キーは不要。
 
-## Local Ollama
+## ローカル Ollama
 
-Install and start Ollama separately before using the local provider. Pull the example models:
+ローカルプロバイダを使う前に、Ollama を別途インストール・起動する。サンプルモデルを取得する:
 
 ```bash
 ollama pull qwen3:8b
@@ -30,69 +30,58 @@ ollama pull deepseek-r1:8b
 
 
 
-## Runtime LLM Config
+## ランタイム LLM 設定
 
-Iris ships with built-in defaults, so you only need to write the values you want to
-override. The recommended local runtime config path is `.iris/config/llm.toml`.
-Create it from the committed sample:
+Iris には組み込みのデフォルトがあるため、上書きしたい値だけを記述すればよい。
+ローカルランタイム設定の推奨パスは `.iris/config/llm.toml`。コミット済みのサンプルから作成する:
 
 ```bash
 cp .iris/config/llm.example.toml .iris/config/llm.toml
 ```
 
-Edit model names if needed, then run:
+必要に応じてモデル名を編集し、次を実行する:
 
 ```bash
 uv run python -m iris.runtime.server --config .iris/config/llm.toml
 ```
 
-`.iris/config/llm.toml` is local developer config and should not be committed.
-`.iris/config/llm.example.toml` is the committed sample. OpenAI credentials must
-be supplied with the `OPENAI_API_KEY` environment variable, never in TOML.
+`.iris/config/llm.toml` はローカル開発者用設定であり、コミットしない。
+`.iris/config/llm.example.toml` はコミット済みサンプルである。OpenAI の認証情報は TOML には書かず、`OPENAI_API_KEY` 環境変数で渡す。
 
-### Configuration role split
+### 設定ソースの役割分担
 
-Each configuration source has a clear role. Pick the right tool for the value you
-need to change.
+各設定ソースには明確な役割がある。変更したい値に応じて適切な手段を選ぶ。
 
-| Source | Role | Examples |
+| ソース | 役割 | 例 |
 |---|---|---|
-| Built-in defaults | Safe fallback for every value. | `provider = "fake"`, `base_url = "http://localhost:11434"`, `state.backend = "memory"` |
-| TOML | Structured non-secret developer configuration. | model names, timeouts, `ollama.base_url`, `state.sqlite_path` |
-| Environment variables | Secrets, deployment overrides, and CI/container overrides. | `OPENAI_API_KEY`, `IRIS_STATE_BACKEND` |
-| CLI flags | Temporary experiment overrides. | `--host`, `--port` |
+| 組み込みのデフォルト | 全項目の安全なフォールバック。 | `provider = "fake"`、`base_url = "http://localhost:11434"`、`state.backend = "memory"` |
+| TOML | 秘密情報を含まない構造化 developer 設定。 | モデル名、タイムアウト、`ollama.base_url`、`state.sqlite_path` |
+| 環境変数 | 秘密情報、デプロイ時上書き、CI / コンテナ上書き。 | `OPENAI_API_KEY`、`IRIS_STATE_BACKEND` |
+| CLI フラグ | 一時的な実験的上書き。 | `--host`、`--port` |
 
-Do not store API keys, auth tokens, passwords, or other credentials in TOML files.
-Use environment variables (or your secret manager) for those.
+API キー、auth トークン、パスワード、その他の認証情報を TOML ファイルに書かない。
+これらは環境変数 (またはシークレットマネージャ) を使う。
 
-Purpose-specific example configs are committed under `examples/config/`:
+目的別のサンプル設定が `examples/config/` にコミットされている:
 
-- `examples/config/minimal.toml` — overrides `models.default_chat` only.
-- `examples/config/local-ollama.toml` — configures all model slots and the shared
-  `ollama` block.
-- `examples/config/openai.toml` — configures OpenAI model settings. Does not
-  include `OPENAI_API_KEY`; supply it via env.
+- `examples/config/minimal.toml` — `models.default_chat` のみを上書き。
+- `examples/config/local-ollama.toml` — 全モデルスロットと共通 `ollama` ブロックを設定。
+- `examples/config/openai.toml` — OpenAI のモデル設定を行う。`OPENAI_API_KEY` は含めない。env で供給する。
 
-### Config precedence
+### 設定の優先順位
 
-Iris applies configuration from lowest to highest precedence; later steps
-override earlier ones:
+Iris は設定を低い優先度から高い優先度まで順に適用し、後のステップが前のステップを上書きする:
 
-1. Built-in defaults
-2. TOML file passed with `--config`
-3. Environment variables such as `IRIS_DEFAULT_CHAT_PROVIDER`,
-   `IRIS_DEFAULT_CHAT_MODEL`, `IRIS_OLLAMA_HOST`, and `IRIS_OPENAI_MODEL`
-4. CLI flags: `--host`, `--port`
+1. 組み込みのデフォルト
+2. `--config` で渡された TOML ファイル
+3. `IRIS_DEFAULT_CHAT_PROVIDER`、`IRIS_DEFAULT_CHAT_MODEL`、`IRIS_OLLAMA_HOST`、`IRIS_OPENAI_MODEL` などの環境変数
+4. CLI フラグ: `--host`、`--port`
 
-`OPENAI_API_KEY` must be provided through the environment, not TOML. Iris will
-read it directly from the process environment when constructing the OpenAI
-client.
+`OPENAI_API_KEY` は TOML ではなく環境変数で渡す。Iris は OpenAI クライアント生成時にプロセス環境から直接読み取る。
 
-### Config module layout
+### 設定モジュールの構成
 
-The runtime configuration lives under `iris/runtime/config/` as a small package
-so future domains (memory, affect, gRPC, scheduler) can grow without bloating a
-single file. The public import path is unchanged:
+ランタイム設定は `iris/runtime/config/` 配下に小さなパッケージとして配置されており、将来的なドメイン (memory、affect、gRPC、scheduler など) を 1 ファイルに肥大化させずに拡張できる。公開 import パスは変更なし:
 
 ```python
 from iris.runtime.config import (
@@ -112,16 +101,9 @@ from iris.runtime.config import (
 )
 ```
 
-The submodules `iris.runtime.config.errors`, `iris.runtime.config.parsing`,
-`iris.runtime.config.llm`, `iris.runtime.config.sources`, and
-`iris.runtime.config.root` are private implementation details. Callers should
-import only from `iris.runtime.config` (or the public submodules only when
-extending the package itself). Direct `os.environ` reads outside
-`iris.runtime.config` are forbidden by an architecture guard test; the only
-current exception is `iris.adapters.llm.openai`, which still reads
-`OPENAI_API_KEY` until the adapter is migrated to the typed config.
+サブモジュール `iris.runtime.config.errors`、`iris.runtime.config.parsing`、`iris.runtime.config.llm`、`iris.runtime.config.sources`、`iris.runtime.config.root` は private 実装詳細である。呼び出し側は `iris.runtime.config` からのみ import する (パッケージ自体を拡張する場合に限り public サブモジュールから import 可)。`iris.runtime.config` の外で `os.environ` を直接読むことは architecture guard test で禁止されている。現時点で唯一の例外は `iris.adapters.llm.openai` であり、typed config への移行完了までは `OPENAI_API_KEY` を直接読む。
 
-## Target Architecture
+## ターゲットアーキテクチャ
 
 ```text
 iris.runtime.server / main.py
@@ -132,39 +114,39 @@ iris.runtime.server / main.py
 → PresentedOutput (returned to gRPC client)
 ```
 
-Available pipeline configurations:
+利用可能なパイプライン構成:
 
-| Wiring function | Steps |
+| 配線関数 | ステップ |
 |---|---|
 | `wire_text_response_cognitive_cycle` | perception → response |
 | `wire_memory_aware_text_response_cognitive_cycle` | perception → memory → response |
 | `wire_affect_memory_aware_text_response_cognitive_cycle` | perception → (memory) → appraisal → relationship → response |
 | `wire_policy_affect_memory_aware_text_response_cognitive_cycle` | perception → (memory) → appraisal → relationship → policy → response |
 
-## Project Structure
+## プロジェクト構成
 
 ```text
 iris/
-├── core/               IDs, base types
-├── contracts/          Domain contracts (actions, observations, memory, identity, policy, spaces)
-├── cognitive/          Cognitive cycle, pipeline, workspace
-│   ├── action/         Response generation
-│   ├── affect/         Appraisal, mood, relationship
-│   ├── cycle/          CognitiveCycle coordinator, pipeline protocol, frame builder
+├── core/               ID、基底型
+├── contracts/          ドメイン契約 (actions, observations, memory, identity, policy, spaces)
+├── cognitive/          認知サイクル、パイプライン、ワークスペース
+│   ├── action/         応答生成
+│   ├── affect/         appraisal, mood, relationship
+│   ├── cycle/          CognitiveCycle コーディネータ、pipeline protocol、frame builder
 │   ├── memory/         Memory retrieval step
-│   ├── perception/     Observation parsing
-│   ├── policy/         Inhibition / behavioral constraints
-│   └── workspace/      WorkspaceFrame (typed one-turn snapshot)
-├── presentation/       ActionPlan → PresentedOutput conversion
+│   ├── perception/     Observation 解析
+│   ├── policy/         Inhibition / 行動制約
+│   └── workspace/      WorkspaceFrame (1 ターンの typed snapshot)
+├── presentation/       ActionPlan → PresentedOutput 変換
 ├── safety/             Action gate, output filter
-├── features/           Feature extension (proactive_talk)
+├── features/           Feature 拡張 (proactive_talk)
 │   └── proactive_talk/ Salience scoring, goal proposal, proactive policy
-├── adapters/           External integrations
-│   ├── app_gateway/    External app protocol boundary
-│   ├── llm/            FakeLLM, OpenAI, Ollama clients
-│   └── memory/         Fake, vector, LangChain memory stores
-└── runtime/            App composition, Server entrypoint, wiring
-    ├── server.py       gRPC Server entrypoint
+├── adapters/           外部統合
+│   ├── app_gateway/    外部アプリ protocol 境界
+│   ├── llm/            FakeLLM, OpenAI, Ollama クライアント
+│   └── memory/         Fake, vector, LangChain memory store
+└── runtime/            アプリ構成、サーバエントリポイント、wiring
+    ├── server.py       gRPC サーバエントリポイント
     └── wiring/         Constructor-injection wiring (app, cognitive, features, llm, memory, presentation)
 ├── tests/
 │   ├── architecture/   Guard tests (18+ files)
@@ -175,21 +157,21 @@ iris/
 │   ├── helpers/
 │   └── runtime/
 ├── scripts/
-│   ├── verify.py       Repository verification entry point
-│   ├── ai_context.py   AI harness context dump
-│   └── ai_report.py    Completion report skeleton
-└── main.py             Redirects to iris.runtime.server
+│   ├── verify.py       リポジトリ検証エントリポイント
+│   ├── ai_context.py   AI harness context ダンプ
+│   └── ai_report.py    完了レポート skeleton
+└── main.py             iris.runtime.server へのリダイレクト
 ```
 
-## Development
+## 開発
 
-Use the canonical verification entry point before reporting work complete:
+作業完了報告の前に、正規の検証エントリポイントを使う:
 
 ```bash
 make check
 ```
 
-`make verify` is an alias for `make check`. The full verification path runs:
+`make verify` は `make check` のエイリアス。フル検証パスは次の順で実行される:
 
 ```bash
 uv run ruff check .
@@ -200,7 +182,7 @@ uv run pytest tests/architecture -q
 uv run pytest tests/ --cov=iris --cov-branch --cov-report=term-missing:skip-covered --cov-report=html --cov-fail-under=90
 ```
 
-Useful targeted commands:
+ターゲットを絞った便利コマンド:
 
 ```bash
 make quick        # lint, format, mypy, pyright, architecture tests (no coverage)
@@ -217,29 +199,27 @@ make coverage     # full coverage gate (90% threshold + HTML report)
 
 ## AI Harness
 
-AI coding agents should start from `AGENTS.md`. Claude Code should start from `CLAUDE.md`,
-which delegates shared rules to `AGENTS.md` and `.agents/`.
+AI コーディングエージェントは `AGENTS.md` から始める。Claude Code は `CLAUDE.md` から始めるが、共通ルールは `AGENTS.md` と `.agents/` に委譲されている。
 
-Agent-oriented commands:
+エージェント向けコマンド:
 
 ```bash
-make ai-context           # show active harness paths
-make ai-quick             # fast strict loop (keep going after failures)
-make ai-check             # full strict loop (keep going after failures)
+make ai-context           # アクティブな harness パスを表示
+make ai-quick             # 高速 strict ループ (失敗しても継続)
+make ai-check             # フル strict ループ (失敗しても継続)
 make ai-arch              # architecture guard tests
-make ai-test-target TARGET=tests/path.py::test_name  # focused test
-make ai-report            # Japanese completion report skeleton
+make ai-test-target TARGET=tests/path.py::test_name  # 個別テスト
+make ai-report            # 日本語完了レポート skeleton
 ```
 
-The required final verification for agent work is:
+エージェント作業の最終検証:
 
 ```bash
 make check
 ```
 
-If the environment cannot run it, the agent must report the exact command, failure reason,
-narrower checks that were possible, and remaining risk.
+環境を実行できない場合、エージェントは正確なコマンド、失敗理由、可能だった限定チェック、残リスクを報告する。
 
-## License
+## ライセンス
 
 MIT

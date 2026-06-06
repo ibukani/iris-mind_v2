@@ -1,4 +1,4 @@
-"""Runtime state persistence configuration."""
+"""ランタイム状態の永続化設定。"""
 
 from __future__ import annotations
 
@@ -16,24 +16,24 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RuntimeStateConfig:
-    """Configuration for persistent state and storage."""
+    """永続状態とストレージの設定。"""
 
     backend: Literal["memory", "sqlite"] = "memory"
     sqlite_path: str = ".iris/runtime/state.sqlite3"
 
 
 def validate_backend(value: str, path: str) -> Literal["memory", "sqlite"]:
-    """Validate a backend name and return the typed literal.
+    """バックエンド名を検証し、型付きリテラルを返す。
 
     Args:
-        value: Backend name to validate.
-        path: Configuration path for error messages.
+        value: 検証対象のバックエンド名。
+        path: エラーメッセージに含める設定パス。
 
     Returns:
-        Literal["memory", "sqlite"]: Validated backend name.
+        Literal["memory", "sqlite"]: 検証済みバックエンド名。
 
     Raises:
-        ConfigError: If backend name is invalid.
+        ConfigError: バックエンド名が不正な場合。
     """
     if value == "memory":
         return "memory"
@@ -44,16 +44,16 @@ def validate_backend(value: str, path: str) -> Literal["memory", "sqlite"]:
 
 
 def validate_state_config(config: RuntimeStateConfig) -> RuntimeStateConfig:
-    """Validate state configuration constraints.
+    """状態設定の制約を検証する。
 
     Args:
-        config: The state config to validate.
+        config: 検証対象の状態設定。
 
     Returns:
-        RuntimeStateConfig: The validated config.
+        RuntimeStateConfig: 検証済みの設定。
 
     Raises:
-        ConfigError: If constraints are violated.
+        ConfigError: 制約に違反している場合。
     """
     if config.backend not in {"memory", "sqlite"}:
         message = f"Invalid state.backend: {config.backend}"
@@ -65,14 +65,14 @@ def validate_state_config(config: RuntimeStateConfig) -> RuntimeStateConfig:
 
 
 def apply_state_toml(config: RuntimeStateConfig, table: TomlTable) -> RuntimeStateConfig:
-    """Apply TOML overrides to state config.
+    """状態設定に TOML オーバーライドを適用する。
 
     Args:
-        config: Base state config.
-        table: Parsed TOML table for state.
+        config: ベースとなる状態設定。
+        table: 解析済みの状態用 TOML テーブル。
 
     Returns:
-        State config with TOML values applied.
+        TOML 値を反映した状態設定。
     """
     backend = config.backend
     sqlite_path = config.sqlite_path
@@ -92,14 +92,14 @@ def apply_state_env(
     config: RuntimeStateConfig,
     env: Mapping[str, str],
 ) -> RuntimeStateConfig:
-    """Apply environment overrides to state config.
+    """状態設定に環境変数オーバーライドを適用する。
 
     Args:
-        config: Base state config.
-        env: Environment variable mapping.
+        config: ベースとなる状態設定。
+        env: 環境変数のマッピング。
 
     Returns:
-        State config with environment values applied.
+        環境変数値を反映した状態設定。
     """
     backend = config.backend
     sqlite_path = config.sqlite_path

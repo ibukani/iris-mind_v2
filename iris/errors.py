@@ -13,8 +13,8 @@ class IrisError(Exception):
         """メッセージとオプションのコードでエラーを初期化する。
 
         Args:
-            message: Human-readable error description.
-            code: Optional error code for debugging and logging.
+            message: 人間可読なエラー説明。
+            code: デバッグ・ログ用のオプションのエラーコード。
         """
         super().__init__(message)
         self.message = message

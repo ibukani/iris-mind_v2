@@ -1,4 +1,4 @@
-"""FrameBuilder applies pipeline step results to WorkspaceFrame."""
+"""FrameBuilder はパイプラインステップの結果を WorkspaceFrame に適用する。"""
 
 from __future__ import annotations
 
@@ -31,14 +31,14 @@ if TYPE_CHECKING:
 
 
 class FrameBuilder:
-    """Apply typed pipeline results to immutable WorkspaceFrame snapshots."""
+    """型付きパイプライン結果を不変 WorkspaceFrame スナップショットへ適用する。"""
 
     @staticmethod
     def build_initial(observation: Observation) -> WorkspaceFrame:
-        """Build an initial frame from an observation context.
+        """観測コンテキストから初期フレームを構築する。
 
         Returns:
-            Initial workspace frame with actor and space context snapshots.
+            actor / space context スナップショットを含む初期ワークスペースフレーム。
         """
         context = observation.context
         return WorkspaceFrame(
@@ -53,13 +53,13 @@ class FrameBuilder:
 
     @staticmethod
     def apply(frame: WorkspaceFrame, result: PipelineStepResult) -> WorkspaceFrame:
-        """Apply a typed pipeline result to a frame.
+        """型付きパイプライン結果をフレームに適用する。
 
         Returns:
-            Updated workspace frame.
+            更新されたワークスペースフレーム。
 
         Raises:
-            TypeError: Unsupported pipeline result type.
+            TypeError: 未対応のパイプライン結果型。
         """
         match result:
             case PerceptionResult():

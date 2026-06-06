@@ -1,4 +1,4 @@
-"""Account identity context contracts."""
+"""Account アイデンティティコンテキストの契約。"""
 
 from __future__ import annotations
 
@@ -14,23 +14,23 @@ if TYPE_CHECKING:
 
 
 class AccountStoreError(ValueError):
-    """Account storage or linking error."""
+    """Account ストレージまたはリンクのエラー。"""
 
 
 @dataclass(frozen=True)
 class AccountProfile:
-    """External provider account binding.
+    """外部プロバイダのアカウントバインディング。
 
-    AccountProfile represents an external provider account binding.
-    It is not an Actor.
-    It may be linked to an Iris Actor through linked_actor_id.
+    AccountProfile は外部プロバイダのアカウントバインディングを表す。
+    Actor そのものではない。
+    linked_actor_id を介して Iris Actor へリンクされることがある。
 
-    account_id: Iris internal ID for this external account binding.
-    provider: External provider name (e.g., discord, github, cli, device).
-    provider_subject: Provider-local stable account ID.
-    display_name: Display name for the account.
-    linked_actor_id: Iris internal ActorId this account is linked to.
-    metadata: Extra context from the provider.
+    account_id: この外部アカウントバインディングに対する Iris 内部 ID。
+    provider: 外部プロバイダ名 (例: discord, github, cli, device)。
+    provider_subject: プロバイダローカルで安定なアカウント ID。
+    display_name: アカウントの表示名。
+    linked_actor_id: このアカウントがリンクされている Iris 内部 ActorId。
+    metadata: プロバイダから渡された追加コンテキスト。
     """
 
     account_id: AccountId
@@ -41,5 +41,5 @@ class AccountProfile:
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
-        """Defensively copy metadata as an immutable mapping proxy."""
+        """メタデータを不変な mapping proxy として防御的にコピーする。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))

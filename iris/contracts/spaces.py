@@ -46,7 +46,7 @@ class SpaceParticipant:
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
-        """Ensure metadata is strongly immutable."""
+        """メタデータが強固に不変であることを保証する。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
 
 
@@ -61,17 +61,17 @@ class InteractionSpace:
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
-        """Ensure metadata is strongly immutable."""
+        """メタデータが強固に不変であることを保証する。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
 
 
 class SpaceBindingStoreError(ValueError):
-    """Raised on SpaceBindingStore failures."""
+    """SpaceBindingStore の障害発生時に送出される。"""
 
 
 @dataclass(frozen=True)
 class SpaceBinding:
-    """External provider space binding to an Iris internal space_id."""
+    """外部プロバイダのスペースを Iris 内部の space_id にバインドする。"""
 
     provider: str
     provider_space_ref: ExternalRef
@@ -81,5 +81,5 @@ class SpaceBinding:
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
-        """Ensure metadata is strongly immutable."""
+        """メタデータが強固に不変であることを保証する。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
