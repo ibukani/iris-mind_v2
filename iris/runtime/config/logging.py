@@ -1,4 +1,4 @@
-"""Runtime logging configuration."""
+"""ランタイムロギング設定。"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RuntimeLoggingConfig:
-    """Configuration for Loguru-based runtime observability."""
+    """Loguru ベースのランタイム可観測性設定。"""
 
     level: str = "INFO"
     format: Literal["text", "json"] = "text"
@@ -25,13 +25,13 @@ class RuntimeLoggingConfig:
 
 
 def validate_level(value: str) -> str:
-    """Validate log level string.
+    """ログレベル文字列を検証する。
 
     Returns:
-        str: Validated and normalized log level.
+        str: 正規化された検証済みログレベル。
 
     Raises:
-        ConfigError: If log level is invalid.
+        ConfigError: ログレベルが不正な場合。
     """
     allowed = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
     upper_value = value.upper()
@@ -42,13 +42,13 @@ def validate_level(value: str) -> str:
 
 
 def validate_format(value: str) -> Literal["text", "json"]:
-    """Validate log format.
+    """ログフォーマットを検証する。
 
     Returns:
-        Literal["text", "json"]: Validated log format.
+        Literal["text", "json"]: 検証済みログフォーマット。
 
     Raises:
-        ConfigError: If log format is invalid.
+        ConfigError: ログフォーマットが不正な場合。
     """
     if value == "text":
         return "text"
@@ -59,10 +59,10 @@ def validate_format(value: str) -> Literal["text", "json"]:
 
 
 def apply_logging_toml(base: RuntimeLoggingConfig, table: TomlTable) -> RuntimeLoggingConfig:
-    """Apply TOML table to RuntimeLoggingConfig.
+    """TOML テーブルを RuntimeLoggingConfig に適用する。
 
     Returns:
-        RuntimeLoggingConfig: New instance with applied overrides.
+        RuntimeLoggingConfig: オーバーライドを反映した新しいインスタンス。
     """
     level = validate_level(str(table["level"])) if "level" in table else base.level
     format_val = validate_format(str(table["format"])) if "format" in table else base.format
@@ -81,10 +81,10 @@ def apply_logging_toml(base: RuntimeLoggingConfig, table: TomlTable) -> RuntimeL
 
 
 def apply_logging_env(base: RuntimeLoggingConfig, env: Mapping[str, str]) -> RuntimeLoggingConfig:
-    """Apply environment variables to RuntimeLoggingConfig.
+    """環境変数を RuntimeLoggingConfig に適用する。
 
     Returns:
-        RuntimeLoggingConfig: New instance with applied environment variables.
+        RuntimeLoggingConfig: 環境変数を反映した新しいインスタンス。
     """
     level = validate_level(env["IRIS_LOG_LEVEL"]) if "IRIS_LOG_LEVEL" in env else base.level
     format_val = (

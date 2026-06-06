@@ -28,9 +28,9 @@ class CognitiveCycle:
         """パイプラインステップ、フレームビルダー、フォールバックプランで初期化する。
 
         Args:
-            steps: Ordered sequence of pipeline steps to execute.
-            frame_builder: Builder that applies step results to the frame.
-            fallback_plan: ActionPlan used when no candidate plan is selected.
+            steps: 実行するパイプラインステップの順序付きシーケンス。
+            frame_builder: ステップ結果をフレームに適用するビルダー。
+            fallback_plan: 候補プランが選択されなかった場合に使用する ActionPlan。
         """
         self._steps = tuple(steps)
         self._frame_builder = frame_builder
@@ -40,7 +40,7 @@ class CognitiveCycle:
         """与えられた観測に対して認知パイプラインを実行し、結果を返す。
 
         Returns:
-            CycleResult: パイプライン実行结果(最終フレームと選択アクションプラン)。
+            CycleResult: パイプライン実行結果(最終フレームと選択されたアクションプラン)。
         """
         frame = self._frame_builder.build_initial(observation)
 

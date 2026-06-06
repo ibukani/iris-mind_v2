@@ -1,4 +1,4 @@
-"""LLM client wiring and response generator implementation."""
+"""LLM クライアントのワイヤリングと応答生成器の実装。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConf
 
 
 class LLMResponseGenerator(ResponseGenerator):
-    """ResponseGenerator backed by an LLM client."""
+    """LLM クライアントをバックエンドとする ResponseGenerator。"""
 
     def __init__(
         self,
@@ -23,13 +23,13 @@ class LLMResponseGenerator(ResponseGenerator):
         temperature: float = 0.0,
         max_tokens: int | None = None,
     ) -> None:
-        """Create an LLM-backed response generator.
+        """LLM バックエンドの応答生成器を作成する。
 
         Args:
-            client: LLM client.
-            model: Model name passed to the LLM provider.
-            temperature: Sampling temperature passed to the LLM provider.
-            max_tokens: Optional output token limit passed to the LLM provider.
+            client: LLM クライアント。
+            model: LLM プロバイダに渡すモデル名。
+            temperature: LLM プロバイダに渡すサンプリング温度。
+            max_tokens: LLM プロバイダに渡す任意の出力トークン上限。
         """
         self._client = client
         self._model = model
@@ -38,13 +38,13 @@ class LLMResponseGenerator(ResponseGenerator):
 
     @override
     async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
-        """Generate response text for a prompt.
+        """プロンプトに対する応答テキストを生成する。
 
         Args:
-            prompt: Response generation prompt.
+            prompt: 応答生成プロンプト。
 
         Returns:
-            Generated response text and model metadata.
+            生成された応答テキストとモデルメタデータ。
         """
         request = LLMRequest(
             model=self._model,
@@ -60,13 +60,13 @@ class LLMResponseGenerator(ResponseGenerator):
 
 
 def wire_fake_llm_client(responses: tuple[str, ...] | None = None) -> FakeLLMClient:
-    """Wire a fake deterministic LLM client.
+    """決定論的なフェイク LLM クライアントを組み立てる。
 
     Args:
-        responses: Optional canned response strings.
+        responses: 任意の canned 応答文字列。
 
     Returns:
-        A FakeLLMClient instance.
+        FakeLLMClient インスタンス。
     """
     return FakeLLMClient(responses=responses)
 
@@ -78,16 +78,16 @@ def wire_response_generator(
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> LLMResponseGenerator:
-    """Wire a response generator.
+    """応答生成器を組み立てる。
 
     Args:
-        client: Optional LLM client. When omitted, a fake client is used.
-        model: Model name passed to the LLM provider.
-        temperature: Sampling temperature passed to the LLM provider.
-        max_tokens: Optional output token limit passed to the LLM provider.
+        client: 任意の LLM クライアント。省略時はフェイククライアントを使用。
+        model: LLM プロバイダに渡すモデル名。
+        temperature: LLM プロバイダに渡すサンプリング温度。
+        max_tokens: LLM プロバイダに渡す任意の出力トークン上限。
 
     Returns:
-        LLMResponseGenerator instance.
+        LLMResponseGenerator インスタンス。
     """
     if client is None:
         client = wire_fake_llm_client()
@@ -100,34 +100,34 @@ def wire_response_generator(
 
 
 def wire_openai_llm_client(config: OpenAIConfig) -> LLMClient:
-    """Wire an OpenAI LLM client.
+    """OpenAI LLM クライアントを組み立てる。
 
     Args:
-        config: OpenAI configuration.
+        config: OpenAI 設定。
 
     Returns:
-        An OpenAILLMClient instance.
+        OpenAILLMClient インスタンス。
     """
     return OpenAILLMClient(config)
 
 
 def wire_ollama_llm_client(config: OllamaConfig) -> LLMClient:
-    """Wire an Ollama LLM client.
+    """Ollama LLM クライアントを組み立てる。
 
     Args:
-        config: Ollama adapter configuration.
+        config: Ollama アダプタ設定。
 
     Returns:
-        An OllamaLLMClient instance.
+        OllamaLLMClient インスタンス。
     """
     return OllamaLLMClient(config)
 
 
 class LLMClientFactory:
-    """Explicit runtime factory for provider-specific LLM clients."""
+    """プロバイダ固有の LLM クライアントを組み立てる明示的なランタイムファクトリ。"""
 
     def __init__(self) -> None:
-        """Create an explicit LLM client factory."""
+        """明示的な LLM クライアントファクトリを作成する。"""
         self._known_providers = ("fake", "ollama", "openai")
 
     def create_client(
@@ -135,17 +135,17 @@ class LLMClientFactory:
         model_config: RuntimeModelConfig,
         runtime_config: IrisRuntimeConfig,
     ) -> LLMClient:
-        """Create an LLM client for a runtime model slot.
+        """ランタイムモデルスロット向けの LLM クライアントを生成する。
 
         Args:
-            model_config: Model slot configuration.
-            runtime_config: Full runtime configuration.
+            model_config: モデルスロット設定。
+            runtime_config: ランタイム設定全体。
 
         Returns:
-            Provider-neutral LLM client.
+            プロバイダ中立な LLM クライアント。
 
         Raises:
-            ConfigError: If the configured provider is unknown.
+            ConfigError: 設定されたプロバイダが未知の場合。
         """
         if model_config.provider not in self._known_providers:
             message = f"Unknown LLM provider: {model_config.provider}"
@@ -161,17 +161,17 @@ class LLMClientFactory:
         model_config: RuntimeModelConfig,
         runtime_config: IrisRuntimeConfig,
     ) -> str:
-        """Resolve the model name sent in provider-neutral LLMRequest.
+        """プロバイダ中立な LLMRequest で送るモデル名を解決する。
 
         Args:
-            model_config: Model slot configuration.
-            runtime_config: Full runtime configuration.
+            model_config: モデルスロット設定。
+            runtime_config: ランタイム設定全体。
 
         Returns:
-            Model name to pass into response generation.
+            応答生成に渡すモデル名。
 
         Raises:
-            ConfigError: If the configured provider is unknown.
+            ConfigError: 設定されたプロバイダが未知の場合。
         """
         if model_config.provider not in self._known_providers:
             message = f"Unknown LLM provider: {model_config.provider}"

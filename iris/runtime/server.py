@@ -1,4 +1,4 @@
-"""Runtime server entrypoint."""
+"""ランタイムサーバーのエントリポイント。"""
 
 from __future__ import annotations
 
@@ -25,11 +25,11 @@ async def serve(
     config_path: str | None = None,
     overrides: RuntimeConfigOverrides | None = None,
 ) -> None:
-    """Start the gRPC runtime server.
+    """gRPC ランタイムサーバーを起動する。
 
     Args:
-        config_path: Optional path to TOML config file.
-        overrides: Optional runtime configuration overrides.
+        config_path: 任意の TOML 設定ファイルパス。
+        overrides: 任意のランタイム設定オーバーライド。
     """
     config = load_runtime_config(config_path, overrides=overrides)
 
@@ -73,7 +73,7 @@ async def serve(
 
 
 def main() -> None:
-    """CLI entrypoint for the runtime server."""
+    """ランタイムサーバーの CLI エントリポイント。"""
     parser = argparse.ArgumentParser(description="Iris gRPC Runtime Server")
     parser.add_argument(
         "--config",

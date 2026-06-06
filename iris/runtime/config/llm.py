@@ -1,4 +1,4 @@
-"""LLM-related runtime configuration types and source application logic."""
+"""LLM 関連のランタイム設定型とソース適用ロジック。"""
 
 from __future__ import annotations
 
@@ -30,29 +30,29 @@ _MODEL_SLOTS: tuple[ModelSlotName, ...] = ("default_chat", "fast_judge", "reason
 
 
 def is_valid_provider(value: str) -> bool:
-    """Return whether a string is a recognised LLM provider.
+    """文字列が LLM プロバイダーとして認識可能か返す。
 
     Args:
-        value: Provider name to check.
+        value: 確認するプロバイダー名。
 
     Returns:
-        True if the value is a supported LLM provider.
+        サポート対象プロバイダーであれば True。
     """
     return value in _VALID_PROVIDERS
 
 
 def validate_provider(value: str, path: str) -> LLMProvider:
-    """Validate a provider name and return the typed literal.
+    """プロバイダー名を検証し、型付きリテラルを返す。
 
     Args:
-        value: Provider name to validate.
-        path: Config path used in error messages.
+        value: 検証対象のプロバイダー名。
+        path: エラーメッセージに使う設定パス。
 
     Returns:
-        The validated provider literal.
+        検証済みプロバイダーリテラル。
 
     Raises:
-        ConfigError: If the provider name is not recognised.
+        ConfigError: 認識できないプロバイダー名の場合。
     """
     if value == "fake":
         return "fake"
@@ -70,16 +70,16 @@ def env_provider(
     default: LLMProvider,
     slot: ModelSlotName,
 ) -> LLMProvider:
-    """Read a provider override from the environment.
+    """環境変数からのプロバイダーオーバーライドを読む。
 
     Args:
-        env: Environment variable mapping.
-        key: Variable name to look up.
-        default: Default provider to return when the variable is absent.
-        slot: Model slot used in error messages.
+        env: 環境変数マッピング。
+        key: 読み取る変数名。
+        default: 変数が無い場合に返すデフォルトプロバイダー。
+        slot: エラーメッセージに使うモデルスロット。
 
     Returns:
-        Validated provider literal or the default.
+        検証済みプロバイダーリテラル、またはデフォルト。
     """
     value = env.get(key)
     if value is None:
@@ -89,7 +89,7 @@ def env_provider(
 
 @dataclass(frozen=True)
 class RuntimeModelConfig:
-    """Runtime configuration for one named model slot."""
+    """1 つの名前付きモデルスロットに対するランタイム設定。"""
 
     provider: LLMProvider
     model: str
@@ -99,7 +99,7 @@ class RuntimeModelConfig:
 
 @dataclass(frozen=True)
 class RuntimeModelsConfig:
-    """Runtime configuration for all named model slots."""
+    """すべての名前付きモデルスロットのランタイム設定。"""
 
     default_chat: RuntimeModelConfig
     fast_judge: RuntimeModelConfig
@@ -108,7 +108,7 @@ class RuntimeModelsConfig:
 
 @dataclass(frozen=True)
 class RuntimeOllamaConfig:
-    """Runtime configuration shared by Ollama model slots."""
+    """Ollama モデルスロットで共有するランタイム設定。"""
 
     base_url: str = "http://localhost:11434"
     timeout_seconds: float = 120.0
@@ -117,7 +117,7 @@ class RuntimeOllamaConfig:
 
 @dataclass(frozen=True)
 class RuntimeOpenAIConfig:
-    """Runtime configuration shared by OpenAI model slots."""
+    """OpenAI モデルスロットで共有するランタイム設定。"""
 
     model: str = "gpt-5-mini"
     timeout_seconds: float | None = None
@@ -125,14 +125,14 @@ class RuntimeOpenAIConfig:
 
 
 def apply_toml(config: RuntimeModelsConfig, models_table: TomlTable) -> RuntimeModelsConfig:
-    """Apply the TOML ``[models.*]`` section to a models config.
+    """TOML ``[models.*]`` セクションを models config に適用する。
 
     Args:
-        config: Base models config.
-        models_table: Parsed TOML ``[models]`` table.
+        config: ベースとなる models config。
+        models_table: 解析済み TOML ``[models]`` テーブル。
 
     Returns:
-        Models config with TOML values applied.
+        TOML 値を反映した models config。
     """
     return RuntimeModelsConfig(
         default_chat=_apply_model_table(
@@ -157,14 +157,14 @@ def apply_ollama_toml(
     config: RuntimeOllamaConfig,
     ollama_table: TomlTable,
 ) -> RuntimeOllamaConfig:
-    """Apply the TOML ``[ollama]`` section to an Ollama config.
+    """TOML ``[ollama]`` セクションを Ollama config に適用する。
 
     Args:
-        config: Base Ollama config.
-        ollama_table: Parsed TOML ``[ollama]`` table.
+        config: ベースとなる Ollama config。
+        ollama_table: 解析済み TOML ``[ollama]`` テーブル。
 
     Returns:
-        Ollama config with TOML values applied.
+        TOML 値を反映した Ollama config。
     """
     base_url = config.base_url
     timeout_seconds = config.timeout_seconds
@@ -187,14 +187,14 @@ def apply_openai_toml(
     config: RuntimeOpenAIConfig,
     openai_table: TomlTable,
 ) -> RuntimeOpenAIConfig:
-    """Apply the TOML ``[openai]`` section to an OpenAI config.
+    """TOML ``[openai]`` セクションを OpenAI config に適用する。
 
     Args:
-        config: Base OpenAI config.
-        openai_table: Parsed TOML ``[openai]`` table.
+        config: ベースとなる OpenAI config。
+        openai_table: 解析済み TOML ``[openai]`` テーブル。
 
     Returns:
-        OpenAI config with TOML values applied.
+        TOML 値を反映した OpenAI config。
     """
     model = config.model
     timeout_seconds = config.timeout_seconds
@@ -225,16 +225,16 @@ def apply_env(
     openai: RuntimeOpenAIConfig,
     env: Mapping[str, str],
 ) -> tuple[RuntimeModelsConfig, RuntimeOllamaConfig, RuntimeOpenAIConfig]:
-    """Apply environment variable overrides to LLM config sections.
+    """環境変数オーバーライドを LLM 設定セクションへ適用する。
 
     Args:
-        config: Base models config.
-        ollama: Base Ollama config.
-        openai: Base OpenAI config.
-        env: Environment variable mapping.
+        config: ベースとなる models config。
+        ollama: ベースとなる Ollama config。
+        openai: ベースとなる OpenAI config。
+        env: 環境変数マッピング。
 
     Returns:
-        Updated models, Ollama, and OpenAI configs.
+        更新後の models / Ollama / OpenAI config。
     """
     updated_models = config
     for slot in _MODEL_SLOTS:
@@ -256,15 +256,15 @@ def _apply_model_table(
     table: TomlTable,
     path: str,
 ) -> RuntimeModelConfig:
-    """Apply a single model slot TOML table to a model config.
+    """単一モデルスロットの TOML テーブルを model config に適用する。
 
     Args:
-        config: Base model config.
-        table: Parsed TOML table for the model slot.
-        path: Config path used in error messages.
+        config: ベースとなる model config。
+        table: モデルスロットに対応する解析済み TOML テーブル。
+        path: エラーメッセージに使う設定パス。
 
     Returns:
-        Model config with TOML values applied.
+        TOML 値を反映した model config。
     """
     provider = config.provider
     model = config.model
@@ -298,15 +298,15 @@ def _apply_model_env(
     slot: ModelSlotName,
     env: Mapping[str, str],
 ) -> RuntimeModelConfig:
-    """Apply environment variable overrides to one model slot.
+    """1 つのモデルスロットへ環境変数オーバーライドを適用する。
 
     Args:
-        config: Base model config.
-        slot: Model slot name used to build the env var prefix.
-        env: Environment variable mapping.
+        config: ベースとなる model config。
+        slot: 環境変数プレフィックスを組み立てるためのモデルスロット名。
+        env: 環境変数マッピング。
 
     Returns:
-        Model config with environment values applied.
+        環境変数値を反映した model config。
     """
     prefix = f"IRIS_{slot.upper()}_"
     provider = env_provider(env, f"{prefix}PROVIDER", config.provider, slot)
@@ -329,14 +329,14 @@ def _apply_ollama_env(
     config: RuntimeOllamaConfig,
     env: Mapping[str, str],
 ) -> RuntimeOllamaConfig:
-    """Apply environment variable overrides to the Ollama config.
+    """環境変数オーバーライドを Ollama config へ適用する。
 
     Args:
-        config: Base Ollama config.
-        env: Environment variable mapping.
+        config: ベースとなる Ollama config。
+        env: 環境変数マッピング。
 
     Returns:
-        Ollama config with environment values applied.
+        環境変数値を反映した Ollama config。
     """
     return RuntimeOllamaConfig(
         base_url=env.get("IRIS_OLLAMA_HOST", config.base_url),
@@ -353,14 +353,14 @@ def _apply_openai_env(
     config: RuntimeOpenAIConfig,
     env: Mapping[str, str],
 ) -> RuntimeOpenAIConfig:
-    """Apply environment variable overrides to the OpenAI config.
+    """環境変数オーバーライドを OpenAI config へ適用する。
 
     Args:
-        config: Base OpenAI config.
-        env: Environment variable mapping.
+        config: ベースとなる OpenAI config。
+        env: 環境変数マッピング。
 
     Returns:
-        OpenAI config with environment values applied.
+        環境変数値を反映した OpenAI config。
     """
     return RuntimeOpenAIConfig(
         model=env.get("IRIS_OPENAI_MODEL", config.model),
@@ -382,15 +382,15 @@ def _replace_slot(
     slot: ModelSlotName,
     config: RuntimeModelConfig,
 ) -> RuntimeModelsConfig:
-    """Return a copy of ``models`` with the named slot replaced.
+    """指定スロットを差し替えた ``models`` のコピーを返す。
 
     Args:
-        models: Base models config.
-        slot: Slot name to replace.
-        config: New model config for the slot.
+        models: ベースとなる models config。
+        slot: 差し替えるスロット名。
+        config: スロットに格納する新しい model config。
 
     Returns:
-        Models config with the slot replaced.
+        スロットを差し替えた models config。
     """
     if slot == "default_chat":
         return replace(models, default_chat=config)
@@ -403,14 +403,14 @@ def _slot_config(
     models: RuntimeModelsConfig,
     slot: ModelSlotName,
 ) -> RuntimeModelConfig:
-    """Return the current config for a named model slot.
+    """指定モデルスロットの現在の config を返す。
 
     Args:
-        models: Models config to read from.
-        slot: Slot name to read.
+        models: 読み取り元の models config。
+        slot: 読み取るスロット名。
 
     Returns:
-        Model config stored at the named slot.
+        指定スロットに格納された model config。
     """
     if slot == "default_chat":
         return models.default_chat

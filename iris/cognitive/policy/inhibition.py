@@ -1,5 +1,5 @@
 # Copyright 2025 Iris Mind
-"""Policy inhibition pipeline step for safety constraints."""
+"""安全性制約のためのポリシー抑制パイプラインステップ。"""
 
 from __future__ import annotations
 
@@ -29,13 +29,13 @@ _SELF_HARM_OR_ABUSE_TERMS = (
 
 
 class PolicyInhibitionStep(PipelineStep[PolicyResult]):
-    """Pipeline step that evaluates policy constraints and preferences from the frame."""
+    """フレームからポリシー制約とアクション優先度を評価するパイプラインステップ。"""
 
     name = "policy_inhibition"
 
     @override
     async def run(self, frame: WorkspaceFrame) -> PolicyResult:
-        """Evaluate constraints and preferences, returning a policy result.
+        """制約と優先度を評価し、ポリシー結果を返す。
 
         Returns:
             PolicyResult: 評価された制約とアクション優先度を含む結果。

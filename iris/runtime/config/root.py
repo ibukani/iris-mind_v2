@@ -1,16 +1,15 @@
-"""Top-level runtime configuration types, defaults, and load entrypoint.
+"""ランタイム設定の最上位型・デフォルト・ロードエントリポイント。
 
-The precedence order is:
+優先順位は次のとおり:
 
-1. Built-in defaults
-2. TOML config file
-3. Environment variables
-4. CLI overrides
+1. 組み込みのデフォルト
+2. TOML 設定ファイル
+3. 環境変数
+4. CLI オーバーライド
 
-TOML is the structured developer configuration. Environment variables are
-intended for secrets, deployment overrides, and CI/container overrides. CLI
-flags are temporary experiment overrides. The defaults below are the safe
-fallback when nothing else is configured.
+TOML は構造化された開発者向け設定。環境変数はシークレット、配置オーバーライド、
+CI/コンテナ用オーバーライドを想定。CLI フラグは一時的な実験用オーバーライド。
+以下のデフォルトは、他に何も設定されていない場合の安全なフォールバック。
 """
 
 from __future__ import annotations
@@ -53,7 +52,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class IrisRuntimeConfig:
-    """Runtime configuration used by application wiring."""
+    """アプリケーションワイヤリングが利用するランタイム設定。"""
 
     server: RuntimeServerConfig
     state: RuntimeStateConfig
@@ -65,7 +64,7 @@ class IrisRuntimeConfig:
 
 @dataclass(frozen=True)
 class RuntimeConfigOverrides:
-    """Configuration overrides supplied at runtime initialization."""
+    """ランタイム初期化時に渡される設定オーバーライド。"""
 
     llm: LLMProvider | None = None
     model: str | None = None
@@ -75,10 +74,10 @@ class RuntimeConfigOverrides:
 
 
 def default_runtime_config() -> IrisRuntimeConfig:
-    """Create the default runtime configuration.
+    """デフォルトのランタイム設定を構築する。
 
     Returns:
-        Default runtime configuration.
+        デフォルトのランタイム設定。
     """
     return IrisRuntimeConfig(
         server=RuntimeServerConfig(),
@@ -108,15 +107,15 @@ def load_runtime_config(
     env: Mapping[str, str] | None = None,
     overrides: RuntimeConfigOverrides | None = None,
 ) -> IrisRuntimeConfig:
-    """Load runtime config from defaults, TOML, environment, and overrides.
+    """デフォルト・TOML・環境変数・オーバーライドからランタイム設定を読み込む。
 
     Args:
-        config_path: Optional explicit TOML file path.
-        env: Environment mapping. Defaults to ``os.environ``.
-        overrides: Optional override values.
+        config_path: 任意の明示的 TOML ファイルパス。
+        env: 環境変数のマッピング。デフォルトは ``os.environ``。
+        overrides: 任意のオーバーライド値。
 
     Returns:
-        Validated runtime configuration.
+        検証済みのランタイム設定。
     """
     config = default_runtime_config()
     if config_path is not None:
@@ -133,14 +132,14 @@ def apply_runtime_overrides(
     config: IrisRuntimeConfig,
     overrides: RuntimeConfigOverrides,
 ) -> IrisRuntimeConfig:
-    """Apply overrides to an existing runtime config.
+    """既存ランタイム設定にオーバーライドを適用する。
 
     Args:
-        config: Base runtime config.
-        overrides: Override values.
+        config: ベースとなるランタイム設定。
+        overrides: 適用するオーバーライド値。
 
     Returns:
-        Runtime config with overrides applied.
+        オーバーライド適用後のランタイム設定。
     """
     default_chat = config.models.default_chat
     if overrides.llm is not None:
@@ -168,26 +167,26 @@ def apply_runtime_overrides(
 
 
 def parse_llm_provider(value: str) -> LLMProvider:
-    """Parse and validate an LLM provider name.
+    """LLM プロバイダ名を解析し検証する。
 
     Args:
-        value: Provider name from CLI or config.
+        value: CLI または設定から渡されたプロバイダ名。
 
     Returns:
-        Typed provider name.
+        型付けされたプロバイダ名。
     """
     return validate_provider(value, "models.default_chat.provider")
 
 
 def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfig:
-    """Apply a top-level TOML table to the full runtime config.
+    """最上位 TOML テーブルをランタイム設定全体に適用する。
 
     Args:
-        config: Base runtime config.
-        table: Parsed top-level TOML table.
+        config: ベースとなるランタイム設定。
+        table: 解析済みの最上位 TOML テーブル。
 
     Returns:
-        Runtime config with TOML values applied.
+        TOML 値を反映したランタイム設定。
     """
     server = apply_server_toml(config.server, table_or_empty(table, "server"))
     state = apply_state_toml(config.state, table_or_empty(table, "state"))
@@ -214,14 +213,14 @@ def _apply_env(
     config: IrisRuntimeConfig,
     env: Mapping[str, str],
 ) -> IrisRuntimeConfig:
-    """Apply environment variable overrides to the full runtime config.
+    """ランタイム設定全体に環境変数オーバーライドを適用する。
 
     Args:
-        config: Base runtime config.
-        env: Environment variable mapping.
+        config: ベースとなるランタイム設定。
+        env: 環境変数のマッピング。
 
     Returns:
-        Runtime config with environment values applied.
+        環境変数値を反映したランタイム設定。
     """
     server = apply_server_env(config.server, env)
     state = apply_state_env(config.state, env)

@@ -1,6 +1,6 @@
-"""Constructor-injection-only composition for presentation and safety.
+"""プレゼンテーションと安全性を組み立てる、コンストラクタ注入のみの構成。
 
-No service locator, no global registry, no presentation logic.
+サービスロケータなし、グローバルレジストリなし、プレゼンテーションロジックなし。
 """
 
 from __future__ import annotations
@@ -11,27 +11,27 @@ from iris.safety.output_filter import AllowAllOutputGate, OutputSafetyGate
 
 
 def wire_presenter() -> Presenter:
-    """Wire the default presenter.
+    """デフォルトの Presenter を組み立てる。
 
     Returns:
-        A SimplePresenter instance.
+        SimplePresenter インスタンス。
     """
     return SimplePresenter()
 
 
 def wire_action_safety_gate() -> ActionSafetyGate:
-    """Wire the default action safety gate.
+    """デフォルトのアクション安全性ゲートを組み立てる。
 
     Returns:
-        An AllowAllActionGate instance.
+        AllowAllActionGate インスタンス。
     """
     return AllowAllActionGate()
 
 
 def wire_output_safety_gate() -> OutputSafetyGate:
-    """Wire the default output safety gate.
+    """デフォルトの出力安全性ゲートを組み立てる。
 
     Returns:
-        An AllowAllOutputGate instance.
+        AllowAllOutputGate インスタンス。
     """
     return AllowAllOutputGate()

@@ -1,4 +1,4 @@
-"""Runtime observability and logging setup."""
+"""ランタイムの可観測性とロギング設定。"""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ if TYPE_CHECKING:
 
 
 def configure_runtime_logging(config: RuntimeLoggingConfig) -> None:
-    """Configure Loguru as the runtime logging backend.
+    """Loguru をランタイムのロギングバックエンドとして構成する。
 
     Args:
-        config: Runtime logging configuration.
+        config: ランタイムロギング設定。
     """
     logger.remove()
 

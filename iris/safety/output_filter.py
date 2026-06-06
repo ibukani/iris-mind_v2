@@ -1,4 +1,4 @@
-"""Output safety gate protocol and pass-through implementations."""
+"""出力安全性ゲートプロトコルとパススルー実装。"""
 
 from __future__ import annotations
 
@@ -11,24 +11,24 @@ if TYPE_CHECKING:
 
 
 class OutputSafetyGate(Protocol):
-    """Protocol for gates that inspect and potentially block presented output."""
+    """PresentedOutput を検査し、必要ならブロックするゲートのプロトコル。"""
 
     async def check_output(self, output: PresentedOutput) -> SafetyDecision:
-        """Evaluate presented output and return a safety decision."""
+        """PresentedOutput を評価し、安全性判定を返す。"""
         ...
 
 
 class AllowAllOutputGate:
-    """Pass-through output gate that allows every output."""
+    """すべての出力を許可するパススルーゲート。"""
 
     async def check_output(self, output: PresentedOutput) -> SafetyDecision:
-        """Allow all output unconditionally.
+        """すべての出力を無条件で許可する。
 
         Args:
-            output: The presented output to check.
+            output: 検査対象の PresentedOutput。
 
         Returns:
-            A SafetyDecision with decision ALLOW.
+            decision=ALLOW の SafetyDecision。
         """
         _ = self, output
         return SafetyDecision(decision=GateDecision.ALLOW)

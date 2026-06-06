@@ -54,7 +54,7 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
         """オプションの関係状態ストアで初期化する。
 
         Args:
-            state: The relationship state store. Defaults to InMemoryRelationshipState().
+            state: 関係状態ストア。デフォルトは InMemoryRelationshipState()。
         """
         self._state = state if state is not None else InMemoryRelationshipState()
 

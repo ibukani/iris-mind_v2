@@ -1,16 +1,16 @@
-# AI Harness Guide
+# AI Harness ガイド
 
-This repository uses strict quality gates plus repository-level agent instructions to make Codex, OpenCode, and other coding agents easier to steer and audit.
+このリポジトリは、Codex・OpenCode などのコーディングエージェントを操作・監査しやすくするために、厳格な品質ゲートとリポジトリレベルのエージェント指示を採用している。
 
-## Shared source of truth
+## 共通のソースオブトゥルース
 
-- `AGENTS.md` is the root instruction file.
-- `.agents/rules/` contains reusable rules.
-- `.agents/workflows/` contains task-specific operating procedures.
-- `Makefile` and `scripts/verify.py` are the deterministic verification entry points.
-- `opencode.json` maps OpenCode slash commands to this repository's harness commands.
+- `AGENTS.md` はルートの指示ファイルである。
+- `.agents/rules/` には再利用可能なルールを配置する。
+- `.agents/workflows/` にはタスク別の運用手順を配置する。
+- `Makefile` と `scripts/verify.py` は決定的な検証エントリポイントである。
+- `opencode.json` は OpenCode のスラッシュコマンドと本リポジトリの harness コマンドを対応付ける。
 
-## Command hierarchy
+## コマンド階層
 
 ```bash
 make ai-test-target TARGET=tests/path_or_file.py
@@ -20,11 +20,11 @@ make ai-check
 make check
 ```
 
-Use `make ai-test-target` while iterating on a small change. Use `make ai-quick` before broader edits are reported. Use `make ai-check` before handoff when possible. Use `make check` as the canonical full gate.
+小規模な変更を反復している間は `make ai-test-target` を使う。広い範囲の編集を報告する前は `make ai-quick` を使う。可能であれば引き継ぎ前に `make ai-check` を使う。正規のフルゲートとして `make check` を使う。
 
-## Codex usage
+## Codex の使い方
 
-Start Codex from the repository root so it loads `AGENTS.md`. For specialized tasks, include the workflow path in the prompt, for example:
+Codex はリポジトリルートから起動し、`AGENTS.md` を読み込ませる。専門タスクではプロンプトにワークフローのパスを含める。例:
 
 ```text
 Goal: fix pyright failures in runtime wiring.
@@ -33,12 +33,12 @@ Test: make ai-quick, then make ai-check if feasible.
 Report: Japanese.
 ```
 
-## OpenCode usage
+## OpenCode の使い方
 
-OpenCode reads project instructions from `AGENTS.md`. The checked-in `opencode.json` also references the AI harness rules and provides commands such as `/ai-quick`, `/ai-check`, `/ai-arch`, `/ai-report`, and `/ai-review`.
+OpenCode はプロジェクト指示を `AGENTS.md` から読む。コミット済みの `opencode.json` も AI harness ルールを参照し、`/ai-quick`、`/ai-check`、`/ai-arch`、`/ai-report`、`/ai-review` などのコマンドを提供する。
 
-## Failure policy
+## 失敗ポリシー
 
-A failed gate is useful signal. Do not hide it by weakening configuration, skipping tests, adding broad ignores, or replacing typed boundaries with `Any`.
+失敗したゲートは有用なシグナルである。設定の弱体化、テストのスキップ、広範な ignore の追加、`Any` による typed 境界の置き換えで失敗を隠蔽しない。
 
-When a command fails, report the exact command, the first failing file or test, and the next smallest fix.
+コマンドが失敗した場合、正確なコマンド、最初に失敗したファイルまたはテスト、次の最小修正を報告する。

@@ -1,4 +1,4 @@
-"""Server runtime configuration."""
+"""サーバーランタイム設定。"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RuntimeServerConfig:
-    """gRPC Server runtime configuration."""
+    """gRPC サーバーのランタイム設定。"""
 
     host: str = "127.0.0.1"
     port: int = 50051
@@ -28,17 +28,17 @@ _MAX_PORT = 65535
 
 
 def validate_server_port(value: int, *, source: str) -> int:
-    """Validate that a server port is within the valid range.
+    """サーバーポートが有効範囲内であることを検証する。
 
     Args:
-        value: Port number to validate.
-        source: Configuration path for error messages.
+        value: 検証対象のポート番号。
+        source: エラーメッセージに含める設定パス。
 
     Returns:
-        int: The validated port number.
+        int: 検証済みポート番号。
 
     Raises:
-        ConfigError: If the port is out of valid bounds.
+        ConfigError: ポートが有効範囲外の場合。
     """
     if not _MIN_PORT <= value <= _MAX_PORT:
         message = f"Invalid {source}: port must be between {_MIN_PORT} and {_MAX_PORT}: {value}"
@@ -47,18 +47,18 @@ def validate_server_port(value: int, *, source: str) -> int:
 
 
 def validate_server_config(config: RuntimeServerConfig) -> RuntimeServerConfig:
-    """Validate server configuration constraints.
+    """サーバー設定の制約を検証する。
 
-    Ensures port is valid and local_only enforces loopback host.
+    ポートが有効であり、``local_only`` がループバックホストを強制していることを確認する。
 
     Args:
-        config: Server config to validate.
+        config: 検証対象のサーバー設定。
 
     Returns:
-        RuntimeServerConfig: Validated server config.
+        RuntimeServerConfig: 検証済みサーバー設定。
 
     Raises:
-        ConfigError: If config violates constraints.
+        ConfigError: 設定が制約に違反している場合。
     """
     validate_server_port(config.port, source="server.port")
     if config.local_only and config.host not in {"127.0.0.1", "localhost", "::1"}:
@@ -71,17 +71,17 @@ def apply_server_toml(
     config: RuntimeServerConfig,
     table: TomlTable,
 ) -> RuntimeServerConfig:
-    """Apply TOML table overrides to the server config.
+    """サーバー設定に TOML テーブルのオーバーライドを適用する。
 
     Args:
-        config: Base server config.
-        table: The [server] TOML table.
+        config: ベースとなるサーバー設定。
+        table: ``[server]`` TOML テーブル。
 
     Returns:
-        Updated server config.
+        更新後のサーバー設定。
 
     Raises:
-        ConfigError: If config values are invalid.
+        ConfigError: 設定値が不正な場合。
     """
     host = config.host
     if "host" in table:
@@ -125,17 +125,17 @@ def apply_server_env(
     config: RuntimeServerConfig,
     env: Mapping[str, str],
 ) -> RuntimeServerConfig:
-    """Apply environment variables to the server config.
+    """サーバー設定に環境変数を適用する。
 
     Args:
-        config: Base server config.
-        env: Environment variable mapping.
+        config: ベースとなるサーバー設定。
+        env: 環境変数のマッピング。
 
     Returns:
-        Updated server config.
+        更新後のサーバー設定。
 
     Raises:
-        ConfigError: If env values are invalid.
+        ConfigError: 環境変数の値が不正な場合。
     """
     host = config.host
     if "IRIS_SERVER_HOST" in env:

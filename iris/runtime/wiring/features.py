@@ -1,4 +1,4 @@
-"""Wiring functions for feature-extended cognitive cycles."""
+"""機能拡張された認知サイクル向けのワイヤリング関数。"""
 
 from __future__ import annotations
 
@@ -21,13 +21,13 @@ if TYPE_CHECKING:
 
 
 def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefinition:
-    """Wire the proactive talk feature definition.
+    """proactive talk 機能の定義を組み立てる。
 
     Args:
-        salience_threshold: Minimum salience for proactive initiation.
+        salience_threshold: 能動的開始を行うためのサリエンス最小値。
 
     Returns:
-        A FeatureDefinition for proactive talk.
+        proactive talk 用の FeatureDefinition。
     """
     return define_proactive_talk_feature(salience_threshold=salience_threshold)
 
@@ -37,16 +37,15 @@ def wire_proactive_talk_cognitive_cycle(
     relationship_state: InMemoryRelationshipState | None = None,
     salience_threshold: float = 0.5,
 ) -> CognitiveCycle:
-    """Wire a cognitive cycle extended with the proactive talk feature.
+    """proactive talk 機能で拡張された認知サイクルを組み立てる。
 
     Args:
-        memory_store: Optional memory store for retrieval.
-        relationship_state: Optional shared relationship state.
-        salience_threshold: Minimum salience for proactive initiation.
+        memory_store: 任意の取得用メモリストア。
+        relationship_state: 任意の共有関係状態。
+        salience_threshold: 能動的開始を行うためのサリエンス最小値。
 
     Returns:
-        A CognitiveCycle with perception, memory, affect, policy,
-        and proactive talk pipeline steps.
+        知覚・メモリ・感情・ポリシー・proactive talk パイプラインステップを含む CognitiveCycle。
     """
     feature = wire_proactive_talk_feature(salience_threshold=salience_threshold)
     steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]

@@ -1,4 +1,4 @@
-"""Transport-neutral runtime service boundary for Iris observations."""
+"""Iris 観測のための、トランスポート非依存ランタイムサービス境界。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ObservationEnvelope:
-    """Transport-neutral container for an incoming observation."""
+    """受信観測を入れるトランスポート非依存コンテナ。"""
 
     observation: Observation
     correlation_id: CorrelationId | None = None
@@ -22,24 +22,24 @@ class ObservationEnvelope:
 
 @dataclass(frozen=True)
 class RuntimeResponse:
-    """Transport-neutral result returned by IrisRuntimeService."""
+    """IrisRuntimeService が返すトランスポート非依存の結果。"""
 
     output: PresentedOutput
     correlation_id: CorrelationId | None = None
 
 
 class IrisRuntimeService:
-    """Thin runtime service that delegates observations to IrisApp."""
+    """観測を IrisApp へ委譲する薄いランタイムサービス。"""
 
     def __init__(self, app: IrisApp) -> None:
-        """Create service with an explicitly injected IrisApp."""
+        """明示的に注入された IrisApp でサービスを生成する。"""
         self._app = app
 
     async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
-        """Process an observation envelope through IrisApp.
+        """ObservationEnvelope を IrisApp 経由で処理する。
 
         Returns:
-            RuntimeResponse: PresentedOutput plus preserved correlation ID.
+            RuntimeResponse: PresentedOutput と保持された correlation ID。
         """
         output = await self._app.process_observation(envelope.observation)
         return RuntimeResponse(output=output, correlation_id=envelope.correlation_id)

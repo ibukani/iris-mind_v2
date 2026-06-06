@@ -1,4 +1,4 @@
-"""Generic TOML and environment value parsing helpers for runtime config."""
+"""ランタイム設定向けの汎用 TOML / 環境変数値パースヘルパー。"""
 
 from __future__ import annotations
 
@@ -20,29 +20,29 @@ _load_toml: Callable[[BinaryIO], TomlTable] = tomllib.load
 
 
 def load_toml(file: BinaryIO) -> TomlTable:
-    """Load a TOML document from an open binary file.
+    """TOML ドキュメントを、開いているバイナリファイルから読み込む。
 
     Args:
-        file: Open binary file handle positioned at the TOML document.
+        file: TOML ドキュメント位置の、開いているバイナリファイルハンドル。
 
     Returns:
-        Parsed top-level TOML table.
+        解析済みトップレベル TOML テーブル。
     """
     return _load_toml(file)
 
 
 def table_or_empty(table: TomlTable, key: str) -> TomlTable:
-    """Return a nested table or an empty table when absent.
+    """ネストしたテーブルを返し、存在しない場合は空テーブルを返す。
 
     Args:
-        table: Parent TOML table.
-        key: Nested table key to read.
+        table: 親 TOML テーブル。
+        key: 読み取るネストテーブルキー。
 
     Returns:
-        Nested TOML table, or an empty table when the key is missing.
+        ネスト TOML テーブル。キーが無い場合は空テーブル。
 
     Raises:
-        ConfigError: If the value exists but is not a table.
+        ConfigError: 値は存在するがテーブルではない場合。
     """
     value = table.get(key)
     if value is None:
@@ -54,17 +54,17 @@ def table_or_empty(table: TomlTable, key: str) -> TomlTable:
 
 
 def parse_string(value: TomlValue, path: str) -> str:
-    """Parse a required string TOML value.
+    """必須の文字列 TOML 値をパースする。
 
     Args:
-        value: TOML value to validate.
-        path: Config path used in error messages.
+        value: 検証する TOML 値。
+        path: エラーメッセージに使う設定パス。
 
     Returns:
-        Validated string value.
+        検証済み文字列値。
 
     Raises:
-        ConfigError: If the value is not a string.
+        ConfigError: 値が文字列ではない場合。
     """
     if isinstance(value, str):
         return value
@@ -73,17 +73,17 @@ def parse_string(value: TomlValue, path: str) -> str:
 
 
 def parse_optional_string(value: TomlValue, path: str) -> str | None:
-    """Parse an optional string TOML value.
+    """任意の文字列 TOML 値をパースする。
 
     Args:
-        value: TOML value to validate.
-        path: Config path used in error messages.
+        value: 検証する TOML 値。
+        path: エラーメッセージに使う設定パス。
 
     Returns:
-        Validated string value or ``None``.
+        検証済み文字列値、または ``None``。
 
     Raises:
-        ConfigError: If the value is not a string or null.
+        ConfigError: 値が文字列でも null でもない場合。
     """
     if value is None or isinstance(value, str):
         return value
@@ -92,17 +92,17 @@ def parse_optional_string(value: TomlValue, path: str) -> str | None:
 
 
 def parse_int(value: TomlValue, path: str) -> int:
-    """Parse a required integer TOML value.
+    """必須の整数 TOML 値をパースする。
 
     Args:
-        value: TOML value to validate.
-        path: Config path used in error messages.
+        value: 検証する TOML 値。
+        path: エラーメッセージに使う設定パス。
 
     Returns:
-        Validated integer value.
+        検証済み整数値。
 
     Raises:
-        ConfigError: If the value is not an integer.
+        ConfigError: 値が整数ではない場合。
     """
     if isinstance(value, bool):
         message = f"Runtime config value '{path}' must be an integer"
@@ -114,14 +114,14 @@ def parse_int(value: TomlValue, path: str) -> int:
 
 
 def parse_optional_int(value: TomlValue, path: str) -> int | None:
-    """Parse an optional integer TOML value.
+    """任意の整数 TOML 値をパースする。
 
     Args:
-        value: TOML value to validate.
-        path: Config path used in error messages.
+        value: 検証する TOML 値。
+        path: エラーメッセージに使う設定パス。
 
     Returns:
-        Validated integer value or ``None``.
+        検証済み整数値、または ``None``。
     """
     if value is None:
         return None
@@ -129,17 +129,17 @@ def parse_optional_int(value: TomlValue, path: str) -> int | None:
 
 
 def parse_float(value: TomlValue, path: str) -> float:
-    """Parse a required float TOML value.
+    """必須の float TOML 値をパースする。
 
     Args:
-        value: TOML value to validate.
-        path: Config path used in error messages.
+        value: 検証する TOML 値。
+        path: エラーメッセージに使う設定パス。
 
     Returns:
-        Validated float value.
+        検証済み float 値。
 
     Raises:
-        ConfigError: If the value is not numeric.
+        ConfigError: 値が数値でない場合。
     """
     if isinstance(value, bool):
         message = f"Runtime config value '{path}' must be a float"
@@ -151,14 +151,14 @@ def parse_float(value: TomlValue, path: str) -> float:
 
 
 def parse_optional_float(value: TomlValue, path: str) -> float | None:
-    """Parse an optional float TOML value.
+    """任意の float TOML 値をパースする。
 
     Args:
-        value: TOML value to validate.
-        path: Config path used in error messages.
+        value: 検証する TOML 値。
+        path: エラーメッセージに使う設定パス。
 
     Returns:
-        Validated float value or ``None``.
+        検証済み float 値、または ``None``。
     """
     if value is None:
         return None
@@ -166,18 +166,18 @@ def parse_optional_float(value: TomlValue, path: str) -> float | None:
 
 
 def env_float(env: Mapping[str, str], key: str, default: float) -> float:
-    """Read a required float environment variable.
+    """必須の float 環境変数を読む。
 
     Args:
-        env: Environment variable mapping.
-        key: Variable name.
-        default: Default value to return when the variable is absent.
+        env: 環境変数マッピング。
+        key: 変数名。
+        default: 変数が無い場合に返すデフォルト値。
 
     Returns:
-        Parsed float value or the default.
+        パース済み float 値、またはデフォルト。
 
     Raises:
-        ConfigError: If the value cannot be parsed as float.
+        ConfigError: 値を float として解釈できない場合。
     """
     value = env.get(key)
     if value is None:
@@ -190,18 +190,18 @@ def env_float(env: Mapping[str, str], key: str, default: float) -> float:
 
 
 def env_optional_float(env: Mapping[str, str], key: str, default: float | None) -> float | None:
-    """Read an optional float environment variable.
+    """任意の float 環境変数を読む。
 
     Args:
-        env: Environment variable mapping.
-        key: Variable name.
-        default: Default value to return when the variable is absent.
+        env: 環境変数マッピング。
+        key: 変数名。
+        default: 変数が無い場合に返すデフォルト値。
 
     Returns:
-        Parsed float value, ``None``, or the default.
+        パース済み float 値、``None``、またはデフォルト。
 
     Raises:
-        ConfigError: If the value cannot be parsed as float.
+        ConfigError: 値を float として解釈できない場合。
     """
     value = env.get(key)
     if value is None:
@@ -214,18 +214,18 @@ def env_optional_float(env: Mapping[str, str], key: str, default: float | None) 
 
 
 def env_optional_int(env: Mapping[str, str], key: str, default: int | None) -> int | None:
-    """Read an optional integer environment variable.
+    """任意の整数環境変数を読む。
 
     Args:
-        env: Environment variable mapping.
-        key: Variable name.
-        default: Default value to return when the variable is absent.
+        env: 環境変数マッピング。
+        key: 変数名。
+        default: 変数が無い場合に返すデフォルト値。
 
     Returns:
-        Parsed integer value, ``None``, or the default.
+        パース済み整数値、``None``、またはデフォルト。
 
     Raises:
-        ConfigError: If the value cannot be parsed as integer.
+        ConfigError: 値を整数として解釈できない場合。
     """
     value = env.get(key)
     if value is None:

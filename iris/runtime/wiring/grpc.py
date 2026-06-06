@@ -1,4 +1,4 @@
-"""Explicit gRPC runtime server wiring."""
+"""明示的な gRPC ランタイムサーバーのワイヤリング。"""
 
 from __future__ import annotations
 
@@ -22,16 +22,14 @@ def add_iris_runtime_servicer(
     identity_resolver: IdentityResolver | None = None,
     space_resolver: SpaceResolver | None = None,
 ) -> None:
-    """Register IrisRuntimeGrpcServicer on a gRPC aio server.
+    """IrisRuntimeGrpcServicer を gRPC aio サーバーに登録する。
 
     Args:
-        server: gRPC aio server to register the servicer on.
-        runtime_service: Runtime service that handles mapped observations.
-        identity_resolver: Optional resolver used to map ExternalAccountRef into
-            typed Identity. If omitted, the mapper rejects ExternalAccountRef
-            inputs.
-        space_resolver: Optional resolver used to map ExternalSpaceRef into
-            InteractionSpace.
+        server: servicer を登録する gRPC aio サーバー。
+        runtime_service: マッピング済み observation を処理するランタイムサービス。
+        identity_resolver: ``ExternalAccountRef`` を型付き ``Identity`` に写像する任意の
+            リゾルバ。省略時はマッパーが ``ExternalAccountRef`` 入力を拒否する。
+        space_resolver: ``ExternalSpaceRef`` を ``InteractionSpace`` に写像する任意のリゾルバ。
     """
     mapper = GrpcRuntimeMapper(
         identity_resolver=identity_resolver,
@@ -51,20 +49,20 @@ def create_grpc_server(
     identity_resolver: IdentityResolver | None = None,
     space_resolver: SpaceResolver | None = None,
 ) -> grpc.aio.Server:
-    """Create a grpc.aio server with Iris runtime service registered.
+    """Iris ランタイムサービスを登録した grpc.aio サーバーを生成する。
 
     Args:
-        runtime_service: Runtime service that handles mapped observations.
-        host: Bind host. Defaults to loopback.
-        port: Bind port. Defaults to 50051.
-        identity_resolver: Optional resolver injected into the gRPC mapper.
-        space_resolver: Optional resolver injected into the gRPC mapper.
+        runtime_service: マッピング済み observation を処理するランタイムサービス。
+        host: バインドホスト。デフォルトはループバック。
+        port: バインドポート。デフォルトは 50051。
+        identity_resolver: gRPC マッパーに注入する任意のリゾルバ。
+        space_resolver: gRPC マッパーに注入する任意のリゾルバ。
 
     Returns:
-        grpc.aio.Server: Configured but not started server.
+        grpc.aio.Server: 構成済みだが未起動のサーバー。
 
     Raises:
-        RuntimeError: If port binding fails.
+        RuntimeError: ポートバインドに失敗した場合。
     """
     server = grpc.aio.server()
     add_iris_runtime_servicer(

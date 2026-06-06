@@ -7,20 +7,20 @@
 
 ## 削除済みパッケージ
 
-| Package | Description |
+| パッケージ | 説明 |
 |---------|-------------|
-| `iris/event` | EventBus, event types, event routing |
-| `iris/kernel` | KernelProcess, PluginManager, supervisor |
-| `iris/io` | I/O abstraction layer |
-| `iris/account` | Account/Session management |
-| `iris/room` | Room/Channel management |
-| `iris/agency` | Agency/Orchestrator system |
-| `iris/memory` | Full memory pipeline (sensory, short-term, episodic, semantic), LangMem |
-| `iris/limbic` | Limbic system (appraisal, classification, mood, relationship) |
-| `iris/llm` | LLM providers, bridge, prompt system |
-| `iris/tools` | Tool registration and execution |
-| `iris/heartbeat` | Heartbeat/scheduler |
-| `iris/admin` | Admin/management interfaces |
+| `iris/event` | EventBus、イベント型、イベントルーティング |
+| `iris/kernel` | KernelProcess、PluginManager、supervisor |
+| `iris/io` | I/O 抽象化レイヤ |
+| `iris/account` | Account / Session 管理 |
+| `iris/room` | Room / Channel 管理 |
+| `iris/agency` | Agency / Orchestrator システム |
+| `iris/memory` | memory パイプライン全体 (sensory, short-term, episodic, semantic)、LangMem |
+| `iris/limbic` | Limbic システム (appraisal, classification, mood, relationship) |
+| `iris/llm` | LLM プロバイダ、bridge、prompt システム |
+| `iris/tools` | ツール登録と実行 |
+| `iris/heartbeat` | Heartbeat / scheduler |
+| `iris/admin` | Admin / 管理インタフェース |
 
 ### 削除した依存関係
 
@@ -52,7 +52,7 @@ langchain-core は core 依存としては削除されたが、`iris/adapters/me
 
 ## 移行対応表 (旧→新)
 
-| 既存 | 移行先 |
+| 旧構成 | 移行先 |
 |---|---|
 | `kernel/` | `runtime/` |
 | `event/` | 廃止 |

@@ -1,4 +1,4 @@
-"""Memory store wiring functions for in-memory and LangChain backends."""
+"""インメモリおよび LangChain バックエンドのメモリストア用ワイヤリング関数。"""
 
 from __future__ import annotations
 
@@ -18,14 +18,14 @@ def wire_in_memory_vector_store(
     embed_text: EmbeddingFunction,
     records: Sequence[MemoryRecord] = (),
 ) -> MemoryStore:
-    """Wire an in-memory vector memory store.
+    """インメモリのベクトルメモリストアを組み立てる。
 
     Args:
-        embed_text: Embedding function for text vectors.
-        records: Initial memory records to seed the store.
+        embed_text: テキストベクトル用の埋め込み関数。
+        records: ストアに投入する初期メモリレコード。
 
     Returns:
-        An InMemoryVectorMemoryStore instance.
+        InMemoryVectorMemoryStore インスタンス。
     """
     return InMemoryVectorMemoryStore(embed_text=embed_text, records=records)
 
@@ -33,12 +33,12 @@ def wire_in_memory_vector_store(
 def wire_langchain_memory_store(
     vector_store: object,
 ) -> MemoryStore:
-    """Wire a LangChain-backed memory store.
+    """LangChain バックエンドのメモリストアを組み立てる。
 
     Args:
-        vector_store: A LangChain vector store instance.
+        vector_store: LangChain のベクトルストアインスタンス。
 
     Returns:
-        A LangChainMemoryStore instance.
+        LangChainMemoryStore インスタンス。
     """
     return LangChainMemoryStore(vector_store)

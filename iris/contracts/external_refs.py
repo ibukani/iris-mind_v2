@@ -1,4 +1,4 @@
-"""Shared external reference DTOs."""
+"""外部参照の共有 DTO。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ExternalAccountRef:
-    """Represents an external provider account/user reference."""
+    """外部プロバイダのアカウント/ユーザー参照を表す。"""
 
     provider: str
     provider_subject: ExternalRef
@@ -27,13 +27,13 @@ class ExternalAccountRef:
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
-        """Defensively copy metadata as an immutable mapping proxy."""
+        """メタデータを不変な mapping proxy として防御的にコピーする。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
 
 
 @dataclass(frozen=True)
 class ExternalSpaceRef:
-    """Represents an external provider interaction space."""
+    """外部プロバイダの相互作用スペースを表す。"""
 
     provider: str
     provider_space_ref: ExternalRef
@@ -42,5 +42,5 @@ class ExternalSpaceRef:
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
-        """Defensively copy metadata as an immutable mapping proxy."""
+        """メタデータを不変な mapping proxy として防御的にコピーする。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))

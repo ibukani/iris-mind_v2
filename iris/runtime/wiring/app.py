@@ -1,6 +1,6 @@
-"""Constructor-injection-only composition for the default IrisApp.
+"""デフォルトの IrisApp を組み立てる、コンストラクタ注入のみの構成。
 
-No service locator, no global registry, no cognitive policy logic.
+サービスロケータなし、グローバルレジストリなし、認知ポリシーロジックなし。
 """
 
 from __future__ import annotations
@@ -30,16 +30,16 @@ def wire_default_app(
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> IrisApp:
-    """Wire an IrisApp using the standard text-response cognitive cycle.
+    """標準的なテキスト応答向け認知サイクルを用いて IrisApp を組み立てる。
 
     Args:
-        llm_client: LLM client used by response generation.
-        model: Model name passed to response generation.
-        temperature: Sampling temperature passed to response generation.
-        max_tokens: Optional output token limit passed to response generation.
+        llm_client: 応答生成に利用する LLM クライアント。
+        model: 応答生成に渡すモデル名。
+        temperature: 応答生成に渡すサンプリング温度。
+        max_tokens: 応答生成に渡す任意の出力トークン上限。
 
     Returns:
-        A fully wired IrisApp instance.
+        完全に組み立てられた IrisApp インスタンス。
     """
     cycle = wire_text_response_cognitive_cycle(
         llm_client,
@@ -51,13 +51,13 @@ def wire_default_app(
 
 
 def wire_fake_app(responses: tuple[str, ...] | None = None) -> IrisApp:
-    """Wire an IrisApp backed by fake deterministic LLM.
+    """決定論的なフェイク LLM をバックエンドとする IrisApp を組み立てる。
 
     Args:
-        responses: Optional canned response strings for FakeLLMClient.
+        responses: FakeLLMClient に渡す任意の canned 応答文字列。
 
     Returns:
-        A fully wired IrisApp instance.
+        完全に組み立てられた IrisApp インスタンス。
     """
     llm = FakeLLMClient(responses=responses)
     return wire_default_app(llm)
@@ -68,14 +68,14 @@ def wire_openai_app(
     *,
     model: str = "gpt-5-mini",
 ) -> IrisApp:
-    """Wire an IrisApp backed by an OpenAI LLM client.
+    """OpenAI LLM クライアントをバックエンドとする IrisApp を組み立てる。
 
     Args:
-        config: OpenAI configuration. When omitted, OPENAI_API_KEY is read from env.
-        model: OpenAI model name used when config is not provided.
+        config: OpenAI 設定。省略時は環境から ``OPENAI_API_KEY`` を読み込む。
+        model: config が省略された際に使う OpenAI モデル名。
 
     Returns:
-        A fully wired IrisApp instance.
+        完全に組み立てられた IrisApp インスタンス。
     """
     if config is None:
         config = OpenAIConfig.from_env(model=model)
@@ -88,15 +88,15 @@ def wire_ollama_app(
     model: str = "qwen3:8b",
     base_url: str = "http://localhost:11434",
 ) -> IrisApp:
-    """Wire an IrisApp backed by an Ollama LLM client.
+    """Ollama LLM クライアントをバックエンドとする IrisApp を組み立てる。
 
     Args:
-        config: Ollama adapter configuration.
-        model: Model name used when config is not provided.
-        base_url: Ollama host URL used when config is not provided.
+        config: Ollama アダプタ設定。
+        model: config が省略された際に使うモデル名。
+        base_url: config が省略された際に使う Ollama ホスト URL。
 
     Returns:
-        A fully wired IrisApp instance.
+        完全に組み立てられた IrisApp インスタンス。
     """
     if config is None:
         config = OllamaConfig(model=model, base_url=base_url)
@@ -113,16 +113,16 @@ def build_app_from_config(
     *,
     client_factory: LLMClientFactory | None = None,
 ) -> IrisApp:
-    """Build an IrisApp from runtime configuration.
+    """ランタイム設定から IrisApp を構築する。
 
-    The ``default_chat`` model slot is wired into the full cognitive cycle.
+    ``default_chat`` モデルスロットを完全な認知サイクルへ組み込む。
 
     Args:
-        config: Runtime configuration.
-        client_factory: Optional explicit LLM client factory.
+        config: ランタイム設定。
+        client_factory: 任意の明示的 LLM クライアントファクトリ。
 
     Returns:
-        A fully wired IrisApp instance.
+        完全に組み立てられた IrisApp インスタンス。
     """
     model_config = config.models.default_chat
     factory = client_factory or LLMClientFactory()

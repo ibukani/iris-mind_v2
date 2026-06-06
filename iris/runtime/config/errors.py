@@ -1,7 +1,7 @@
-"""Runtime configuration error types."""
+"""ランタイム設定のエラー型。"""
 
 from __future__ import annotations
 
 
 class ConfigError(RuntimeError):
-    """Raised when runtime configuration is invalid."""
+    """ランタイム設定が無効な場合に送出される。"""

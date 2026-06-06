@@ -1,4 +1,4 @@
-"""Wiring for runtime state and persistence."""
+"""ランタイム状態と永続化のワイヤリング。"""
 
 from __future__ import annotations
 
@@ -15,19 +15,19 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RuntimeStateStores:
-    """Wired persistence stores for the runtime."""
+    """ランタイム向けに組み立てられた永続ストア。"""
 
     account_store: AccountStore
 
 
 def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
-    """Wire and initialize persistent state stores.
+    """永続状態ストアを組み立てて初期化する。
 
     Args:
-        config: Full runtime configuration.
+        config: ランタイム設定全体。
 
     Returns:
-        Configured runtime state stores.
+        構成済みのランタイム状態ストア。
     """
     if config.state.backend == "sqlite":
         account_store: AccountStore = SQLiteAccountStore(config.state.sqlite_path)

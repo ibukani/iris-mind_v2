@@ -1,4 +1,4 @@
-"""Runtime AccountService."""
+"""ランタイム AccountService。"""
 
 from __future__ import annotations
 
@@ -11,20 +11,20 @@ if TYPE_CHECKING:
 
 
 class AccountService:
-    """Internal runtime service for explicit account lookup and linking."""
+    """明示的なアカウント参照・連携のための内部ランタイムサービス。"""
 
     def __init__(self, account_store: AccountStore) -> None:
-        """Initialize the service with an account store."""
+        """アカウントストアでサービスを初期化する。"""
         self._account_store = account_store
 
     async def get_account_by_id(
         self,
         account_id: AccountId,
     ) -> AccountProfile | None:
-        """Get an account profile by its internal AccountId.
+        """内部 AccountId でアカウントプロフィールを取得する。
 
         Returns:
-            AccountProfile | None: The found account profile, or None.
+            AccountProfile | None: 見つかったアカウントプロフィール。なければ None。
         """
         return await self._account_store.get_by_account_id(account_id)
 
@@ -34,10 +34,10 @@ class AccountService:
         provider: str,
         provider_subject: ExternalRef,
     ) -> AccountProfile | None:
-        """Get an account profile by provider and subject.
+        """プロバイダーとサブジェクトでアカウントプロフィールを取得する。
 
         Returns:
-            AccountProfile | None: The found account profile, or None.
+            AccountProfile | None: 見つかったアカウントプロフィール。なければ None。
         """
         return await self._account_store.get_by_external_ref(
             provider=provider,
@@ -50,10 +50,10 @@ class AccountService:
         account_id: AccountId,
         actor_id: ActorId,
     ) -> AccountProfile:
-        """Link an account to an internal ActorId.
+        """アカウントを内部 ActorId に紐づける。
 
         Returns:
-            AccountProfile: The updated account profile.
+            AccountProfile: 更新されたアカウントプロフィール。
         """
         return await self._account_store.link_account_to_actor(
             account_id=account_id,
@@ -64,9 +64,9 @@ class AccountService:
         self,
         account_id: AccountId,
     ) -> AccountProfile:
-        """Remove any actor linking from an account.
+        """アカウントからアクター連携を除去する。
 
         Returns:
-            AccountProfile: The updated account profile.
+            AccountProfile: 更新されたアカウントプロフィール。
         """
         return await self._account_store.unlink_account(account_id)

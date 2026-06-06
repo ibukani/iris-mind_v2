@@ -1,4 +1,4 @@
-"""Runtime wiring for accounts and identity resolution."""
+"""アカウントと ID 解決のランタイムワイヤリング。"""
 
 from __future__ import annotations
 
@@ -16,13 +16,13 @@ if TYPE_CHECKING:
 def build_identity_resolver_with_sqlite_account_store(
     db_path: str | Path,
 ) -> IdentityResolver:
-    """Build an IdentityResolver backed by a persistent SQLite account store.
+    """永続 SQLite アカウントストアをバックエンドとする IdentityResolver を構築する。
 
     Args:
-        db_path: Path to the SQLite database file.
+        db_path: SQLite データベースファイルへのパス。
 
     Returns:
-        IdentityResolver: A configured AccountBackedIdentityResolver.
+        IdentityResolver: 構成済みの AccountBackedIdentityResolver。
     """
     account_store = SQLiteAccountStore(db_path)
     return AccountBackedIdentityResolver(account_store=account_store)

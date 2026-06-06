@@ -1,7 +1,7 @@
-"""Constructor-injection-only composition for cognitive module dependencies.
+"""認知モジュールの依存関係を組み立てる、コンストラクタ注入のみの構成。
 
-This module wires PipelineStep instances into a CognitiveCycle. It contains no
-registry and no cognitive policy logic.
+本モジュールは PipelineStep インスタンスを CognitiveCycle に組み込む。レジストリも
+認知ポリシーロジックも含まない。
 """
 
 from __future__ import annotations
@@ -32,14 +32,14 @@ def wire_cognitive_cycle(
     steps: Sequence[PipelineStep[PipelineStepResult]],
     fallback_plan: ActionPlan | None = None,
 ) -> CognitiveCycle:
-    """Wire a CognitiveCycle from explicit pipeline steps.
+    """明示的なパイプラインステップから CognitiveCycle を組み立てる。
 
     Args:
-        steps: Ordered pipeline steps to execute per turn.
-        fallback_plan: Plan returned when the cycle produces no result.
+        steps: 1 ターンごとに実行するパイプラインステップの順序付き列。
+        fallback_plan: サイクルが結果を生成しない場合に返すプラン。
 
     Returns:
-        A configured CognitiveCycle.
+        構成済みの CognitiveCycle。
     """
     if fallback_plan is None:
         fallback_plan = ActionPlan(
@@ -62,16 +62,16 @@ def wire_text_response_cognitive_cycle(
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> CognitiveCycle:
-    """Wire the default one-turn text-response cognitive cycle.
+    """デフォルトの 1 ターンテキスト応答向け認知サイクルを組み立てる。
 
     Args:
-        llm_client: Optional LLM client override.
-        model: Model name passed to response generation.
-        temperature: Sampling temperature passed to response generation.
-        max_tokens: Optional output token limit passed to response generation.
+        llm_client: 任意の LLM クライアントオーバーライド。
+        model: 応答生成に渡すモデル名。
+        temperature: 応答生成に渡すサンプリング温度。
+        max_tokens: 応答生成に渡す任意の出力トークン上限。
 
     Returns:
-        CognitiveCycle with perception and response generation steps.
+        知覚と応答生成ステップを含む CognitiveCycle。
     """
     return wire_cognitive_cycle(
         steps=(
@@ -96,17 +96,17 @@ def wire_memory_aware_text_response_cognitive_cycle(
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> CognitiveCycle:
-    """Wire a text-response cognitive cycle with memory retrieval.
+    """メモリ検索付きのテキスト応答向け認知サイクルを組み立てる。
 
     Args:
-        memory_store: Memory store used for retrieval.
-        llm_client: Optional LLM client override.
-        model: Model name passed to response generation.
-        temperature: Sampling temperature passed to response generation.
-        max_tokens: Optional output token limit passed to response generation.
+        memory_store: 取得に利用するメモリストア。
+        llm_client: 任意の LLM クライアントオーバーライド。
+        model: 応答生成に渡すモデル名。
+        temperature: 応答生成に渡すサンプリング温度。
+        max_tokens: 応答生成に渡す任意の出力トークン上限。
 
     Returns:
-        CognitiveCycle with perception, memory retrieval, and response generation.
+        知覚・メモリ検索・応答生成を含む CognitiveCycle。
     """
     return wire_cognitive_cycle(
         steps=(
@@ -133,19 +133,18 @@ def wire_affect_memory_aware_text_response_cognitive_cycle(
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> CognitiveCycle:
-    """Wire a text-response cognitive cycle with affect and optional memory.
+    """感情と任意のメモリを含むテキスト応答向け認知サイクルを組み立てる。
 
     Args:
-        memory_store: Optional memory store for retrieval.
-        llm_client: Optional LLM client override.
-        relationship_state: Optional shared relationship state.
-        model: Model name passed to response generation.
-        temperature: Sampling temperature passed to response generation.
-        max_tokens: Optional output token limit passed to response generation.
+        memory_store: 任意の取得用メモリストア。
+        llm_client: 任意の LLM クライアントオーバーライド。
+        relationship_state: 任意の共有関係状態。
+        model: 応答生成に渡すモデル名。
+        temperature: 応答生成に渡すサンプリング温度。
+        max_tokens: 応答生成に渡す任意の出力トークン上限。
 
     Returns:
-        CognitiveCycle with perception, optional memory, appraisal, relationship,
-        and response generation steps.
+        知覚・任意のメモリ・アプレイザル・関係・応答生成を含む CognitiveCycle。
     """
     steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
     if memory_store is not None:
@@ -176,19 +175,18 @@ def wire_policy_affect_memory_aware_text_response_cognitive_cycle(
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> CognitiveCycle:
-    """Wire a text-response cognitive cycle with policy, affect, and memory.
+    """ポリシー・感情・メモリを含むテキスト応答向け認知サイクルを組み立てる。
 
     Args:
-        memory_store: Optional memory store for retrieval.
-        llm_client: Optional LLM client override.
-        relationship_state: Optional shared relationship state.
-        model: Model name passed to response generation.
-        temperature: Sampling temperature passed to response generation.
-        max_tokens: Optional output token limit passed to response generation.
+        memory_store: 任意の取得用メモリストア。
+        llm_client: 任意の LLM クライアントオーバーライド。
+        relationship_state: 任意の共有関係状態。
+        model: 応答生成に渡すモデル名。
+        temperature: 応答生成に渡すサンプリング温度。
+        max_tokens: 応答生成に渡す任意の出力トークン上限。
 
     Returns:
-        CognitiveCycle with perception, optional memory, appraisal, relationship,
-        policy inhibition, and response generation steps.
+        知覚・任意のメモリ・アプレイザル・関係・ポリシー抑制・応答生成を含む CognitiveCycle。
     """
     steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
     if memory_store is not None:
