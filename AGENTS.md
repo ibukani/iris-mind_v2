@@ -128,10 +128,14 @@ After: 原因: 認証middleware token期限check。
 
 - Internal task analysis, scratch planning, and hidden reasoning when available: **English**.
 - User-facing final responses and completion reports: **Japanese**.
+- Human-facing repository documentation is **Japanese by default**. This includes `README.md`, `docs/`, design notes, review summaries, implementation explanations, and PR text written for human readers.
+- AI/coding-agent instructions, machine-oriented prompts, harness rules, and implementation contracts may be **English** when it improves precision or tool compatibility.
 - Code, identifiers, docstrings, and comments: follow the existing repository style.
 - Commit messages: follow project convention if one exists; otherwise concise English is acceptable.
 
 Do not reveal hidden reasoning. In Japanese final reports, summarize only decisions, changed files, verification, and risks.
+
+See `.agents/rules/documentation-language.md` for detailed documentation language rules.
 
 ### Token-saving hierarchy
 
@@ -194,13 +198,14 @@ Before changing code, read the relevant files in this order:
 
 1. `AGENTS.md` fully, including the token, language, and output compression policy above
 2. `.agents/README.md`
-3. `.agents/rules/architecture.md`
-4. `.agents/rules/boundaries.md`
-5. `.agents/rules/cognitive-cycle.md`
-6. `.agents/rules/anti-patterns.md`
-7. `.agents/rules/typing.md`
-8. `.agents/rules/testing.md`
-9. The workflow under `.agents/workflows/` that matches the task
+3. `.agents/rules/documentation-language.md`
+4. `.agents/rules/architecture.md`
+5. `.agents/rules/boundaries.md`
+6. `.agents/rules/cognitive-cycle.md`
+7. `.agents/rules/anti-patterns.md`
+8. `.agents/rules/typing.md`
+9. `.agents/rules/testing.md`
+10. The workflow under `.agents/workflows/` that matches the task
 
 If a task touches existing behavior, also inspect the matching tests under `tests/` before editing.
 
