@@ -18,12 +18,17 @@ MemoryId = NewType("MemoryId", str)
 
 
 class MemoryKind(StrEnum):
-    """メモリレコードの種別。"""
+    """メモリレコードの種別。
+
+    ``RELATIONSHIP_EVENT`` は関係状態 (affinity/trust/familiarity) ではなく、
+    関係に関わる出来事・記憶のサマリを表す。RelationshipSnapshot の永続化
+    には ``IrisApp`` 側で別のストレージを使う想定。
+    """
 
     EPISODE = "episode"
     PREFERENCE = "preference"
     FACT = "fact"
-    RELATIONSHIP = "relationship"
+    RELATIONSHIP_EVENT = "relationship_event"
     TASK = "task"
     NOTE = "note"
 

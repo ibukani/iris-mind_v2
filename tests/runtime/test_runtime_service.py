@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
+from iris.adapters.memory.fake import FakeMemoryStore
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.contracts.actions import ActionPlan, PresentedOutput
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
@@ -60,7 +61,9 @@ async def test_runtime_service_preserves_no_action_output() -> None:
 @pytest.mark.anyio
 async def test_runtime_service_full_cycle_app_from_config() -> None:
     """build_app_from_configで作ったfull-cycle appがRuntimeService経由で動作することを確認する。"""
-    service = IrisRuntimeService(build_app_from_config(default_runtime_config()))
+    service = IrisRuntimeService(
+        build_app_from_config(default_runtime_config(), memory_store=FakeMemoryStore())
+    )
 
     response = await service.handle_observation(
         ObservationEnvelope(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -18,7 +19,47 @@ from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.service import IrisRuntimeService
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.grpc import create_grpc_server
-from iris.runtime.wiring.state import wire_runtime_state
+from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
+
+if TYPE_CHECKING:
+    from iris.runtime.app import IrisApp
+    from iris.runtime.config import IrisRuntimeConfig
+
+
+@dataclass(frozen=True)
+class RuntimeComponents:
+    """ランタイムサーバー起動前に組み立てるコンポーネント群。"""
+
+    stores: RuntimeStateStores
+    runtime_service: IrisRuntimeService
+    identity_resolver: AccountBackedIdentityResolver
+    space_resolver: EphemeralSpaceResolver
+
+
+def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
+    """ランタイム設定から永続ストアとサービス境界を組み立てる。
+
+    メモリ検索は ``wire_runtime_state`` で組み立てたメモリストアを
+    ``build_app_from_config`` に明示注入する。``FakeMemoryStore`` への
+    フォールバックは持たない。
+
+    Args:
+        config: ランタイム設定。
+
+    Returns:
+        ランタイムコンポーネント。
+    """
+    stores = wire_runtime_state(config)
+    app: IrisApp = build_app_from_config(config, memory_store=stores.memory_store)
+    runtime_service = IrisRuntimeService(app)
+    identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
+    space_resolver = EphemeralSpaceResolver()
+    return RuntimeComponents(
+        stores=stores,
+        runtime_service=runtime_service,
+        identity_resolver=identity_resolver,
+        space_resolver=space_resolver,
+    )
 
 
 async def serve(
@@ -43,22 +84,15 @@ async def serve(
     logger.info("log format: {}", config.logging.format)
     if config.logging.file_path:
         logger.info("log file path: {}", config.logging.file_path)
-    app = build_app_from_config(config)
-    runtime_service = IrisRuntimeService(app)
 
-    stores = wire_runtime_state(config)
-
-    identity_resolver = AccountBackedIdentityResolver(
-        account_store=stores.account_store,
-    )
-    space_resolver = EphemeralSpaceResolver()
+    components = build_runtime_components(config)
 
     server: grpc.aio.Server = create_grpc_server(
-        runtime_service,
+        components.runtime_service,
         host=config.server.host,
         port=config.server.port,
-        identity_resolver=identity_resolver,
-        space_resolver=space_resolver,
+        identity_resolver=components.identity_resolver,
+        space_resolver=components.space_resolver,
     )
 
     await server.start()

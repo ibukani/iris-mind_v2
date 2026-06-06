@@ -414,10 +414,12 @@ LangMem promotion / consolidation、実 embeddings provider、vector DB persiste
 - `MemoryStore`: `search` / `put` のみの最小契約。LangChain/vector など書き込み API を持たない外部バックエンドの互換性のために維持する。
 - `MutableMemoryStore(MemoryStore)`: `get` / `update` / `archive` / `filter` を追加した完全な CRUD 契約。`FakeMemoryStore` / `InMemoryMemoryStore` / `SQLiteMemoryStore` が実装する永続化/編集可能なバックエンドの正本。
 
-`MemoryRecord` は `kind` (MemoryKind EPISODE/PREFERENCE/FACT/RELATIONSHIP/TASK/NOTE)、`confidence`、`source_observation_id`、`created_at`、`updated_at`、`archived`、`metadata` を持つ。
+`MemoryRecord` は `kind` (MemoryKind EPISODE/PREFERENCE/FACT/RELATIONSHIP_EVENT/TASK/NOTE)、`confidence`、`source_observation_id`、`created_at`、`updated_at`、`archived`、`metadata` を持つ。
+`RELATIONSHIP_EVENT` は関係状態値 (affinity/trust/familiarity) ではなく、関係に関わる出来事・記憶のサマリを表す。`RelationshipSnapshot` の永続化は `IrisApp` 側で別のストレージを使う想定。
 `MemoryQuery` は `kind` と `include_archived` を追加で受ける。
 SQLite 永続ストアは `state.sqlite_path` をアカウントストアと共有し、`wire_runtime_state` が backend が `sqlite` なら `SQLiteMemoryStore`、`memory` なら `InMemoryMemoryStore` を選択する。
-`build_app_from_config` は `memory_store` をオプショナル引数として受け付け、未指定なら `FakeMemoryStore` にフォールバックする。
+SQLite 永続ストアは `put` / `update` / `archive` 時に timezone-aware UTC のタイムスタンプで `created_at` / `updated_at` を正規化し、`actor_id` / `space_id` / `kind` / `archived` の各フィルタ用インデックスを作成する。
+`build_app_from_config` は `memory_store` を必須引数として受け付け、`FakeMemoryStore` への暗黙フォールバックは持たない。`FakeMemoryStore` はテスト専用の決定論的バックエンドであり、ランタイム配線 (`serve` -> `build_runtime_components`) は `wire_runtime_state` の `stores.memory_store` を `build_app_from_config` に明示注入する。
 
 AppGateway の責務。
 

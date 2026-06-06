@@ -339,6 +339,7 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
     """OpenAI provider override without model uses the OpenAI provider default model."""
     client = _RecordingLLMClient()
     factory = _RecordingFactory(client)
+    memory_store = FakeMemoryStore()
     base = default_runtime_config()
     config = replace(
         base,
@@ -347,7 +348,7 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
             default_chat=RuntimeModelConfig(provider="openai", model="fake-llm"),
         ),
     )
-    app = build_app_from_config(config, client_factory=factory)
+    app = build_app_from_config(config, client_factory=factory, memory_store=memory_store)
 
     await app.process_observation(_observation("hello"))
 

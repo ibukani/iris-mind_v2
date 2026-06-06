@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+import sqlite3
 from typing import TYPE_CHECKING
 
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
@@ -199,3 +201,174 @@ def test_sqlite_memory_store_creates_parent_dir(tmp_path: Path) -> None:
     SQLiteMemoryStore(db_path)
 
     assert db_path.exists()
+
+
+def test_sqlite_memory_store_put_populates_timestamps(tmp_path: Path) -> None:
+    """Put 時に created_at と updated_at が UTC で自動設定されることを確認する。"""
+    store = SQLiteMemoryStore(tmp_path / "memories.db")
+    before = datetime.now(tz=UTC)
+
+    store.put(_record("m1", "tea preference"))
+
+    after = datetime.now(tz=UTC)
+    fetched = store.get(MemoryId("m1"))
+    assert fetched is not None
+    assert fetched.created_at is not None
+    assert fetched.updated_at is not None
+    assert before - timedelta(seconds=1) <= fetched.created_at <= after + timedelta(seconds=1)
+    assert fetched.created_at == fetched.updated_at
+
+
+def test_sqlite_memory_store_put_preserves_explicit_timestamps(tmp_path: Path) -> None:
+    """Put 時に明示された created_at / updated_at は上書きしないことを確認する。"""
+    store = SQLiteMemoryStore(tmp_path / "memories.db")
+    created = datetime(2026, 1, 1, tzinfo=UTC)
+    updated = datetime(2026, 2, 2, tzinfo=UTC)
+
+    store.put(
+        MemoryRecord(
+            id=MemoryId("m1"),
+            text="explicit timestamps",
+            created_at=created,
+            updated_at=updated,
+        )
+    )
+
+    fetched = store.get(MemoryId("m1"))
+    assert fetched is not None
+    assert fetched.created_at == created
+    assert fetched.updated_at == updated
+
+
+def test_sqlite_memory_store_update_preserves_created_at_and_advances_updated_at(
+    tmp_path: Path,
+) -> None:
+    """Update 時に created_at を保持し、updated_at のみ進めることを確認する。"""
+    store = SQLiteMemoryStore(tmp_path / "memories.db")
+    initial = _record("m1", "first")
+    store.put(initial)
+    original = store.get(MemoryId("m1"))
+    assert original is not None
+    assert original.created_at is not None
+    assert original.updated_at is not None
+
+    before_update = datetime.now(tz=UTC)
+    store.update(_record("m1", "second", kind=MemoryKind.FACT))
+    after_update = datetime.now(tz=UTC)
+
+    fetched = store.get(MemoryId("m1"))
+    assert fetched is not None
+    assert fetched.created_at == original.created_at
+    assert fetched.updated_at is not None
+    assert fetched.updated_at >= original.updated_at
+    assert (
+        before_update - timedelta(seconds=1)
+        <= fetched.updated_at
+        <= after_update + timedelta(seconds=1)
+    )
+
+
+def test_sqlite_memory_store_update_keeps_explicit_updated_at(tmp_path: Path) -> None:
+    """Update 時に明示された updated_at は上書きしないことを確認する。"""
+    store = SQLiteMemoryStore(tmp_path / "memories.db")
+    store.put(_record("m1", "first"))
+
+    explicit_updated = datetime(2027, 5, 5, tzinfo=UTC)
+    store.update(
+        MemoryRecord(
+            id=MemoryId("m1"),
+            text="second with explicit updated_at",
+            updated_at=explicit_updated,
+        )
+    )
+
+    fetched = store.get(MemoryId("m1"))
+    assert fetched is not None
+    assert fetched.updated_at == explicit_updated
+
+
+def test_sqlite_memory_store_update_fills_created_at_from_existing(tmp_path: Path) -> None:
+    """Update 時に record.created_at 未指定なら既存 created_at を引き継ぐことを確認する。"""
+    store = SQLiteMemoryStore(tmp_path / "memories.db")
+    store.put(_record("m1", "first"))
+    original = store.get(MemoryId("m1"))
+    assert original is not None
+    assert original.created_at is not None
+
+    store.update(MemoryRecord(id=MemoryId("m1"), text="second without created_at"))
+
+    fetched = store.get(MemoryId("m1"))
+    assert fetched is not None
+    assert fetched.created_at == original.created_at
+
+
+def test_sqlite_memory_store_archive_advances_updated_at(tmp_path: Path) -> None:
+    """Archive 時に archived フラグが切り替わり updated_at が進められることを確認する。"""
+    store = SQLiteMemoryStore(tmp_path / "memories.db")
+    store.put(_record("m1", "tea"))
+    original = store.get(MemoryId("m1"))
+    assert original is not None
+    assert original.updated_at is not None
+
+    before_archive = datetime.now(tz=UTC)
+    archived = store.archive(MemoryId("m1"))
+    after_archive = datetime.now(tz=UTC)
+
+    assert archived is not None
+    assert archived.archived is True
+    assert archived.updated_at is not None
+    assert archived.updated_at > original.updated_at
+    assert before_archive - timedelta(seconds=1) <= archived.updated_at
+    assert archived.updated_at <= after_archive + timedelta(seconds=1)
+
+    before_unarchive = datetime.now(tz=UTC)
+    unarchived = store.archive(MemoryId("m1"), archived=False)
+    after_unarchive = datetime.now(tz=UTC)
+    assert unarchived is not None
+    assert unarchived.archived is False
+    assert unarchived.updated_at is not None
+    assert unarchived.updated_at >= archived.updated_at
+    assert before_unarchive - timedelta(seconds=1) <= unarchived.updated_at
+    assert unarchived.updated_at <= after_unarchive + timedelta(seconds=1)
+
+
+def test_sqlite_memory_store_archive_keeps_explicit_updated_at(tmp_path: Path) -> None:
+    """Archive 経路の UTC 正規化で明示 updated_at が上書きされることを確認する。"""
+    store = SQLiteMemoryStore(tmp_path / "memories.db")
+    explicit_updated = datetime(2026, 3, 3, tzinfo=UTC)
+    store.put(
+        MemoryRecord(
+            id=MemoryId("m1"),
+            text="tea",
+            created_at=explicit_updated,
+            updated_at=explicit_updated,
+        )
+    )
+
+    archived = store.archive(MemoryId("m1"))
+    assert archived is not None
+    assert archived.archived is True
+    assert archived.updated_at is not None
+    assert archived.updated_at > explicit_updated
+
+
+def test_sqlite_memory_store_creates_filter_indexes(tmp_path: Path) -> None:
+    """_init_db で filter 用インデックスが作成されることを確認する。"""
+    db_path = tmp_path / "memories.db"
+    SQLiteMemoryStore(db_path)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        index_names = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'memories'"
+            )
+        }
+    finally:
+        conn.close()
+
+    assert "idx_memories_actor_id" in index_names
+    assert "idx_memories_space_id" in index_names
+    assert "idx_memories_kind" in index_names
+    assert "idx_memories_archived" in index_names

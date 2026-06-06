@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import contextlib
-from datetime import datetime
+import dataclasses
+from datetime import UTC, datetime
 import json
 from pathlib import Path
 import sqlite3
@@ -38,25 +39,30 @@ class SQLiteMemoryStore(MutableMemoryStore):
         self._init_db()
 
     def _init_db(self) -> None:
-        """Create the memories table if it does not exist."""
-        query = """
-        CREATE TABLE IF NOT EXISTS memories (
-            memory_id TEXT PRIMARY KEY,
-            text TEXT NOT NULL,
-            actor_id TEXT,
-            space_id TEXT,
-            salience REAL NOT NULL DEFAULT 0.0,
-            kind TEXT NOT NULL,
-            confidence REAL NOT NULL DEFAULT 1.0,
-            source_observation_id TEXT,
-            created_at TEXT,
-            updated_at TEXT,
-            archived INTEGER NOT NULL DEFAULT 0,
-            metadata_json TEXT NOT NULL DEFAULT '{}'
-        );
-        """
+        """Create the memories table and filter indexes if missing."""
         with self._transaction() as conn:
-            conn.execute(query)
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS memories (
+                    memory_id TEXT PRIMARY KEY,
+                    text TEXT NOT NULL,
+                    actor_id TEXT,
+                    space_id TEXT,
+                    salience REAL NOT NULL DEFAULT 0.0,
+                    kind TEXT NOT NULL,
+                    confidence REAL NOT NULL DEFAULT 1.0,
+                    source_observation_id TEXT,
+                    created_at TEXT,
+                    updated_at TEXT,
+                    archived INTEGER NOT NULL DEFAULT 0,
+                    metadata_json TEXT NOT NULL DEFAULT '{}'
+                );
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_actor_id ON memories(actor_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_space_id ON memories(space_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_kind ON memories(kind);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_archived ON memories(archived);")
 
     def _connect(self) -> sqlite3.Connection:
         """Get a configured sqlite3 connection.
@@ -80,7 +86,12 @@ class SQLiteMemoryStore(MutableMemoryStore):
 
     @override
     def put(self, record: MemoryRecord) -> None:
-        """Insert a new memory record."""
+        """Insert a new memory record with normalized timestamps.
+
+        ``created_at`` が未指定なら現在の UTC を設定し、``updated_at`` が
+        未指定なら ``created_at`` と同じ値を補う。
+        """
+        normalized = _normalize_for_put(record)
         with self._transaction() as conn:
             conn.execute(
                 """
@@ -90,7 +101,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
                     archived, metadata_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                _record_to_row(record),
+                _record_to_row(normalized),
             )
 
     @override
@@ -108,11 +119,15 @@ class SQLiteMemoryStore(MutableMemoryStore):
 
     @override
     def update(self, record: MemoryRecord) -> MemoryRecord:
-        """Upsert a record and return the persisted form.
+        """Upsert a record with timestamp normalization.
+
+        既存レコードがあり ``record.created_at`` が None なら既存の
+        ``created_at`` を引き継ぐ。``updated_at`` 未指定時は現在の UTC を設定する。
 
         Returns:
             MemoryRecord: 永続化された正規化済みレコード。
         """
+        normalized = _normalize_for_update(self, record)
         with self._transaction() as conn:
             conn.execute(
                 """
@@ -133,7 +148,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
                     archived=excluded.archived,
                     metadata_json=excluded.metadata_json
                 """,
-                _record_to_row(record),
+                _record_to_row(normalized),
             )
         return self.get(record.id) or record
 
@@ -141,20 +156,22 @@ class SQLiteMemoryStore(MutableMemoryStore):
     def archive(self, memory_id: MemoryId, *, archived: bool = True) -> MemoryRecord | None:
         """Toggle the archived flag for the given id and return the updated record.
 
+        ``updated_at`` を現在の UTC に進める。
+
         Returns:
             MemoryRecord | None: 更新後レコード。存在しない ID の場合は None。
         """
+        now_iso = datetime.now(tz=UTC).isoformat()
         with self._transaction() as conn:
             cursor = conn.execute(
-                "SELECT * FROM memories WHERE memory_id = ?",
+                "SELECT memory_id FROM memories WHERE memory_id = ?",
                 (str(memory_id),),
             )
-            row = cursor.fetchone()
-            if not row:
+            if cursor.fetchone() is None:
                 return None
             conn.execute(
-                "UPDATE memories SET archived = ? WHERE memory_id = ?",
-                (1 if archived else 0, str(memory_id)),
+                "UPDATE memories SET archived = ?, updated_at = ? WHERE memory_id = ?",
+                (1 if archived else 0, now_iso, str(memory_id)),
             )
             cursor = conn.execute(
                 "SELECT * FROM memories WHERE memory_id = ?",
@@ -214,6 +231,65 @@ class SQLiteMemoryStore(MutableMemoryStore):
 
         ranked.sort(key=lambda item: (-item[0], item[1]))
         return tuple(result for _, _, result in ranked[: query.limit])
+
+
+def _now_utc() -> datetime:
+    """現在の timezone-aware UTC datetime を返す。
+
+    Returns:
+        datetime: timezone-aware な UTC タイムスタンプ。
+    """
+    return datetime.now(tz=UTC)
+
+
+def _normalize_for_put(record: MemoryRecord) -> MemoryRecord:
+    """``put`` 用のタイムスタンプ正規化レコードを返す。
+
+    ``created_at`` 未指定なら現在の UTC を、``updated_at`` 未指定なら
+    ``created_at`` (補完後の値) と同じものを設定する。
+
+    Args:
+        record: 元のメモリレコード。
+
+    Returns:
+        MemoryRecord: タイムスタンプを補完した新しいメモリレコード。
+    """
+    if record.created_at is None and record.updated_at is None:
+        now = _now_utc()
+        return dataclasses.replace(record, created_at=now, updated_at=now)
+    if record.created_at is None:
+        created = record.updated_at
+        if created is None:  # pragma: no cover -- defensive
+            created = _now_utc()
+        return dataclasses.replace(record, created_at=created)
+    if record.updated_at is None:
+        return dataclasses.replace(record, updated_at=record.created_at)
+    return record
+
+
+def _normalize_for_update(
+    store: SQLiteMemoryStore,
+    record: MemoryRecord,
+) -> MemoryRecord:
+    """``update`` 用のタイムスタンプ正規化レコードを返す。
+
+    既存レコードがあり ``record.created_at`` が None の場合は既存の
+    ``created_at`` を引き継ぐ。``updated_at`` 未指定時は現在の UTC を設定する。
+
+    Args:
+        store: 既存レコード参照に使うストア。
+        record: 元のメモリレコード。
+
+    Returns:
+        MemoryRecord: タイムスタンプを補完した新しいメモリレコード。
+    """
+    if record.created_at is None:
+        existing = store.get(record.id)
+        if existing is not None and existing.created_at is not None:
+            record = dataclasses.replace(record, created_at=existing.created_at)
+    if record.updated_at is None:
+        record = dataclasses.replace(record, updated_at=_now_utc())
+    return record
 
 
 def _record_to_row(record: MemoryRecord) -> tuple[object, ...]:
