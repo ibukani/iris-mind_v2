@@ -8,6 +8,9 @@ Use this workflow when changing README, docs, agent rules, prompts, or checklist
 
 - Keep `AGENTS.md` and `CLAUDE.md` concise.
 - Put detailed instructions under `.agents/`.
+- Apply `.agents/rules/documentation-language.md` when choosing Japanese or English.
+- Write human-facing documentation in Japanese by default.
+- Agent-facing prompts, harness rules, and machine-oriented contracts may stay English when useful.
 - Do not duplicate long rule text across many files.
 - Update docs with code behavior when architecture changes.
 - Prefer command examples that are valid for this repository.
@@ -21,6 +24,7 @@ When editing docs, compare against:
 - `docs/architecture.md`
 - `docs/rules.md`
 - `docs/tests.md`
+- `.agents/rules/documentation-language.md`
 - `tests/architecture/`
 
 ## Do not invent commands
