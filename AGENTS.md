@@ -130,7 +130,9 @@ After: 原因: 認証middleware token期限check。
 - User-facing final responses and completion reports: **Japanese**.
 - Human-facing repository documentation is **Japanese by default**. This includes `README.md`, `docs/`, design notes, review summaries, implementation explanations, and PR text written for human readers.
 - AI/coding-agent instructions, machine-oriented prompts, harness rules, and implementation contracts may be **English** when it improves precision or tool compatibility.
-- Code, identifiers, docstrings, and comments: follow the existing repository style.
+- Code identifiers, public API names, protocol fields, commands, and paths must keep their exact existing spelling.
+- New or updated docstrings and explanatory comments are **Japanese by default** when they explain behavior, intent, rationale, architecture, or caveats for human readers.
+- Short mechanical comments, generated code, external API/protocol wording, and agent-only implementation contracts may stay **English** when it improves precision or matches surrounding code.
 - Commit messages: follow project convention if one exists; otherwise concise English is acceptable.
 
 Do not reveal hidden reasoning. In Japanese final reports, summarize only decisions, changed files, verification, and risks.
