@@ -4,15 +4,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, override
 
-from iris.adapters.memory.ports import MemoryStore
-from iris.contracts.memory import MemoryQuery, MemoryRecord, MemorySearchResult
+from iris.adapters.memory.in_memory import InMemoryMemoryStore
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from iris.contracts.memory import MemoryQuery, MemoryRecord, MemorySearchResult
 
-class FakeMemoryStore(MemoryStore):
-    """本番バックエンドなしでテストするためのインメモリMemoryStore。"""
+
+class FakeMemoryStore(InMemoryMemoryStore):
+    """本番バックエンドなしでテストするためのインメモリMemoryStore。
+
+    `InMemoryMemoryStore` の上に構築し、`fixed_results` モードで
+    検索結果を完全に差し替える。
+    """
 
     def __init__(
         self,
@@ -26,42 +31,18 @@ class FakeMemoryStore(MemoryStore):
             records: Initial memory records to populate the store.
             fixed_results: When set, search always returns a subset of these results.
         """
-        self._records = list(records)
+        super().__init__(records=records)
         self._fixed_results = tuple(fixed_results) if fixed_results is not None else None
-
-    @override
-    def put(self, record: MemoryRecord) -> None:
-        """メモリレコードを保存する。"""
-        self._records.append(record)
 
     @override
     def search(self, query: MemoryQuery) -> Sequence[MemorySearchResult]:
         """テキスト用語マッチングでメモリレコードを検索する。
+
+        `fixed_results` が設定されている場合はクエリを無視してそれを返す。
 
         Returns:
             Sequence[MemorySearchResult]: 検索条件に一致するメモリレコードのシーケンス。
         """
         if self._fixed_results is not None:
             return self._fixed_results[: query.limit]
-
-        terms = tuple(term.casefold() for term in query.text.split() if term.strip())
-        ranked: list[tuple[int, int, MemorySearchResult]] = []
-        for index, record in enumerate(self._records):
-            if query.actor_id is not None and record.actor_id != query.actor_id:
-                continue
-            if query.space_id is not None and record.space_id != query.space_id:
-                continue
-            score = _score_record(record, terms)
-            if score <= 0:
-                continue
-            ranked.append((score, index, MemorySearchResult(record=record, score=float(score))))
-
-        ranked.sort(key=lambda item: (-item[0], item[1]))
-        return tuple(result for _, _, result in ranked[: query.limit])
-
-
-def _score_record(record: MemoryRecord, terms: tuple[str, ...]) -> int:
-    if not terms:
-        return 0
-    text = record.text.casefold()
-    return sum(1 for term in terms if term in text)
+        return super().search(query)

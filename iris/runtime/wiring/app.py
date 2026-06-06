@@ -20,6 +20,7 @@ from iris.runtime.wiring.llm import LLMClientFactory
 
 if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
+    from iris.adapters.memory.ports import MutableMemoryStore
     from iris.runtime.config import IrisRuntimeConfig
 
 
@@ -112,6 +113,7 @@ def build_app_from_config(
     config: IrisRuntimeConfig,
     *,
     client_factory: LLMClientFactory | None = None,
+    memory_store: MutableMemoryStore | None = None,
 ) -> IrisApp:
     """ランタイム設定から IrisApp を構築する。
 
@@ -120,6 +122,8 @@ def build_app_from_config(
     Args:
         config: ランタイム設定。
         client_factory: 任意の明示的 LLM クライアントファクトリ。
+        memory_store: 任意の明示的メモリストア。省略時は
+            ``FakeMemoryStore`` を利用する。
 
     Returns:
         完全に組み立てられた IrisApp インスタンス。
@@ -129,7 +133,7 @@ def build_app_from_config(
     client = factory.create_client(model_config, config)
     model = factory.resolve_model(model_config, config)
     cycle = wire_policy_affect_memory_aware_text_response_cognitive_cycle(
-        memory_store=FakeMemoryStore(),
+        memory_store=memory_store if memory_store is not None else FakeMemoryStore(),
         llm_client=client,
         model=model,
         temperature=model_config.temperature,
