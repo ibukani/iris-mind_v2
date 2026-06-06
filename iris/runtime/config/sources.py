@@ -14,6 +14,11 @@ from iris.runtime.config.llm import (
 )
 from iris.runtime.config.llm import apply_env as apply_llm_env
 from iris.runtime.config.llm import apply_toml as apply_llm_toml
+from iris.runtime.config.logging import (
+    RuntimeLoggingConfig,
+    apply_logging_env,
+    apply_logging_toml,
+)
 from iris.runtime.config.parsing import TomlTable, load_toml, table_or_empty
 
 if TYPE_CHECKING:
@@ -44,14 +49,16 @@ def apply_toml(
     models: RuntimeModelsConfig,
     ollama: RuntimeOllamaConfig,
     openai: RuntimeOpenAIConfig,
+    logging: RuntimeLoggingConfig,
     table: TomlTable,
-) -> tuple[RuntimeModelsConfig, RuntimeOllamaConfig, RuntimeOpenAIConfig]:
+) -> tuple[RuntimeModelsConfig, RuntimeOllamaConfig, RuntimeOpenAIConfig, RuntimeLoggingConfig]:
     """Apply a top-level TOML table to the LLM config sections.
 
     Args:
-        models: Base models config.
-        ollama: Base Ollama config.
-        openai: Base OpenAI config.
+        models: Models configuration to update.
+        ollama: Ollama configuration to update.
+        openai: OpenAI configuration to update.
+        logging: Logging configuration to update.
         table: Top-level TOML table.
 
     Returns:
@@ -60,24 +67,29 @@ def apply_toml(
     updated_models = apply_llm_toml(models, table_or_empty(table, "models"))
     updated_ollama = apply_ollama_toml(ollama, table_or_empty(table, "ollama"))
     updated_openai = apply_openai_toml(openai, table_or_empty(table, "openai"))
-    return updated_models, updated_ollama, updated_openai
+    updated_logging = apply_logging_toml(logging, table_or_empty(table, "logging"))
+    return updated_models, updated_ollama, updated_openai, updated_logging
 
 
 def apply_env(
     models: RuntimeModelsConfig,
     ollama: RuntimeOllamaConfig,
     openai: RuntimeOpenAIConfig,
+    logging: RuntimeLoggingConfig,
     env: Mapping[str, str],
-) -> tuple[RuntimeModelsConfig, RuntimeOllamaConfig, RuntimeOpenAIConfig]:
+) -> tuple[RuntimeModelsConfig, RuntimeOllamaConfig, RuntimeOpenAIConfig, RuntimeLoggingConfig]:
     """Apply environment variable overrides to the LLM config sections.
 
     Args:
         models: Base models config.
         ollama: Base Ollama config.
         openai: Base OpenAI config.
+        logging: Base logging config.
         env: Environment variable mapping.
 
     Returns:
         Updated models, Ollama, and OpenAI configs.
     """
-    return apply_llm_env(models, ollama, openai, env)
+    models, ollama, openai = apply_llm_env(models, ollama, openai, env)
+    updated_logging = apply_logging_env(logging, env)
+    return models, ollama, openai, updated_logging

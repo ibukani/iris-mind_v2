@@ -16,6 +16,7 @@ from iris.runtime.config.llm import (
     RuntimeOllamaConfig,
     RuntimeOpenAIConfig,
 )
+from iris.runtime.config.logging import RuntimeLoggingConfig
 from iris.runtime.config.root import (
     IrisRuntimeConfig,
     RuntimeConfigOverrides,
@@ -33,6 +34,7 @@ __all__ = [
     "LLMProvider",
     "ModelSlotName",
     "RuntimeConfigOverrides",
+    "RuntimeLoggingConfig",
     "RuntimeModelConfig",
     "RuntimeModelsConfig",
     "RuntimeOllamaConfig",

@@ -1,0 +1,100 @@
+"""Runtime logging configuration."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Literal
+
+from iris.runtime.config.errors import ConfigError
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from iris.runtime.config.parsing import TomlTable
+
+
+@dataclass(frozen=True)
+class RuntimeLoggingConfig:
+    """Configuration for Loguru-based runtime observability."""
+
+    level: str = "INFO"
+    format: Literal["text", "json"] = "text"
+    file_path: str | None = None
+    rotation: str = "10 MB"
+    retention: str = "7 days"
+
+
+def validate_level(value: str) -> str:
+    """Validate log level string.
+
+    Returns:
+        str: Validated and normalized log level.
+
+    Raises:
+        ConfigError: If log level is invalid.
+    """
+    allowed = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    upper_value = value.upper()
+    if upper_value not in allowed:
+        msg = f"Invalid log level: {value}"
+        raise ConfigError(msg)
+    return upper_value
+
+
+def validate_format(value: str) -> Literal["text", "json"]:
+    """Validate log format.
+
+    Returns:
+        Literal["text", "json"]: Validated log format.
+
+    Raises:
+        ConfigError: If log format is invalid.
+    """
+    if value == "text":
+        return "text"
+    if value == "json":
+        return "json"
+    msg = f"Invalid log format: {value}"
+    raise ConfigError(msg)
+
+
+def apply_logging_toml(base: RuntimeLoggingConfig, table: TomlTable) -> RuntimeLoggingConfig:
+    """Apply TOML table to RuntimeLoggingConfig.
+
+    Returns:
+        RuntimeLoggingConfig: New instance with applied overrides.
+    """
+    level = validate_level(str(table["level"])) if "level" in table else base.level
+    format_val = validate_format(str(table["format"])) if "format" in table else base.format
+    file_path = str(table["file_path"]) if "file_path" in table else base.file_path
+    rotation = str(table["rotation"]) if "rotation" in table else base.rotation
+    retention = str(table["retention"]) if "retention" in table else base.retention
+
+    return replace(
+        base,
+        level=level,
+        format=format_val,
+        file_path=file_path,
+        rotation=rotation,
+        retention=retention,
+    )
+
+
+def apply_logging_env(base: RuntimeLoggingConfig, env: Mapping[str, str]) -> RuntimeLoggingConfig:
+    """Apply environment variables to RuntimeLoggingConfig.
+
+    Returns:
+        RuntimeLoggingConfig: New instance with applied environment variables.
+    """
+    level = validate_level(env["IRIS_LOG_LEVEL"]) if "IRIS_LOG_LEVEL" in env else base.level
+    format_val = (
+        validate_format(env["IRIS_LOG_FORMAT"]) if "IRIS_LOG_FORMAT" in env else base.format
+    )
+    file_path = env.get("IRIS_LOG_FILE", base.file_path)
+
+    return replace(
+        base,
+        level=level,
+        format=format_val,
+        file_path=file_path,
+    )
