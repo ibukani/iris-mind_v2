@@ -18,10 +18,23 @@ def test_immutable_metadata_returns_empty_when_none() -> None:
     assert immutable_metadata(None) is EMPTY_METADATA
 
 
-def test_immutable_metadata_returns_same_proxy_if_already_proxy() -> None:
-    """immutable_metadata returns the same object if already a MappingProxyType."""
-    proxy = MappingProxyType[str, str]({"key": "value"})
-    assert immutable_metadata(proxy) is proxy
+def test_immutable_metadata_returns_same_proxy_only_if_empty_metadata() -> None:
+    """immutable_metadata returns the same object only if it is EMPTY_METADATA."""
+    assert immutable_metadata(EMPTY_METADATA) is EMPTY_METADATA
+
+
+def test_immutable_metadata_copies_existing_proxy_to_prevent_view_mutations() -> None:
+    """immutable_metadata creates a new copy even if given a MappingProxyType."""
+    mutable_dict = {"key": "value"}
+    proxy = MappingProxyType[str, str](mutable_dict)
+
+    result = immutable_metadata(proxy)
+    assert result is not proxy
+    assert result == {"key": "value"}
+
+    # Mutate the original dict, the returned proxy should be unaffected
+    mutable_dict["key"] = "mutated"
+    assert result["key"] == "value"
 
 
 def test_immutable_metadata_copies_dict_into_proxy() -> None:

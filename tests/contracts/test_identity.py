@@ -114,7 +114,7 @@ def test_identity_accepts_custom_metadata() -> None:
         metadata=custom,
     )
 
-    assert identity.metadata is custom
+    assert identity.metadata == custom
     assert identity.metadata["locale"] == "ja-JP"
 
 

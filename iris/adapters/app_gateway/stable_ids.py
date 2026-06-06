@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from hashlib import blake2b
 
 from iris.core.ids import AccountId, ActorId, ExternalRef, SpaceId
@@ -53,6 +54,8 @@ def stable_actor_id(account_id: AccountId) -> ActorId:
 def stable_space_id(provider: str, provider_space_ref: ExternalRef | str) -> SpaceId:
     """Generate a stable SpaceId.
 
+    Maintains legacy sha256 format for space fallback compatibility.
+
     Args:
         provider: The provider name.
         provider_space_ref: The provider space reference.
@@ -60,4 +63,5 @@ def stable_space_id(provider: str, provider_space_ref: ExternalRef | str) -> Spa
     Returns:
         SpaceId: The stable space ID.
     """
-    return SpaceId(stable_external_id("space", provider, str(provider_space_ref)))
+    digest = hashlib.sha256(f"{provider}:{provider_space_ref}".encode()).hexdigest()[:16]
+    return SpaceId(f"space-{provider}-{digest}")

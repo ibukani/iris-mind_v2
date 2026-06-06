@@ -15,6 +15,6 @@ def immutable_metadata(metadata: Mapping[str, str] | None = None) -> Mapping[str
     """Return an immutable defensive copy of metadata."""
     if metadata is None:
         return EMPTY_METADATA
-    if isinstance(metadata, MappingProxyType):
-        return metadata
+    if metadata is EMPTY_METADATA:
+        return EMPTY_METADATA
     return MappingProxyType(dict(metadata))

@@ -111,7 +111,7 @@ def test_interaction_space_carries_participants_and_metadata() -> None:
     )
 
     assert space.participants == participants
-    assert space.metadata is metadata
+    assert space.metadata == metadata
     assert space.participants[1].identity is identity
 
 
