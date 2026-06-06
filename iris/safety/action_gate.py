@@ -45,4 +45,5 @@ class AllowAllActionGate:
         Returns:
             A SafetyDecision with decision ALLOW.
         """
+        _ = self, plan
         return SafetyDecision(decision=GateDecision.ALLOW)

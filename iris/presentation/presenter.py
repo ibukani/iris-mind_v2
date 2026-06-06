@@ -18,8 +18,7 @@ class Presenter(Protocol):
 class SimplePresenter:
     """アクションプランのフィールドをそのまま出力に委譲するデフォルトプレゼンター."""
 
-    @staticmethod
-    async def present(plan: ActionPlan) -> PresentedOutput:
+    async def present(self, plan: ActionPlan) -> PresentedOutput:
         """アクションプランを提示用出力に変換する.
 
         Args:
@@ -28,6 +27,7 @@ class SimplePresenter:
         Returns:
             Presented output with text and metadata from the plan.
         """
+        _ = self
         if plan.is_no_action:
             return PresentedOutput(text=None)
         return PresentedOutput(

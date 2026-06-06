@@ -30,4 +30,5 @@ class AllowAllOutputGate:
         Returns:
             A SafetyDecision with decision ALLOW.
         """
+        _ = self, output
         return SafetyDecision(decision=GateDecision.ALLOW)

@@ -83,7 +83,8 @@ async def test_action_safety_gate_blocks(actor_message: ActorMessageObservation)
     """ブロックするアクションセーフティゲートがNoneテキストのPresentedOutputを生成することを確認する。"""
 
     class BlockingGate:
-        async def check_plan(self, plan: ActionPlan) -> SafetyDecision:  # noqa: PLR6301, ARG002 -- inline test gate implements ActionSafetyGate protocol; stub does not consume self/plan
+        async def check_plan(self, plan: ActionPlan) -> SafetyDecision:
+            _ = self, plan
             return SafetyDecision(decision=GateDecision.BLOCK, reason="test block")
 
     app = IrisApp(
@@ -100,7 +101,8 @@ async def test_output_safety_gate_blocks(actor_message: ActorMessageObservation)
     """ブロックする出力セーフティゲートがNoneテキストのPresentedOutputを生成することを確認する。"""
 
     class BlockingGate:
-        async def check_output(self, output: PresentedOutput) -> SafetyDecision:  # noqa: PLR6301, ARG002 -- inline test gate implements OutputSafetyGate protocol; stub does not consume self/output
+        async def check_output(self, output: PresentedOutput) -> SafetyDecision:
+            _ = self, output
             return SafetyDecision(decision=GateDecision.BLOCK, reason="test block")
 
     app = IrisApp(
