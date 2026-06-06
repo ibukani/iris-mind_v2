@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
-from iris.adapters.app_gateway.resolvers import AccountIdentityResolver, EphemeralSpaceResolver
-from iris.runtime.config import RuntimeConfigOverrides, load_runtime_config
-from iris.runtime.service import IrisRuntimeService
-from iris.runtime.wiring.app import build_app_from_config
-from iris.runtime.wiring.grpc import create_grpc_server
-from iris.runtime.wiring.state import wire_runtime_state
+from loguru import logger
 
 if TYPE_CHECKING:
     import grpc
 
-logger = logging.getLogger(__name__)
+from iris.adapters.app_gateway.resolvers import AccountIdentityResolver, EphemeralSpaceResolver
+from iris.runtime.config import RuntimeConfigOverrides, load_runtime_config
+from iris.runtime.observability.logging import configure_runtime_logging
+from iris.runtime.service import IrisRuntimeService
+from iris.runtime.wiring.app import build_app_from_config
+from iris.runtime.wiring.grpc import create_grpc_server
+from iris.runtime.wiring.state import wire_runtime_state
 
 
 async def serve(
@@ -30,9 +30,18 @@ async def serve(
         config_path: Optional path to TOML config file.
         overrides: Optional runtime configuration overrides.
     """
-    logging.basicConfig(level=logging.INFO)
-
     config = load_runtime_config(config_path, overrides=overrides)
+
+    configure_runtime_logging(config.logging)
+
+    logger.info("runtime server starting")
+    logger.info("host: {}", config.server.host)
+    logger.info("port: {}", config.server.port)
+    logger.info("state backend: {}", config.state.backend)
+    logger.info("log level: {}", config.logging.level)
+    logger.info("log format: {}", config.logging.format)
+    if config.logging.file_path:
+        logger.info("log file path: {}", config.logging.file_path)
     app = build_app_from_config(config)
     runtime_service = IrisRuntimeService(app)
 
@@ -52,15 +61,14 @@ async def serve(
     )
 
     await server.start()
-    logger.info("Server started on %s:%d", config.server.host, config.server.port)
 
     try:
         await server.wait_for_termination()
     except asyncio.CancelledError:
-        logger.info("Server shutdown requested")
+        logger.info("shutdown requested")
     finally:
         await server.stop(grace=config.server.shutdown_grace_seconds)
-        logger.info("Server shut down")
+        logger.info("shutdown complete")
 
 
 def main() -> None:

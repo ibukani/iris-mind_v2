@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import logging
+import time
 from typing import TYPE_CHECKING, override
 
 import grpc
+from loguru import logger
 
 from iris.adapters.grpc.mappers import (
     GrpcMappingError,
@@ -16,8 +17,6 @@ from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 
 if TYPE_CHECKING:
     from iris.runtime.service import IrisRuntimeService
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
@@ -51,7 +50,8 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         Returns:
             runtime_pb2.GetRuntimeInfoResponse: Proto runtime info response.
         """
-        return runtime_pb2.GetRuntimeInfoResponse(
+        logger.info("GetRuntimeInfo: received")
+        response = runtime_pb2.GetRuntimeInfoResponse(
             runtime_name="iris-mind",
             runtime_version="0.1.0",
             api_version="iris.runtime.v1",
@@ -61,6 +61,8 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
                 "ephemeral_space",
             ],
         )
+        logger.info("GetRuntimeInfo: completed")
+        return response
 
     @override
     async def SubmitObservation(
@@ -76,12 +78,28 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         Returns:
             runtime_pb2.SubmitObservationResponse: Proto runtime response.
         """
+        logger.info("SubmitObservation: received")
+        start_time = time.monotonic()
         try:
             envelope = await self._mapper.observation_envelope_from_proto(request)
             response = await self._runtime_service.handle_observation(envelope)
+            latency_ms = (time.monotonic() - start_time) * 1000
+
+            logger.bind(
+                correlation_id=str(envelope.correlation_id),
+                observation_id=str(envelope.observation.observation_id),
+                session_id=str(envelope.observation.session_id),
+                kind=envelope.observation.kind.value,
+                source=envelope.observation.context.source,
+                has_account_ref=request.observation.context.HasField("account_ref"),
+                has_space_ref=request.observation.context.HasField("space_ref"),
+                latency_ms=round(latency_ms, 2),
+            ).info("SubmitObservation: completed")
+
             return runtime_response_to_proto(response)
         except GrpcMappingError as exc:
+            logger.warning("SubmitObservation: invalid_argument - {}", exc)
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
-        except Exception:
-            _LOGGER.exception("runtime service failed")
+        except Exception as exc:  # noqa: BLE001 -- global fallback for the runtime ingress boundary
+            logger.exception("SubmitObservation: internal_error - {}", exc)
             await context.abort(grpc.StatusCode.INTERNAL, "runtime service failed")

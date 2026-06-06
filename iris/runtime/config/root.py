@@ -28,6 +28,7 @@ from iris.runtime.config.llm import (
     RuntimeOpenAIConfig,
     validate_provider,
 )
+from iris.runtime.config.logging import RuntimeLoggingConfig
 from iris.runtime.config.parsing import table_or_empty
 from iris.runtime.config.server import (
     RuntimeServerConfig,
@@ -59,6 +60,7 @@ class IrisRuntimeConfig:
     models: RuntimeModelsConfig
     ollama: RuntimeOllamaConfig
     openai: RuntimeOpenAIConfig
+    logging: RuntimeLoggingConfig
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         ),
         ollama=RuntimeOllamaConfig(),
         openai=RuntimeOpenAIConfig(),
+        logging=RuntimeLoggingConfig(),
     )
 
 
@@ -189,13 +192,22 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     server = apply_server_toml(config.server, table_or_empty(table, "server"))
     state = apply_state_toml(config.state, table_or_empty(table, "state"))
 
-    models, ollama, openai = apply_toml(
+    models, ollama, openai, logging = apply_toml(
         config.models,
         config.ollama,
         config.openai,
+        config.logging,
         table,
     )
-    return replace(config, server=server, state=state, models=models, ollama=ollama, openai=openai)
+    return replace(
+        config,
+        server=server,
+        state=state,
+        models=models,
+        ollama=ollama,
+        openai=openai,
+        logging=logging,
+    )
 
 
 def _apply_env(
@@ -214,5 +226,15 @@ def _apply_env(
     server = apply_server_env(config.server, env)
     state = apply_state_env(config.state, env)
 
-    models, ollama, openai = apply_env(config.models, config.ollama, config.openai, env)
-    return replace(config, server=server, state=state, models=models, ollama=ollama, openai=openai)
+    models, ollama, openai, logging = apply_env(
+        config.models, config.ollama, config.openai, config.logging, env
+    )
+    return replace(
+        config,
+        server=server,
+        state=state,
+        models=models,
+        ollama=ollama,
+        openai=openai,
+        logging=logging,
+    )
