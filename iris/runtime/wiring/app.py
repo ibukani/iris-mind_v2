@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
-from iris.adapters.memory.fake import FakeMemoryStore
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
     wire_policy_affect_memory_aware_text_response_cognitive_cycle,
@@ -20,6 +19,7 @@ from iris.runtime.wiring.llm import LLMClientFactory
 
 if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
+    from iris.adapters.memory.ports import MemoryStore
     from iris.runtime.config import IrisRuntimeConfig
 
 
@@ -112,14 +112,19 @@ def build_app_from_config(
     config: IrisRuntimeConfig,
     *,
     client_factory: LLMClientFactory | None = None,
+    memory_store: MemoryStore,
 ) -> IrisApp:
     """ランタイム設定から IrisApp を構築する。
 
     ``default_chat`` モデルスロットを完全な認知サイクルへ組み込む。
+    ``memory_store`` は必須引数であり、ランタイム配線は ``wire_runtime_state``
+    で組み立てた永続化/編集可能なストアを明示注入する。
 
     Args:
         config: ランタイム設定。
         client_factory: 任意の明示的 LLM クライアントファクトリ。
+        memory_store: 認知サイクルのメモリ検索に利用する ``MemoryStore``。
+            ランタイム設定から組み立てた ``MutableMemoryStore`` を渡す想定。
 
     Returns:
         完全に組み立てられた IrisApp インスタンス。
@@ -129,7 +134,7 @@ def build_app_from_config(
     client = factory.create_client(model_config, config)
     model = factory.resolve_model(model_config, config)
     cycle = wire_policy_affect_memory_aware_text_response_cognitive_cycle(
-        memory_store=FakeMemoryStore(),
+        memory_store=memory_store,
         llm_client=client,
         model=model,
         temperature=model_config.temperature,

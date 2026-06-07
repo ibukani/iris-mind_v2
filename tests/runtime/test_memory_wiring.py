@@ -7,9 +7,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 from iris.adapters.memory import langchain
+from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.langchain import LangChainMemoryStore
 from iris.adapters.memory.vector import InMemoryVectorMemoryStore
-from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord
+from iris.contracts.memory import MemoryId, MemoryKind, MemoryQuery, MemoryRecord
 from iris.runtime.wiring.memory import wire_in_memory_vector_store, wire_langchain_memory_store
 
 if TYPE_CHECKING:
@@ -57,6 +58,30 @@ def test_wire_in_memory_vector_store_returns_memory_store() -> None:
 
     assert isinstance(store, InMemoryVectorMemoryStore)
     assert store.search(MemoryQuery(text="memory"))[0].record.id == MemoryId("m1")
+
+
+def test_in_memory_memory_store_supports_mutable_operations() -> None:
+    """Verify the text-based InMemoryMemoryStore implements MutableMemoryStore."""
+    store = InMemoryMemoryStore()
+    store.put(MemoryRecord(id=MemoryId("m1"), text="first tea", kind=MemoryKind.PREFERENCE))
+
+    updated = store.update(
+        MemoryRecord(
+            id=MemoryId("m1"),
+            text="updated tea",
+            kind=MemoryKind.FACT,
+        )
+    )
+
+    fetched = store.get(MemoryId("m1"))
+    assert fetched is not None
+    assert fetched.text == "updated tea"
+    assert updated.text == "updated tea"
+    assert updated.kind == MemoryKind.FACT
+
+    archived = store.archive(MemoryId("m1"))
+    assert archived is not None
+    assert archived.archived is True
 
 
 def test_wire_langchain_memory_store_is_explicit_adapter_wiring(
