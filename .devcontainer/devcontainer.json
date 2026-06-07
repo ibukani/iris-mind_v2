@@ -1,0 +1,53 @@
+{
+  "name": "Iris Cognitive Runtime",
+  "image": "mcr.microsoft.com/devcontainers/python:3.13",
+
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.13"
+    },
+    "ghcr.io/jsburckhardt/devcontainer-features/uv:1": {}
+  },
+
+  "containerEnv": {
+    "UV_LINK_MODE": "copy"
+  },
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
+        "ruff.lint.args": ["--config", "${containerWorkspaceFolder}/pyproject.toml"],
+        "mypy-type-checker.args": ["--config-file", "${containerWorkspaceFolder}/pyproject.toml"],
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.ruff": "explicit",
+          "source.organizeImports.ruff": "explicit"
+        },
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true
+        },
+        "files.eol": "\n",
+        "files.insertFinalNewline": true,
+        "files.trimTrailingWhitespace": true
+      },
+      "extensions": [
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "tamasfe.even-better-toml",
+        "zxh404.vscode-proto3",
+        "eamodio.gitlens",
+        "ms-vscode.makefile-tools",
+        "yzhang.markdown-all-in-one"
+      ]
+    }
+  },
+
+  "postCreateCommand": "make deps && uv run pre-commit install -t pre-commit -t pre-push",
+
+  "remoteUser": "vscode"
+}
