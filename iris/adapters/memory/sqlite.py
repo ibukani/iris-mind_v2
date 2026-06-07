@@ -121,8 +121,9 @@ class SQLiteMemoryStore(MutableMemoryStore):
     def update(self, record: MemoryRecord) -> MemoryRecord:
         """Upsert a record with timestamp normalization.
 
-        既存レコードがあり ``record.created_at`` が None なら既存の
-        ``created_at`` を引き継ぐ。``updated_at`` 未指定時は現在の UTC を設定する。
+        ``created_at`` 未指定時は、既存レコードがあればその ``created_at`` を
+        引き継ぎ、なければ現在の UTC を設定する。``updated_at`` 未指定時は
+        現在の UTC を設定する。
 
         Returns:
             MemoryRecord: 永続化された正規化済みレコード。
@@ -273,8 +274,10 @@ def _normalize_for_update(
 ) -> MemoryRecord:
     """``update`` 用のタイムスタンプ正規化レコードを返す。
 
-    既存レコードがあり ``record.created_at`` が None の場合は既存の
-    ``created_at`` を引き継ぐ。``updated_at`` 未指定時は現在の UTC を設定する。
+    ``record.created_at`` が None の場合、既存レコードがあればその
+    ``created_at`` を引き継ぎ、なければ現在の UTC を設定する。
+    ``updated_at`` 未指定時は現在の UTC を設定する。新規作成経路で
+    両方を補完する場合は同一の now 値を使う。
 
     Args:
         store: 既存レコード参照に使うストア。
@@ -283,12 +286,28 @@ def _normalize_for_update(
     Returns:
         MemoryRecord: タイムスタンプを補完した新しいメモリレコード。
     """
+    existing = store.get(record.id)
+    existing_created = existing.created_at if existing is not None else None
+
+    if record.created_at is None and record.updated_at is None:
+        if existing_created is not None:
+            return dataclasses.replace(
+                record,
+                created_at=existing_created,
+                updated_at=_now_utc(),
+            )
+        now = _now_utc()
+        return dataclasses.replace(record, created_at=now, updated_at=now)
+
     if record.created_at is None:
-        existing = store.get(record.id)
-        if existing is not None and existing.created_at is not None:
-            record = dataclasses.replace(record, created_at=existing.created_at)
+        if existing_created is not None:
+            record = dataclasses.replace(record, created_at=existing_created)
+        else:
+            record = dataclasses.replace(record, created_at=_now_utc())
+
     if record.updated_at is None:
         record = dataclasses.replace(record, updated_at=_now_utc())
+
     return record
 
 

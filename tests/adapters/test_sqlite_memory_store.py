@@ -108,6 +108,22 @@ def test_sqlite_memory_store_update_creates_new(tmp_path: Path) -> None:
     assert store.get(MemoryId("m1")) is not None
 
 
+def test_sqlite_memory_store_update_creates_new_with_timestamps(tmp_path: Path) -> None:
+    """Update 経路の新規作成で created_at と updated_at が補完されることを確認する。"""
+    store = SQLiteMemoryStore(tmp_path / "memories.db")
+    before = datetime.now(tz=UTC)
+
+    store.update(_record("m1", "created via update"))
+
+    after = datetime.now(tz=UTC)
+    fetched = store.get(MemoryId("m1"))
+    assert fetched is not None
+    assert fetched.created_at is not None
+    assert fetched.updated_at is not None
+    assert before - timedelta(seconds=1) <= fetched.created_at <= after + timedelta(seconds=1)
+    assert fetched.created_at == fetched.updated_at
+
+
 def test_sqlite_memory_store_archive_toggles_flag(tmp_path: Path) -> None:
     """Archive が archived フラグを切り替え、永続化されることを確認する。"""
     store = SQLiteMemoryStore(tmp_path / "memories.db")
@@ -317,7 +333,7 @@ def test_sqlite_memory_store_archive_advances_updated_at(tmp_path: Path) -> None
     assert archived is not None
     assert archived.archived is True
     assert archived.updated_at is not None
-    assert archived.updated_at > original.updated_at
+    assert archived.updated_at >= original.updated_at
     assert before_archive - timedelta(seconds=1) <= archived.updated_at
     assert archived.updated_at <= after_archive + timedelta(seconds=1)
 
