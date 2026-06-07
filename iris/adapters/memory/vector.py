@@ -7,7 +7,7 @@ from math import isclose, sqrt
 from typing import override
 
 from iris.adapters.memory.ports import MemoryStore
-from iris.contracts.memory import MemoryQuery, MemoryRecord, MemorySearchResult
+from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
 
 EmbeddingFunction = Callable[[str], Sequence[float]]
 
@@ -30,6 +30,21 @@ class InMemoryVectorMemoryStore(MemoryStore):
         self._entries: list[tuple[MemoryRecord, tuple[float, ...]]] = []
         for record in records:
             self.put(record)
+
+    @override
+    def get(self, memory_id: MemoryId) -> MemoryRecord | None:
+        """指定 ID のメモリレコードを返す。
+
+        Args:
+            memory_id: 検索するメモリ ID。
+
+        Returns:
+            MemoryRecord | None: 一致したレコード。存在しない場合は None。
+        """
+        for record, _vector in self._entries:
+            if record.id == memory_id:
+                return record
+        return None
 
     @override
     def put(self, record: MemoryRecord) -> None:

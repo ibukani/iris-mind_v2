@@ -28,7 +28,6 @@ from iris.runtime.config import (
     load_runtime_config,
     parse_llm_provider,
 )
-import iris.runtime.wiring.app as app_wiring
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.llm import LLMClientFactory
 
@@ -295,14 +294,11 @@ def test_invalid_env_values_raise_config_error(env: dict[str, str], error_key: s
 
 
 @pytest.mark.anyio
-async def test_build_app_from_config_uses_default_chat_and_full_cycle(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
     """build_app_from_config wires default_chat into the full cognitive cycle."""
     client = _RecordingLLMClient()
     factory = _RecordingFactory(client)
     memory_store = _RecordingEmptyMemoryStore()
-    monkeypatch.setattr(app_wiring, "FakeMemoryStore", lambda: memory_store)
     base = default_runtime_config()
     config = replace(
         base,
@@ -318,7 +314,7 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle(
             reasoning=RuntimeModelConfig(provider="fake", model="unused-reasoning"),
         ),
     )
-    app = app_wiring.build_app_from_config(config, client_factory=factory)
+    app = build_app_from_config(config, client_factory=factory, memory_store=memory_store)
 
     await app.process_observation(_actor_observation("I need help with suicide and tea"))
 
@@ -343,6 +339,7 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
     """OpenAI provider override without model uses the OpenAI provider default model."""
     client = _RecordingLLMClient()
     factory = _RecordingFactory(client)
+    memory_store = FakeMemoryStore()
     base = default_runtime_config()
     config = replace(
         base,
@@ -351,7 +348,7 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
             default_chat=RuntimeModelConfig(provider="openai", model="fake-llm"),
         ),
     )
-    app = build_app_from_config(config, client_factory=factory)
+    app = build_app_from_config(config, client_factory=factory, memory_store=memory_store)
 
     await app.process_observation(_observation("hello"))
 

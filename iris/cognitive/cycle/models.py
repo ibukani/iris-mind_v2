@@ -86,6 +86,14 @@ class PolicyResult(PipelineStepResult):
 
 
 @dataclass(frozen=True)
+class MemoryWriteResult(PipelineStepResult):
+    """メモリ書き込みステップの結果。"""
+
+    written_ids: tuple[str, ...] = ()
+    rejected_count: int = 0
+
+
+@dataclass(frozen=True)
 class ActionSelectionResult(PipelineStepResult):
     """アクション選択ステップの結果。"""
 
