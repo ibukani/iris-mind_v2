@@ -39,7 +39,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         self._init_db()
 
     def _init_db(self) -> None:
-        """Create the memories table and filter indexes if missing."""
+        """Create the memories table, filter indexes, and FTS5 virtual table if missing."""
         with self._transaction() as conn:
             conn.execute(
                 """
@@ -63,6 +63,14 @@ class SQLiteMemoryStore(MutableMemoryStore):
             conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_space_id ON memories(space_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_kind ON memories(kind);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_archived ON memories(archived);")
+            conn.execute(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts5 USING fts5(
+                    text,
+                    memory_id UNINDEXED
+                );
+                """
+            )
 
     def _connect(self) -> sqlite3.Connection:
         """Get a configured sqlite3 connection.
@@ -84,6 +92,79 @@ class SQLiteMemoryStore(MutableMemoryStore):
         with contextlib.closing(self._connect()) as conn, conn:
             yield conn
 
+    def search_fts5(self, query: MemoryQuery) -> Sequence[MemorySearchResult]:
+        """FTS5 全文検索でメモリレコードを返す。
+
+        BM25 ランク付き。actor_id / space_id / kind / archived
+        フィルタは post-filter 。
+
+        Args:
+            query: 検索クエリ。
+
+        Returns:
+            Sequence[MemorySearchResult]: スコア降順の検索結果。
+        """
+        if query.limit <= 0:
+            return ()
+
+        with self._transaction() as conn:
+            cursor = conn.execute(
+                """
+                SELECT memory_id, rank
+                FROM memories_fts5
+                WHERE memories_fts5 MATCH ?
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (query.text, query.limit * 4),
+            )
+            raw_rows = cursor.fetchall()
+
+        results: list[MemorySearchResult] = []
+        for row in raw_rows:
+            record = self.get(MemoryId(row["memory_id"]))
+            if record is None or not _matches_query(record, query):
+                continue
+            score = -float(row["rank"])
+            results.append(MemorySearchResult(record=record, score=score))
+            if len(results) >= query.limit:
+                break
+        return tuple(results)
+
+    def _sync_fts5(
+        self,
+        memory_id: MemoryId,
+        text: str,
+        *,
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
+        """FTS5 インデックスを単一レコードで同期する。
+
+        Args:
+            memory_id: 同期対象のメモリ ID。
+            text: インデックス対象テキスト。
+            conn: 既存の接続。省略時は新しいトランザクションを開く。
+        """
+        if conn is not None:
+            conn.execute(
+                "DELETE FROM memories_fts5 WHERE memory_id = ?",
+                (str(memory_id),),
+            )
+            conn.execute(
+                "INSERT INTO memories_fts5(text, memory_id) VALUES(?, ?)",
+                (text, str(memory_id)),
+            )
+            return
+        with self._transaction() as c:
+            c.execute(
+                "DELETE FROM memories_fts5 WHERE memory_id = ?",
+                (str(memory_id),),
+            )
+            c.execute(
+                "INSERT INTO memories_fts5(text, memory_id) VALUES(?, ?)",
+                (text, str(memory_id)),
+            )
+
     @override
     def put(self, record: MemoryRecord) -> None:
         """Insert a new memory record with normalized timestamps.
@@ -103,6 +184,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
                 """,
                 _record_to_row(normalized),
             )
+            self._sync_fts5(record.id, record.text, conn=conn)
 
     @override
     def get(self, memory_id: MemoryId) -> MemoryRecord | None:
@@ -151,6 +233,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
                 """,
                 _record_to_row(normalized),
             )
+            self._sync_fts5(record.id, record.text, conn=conn)
         return self.get(record.id) or record
 
     @override
@@ -174,6 +257,13 @@ class SQLiteMemoryStore(MutableMemoryStore):
                 "UPDATE memories SET archived = ?, updated_at = ? WHERE memory_id = ?",
                 (1 if archived else 0, now_iso, str(memory_id)),
             )
+            cursor = conn.execute(
+                "SELECT text FROM memories WHERE memory_id = ?",
+                (str(memory_id),),
+            )
+            text_row = cursor.fetchone()
+            if text_row is not None:
+                self._sync_fts5(memory_id, text_row["text"], conn=conn)
             cursor = conn.execute(
                 "SELECT * FROM memories WHERE memory_id = ?",
                 (str(memory_id),),
@@ -364,6 +454,24 @@ def _parse_datetime(value: object) -> datetime | None:
     if isinstance(value, datetime):
         return value
     return datetime.fromisoformat(str(value))
+
+
+def _matches_query(record: MemoryRecord, query: MemoryQuery) -> bool:
+    """レコードが MemoryQuery のフィルタ条件に一致するか判定する。
+
+    Args:
+        record: 判定対象のメモリレコード。
+        query: フィルタ条件を含むクエリ。
+
+    Returns:
+        bool: すべての条件を満たす場合は True 。
+    """
+    return (
+        (query.include_archived or not record.archived)
+        and (query.actor_id is None or record.actor_id == query.actor_id)
+        and (query.space_id is None or record.space_id == query.space_id)
+        and (query.kind is None or record.kind == query.kind)
+    )
 
 
 def _score_record(record: MemoryRecord, terms: tuple[str, ...]) -> int:

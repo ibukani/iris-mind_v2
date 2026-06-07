@@ -101,6 +101,18 @@ class LangChainMemoryStore(MemoryStore):
         self._document_factory = document_factory or _load_document_factory()
 
     @override
+    def get(self, memory_id: MemoryId) -> MemoryRecord | None:
+        """指定 ID のメモリレコードを返す。
+
+        LangChain ベクターストアに標準的な get-by-id API がないため、
+        現在は None を返す。必要に応じて継承クラスで上書きする。
+
+        Returns:
+            MemoryRecord | None: 常に None 。
+        """
+        return None
+
+    @override
     def put(self, record: MemoryRecord) -> None:
         """メモリレコードをベクターストアに保存する。
 

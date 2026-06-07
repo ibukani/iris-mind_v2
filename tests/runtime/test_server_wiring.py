@@ -8,6 +8,7 @@ from pathlib import Path
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.cognitive.memory.hybrid import HybridMemoryRetriever
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateConfig
@@ -26,10 +27,10 @@ def _read_app_wiring_source() -> str:
     return _MODULE_PATH.read_text(encoding="utf-8")
 
 
-def test_build_runtime_components_passes_state_memory_store_to_cycle(
+def test_build_runtime_components_uses_hybrid_retrieval_for_sqlite(
     tmp_path: Path,
 ) -> None:
-    """build_runtime_components injects the state-wired memory_store into the cycle."""
+    """SQLite バックエンドではハイブリッド検索が有効化される。"""
     db_path = tmp_path / "state.db"
     config = default_runtime_config()
     config = replace(
@@ -49,10 +50,9 @@ def test_build_runtime_components_passes_state_memory_store_to_cycle(
         if isinstance(step, MemoryRetrievalStep)
     ]
     assert len(retrieval_steps) == 1
-    assert (
-        retrieval_steps[0]._retriever  # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
-        is components.stores.memory_store
-    )
+    retriever = retrieval_steps[0]._retriever  # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
+    assert isinstance(retriever, HybridMemoryRetriever)
+    assert retriever._fts._store is components.stores.memory_store  # type: ignore[attr-defined] # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
 
 
 def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> None:

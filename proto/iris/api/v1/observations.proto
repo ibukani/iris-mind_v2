@@ -34,7 +34,7 @@ message ObservationContext {
   // External clients should not send internal account_id or device_id.
   string account_id = 2;
   string device_id = 3;
-  
+
   string space_id = 4;
 
   // Should be "cli" for iris-cli_v2.
@@ -42,7 +42,7 @@ message ObservationContext {
 
   // External clients should usually send account_ref to identify the user.
   ExternalAccountRef account_ref = 6;
-  
+
   map<string, string> metadata = 7;
 
   // space_ref is optional and represents interaction context.

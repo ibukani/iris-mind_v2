@@ -10,16 +10,20 @@ from typing import TYPE_CHECKING
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
+from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.cognitive.action.response import ResponseGenerationStep
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
     wire_policy_affect_memory_aware_text_response_cognitive_cycle,
     wire_text_response_cognitive_cycle,
 )
-from iris.runtime.wiring.llm import LLMClientFactory
+from iris.runtime.wiring.llm import LLMClientFactory, wire_response_generator
+from iris.runtime.wiring.memory import wire_sqlite_hybrid_memory_retriever
 
 if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
     from iris.adapters.memory.ports import MemoryStore
+    from iris.adapters.memory.vector import EmbeddingFunction
     from iris.runtime.config import IrisRuntimeConfig
 
 
@@ -113,18 +117,22 @@ def build_app_from_config(
     *,
     client_factory: LLMClientFactory | None = None,
     memory_store: MemoryStore,
+    embed_text: EmbeddingFunction | None = None,
 ) -> IrisApp:
     """ランタイム設定から IrisApp を構築する。
 
     ``default_chat`` モデルスロットを完全な認知サイクルへ組み込む。
     ``memory_store`` は必須引数であり、ランタイム配線は ``wire_runtime_state``
     で組み立てた永続化/編集可能なストアを明示注入する。
+    ``embed_text`` を指定すると SQLiteMemoryStore に対してハイブリッド検索を有効化する。
 
     Args:
         config: ランタイム設定。
         client_factory: 任意の明示的 LLM クライアントファクトリ。
         memory_store: 認知サイクルのメモリ検索に利用する ``MemoryStore``。
             ランタイム設定から組み立てた ``MutableMemoryStore`` を渡す想定。
+        embed_text: テキストベクトル用の埋め込み関数。
+            SQLiteMemoryStore と組み合わせてハイブリッド検索を有効化する。
 
     Returns:
         完全に組み立てられた IrisApp インスタンス。
@@ -133,11 +141,28 @@ def build_app_from_config(
     factory = client_factory or LLMClientFactory()
     client = factory.create_client(model_config, config)
     model = factory.resolve_model(model_config, config)
+
+    memory_retriever = None
+    vector_index = None
+    if embed_text is not None and isinstance(memory_store, SQLiteMemoryStore):
+        memory_retriever, vector_index = wire_sqlite_hybrid_memory_retriever(
+            store=memory_store,
+            embed_text=embed_text,
+        )
+
+    response_generator = ResponseGenerationStep(
+        wire_response_generator(
+            client,
+            model=model,
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_output_tokens,
+        )
+    )
     cycle = wire_policy_affect_memory_aware_text_response_cognitive_cycle(
         memory_store=memory_store,
         llm_client=client,
-        model=model,
-        temperature=model_config.temperature,
-        max_tokens=model_config.max_output_tokens,
+        memory_retriever=memory_retriever,
+        vector_index=vector_index,
+        response_generator=response_generator,
     )
     return IrisApp(cycle=cycle)

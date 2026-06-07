@@ -34,6 +34,6 @@ message ExternalAccountRef {
 
   // Should usually be ACTOR_KIND_HUMAN for a human user.
   ActorKind actor_kind = 4;
-  
+
   map<string, string> metadata = 5;
 }

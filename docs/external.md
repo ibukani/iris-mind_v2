@@ -146,7 +146,7 @@ message ExternalSpaceRef {
 解決の流れの例:
 ```text
 ExternalSpaceRef(provider="discord", provider_space_ref="123")
-→ SpaceBinding(space_id="bound-space-...") 
+→ SpaceBinding(space_id="bound-space-...")
 → 存在しない場合はフォールバックとして決定論的 SpaceId(space-discord-<hash>) を生成
 ```
 

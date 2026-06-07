@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
+from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.runtime.config import RuntimeConfigOverrides, load_runtime_config
 from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.service import IrisRuntimeService
@@ -22,6 +23,8 @@ from iris.runtime.wiring.grpc import create_grpc_server
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from iris.runtime.app import IrisApp
     from iris.runtime.config import IrisRuntimeConfig
 
@@ -36,12 +39,23 @@ class RuntimeComponents:
     space_resolver: EphemeralSpaceResolver
 
 
+def _fake_embed_text(text: str) -> Sequence[float]:
+    """プレースホルダー埋め込み関数（ハイブリッド検索有効化用）。
+
+    Returns:
+        Sequence[float]: 固定ゼロベクトル。
+    """
+    _ = text
+    return [0.0] * 384
+
+
 def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     """ランタイム設定から永続ストアとサービス境界を組み立てる。
 
     メモリ検索は ``wire_runtime_state`` で組み立てたメモリストアを
     ``build_app_from_config`` に明示注入する。``FakeMemoryStore`` への
     フォールバックは持たない。
+    SQLite バックエンドの場合はハイブリッド検索を有効化する。
 
     Args:
         config: ランタイム設定。
@@ -50,7 +64,14 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         ランタイムコンポーネント。
     """
     stores = wire_runtime_state(config)
-    app: IrisApp = build_app_from_config(config, memory_store=stores.memory_store)
+    embed_text = None
+    if isinstance(stores.memory_store, SQLiteMemoryStore):
+        embed_text = _fake_embed_text
+    app: IrisApp = build_app_from_config(
+        config,
+        memory_store=stores.memory_store,
+        embed_text=embed_text,
+    )
     runtime_service = IrisRuntimeService(app)
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
     space_resolver = EphemeralSpaceResolver()
