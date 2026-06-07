@@ -1,0 +1,50 @@
+schema_version = 2
+id = "iris-mind"
+display_name = "Iris Mind V2"
+kind = "server"
+runtime = "python"
+
+[setup]
+required_tools = ["uv", "python"]
+check_files = ["pyproject.toml", "iris/runtime/server.py", ".iris/config/llm.example.toml"]
+
+[launch]
+cwd = "."
+command = "uv"
+args = [
+  "run",
+  "python",
+  "-m",
+  "iris.runtime.server",
+  "--config",
+  ".iris/config/llm.toml",
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "50051",
+]
+
+[health]
+type = "tcp"
+host = "127.0.0.1"
+port = 50051
+
+[logs]
+stdout = true
+stderr = true
+
+[[commands.quick_check]]
+cwd = "."
+command = "make"
+args = ["quick"]
+
+[[commands.full_check]]
+cwd = "."
+command = "make"
+args = ["check"]
+
+[[config_templates]]
+target = ".iris/config/llm.toml"
+source = ".iris/config/llm.example.toml"
+method = "copy"
+overwrite = false
