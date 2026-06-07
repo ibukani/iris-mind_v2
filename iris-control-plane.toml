@@ -33,12 +33,12 @@ port = 50051
 stdout = true
 stderr = true
 
-[[commands.quick_check]]
+[commands.quick_check]
 cwd = "."
 command = "make"
 args = ["quick"]
 
-[[commands.full_check]]
+[commands.full_check]
 cwd = "."
 command = "make"
 args = ["check"]
