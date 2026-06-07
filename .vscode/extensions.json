@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    "charliermarsh.ruff",
+    "ms-python.mypy-type-checker",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "tamasfe.even-better-toml",
+    "zxh404.vscode-proto3",
+    "eamodio.gitlens",
+    "ms-vscode.makefile-tools",
+    "yzhang.markdown-all-in-one"
+  ]
+}

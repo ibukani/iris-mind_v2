@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Iris: Runtime Server",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "iris.runtime.server",
+      "args": ["--host", "127.0.0.1", "--port", "50051"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Iris: Runtime Server (config)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "iris.runtime.server",
+      "args": ["--config", ".iris/config/llm.toml", "--host", "127.0.0.1", "--port", "50051"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Pytest: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["${file}", "-q", "--tb=short"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Pytest: Architecture Tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["tests/architecture", "-q", "--tb=short"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Pytest: All Tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["tests", "-q", "--tb=short"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}
