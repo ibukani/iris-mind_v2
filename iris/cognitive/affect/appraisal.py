@@ -9,7 +9,7 @@ from iris.cognitive.affect.common import clamp_value, format_vad_summary, label_
 from iris.cognitive.affect.mood import update_mood
 from iris.cognitive.cycle.models import AppraisalResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.cognitive.workspace.frame import AffectSnapshot, WorkspaceFrame
+from iris.cognitive.workspace.frame import AffectSnapshot, WorkspaceFrame, interpreted_input_text
 
 _POSITIVE_KEYWORDS = (
     "ありがとう",
@@ -116,14 +116,15 @@ class AppraisalStep(PipelineStep[AppraisalResult]):
         Returns:
             AppraisalResult: 感情評価結果。入力がない場合は SKIPPED。
         """
-        if frame.interpreted_input is None or frame.interpreted_input.text is None:
+        text = interpreted_input_text(frame)
+        if text is None:
             return AppraisalResult(
                 step_name=self.name,
                 status=StepStatus.SKIPPED,
                 reason="no interpreted input text",
             )
 
-        appraisal = classify_appraisal(frame.interpreted_input.text)
+        appraisal = classify_appraisal(text)
         mood = update_mood(frame.affect, appraisal, elapsed_seconds=self._elapsed_seconds)
         return AppraisalResult(
             step_name=self.name,

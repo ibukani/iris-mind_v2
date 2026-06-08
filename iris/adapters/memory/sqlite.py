@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
-from datetime import UTC, datetime
 import json
 from pathlib import Path
 import sqlite3
@@ -19,11 +18,12 @@ from iris.contracts.memory import (
     MemoryRecord,
     MemorySearchResult,
 )
-from iris.core.datetime_utils import parse_datetime
+from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.core.ids import ActorId, ObservationId, SpaceId
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
+    from datetime import datetime
 
 
 class SQLiteMemoryStore(MutableMemoryStore):
@@ -147,7 +147,8 @@ class SQLiteMemoryStore(MutableMemoryStore):
             text: インデックス対象テキスト。
             conn: 既存の接続。省略時は新しいトランザクションを開く。
         """
-        if conn is not None:
+
+        def _sync(conn: sqlite3.Connection) -> None:
             conn.execute(
                 "DELETE FROM memories_fts5 WHERE memory_id = ?",
                 (str(memory_id),),
@@ -156,16 +157,12 @@ class SQLiteMemoryStore(MutableMemoryStore):
                 "INSERT INTO memories_fts5(text, memory_id) VALUES(?, ?)",
                 (text, str(memory_id)),
             )
+
+        if conn is not None:
+            _sync(conn)
             return
         with self._transaction() as c:
-            c.execute(
-                "DELETE FROM memories_fts5 WHERE memory_id = ?",
-                (str(memory_id),),
-            )
-            c.execute(
-                "INSERT INTO memories_fts5(text, memory_id) VALUES(?, ?)",
-                (text, str(memory_id)),
-            )
+            _sync(c)
 
     @override
     def put(self, record: MemoryRecord) -> None:
@@ -247,7 +244,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         Returns:
             MemoryRecord | None: 更新後レコード。存在しない ID の場合は None。
         """
-        now_iso = datetime.now(tz=UTC).isoformat()
+        now_iso = now_utc().isoformat()
         with self._transaction() as conn:
             cursor = conn.execute(
                 "SELECT memory_id FROM memories WHERE memory_id = ?",
@@ -313,15 +310,6 @@ class SQLiteMemoryStore(MutableMemoryStore):
         return rank_text_matches(self.filter(query), query)
 
 
-def _now_utc() -> datetime:
-    """現在の timezone-aware UTC datetime を返す。
-
-    Returns:
-        datetime: timezone-aware な UTC タイムスタンプ。
-    """
-    return datetime.now(tz=UTC)
-
-
 def _normalize_for_put(record: MemoryRecord) -> MemoryRecord:
     """``put`` 用のタイムスタンプ正規化レコードを返す。
 
@@ -335,12 +323,12 @@ def _normalize_for_put(record: MemoryRecord) -> MemoryRecord:
         MemoryRecord: タイムスタンプを補完した新しいメモリレコード。
     """
     if record.created_at is None and record.updated_at is None:
-        now = _now_utc()
+        now = now_utc()
         return dataclasses.replace(record, created_at=now, updated_at=now)
     if record.created_at is None:
         created = record.updated_at
         if created is None:  # pragma: no cover -- defensive
-            created = _now_utc()
+            created = now_utc()
         return dataclasses.replace(record, created_at=created)
     if record.updated_at is None:
         return dataclasses.replace(record, updated_at=record.created_at)
@@ -373,19 +361,19 @@ def _normalize_for_update(
             return dataclasses.replace(
                 record,
                 created_at=existing_created,
-                updated_at=_now_utc(),
+                updated_at=now_utc(),
             )
-        now = _now_utc()
+        now = now_utc()
         return dataclasses.replace(record, created_at=now, updated_at=now)
 
     if record.created_at is None:
         if existing_created is not None:
             record = dataclasses.replace(record, created_at=existing_created)
         else:
-            record = dataclasses.replace(record, created_at=_now_utc())
+            record = dataclasses.replace(record, created_at=now_utc())
 
     if record.updated_at is None:
-        record = dataclasses.replace(record, updated_at=_now_utc())
+        record = dataclasses.replace(record, updated_at=now_utc())
 
     return record
 

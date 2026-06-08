@@ -125,6 +125,32 @@ def wire_memory_aware_text_response_cognitive_cycle(
     )
 
 
+def _build_memory_steps(
+    memory_store: MemoryStore | None,
+    *,
+    memory_retriever: MemoryRetriever | None,
+    vector_index: VectorMemoryIndex | None,
+) -> list[PipelineStep[PipelineStepResult]]:
+    """知覚とメモリステップを組み立てる。
+
+    Args:
+        memory_store: 任意の取得用メモリストア。
+        memory_retriever: 任意のメモリ検索レトリーバー。指定時は memory_store より優先。
+        vector_index: ベクトル検索インデックス。指定時は MemoryWriteStep で upsert する。
+
+    Returns:
+        list[PipelineStep[PipelineStepResult]]: 組み立てられたステップリスト。
+    """
+    steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
+    if memory_retriever is not None:
+        steps.append(MemoryRetrievalStep(memory_retriever))
+    elif memory_store is not None:
+        steps.append(MemoryRetrievalStep(memory_store))
+    if memory_store is not None and isinstance(memory_store, MutableMemoryStore):
+        steps.append(MemoryWriteStep(store=memory_store, vector_index=vector_index))
+    return steps
+
+
 def wire_affect_memory_aware_text_response_cognitive_cycle(
     memory_store: MemoryStore | None = None,
     llm_client: LLMClient | None = None,
@@ -147,13 +173,11 @@ def wire_affect_memory_aware_text_response_cognitive_cycle(
     Returns:
         知覚・任意のメモリ・アプレイザル・関係・応答生成を含む CognitiveCycle。
     """
-    steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
-    if memory_retriever is not None:
-        steps.append(MemoryRetrievalStep(memory_retriever))
-    elif memory_store is not None:
-        steps.append(MemoryRetrievalStep(memory_store))
-    if memory_store is not None and isinstance(memory_store, MutableMemoryStore):
-        steps.append(MemoryWriteStep(store=memory_store, vector_index=vector_index))
+    steps = _build_memory_steps(
+        memory_store,
+        memory_retriever=memory_retriever,
+        vector_index=vector_index,
+    )
     if response_generator is None:
         response_generator = ResponseGenerationStep(wire_response_generator(llm_client))
     steps.extend(
@@ -189,13 +213,11 @@ def wire_policy_affect_memory_aware_text_response_cognitive_cycle(
         知覚・任意のメモリ・書き込み・アプレイザル・関係・
         ポリシー抑制・応答生成を含む CognitiveCycle。
     """
-    steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
-    if memory_retriever is not None:
-        steps.append(MemoryRetrievalStep(memory_retriever))
-    elif memory_store is not None:
-        steps.append(MemoryRetrievalStep(memory_store))
-    if memory_store is not None and isinstance(memory_store, MutableMemoryStore):
-        steps.append(MemoryWriteStep(store=memory_store, vector_index=vector_index))
+    steps = _build_memory_steps(
+        memory_store,
+        memory_retriever=memory_retriever,
+        vector_index=vector_index,
+    )
     if response_generator is None:
         response_generator = ResponseGenerationStep(wire_response_generator(llm_client))
     steps.extend(

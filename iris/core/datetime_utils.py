@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 def parse_datetime(value: object) -> datetime | None:
@@ -19,3 +19,12 @@ def parse_datetime(value: object) -> datetime | None:
     if isinstance(value, datetime):
         return value
     return datetime.fromisoformat(str(value))
+
+
+def now_utc() -> datetime:
+    """現在の timezone-aware UTC datetime を返す。
+
+    Returns:
+        datetime: timezone-aware な UTC タイムスタンプ。
+    """
+    return datetime.now(tz=UTC)

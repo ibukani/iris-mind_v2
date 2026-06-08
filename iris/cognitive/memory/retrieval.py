@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Protocol, override
 
 from iris.cognitive.cycle.models import MemoryRetrievalResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
+from iris.cognitive.workspace.frame import interpreted_input_text
 from iris.contracts.memory import MemoryQuery, MemorySearchResult
 
 if TYPE_CHECKING:
@@ -45,7 +46,8 @@ class MemoryRetrievalStep(PipelineStep[MemoryRetrievalResult]):
         Returns:
             MemoryRetrievalResult: 取得されたメモリ。入力がない場合は SKIPPED。
         """
-        if frame.interpreted_input is None or frame.interpreted_input.text is None:
+        text = interpreted_input_text(frame)
+        if text is None:
             return MemoryRetrievalResult(
                 step_name=self.name,
                 status=StepStatus.SKIPPED,
@@ -54,7 +56,7 @@ class MemoryRetrievalStep(PipelineStep[MemoryRetrievalResult]):
             )
 
         query = MemoryQuery(
-            text=frame.interpreted_input.text,
+            text=text,
             actor_id=(frame.actor_context.actor.actor_id if frame.actor_context.actor else None),
             space_id=frame.space_context.space_id,
             limit=self._limit,

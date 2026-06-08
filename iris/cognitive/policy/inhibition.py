@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import PolicyResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
+from iris.cognitive.workspace.frame import interpreted_input_text
 from iris.contracts.policy import ActionPreference, PolicyConstraint
 
 if TYPE_CHECKING:
@@ -110,9 +111,10 @@ def _constraints_for_relationship(frame: WorkspaceFrame) -> tuple[PolicyConstrai
 
 
 def _constraints_for_input_notes(frame: WorkspaceFrame) -> tuple[PolicyConstraint, ...]:
-    if frame.interpreted_input is None or frame.interpreted_input.text is None:
+    text = interpreted_input_text(frame)
+    if text is None:
         return ()
-    text = frame.interpreted_input.text.casefold()
+    text = text.casefold()
     if not any(term in text for term in _SELF_HARM_OR_ABUSE_TERMS):
         return ()
     return (
