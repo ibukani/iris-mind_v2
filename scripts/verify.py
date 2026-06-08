@@ -2,6 +2,11 @@
 
 This script is intentionally small and deterministic so coding agents can use a
 single command (`make check` or `make verify`) before reporting completion.
+
+Failure analysis is integrated directly: when a check fails, the script prints
+its failure class, the first failing file or test, and the recommended next
+command.  This replaces the manual `.agents/checklists/failure-analysis.md`
+steps with an automated, repeatable diagnostic.
 """
 
 from __future__ import annotations
@@ -9,6 +14,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import sys
 from typing import TYPE_CHECKING
 
@@ -29,6 +35,16 @@ COVERAGE_ARGS: tuple[str, ...] = (
     "--cov-fail-under=90",
 )
 
+_RECOMMENDATIONS: dict[str, str] = {
+    "lint": "make lint-fix  OR  uv run ruff check .",
+    "format": "make format-write  OR  uv run ruff format .",
+    "type": "make type  OR  uv run mypy iris tests scripts main.py",
+    "pyright": "make pyright  OR  uv run pyright .",
+    "architecture": "make arch  OR  uv run pytest tests/architecture -q",
+    "tests+coverage": ("make ai-test-target TARGET=<failing_test>  OR  make coverage"),
+    "environment": "Check uv environment and tool versions with make doctor",
+}
+
 
 @dataclass(frozen=True)
 class Check:
@@ -37,15 +53,33 @@ class Check:
     name: str
     command: tuple[str, ...]
     full_only: bool = False
+    failure_class: str = "environment"
 
 
 CHECKS: tuple[Check, ...] = (
-    Check("lint", ("uv", "run", "ruff", "check", ".")),
-    Check("format", ("uv", "run", "ruff", "format", "--check", ".")),
-    Check("type", ("uv", "run", "mypy", *MYPY_TARGETS)),
-    Check("pyright", ("uv", "run", "pyright", ".")),
-    Check("architecture", ("uv", "run", "pytest", "tests/architecture", "-q")),
-    Check("tests+coverage", ("uv", "run", "pytest", "tests/", *COVERAGE_ARGS), full_only=True),
+    Check("lint", ("uv", "run", "ruff", "check", "."), failure_class="lint"),
+    Check(
+        "format",
+        ("uv", "run", "ruff", "format", "--check", "."),
+        failure_class="format",
+    ),
+    Check("type", ("uv", "run", "mypy", *MYPY_TARGETS), failure_class="type"),
+    Check(
+        "pyright",
+        ("uv", "run", "pyright", "."),
+        failure_class="pyright",
+    ),
+    Check(
+        "architecture",
+        ("uv", "run", "pytest", "tests/architecture", "-q"),
+        failure_class="architecture",
+    ),
+    Check(
+        "tests+coverage",
+        ("uv", "run", "pytest", "tests/", *COVERAGE_ARGS),
+        full_only=True,
+        failure_class="tests+coverage",
+    ),
 )
 
 
@@ -89,8 +123,37 @@ def selected_checks(*, quick: bool) -> tuple[Check, ...]:
     return CHECKS
 
 
+def _first_failing_location(stdout: str) -> str | None:
+    """Extract the first failing file or test from tool stdout.
+
+    Args:
+        stdout: Captured standard output from the check command.
+
+    Returns:
+        File path (with optional line number) or pytest node id, or None.
+    """
+    # pytest: FAILED tests/path.py::test_name
+    match = re.search(r"FAILED\s+(\S+)", stdout)
+    if match:
+        return match.group(1)
+    # ruff / mypy / pyright: file.py:line:col ... or file.py:line: error:
+    match = re.search(r"(.+?\.py):(\d+):", stdout)
+    if match:
+        return f"{match.group(1)}:{match.group(2)}"
+    # ruff format --check lists plain filenames that need reformatting.
+    match = re.search(r"(\S+\.py)", stdout)
+    if match:
+        return match.group(1)
+    return None
+
+
 def run_check(check: Check) -> int:
     """Execute a single verification check via subprocess.
+
+    Captures stdout so that, on failure, an automated failure-analysis
+    block can be printed: failure class, first failing location, and the
+    recommended focused next command.  This mirrors the manual checklist
+    in ``.agents/checklists/failure-analysis.md``.
 
     Args:
         check: The check to run.
@@ -101,11 +164,31 @@ def run_check(check: Check) -> int:
     command_text = " ".join(check.command)
     sys.stdout.write(f"\n==> {check.name}: {command_text}\n")
     sys.stdout.flush()
-    completed = _run_command(check.command, cwd=REPO_ROOT, check=False)
+    completed = _run_command(
+        check.command,
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
     if completed.returncode == 0:
         sys.stdout.write(f"==> {check.name}: passed\n")
     else:
-        sys.stdout.write(f"==> {check.name}: failed with exit code {completed.returncode}\n")
+        stdout = completed.stdout or ""
+        stderr = completed.stderr or ""
+        if stdout:
+            sys.stdout.write(stdout)
+        if stderr:
+            sys.stdout.write(stderr)
+        location = _first_failing_location(stdout)
+        recommendation = _RECOMMENDATIONS.get(check.failure_class, "")
+        sys.stdout.write(f"\n==> {check.name}: failed with exit code {completed.returncode}\n")
+        sys.stdout.write(f"    class: {check.failure_class}\n")
+        if location:
+            sys.stdout.write(f"    first failure: {location}\n")
+        if recommendation:
+            sys.stdout.write(f"    next: {recommendation}\n")
+        sys.stdout.write("    note: do not relax config to pass; fix code or tests instead.\n")
     sys.stdout.flush()
     return completed.returncode
 
@@ -133,6 +216,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.write("\nVerification failed:\n")
         for name, exit_code in failures:
             sys.stdout.write(f"- {name}: exit code {exit_code}\n")
+        sys.stdout.write("\nFailure-analysis summary:\n")
+        for name, exit_code in failures:
+            check_match = next((c for c in CHECKS if c.name == name), None)
+            if check_match is not None:
+                rec = _RECOMMENDATIONS.get(check_match.failure_class, "")
+                sys.stdout.write(f"- {name} ({check_match.failure_class}): {rec}\n")
+            else:
+                sys.stdout.write(f"- {name}: exit code {exit_code}\n")
         sys.stdout.flush()
         return 1
 
