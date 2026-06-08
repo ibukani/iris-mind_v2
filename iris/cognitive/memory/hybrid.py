@@ -106,10 +106,11 @@ class MemoryReranker:
         Returns:
             Sequence[MemorySearchResult]: 統合スコア降順の結果。
         """
-        fts_scores = [fts for fts, _, _ in merged.values()]
-        vec_scores = [vec for _, vec, _ in merged.values()]
-        fts_max = max(fts_scores) if fts_scores else 1.0
-        vec_max = max(vec_scores) if vec_scores else 1.0
+        fts_max = float("-inf")
+        vec_max = float("-inf")
+        for fts_score, vec_score, _ in merged.values():
+            fts_max = max(fts_max, fts_score)
+            vec_max = max(vec_max, vec_score)
         if fts_max == 0:
             fts_max = 1.0
         if vec_max == 0:

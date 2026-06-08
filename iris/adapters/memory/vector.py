@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from math import isclose, sqrt
 from typing import override
 
 from iris.adapters.memory.ports import MemoryStore
+from iris.adapters.memory.utils import cosine_similarity, vector_from_embedding
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
 
 EmbeddingFunction = Callable[[str], Sequence[float]]
@@ -49,7 +49,7 @@ class InMemoryVectorMemoryStore(MemoryStore):
     @override
     def put(self, record: MemoryRecord) -> None:
         """メモリレコードを埋め込みベクターとともに保存する。"""
-        self._entries.append((record, _vector_from_embedding(self._embed_text(record.text))))
+        self._entries.append((record, vector_from_embedding(self._embed_text(record.text))))
 
     @override
     def search(self, query: MemoryQuery) -> Sequence[MemorySearchResult]:
@@ -61,41 +61,15 @@ class InMemoryVectorMemoryStore(MemoryStore):
         if query.limit <= 0:
             return ()
 
-        query_vector = _vector_from_embedding(self._embed_text(query.text))
+        query_vector = vector_from_embedding(self._embed_text(query.text))
         ranked: list[tuple[float, int, MemorySearchResult]] = []
         for index, (record, record_vector) in enumerate(self._entries):
             if query.actor_id is not None and record.actor_id != query.actor_id:
                 continue
             if query.space_id is not None and record.space_id != query.space_id:
                 continue
-            score = _cosine_similarity(query_vector, record_vector)
+            score = cosine_similarity(query_vector, record_vector)
             ranked.append((score, index, MemorySearchResult(record=record, score=score)))
 
         ranked.sort(key=lambda item: (-item[0], item[1]))
         return tuple(result for _, _, result in ranked[: query.limit])
-
-
-_ERR_EMPTY_EMBEDDING = "Embedding function must return at least one dimension."
-_ERR_DIMENSION_MISMATCH = "Embedding function must return vectors with stable dimensions."
-
-
-def _vector_from_embedding(values: Sequence[float]) -> tuple[float, ...]:
-    vector = tuple(float(value) for value in values)
-    if not vector:
-        raise ValueError(_ERR_EMPTY_EMBEDDING)
-    return vector
-
-
-def _cosine_similarity(left: tuple[float, ...], right: tuple[float, ...]) -> float:
-    if len(left) != len(right):
-        raise ValueError(_ERR_DIMENSION_MISMATCH)
-
-    left_norm = sqrt(sum(value * value for value in left))
-    right_norm = sqrt(sum(value * value for value in right))
-    if isclose(left_norm, 0.0) or isclose(right_norm, 0.0):
-        return 0.0
-
-    dot_product = sum(
-        left_value * right_value for left_value, right_value in zip(left, right, strict=True)
-    )
-    return dot_product / (left_norm * right_norm)

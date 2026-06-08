@@ -22,6 +22,9 @@ class RuntimeStateConfig:
     sqlite_path: str = ".iris/runtime/state.sqlite3"
 
 
+_VALID_BACKENDS: tuple[Literal["memory", "sqlite"], ...] = ("memory", "sqlite")
+
+
 def validate_backend(value: str, path: str) -> Literal["memory", "sqlite"]:
     """バックエンド名を検証し、型付きリテラルを返す。
 
@@ -35,10 +38,8 @@ def validate_backend(value: str, path: str) -> Literal["memory", "sqlite"]:
     Raises:
         ConfigError: バックエンド名が不正な場合。
     """
-    if value == "memory":
-        return "memory"
-    if value == "sqlite":
-        return "sqlite"
+    if value in _VALID_BACKENDS:
+        return value
     message = f"Invalid {path}: {value}"
     raise ConfigError(message)
 

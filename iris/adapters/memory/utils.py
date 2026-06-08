@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import isclose, sqrt
 from typing import TYPE_CHECKING
 
 from iris.contracts.memory import MemorySearchResult
@@ -72,3 +73,52 @@ def rank_text_matches(
 
     ranked.sort(key=lambda item: (-item[0], item[1]))
     return tuple(result for _, _, result in ranked[: query.limit])
+
+
+_ERR_EMPTY_EMBEDDING = "Embedding function must return at least one dimension."
+_ERR_DIMENSION_MISMATCH = "Vectors must have the same number of dimensions."
+
+
+def vector_from_embedding(values: Sequence[float]) -> tuple[float, ...]:
+    """Embedding 値を検証し tuple[float, ...] に変換する。
+
+    Args:
+        values: 埋め込み関数から返された float シーケンス。
+
+    Returns:
+        tuple[float, ...]: 検証済みベクトル。
+
+    Raises:
+        ValueError: ベクトルが空の場合。
+    """
+    vector = tuple(float(value) for value in values)
+    if not vector:
+        raise ValueError(_ERR_EMPTY_EMBEDDING)
+    return vector
+
+
+def cosine_similarity(left: tuple[float, ...], right: tuple[float, ...]) -> float:
+    """2 つのベクトル間のコサイン類似度を計算する。
+
+    Args:
+        left: 左辺ベクトル。
+        right: 右辺ベクトル。
+
+    Returns:
+        float: コサイン類似度 (範囲 -1.0 ~ 1.0)。いずれかのノルムが 0 の場合は 0.0。
+
+    Raises:
+        ValueError: ベクトル次元が一致しない場合。
+    """
+    if len(left) != len(right):
+        raise ValueError(_ERR_DIMENSION_MISMATCH)
+
+    left_norm = sqrt(sum(value * value for value in left))
+    right_norm = sqrt(sum(value * value for value in right))
+    if isclose(left_norm, 0.0) or isclose(right_norm, 0.0):
+        return 0.0
+
+    dot_product = sum(
+        left_value * right_value for left_value, right_value in zip(left, right, strict=True)
+    )
+    return dot_product / (left_norm * right_norm)
