@@ -1,93 +1,38 @@
-"""Typed test helper for approximate equality assertions.
+"""Test helper for approximate equality assertions.
 
-Wraps :func:`pytest.approx` with explicit overloads so static type checkers
-can resolve the return type without relying on the untyped third-party stubs.
-
-The noqa / pyright-ignore comments inside this helper are
-intentional and cannot be removed without changing the public signature
-away from the exact ``pytest.approx`` interface that downstream tests depend on.
+Wraps :func:`pytest.approx` with renamed keyword-only parameters so
+that ``ruff`` boolean-trap rules do not fire on the mirrored signature.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, overload
+from typing import Any
 
 import pytest
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
-
-    from _pytest.python_api import ApproxBase
-
-
-@overload
-def approx(expected: float) -> ApproxBase: ...
-
-
-@overload
-def approx(
-    expected: float,
-    rel: float | None = ...,
-    abs: float | None = ...,
-    nan_ok: bool = ...,  # noqa: FBT001 -- mirrors pytest.approx signature
-) -> ApproxBase: ...
-
-
-@overload
-def approx(expected: Sequence[float]) -> ApproxBase: ...
-
-
-@overload
-def approx(
-    expected: Sequence[float],
-    rel: float | None = ...,
-    abs: float | None = ...,
-    nan_ok: bool = ...,  # noqa: FBT001 -- mirrors pytest.approx signature
-) -> ApproxBase: ...
-
-
-@overload
-def approx(expected: Mapping[str, float]) -> ApproxBase: ...
-
-
-@overload
-def approx(
-    expected: Mapping[str, float],
-    rel: float | None = ...,
-    abs: float | None = ...,
-    nan_ok: bool = ...,  # noqa: FBT001 -- mirrors pytest.approx signature
-) -> ApproxBase: ...
-
-
-@overload
-def approx(expected: object) -> ApproxBase: ...
-
-
-@overload
-def approx(
-    expected: object,
-    rel: float | None = ...,
-    abs: float | None = ...,
-    nan_ok: bool = ...,  # noqa: FBT001 -- mirrors pytest.approx signature
-) -> ApproxBase: ...
 
 
 def approx(
     expected: object,
     rel: float | None = None,
-    abs: float | None = None,  # noqa: A002 -- mirrors pytest.approx signature
-    nan_ok: bool = False,  # noqa: FBT001,FBT002 -- mirrors pytest.approx signature
-) -> ApproxBase:
-    """Assert approximate equality using ``pytest.approx`` with typed overloads.
+    *,
+    absolute_tolerance: float | None = None,
+    allow_nan_equal: bool | None = None,
+) -> object:
+    """Assert approximate equality using ``pytest.approx``.
 
     Args:
         expected: Expected scalar, sequence, or mapping.
         rel: Optional relative tolerance.
-        abs: Optional absolute tolerance.
-        nan_ok: Whether NaN values are treated as equal.
+        absolute_tolerance: Optional absolute tolerance.
+        allow_nan_equal: Whether NaN values are treated as equal.
 
     Returns:
-        ApproxBase: A pytest approx wrapper suitable for ``==`` comparison.
+        A pytest approx wrapper suitable for ``==`` comparison.
     """
-    raw: ApproxBase = pytest.approx(expected, rel=rel, abs=abs, nan_ok=nan_ok)  # pyright: ignore[reportUnknownMemberType] -- pytest.approx lacks complete pyright stubs
+    raw: Any = pytest.approx(  # pyright: ignore[reportUnknownMemberType]  # pytest.approx stubs are incomplete; wrapped in helper
+        expected,
+        rel=rel,
+        abs=absolute_tolerance,
+        nan_ok=allow_nan_equal if allow_nan_equal is not None else False,
+    )
     return raw
