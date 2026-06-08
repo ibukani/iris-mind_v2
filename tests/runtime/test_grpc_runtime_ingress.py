@@ -19,6 +19,7 @@ from iris.core.ids import SpaceId
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from iris.runtime.service import IrisRuntimeService, RuntimeResponse
+from tests.helpers.grpc_test import grpc_call
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -43,8 +44,10 @@ async def test_submit_observation_returns_presented_output() -> None:
     runtime_service = _RecordingRuntimeService("grpc response")
 
     async with _GrpcRuntimeHarness(runtime_service) as stub:
-        coro = stub.SubmitObservation(_actor_message_request())
-        response = cast("runtime_pb2.SubmitObservationResponse", await coro)  # type: ignore[misc]  # grpc stub sync return type
+        response = cast(
+            "runtime_pb2.SubmitObservationResponse",
+            await grpc_call(stub.SubmitObservation(_actor_message_request())),
+        )
     assert runtime_service.envelope is not None
     assert runtime_service.envelope.observation.kind.value == "actor_message"
     assert response.correlation_id == "corr-1"
@@ -67,7 +70,7 @@ async def test_submit_observation_invalid_request_returns_invalid_argument() -> 
             )
         )
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await coro  # type: ignore[misc]  # grpc stub sync return type
+            await grpc_call(coro)
 
     assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
 
@@ -78,7 +81,7 @@ async def test_submit_observation_runtime_failure_returns_internal() -> None:
     async with _GrpcRuntimeHarness(_FailingRuntimeService()) as stub:
         coro = stub.SubmitObservation(_actor_message_request())
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await coro  # type: ignore[misc]  # grpc stub sync return type
+            await grpc_call(coro)
 
     assert exc_info.value.code() is grpc.StatusCode.INTERNAL
 
@@ -90,8 +93,10 @@ async def test_submit_observation_with_account_ref_resolves_identity() -> None:
     resolver = FakeIdentityResolver()
 
     async with _GrpcRuntimeHarness(runtime_service, identity_resolver=resolver) as stub:
-        coro = stub.SubmitObservation(_account_ref_request())
-        response = cast("runtime_pb2.SubmitObservationResponse", await coro)  # type: ignore[misc]  # grpc stub sync return type
+        response = cast(
+            "runtime_pb2.SubmitObservationResponse",
+            await grpc_call(stub.SubmitObservation(_account_ref_request())),
+        )
     assert response.output.text == "account_ref response"
     assert runtime_service.envelope is not None
     actor = runtime_service.envelope.observation.context.actor
@@ -106,7 +111,7 @@ async def test_submit_observation_account_ref_without_resolver_is_invalid_argume
     async with _GrpcRuntimeHarness(_RecordingRuntimeService("unused")) as stub:
         coro = stub.SubmitObservation(_account_ref_request())
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await coro  # type: ignore[misc]  # grpc stub sync return type
+            await grpc_call(coro)
 
     assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
 
@@ -144,7 +149,7 @@ async def test_submit_observation_with_actor_and_account_ref_returns_invalid_arg
         _RecordingRuntimeService("unused"), identity_resolver=resolver
     ) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await stub.SubmitObservation(request)  # type: ignore[misc]  # grpc stub sync return type
+            await grpc_call(stub.SubmitObservation(request))
 
     assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
 
@@ -175,7 +180,7 @@ async def test_submit_observation_account_ref_and_account_id_is_invalid() -> Non
         _RecordingRuntimeService("unused"), identity_resolver=FakeIdentityResolver()
     ) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await stub.SubmitObservation(request)  # type: ignore[misc]  # grpc stub sync return type
+            await grpc_call(stub.SubmitObservation(request))
 
     assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
 
@@ -187,8 +192,10 @@ async def test_submit_observation_with_space_ref_resolves_space() -> None:
     resolver = _RecordingSpaceResolver()
 
     async with _GrpcRuntimeHarness(runtime_service, space_resolver=resolver) as stub:
-        coro = stub.SubmitObservation(_space_ref_request())
-        response = cast("runtime_pb2.SubmitObservationResponse", await coro)  # type: ignore[misc]  # grpc stub sync return type
+        response = cast(
+            "runtime_pb2.SubmitObservationResponse",
+            await grpc_call(stub.SubmitObservation(_space_ref_request())),
+        )
     assert response.output.text == "space_ref response"
     assert runtime_service.envelope is not None
     assert runtime_service.envelope.observation.context.space_id == "resolved-space-discord-chan-1"
@@ -200,7 +207,7 @@ async def test_submit_observation_space_ref_without_resolver_is_invalid_argument
     async with _GrpcRuntimeHarness(_RecordingRuntimeService("unused")) as stub:
         coro = stub.SubmitObservation(_space_ref_request())
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await coro  # type: ignore[misc]  # grpc stub sync return type
+            await grpc_call(coro)
 
     assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
 
@@ -216,7 +223,7 @@ async def test_submit_observation_with_space_ref_and_space_id_returns_invalid_ar
         _RecordingRuntimeService("unused"), space_resolver=resolver
     ) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await stub.SubmitObservation(request)  # type: ignore[misc]  # grpc stub sync return type
+            await grpc_call(stub.SubmitObservation(request))
 
     assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
 
@@ -242,8 +249,10 @@ async def test_submit_observation_with_account_ref_and_space_ref_succeeds() -> N
         identity_resolver=id_resolver,
         space_resolver=space_resolver,
     ) as stub:
-        coro = stub.SubmitObservation(request)
-        response = cast("runtime_pb2.SubmitObservationResponse", await coro)  # type: ignore[misc]  # grpc stub sync return type
+        response = cast(
+            "runtime_pb2.SubmitObservationResponse",
+            await grpc_call(stub.SubmitObservation(request)),
+        )
     assert response.output.text == "both response"
     assert runtime_service.envelope is not None
     assert runtime_service.envelope.observation.context.space_id == "resolved-space-discord-chan-1"
@@ -256,8 +265,10 @@ async def test_get_runtime_info_returns_supported_features() -> None:
     """GetRuntimeInfoがサポートする機能とバージョン情報を返すことを確認する。"""
     async with _GrpcRuntimeHarness(_RecordingRuntimeService("unused")) as stub:
         request = runtime_pb2.GetRuntimeInfoRequest()
-        coro = stub.GetRuntimeInfo(request)
-        response = cast("runtime_pb2.GetRuntimeInfoResponse", await coro)  # type: ignore[misc]  # grpc stub sync return type
+        response = cast(
+            "runtime_pb2.GetRuntimeInfoResponse",
+            await grpc_call(stub.GetRuntimeInfo(request)),
+        )
 
     assert response.runtime_name == "iris-mind"
     assert response.runtime_version == "0.1.0"
@@ -308,8 +319,10 @@ async def test_submit_observation_with_cli_like_request_succeeds() -> None:
         identity_resolver=id_resolver,
         space_resolver=space_resolver,
     ) as stub:
-        coro = stub.SubmitObservation(request)
-        response = cast("runtime_pb2.SubmitObservationResponse", await coro)  # type: ignore[misc]  # grpc stub sync return type
+        response = cast(
+            "runtime_pb2.SubmitObservationResponse",
+            await grpc_call(stub.SubmitObservation(request)),
+        )
 
     assert response.correlation_id == "cli-req-1"
     assert response.output.text == "cli response"

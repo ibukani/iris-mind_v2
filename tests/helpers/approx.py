@@ -2,6 +2,10 @@
 
 Wraps :func:`pytest.approx` with explicit overloads so static type checkers
 can resolve the return type without relying on the untyped third-party stubs.
+
+The noqa / pyright-ignore comments inside this helper are
+intentional and cannot be removed without changing the public signature
+away from the exact ``pytest.approx`` interface that downstream tests depend on.
 """
 
 from __future__ import annotations

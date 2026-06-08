@@ -1,0 +1,142 @@
+"""Tests for LLM wiring factory functions and edge cases."""
+
+from __future__ import annotations
+
+from typing import cast
+
+import pytest
+
+from iris.adapters.llm.fake import FakeLLMClient
+from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
+from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
+from iris.cognitive.action.response import ResponsePrompt
+from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime_config
+from iris.runtime.wiring.llm import (
+    LLMClientFactory,
+    LLMResponseGenerator,
+    wire_fake_llm_client,
+    wire_ollama_llm_client,
+    wire_openai_llm_client,
+    wire_response_generator,
+)
+from tests.helpers.private_access import get_private_attr, get_private_attr_path, import_private
+
+
+def test_wire_fake_llm_client_returns_fake() -> None:
+    """wire_fake_llm_client returns a FakeLLMClient."""
+    client = wire_fake_llm_client()
+    assert isinstance(client, FakeLLMClient)
+
+
+def test_wire_fake_llm_client_with_responses() -> None:
+    """wire_fake_llm_client passes responses through."""
+    client = wire_fake_llm_client(responses=("a", "b"))
+    assert get_private_attr(client, "_responses") == ("a", "b")
+
+
+def test_wire_openai_llm_client_returns_client() -> None:
+    """wire_openai_llm_client returns an OpenAILLMClient."""
+    config = OpenAIConfig(model="gpt-test", api_key="test-key")
+    client = cast("OpenAILLMClient", wire_openai_llm_client(config))
+    assert get_private_attr_path(client, "_config", "model") == "gpt-test"
+
+
+def test_wire_ollama_llm_client_returns_client() -> None:
+    """wire_ollama_llm_client returns an OllamaLLMClient."""
+    config = OllamaConfig(model="qwen3:8b")
+    client = cast("OllamaLLMClient", wire_ollama_llm_client(config))
+    assert get_private_attr_path(client, "_config", "model") == "qwen3:8b"
+
+
+def test_wire_response_generator_uses_fake_when_client_none() -> None:
+    """wire_response_generator creates a fake client when client is None."""
+    gen = wire_response_generator(client=None)
+    assert isinstance(gen, LLMResponseGenerator)
+    assert isinstance(get_private_attr(gen, "_client"), FakeLLMClient)
+
+
+def _model_config_with_unknown_provider() -> RuntimeModelConfig:
+    """Build a RuntimeModelConfig with an invalid provider value at runtime.
+
+    Returns:
+        RuntimeModelConfig with provider set to "unknown".
+    """
+    # RuntimeModelConfig is frozen and provider is typed as LLMProvider Literal.
+    # To test the unknown-provider error path we bypass the dataclass invariant
+    # by directly mutating the underlying __dict__ through object.__setattr__.
+    model_config = RuntimeModelConfig(provider="fake", model="x")
+    object.__setattr__(model_config, "provider", "unknown")  # noqa: PLC2801 -- mutate frozen dataclass for error-path test
+    return model_config
+
+
+def test_llm_client_factory_create_client_unknown_provider() -> None:
+    """LLMClientFactory.create_client raises ConfigError for unknown provider."""
+    factory = LLMClientFactory()
+    config = default_runtime_config()
+    with pytest.raises(ConfigError, match="Unknown LLM provider"):
+        factory.create_client(_model_config_with_unknown_provider(), config)
+
+
+def test_llm_client_factory_resolve_model_unknown_provider() -> None:
+    """LLMClientFactory.resolve_model raises ConfigError for unknown provider."""
+    factory = LLMClientFactory()
+    config = default_runtime_config()
+    with pytest.raises(ConfigError, match="Unknown LLM provider"):
+        factory.resolve_model(_model_config_with_unknown_provider(), config)
+
+
+def test_ollama_adapter_config_replaces_fake_llm_model() -> None:
+    """_ollama_adapter_config replaces fake-llm with the Ollama default model."""
+    config = default_runtime_config()
+    model_config = RuntimeModelConfig(provider="ollama", model="fake-llm")
+    ollama_adapter_config = import_private("iris.runtime.wiring.llm", "_ollama_adapter_config")
+    result = ollama_adapter_config(model_config, config)
+    assert result.model == OllamaConfig().model
+
+
+def test_openai_adapter_config_replaces_fake_llm_model() -> None:
+    """_openai_adapter_config replaces fake-llm with the OpenAI default model."""
+    config = default_runtime_config()
+    model_config = RuntimeModelConfig(provider="openai", model="fake-llm")
+    openai_adapter_config = import_private("iris.runtime.wiring.llm", "_openai_adapter_config")
+    result = openai_adapter_config(model_config, config)
+    assert result.model == "gpt-5-mini"
+
+
+def test_openai_adapter_config_uses_runtime_max_tokens() -> None:
+    """_openai_adapter_config uses runtime max_output_tokens when model config has None."""
+    config = default_runtime_config()
+    model_config = RuntimeModelConfig(provider="openai", model="gpt-test")
+    openai_adapter_config = import_private("iris.runtime.wiring.llm", "_openai_adapter_config")
+    result = openai_adapter_config(model_config, config)
+    assert result.max_output_tokens == config.openai.max_output_tokens
+
+
+def test_build_user_content_with_no_sections() -> None:
+    """_build_user_content returns actor_text when no optional sections are present."""
+    build_user_content = import_private("iris.runtime.wiring.llm", "_build_user_content")
+    prompt = ResponsePrompt(
+        system_instruction="sys",
+        actor_text="hello",
+        memory_snippets=(),
+        affect_context=None,
+        relationship_context=None,
+        constraints=(),
+        goals=(),
+    )
+    content = build_user_content(prompt)
+    assert content == "hello"
+
+
+@pytest.mark.anyio
+async def test_llm_response_generator_builds_request() -> None:
+    """LLMResponseGenerator.builds an LLMRequest and calls the client."""
+    client = FakeLLMClient(responses=("reply",), model="test-model")
+    gen = LLMResponseGenerator(client, model="test-model")
+    prompt = ResponsePrompt(
+        system_instruction="You are helpful.",
+        actor_text="hi",
+    )
+    result = await gen.generate_response(prompt)
+    assert result.text == "reply"
+    assert result.model == "test-model"

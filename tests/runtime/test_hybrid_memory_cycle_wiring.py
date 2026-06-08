@@ -19,6 +19,7 @@ from iris.runtime.wiring.memory import (
     SQLiteFTS5MemoryRetriever,
     wire_sqlite_hybrid_memory_retriever,
 )
+from tests.helpers.private_access import get_private_attr
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -65,10 +66,10 @@ def test_wire_affect_cycle_uses_memory_retriever_over_store() -> None:
         memory_retriever=fake,
     )
 
-    steps = cycle._steps  # noqa: SLF001 -- test verifies private wiring  # pyright: ignore[reportPrivateUsage]
+    steps = get_private_attr(cycle, "_steps")
     retrieval_steps = [s for s in steps if isinstance(s, MemoryRetrievalStep)]
     assert len(retrieval_steps) == 1
-    assert retrieval_steps[0]._retriever is fake  # noqa: SLF001 -- test verifies private wiring  # pyright: ignore[reportPrivateUsage]
+    assert get_private_attr(retrieval_steps[0], "_retriever") is fake
 
 
 def test_wire_policy_cycle_passes_vector_index_to_write_step() -> None:
@@ -81,10 +82,10 @@ def test_wire_policy_cycle_passes_vector_index_to_write_step() -> None:
         vector_index=vector_index,
     )
 
-    steps = cycle._steps  # noqa: SLF001 -- test verifies private wiring  # pyright: ignore[reportPrivateUsage]
+    steps = get_private_attr(cycle, "_steps")
     write_steps = [s for s in steps if isinstance(s, MemoryWriteStep)]
     assert len(write_steps) == 1
-    assert write_steps[0]._vector_index is vector_index  # noqa: SLF001 -- test verifies private wiring  # pyright: ignore[reportPrivateUsage]
+    assert get_private_attr(write_steps[0], "_vector_index") is vector_index
 
 
 def test_sqlite_fts5_memory_retriever_delegates_to_store(tmp_path: Path) -> None:
