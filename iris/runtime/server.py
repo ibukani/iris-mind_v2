@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
+import sys
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -16,6 +18,7 @@ from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityRes
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.runtime.config import RuntimeConfigOverrides, load_runtime_config
+from iris.runtime.config.init import init_runtime_config, runtime_config_template
 from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.service import IrisRuntimeService
 from iris.runtime.wiring.app import build_app_from_config
@@ -145,7 +148,36 @@ def main() -> None:
         help="Server port",
     )
 
+    parser.set_defaults(init_config=False)
+    subparsers = parser.add_subparsers()
+    init_parser = subparsers.add_parser(
+        "init-config",
+        help="Create a local runtime config from the example template",
+    )
+    init_parser.add_argument(
+        "--path",
+        type=Path,
+        help="Target TOML configuration path",
+    )
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite the target configuration file if it already exists",
+    )
+    init_parser.add_argument(
+        "--print",
+        action="store_true",
+        dest="print_only",
+        help="Print the configuration template without writing a file",
+    )
+    init_parser.set_defaults(init_config=True)
+
     args = parser.parse_args()
+
+    init_config: bool = args.init_config
+    if init_config:
+        _run_init_config_command(args)
+        return
 
     host: str | None = args.host
     port_val: int | str | None = args.port
@@ -165,3 +197,26 @@ def main() -> None:
         )
     except KeyboardInterrupt:
         return
+
+
+def _run_init_config_command(args: argparse.Namespace) -> None:
+    target_path: Path | None = args.path
+    force: bool = args.force
+    print_only: bool = args.print_only
+
+    if print_only:
+        sys.stdout.write(runtime_config_template())
+        return
+
+    result = init_runtime_config(path=target_path, force=force)
+    if result.overwritten:
+        message = f"Runtime config overwritten: {result.path}"
+    elif result.created:
+        message = f"Runtime config created: {result.path}"
+    else:
+        message = f"Runtime config already exists: {result.path}"
+    sys.stdout.write(f"{message}\n")
+
+
+if __name__ == "__main__":
+    main()

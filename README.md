@@ -32,11 +32,12 @@ ollama pull deepseek-r1:8b
 
 ## ランタイム LLM 設定
 
-Iris には組み込みのデフォルトがあるため、上書きしたい値だけを記述すればよい。
-ローカルランタイム設定の推奨パスは `.iris/config/llm.toml`。コミット済みのサンプルから作成する:
+Iris は設定ファイルなしでも起動し、組み込みデフォルトを使う。
+ランタイム設定をカスタマイズしたい場合だけ、ローカル設定ファイルを明示的に作成する。
+推奨パスは `.iris/config/llm.toml`。
 
 ```bash
-cp .iris/config/llm.example.toml .iris/config/llm.toml
+uv run python -m iris.runtime.server init-config
 ```
 
 必要に応じてモデル名を編集し、次を実行する:
@@ -46,7 +47,7 @@ uv run python -m iris.runtime.server --config .iris/config/llm.toml
 ```
 
 `.iris/config/llm.toml` はローカル開発者用設定であり、コミットしない。
-`.iris/config/llm.example.toml` はコミット済みサンプルである。OpenAI の認証情報は TOML には書かず、`OPENAI_API_KEY` 環境変数で渡す。
+`.iris/config/llm.example.toml` はコミット済みサンプルである。OpenAI の認証情報などの秘密情報は TOML には書かず、`OPENAI_API_KEY` などの環境変数で渡す。
 
 ### 設定ソースの役割分担
 
