@@ -31,3 +31,67 @@ def test_mood_updates_from_current_appraisal() -> None:
     assert mood.valence == approx(-0.175)
     assert mood.arousal == approx(0.06999999999999999)
     assert mood.dominance == approx(-0.0875)
+
+
+def test_mood_label_positive() -> None:
+    """Valence >= threshold のとき label が positive になる。
+
+    elapsed_seconds=600.0 で decay=0.5 となり、ブレンド後の値 (0.3*0.85=0.255) が
+    threshold (0.2) を超えるようになる。
+    """
+    mood = update_mood(
+        AffectSnapshot(),
+        AffectSnapshot(valence=0.3, arousal=0.0, dominance=0.0),
+        elapsed_seconds=600.0,
+    )
+    assert mood.mood_label == "positive"
+
+
+def test_mood_label_distressed() -> None:
+    """Valence <= -threshold かつ arousal >= threshold のとき label が distressed になる。"""
+    mood = update_mood(
+        AffectSnapshot(),
+        AffectSnapshot(valence=-0.3, arousal=0.3, dominance=0.0),
+        elapsed_seconds=600.0,
+    )
+    assert mood.mood_label == "distressed"
+
+
+def test_mood_label_negative() -> None:
+    """Valence <= -threshold かつ arousal < threshold のとき label が negative になる。"""
+    mood = update_mood(
+        AffectSnapshot(),
+        AffectSnapshot(valence=-0.3, arousal=0.0, dominance=0.0),
+        elapsed_seconds=600.0,
+    )
+    assert mood.mood_label == "negative"
+
+
+def test_mood_label_uncertain() -> None:
+    """Dominance <= -threshold のとき label が uncertain になる。"""
+    mood = update_mood(
+        AffectSnapshot(),
+        AffectSnapshot(valence=0.0, arousal=0.0, dominance=-0.3),
+        elapsed_seconds=600.0,
+    )
+    assert mood.mood_label == "uncertain"
+
+
+def test_mood_label_alert() -> None:
+    """Arousal >= threshold のとき label が alert になる。"""
+    mood = update_mood(
+        AffectSnapshot(),
+        AffectSnapshot(valence=0.0, arousal=0.3, dominance=0.0),
+        elapsed_seconds=600.0,
+    )
+    assert mood.mood_label == "alert"
+
+
+def test_mood_label_none() -> None:
+    """すべてのしきい値を下回るとき label が None になる。"""
+    mood = update_mood(
+        AffectSnapshot(),
+        AffectSnapshot(valence=0.0, arousal=0.0, dominance=0.0),
+        elapsed_seconds=0.0,
+    )
+    assert mood.mood_label is None

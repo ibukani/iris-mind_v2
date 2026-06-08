@@ -7,6 +7,7 @@ import pytest
 from iris.adapters.memory.vector import InMemoryVectorMemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord
 from iris.core.ids import ActorId, SpaceId
+from tests.helpers.private_access import import_private
 
 
 def embed_text(text: str) -> tuple[float, float]:
@@ -86,3 +87,26 @@ def test_in_memory_vector_store_rejects_unstable_embedding_dimensions() -> None:
 
     with pytest.raises(ValueError, match="stable dimensions"):
         store.search(MemoryQuery(text="query"))
+
+
+def test_vector_from_embedding_rejects_empty() -> None:
+    """空の埋め込みベクトルに対して ValueError が発生する。"""
+    vector_from_embedding = import_private("iris.adapters.memory.vector", "_vector_from_embedding")
+    with pytest.raises(ValueError, match="at least one dimension"):
+        vector_from_embedding(())
+
+
+def test_cosine_similarity_rejects_dimension_mismatch() -> None:
+    """次元数が異なるベクトルに対して ValueError が発生する。"""
+    cosine_similarity = import_private("iris.adapters.memory.vector", "_cosine_similarity")
+    with pytest.raises(ValueError, match="stable dimensions"):
+        cosine_similarity((1.0, 0.0), (1.0,))
+
+
+def test_in_memory_vector_store_search_returns_empty_for_limit_zero() -> None:
+    """Limit <= 0 のとき空の結果を返す。"""
+    store = InMemoryVectorMemoryStore(
+        embed_text,
+        records=(MemoryRecord(id=MemoryId("m1"), text="tea"),),
+    )
+    assert store.search(MemoryQuery(text="tea", limit=0)) == ()

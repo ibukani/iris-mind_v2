@@ -14,6 +14,7 @@ from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateConfig
 from iris.runtime.server import build_runtime_components
 from iris.runtime.wiring.app import build_app_from_config
+from tests.helpers.private_access import get_private_attr, get_private_attr_path
 
 _MODULE_PATH = Path("iris/runtime/wiring/app.py")
 
@@ -41,18 +42,14 @@ def test_build_runtime_components_uses_hybrid_retrieval_for_sqlite(
     components = build_runtime_components(config)
 
     assert isinstance(components.stores.memory_store, SQLiteMemoryStore)
-    cycle = (
-        components.runtime_service._app._cycle  # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
-    )
+    cycle = get_private_attr_path(components.runtime_service, "_app", "_cycle")
     retrieval_steps = [
-        step
-        for step in cycle._steps  # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
-        if isinstance(step, MemoryRetrievalStep)
+        step for step in get_private_attr(cycle, "_steps") if isinstance(step, MemoryRetrievalStep)
     ]
     assert len(retrieval_steps) == 1
-    retriever = retrieval_steps[0]._retriever  # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
+    retriever = get_private_attr(retrieval_steps[0], "_retriever")
     assert isinstance(retriever, HybridMemoryRetriever)
-    assert retriever._fts._store is components.stores.memory_store  # type: ignore[attr-defined] # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
+    assert get_private_attr_path(retriever, "_fts", "_store") is components.stores.memory_store
 
 
 def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> None:
@@ -62,19 +59,12 @@ def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> 
     components = build_runtime_components(config)
 
     assert isinstance(components.stores.memory_store, InMemoryMemoryStore)
-    cycle = (
-        components.runtime_service._app._cycle  # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
-    )
+    cycle = get_private_attr_path(components.runtime_service, "_app", "_cycle")
     retrieval_steps = [
-        step
-        for step in cycle._steps  # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
-        if isinstance(step, MemoryRetrievalStep)
+        step for step in get_private_attr(cycle, "_steps") if isinstance(step, MemoryRetrievalStep)
     ]
     assert len(retrieval_steps) == 1
-    assert (
-        retrieval_steps[0]._retriever  # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
-        is components.stores.memory_store
-    )
+    assert get_private_attr(retrieval_steps[0], "_retriever") is components.stores.memory_store
 
 
 def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
@@ -91,7 +81,7 @@ def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
     components = build_runtime_components(config)
 
     assert (
-        components.identity_resolver._account_store  # noqa: SLF001 -- white-box wiring test  # pyright: ignore[reportPrivateUsage] -- white-box wiring test
+        get_private_attr(components.identity_resolver, "_account_store")
         is components.stores.account_store
     )
 
