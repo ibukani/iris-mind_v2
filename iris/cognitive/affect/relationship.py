@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, override
 
+from iris.cognitive.affect.common import clamp_value
 from iris.cognitive.cycle.models import RelationshipResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot, WorkspaceFrame
@@ -96,15 +97,15 @@ def update_relationship(
     Returns:
         RelationshipSnapshot: 親密度、親和性、信頼度が更新された関係スナップショット。
     """
-    familiarity = _clamp01(current.familiarity + 0.02)
-    affinity = _clamp_signed(current.affinity + affect.valence * 0.04)
+    familiarity = clamp_value(current.familiarity + 0.02, lower=0.0, upper=1.0)
+    affinity = clamp_value(current.affinity + affect.valence * 0.04)
     if affect.valence > _POSITIVE_VALENCE_TRUST_THRESHOLD:
         trust_delta = 0.015
     elif affect.valence < _NEGATIVE_VALENCE_TRUST_THRESHOLD:
         trust_delta = -0.01
     else:
         trust_delta = 0.0
-    trust = _clamp01(current.trust + trust_delta)
+    trust = clamp_value(current.trust + trust_delta, lower=0.0, upper=1.0)
     return replace(
         current,
         familiarity=familiarity,
@@ -120,11 +121,3 @@ def _summarize(actor_label: str | None, affinity: float, trust: float, familiari
         f"{label} relationship(affinity={affinity:.2f}, trust={trust:.2f}, "
         f"familiarity={familiarity:.2f})"
     )
-
-
-def _clamp01(value: float) -> float:
-    return max(0.0, min(1.0, value))
-
-
-def _clamp_signed(value: float) -> float:
-    return max(-1.0, min(1.0, value))
