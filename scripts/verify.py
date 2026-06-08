@@ -35,7 +35,7 @@ COVERAGE_ARGS: tuple[str, ...] = (
     "--cov-fail-under=90",
 )
 
-_RECOMMENDATIONS: dict[str, str] = {
+RECOMMENDATIONS: dict[str, str] = {
     "lint": "make lint-fix  OR  uv run ruff check .",
     "format": "make format-write  OR  uv run ruff format .",
     "type": "make type  OR  uv run mypy iris tests scripts main.py",
@@ -181,7 +181,7 @@ def run_check(check: Check) -> int:
         if stderr:
             sys.stdout.write(stderr)
         location = _first_failing_location(stdout)
-        recommendation = _RECOMMENDATIONS.get(check.failure_class, "")
+        recommendation = RECOMMENDATIONS.get(check.failure_class, "")
         sys.stdout.write(f"\n==> {check.name}: failed with exit code {completed.returncode}\n")
         sys.stdout.write(f"    class: {check.failure_class}\n")
         if location:
@@ -220,7 +220,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for name, exit_code in failures:
             check_match = next((c for c in CHECKS if c.name == name), None)
             if check_match is not None:
-                rec = _RECOMMENDATIONS.get(check_match.failure_class, "")
+                rec = RECOMMENDATIONS.get(check_match.failure_class, "")
                 sys.stdout.write(f"- {name} ({check_match.failure_class}): {rec}\n")
             else:
                 sys.stdout.write(f"- {name}: exit code {exit_code}\n")
