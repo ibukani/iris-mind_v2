@@ -138,7 +138,7 @@ class GrpcRuntimeMapper:
             device_id=DeviceId(context.device_id) if context.device_id else None,
             space_id=space_id,
             source=context.source or None,
-            metadata=dict(context.metadata.items()),
+            metadata=_metadata_dict(context.metadata),
         )
 
     async def _resolve_actor_from_context(
@@ -251,7 +251,7 @@ def external_account_ref_from_proto(
         display_name=account_ref.display_name,
         actor_kind=actor_kind,
         account_id=None,
-        metadata=dict(account_ref.metadata.items()),
+        metadata=_metadata_dict(account_ref.metadata),
     )
 
 
@@ -279,7 +279,7 @@ def external_space_ref_from_proto(
         provider_space_ref=ExternalRef(space_ref.provider_space_ref),
         display_name=space_ref.display_name,
         space_kind=space_kind,
-        metadata=dict(space_ref.metadata.items()),
+        metadata=_metadata_dict(space_ref.metadata),
     )
 
 

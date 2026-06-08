@@ -185,6 +185,37 @@ def parse_optional_float(value: TomlValue, path: str) -> float | None:
     return parse_float(value, path)
 
 
+def _env_parse[T, D](
+    env: Mapping[str, str],
+    key: str,
+    default: D,
+    parser: Callable[[str], T],
+    expected: str,
+) -> T | D:
+    """環境変数を共通パターンで読み込む。
+
+    Args:
+        env: 環境変数マッピング。
+        key: 変数名。
+        default: 変数が無い場合に返すデフォルト値。
+        parser: 値を変換する callable (float または int)。
+        expected: エラーメッセージに使う型名。
+
+    Returns:
+        パース済み値、またはデフォルト。
+
+    Raises:
+        ConfigError: 値を期待型として解釈できない場合。
+    """
+    value = env.get(key)
+    if value is None:
+        return default
+    try:
+        return parser(value)
+    except ValueError as exc:
+        raise ConfigError(_env_type_error_message(key, expected)) from exc
+
+
 def env_float(env: Mapping[str, str], key: str, default: float) -> float:
     """必須の float 環境変数を読む。
 
@@ -195,17 +226,8 @@ def env_float(env: Mapping[str, str], key: str, default: float) -> float:
 
     Returns:
         パース済み float 値、またはデフォルト。
-
-    Raises:
-        ConfigError: 値を float として解釈できない場合。
     """
-    value = env.get(key)
-    if value is None:
-        return default
-    try:
-        return float(value)
-    except ValueError as exc:
-        raise ConfigError(_env_type_error_message(key, "a float")) from exc
+    return _env_parse(env, key, default, float, "a float")
 
 
 def env_optional_float(env: Mapping[str, str], key: str, default: float | None) -> float | None:
@@ -218,17 +240,8 @@ def env_optional_float(env: Mapping[str, str], key: str, default: float | None) 
 
     Returns:
         パース済み float 値、``None``、またはデフォルト。
-
-    Raises:
-        ConfigError: 値を float として解釈できない場合。
     """
-    value = env.get(key)
-    if value is None:
-        return default
-    try:
-        return float(value)
-    except ValueError as exc:
-        raise ConfigError(_env_type_error_message(key, "a float")) from exc
+    return _env_parse(env, key, default, float, "a float")
 
 
 def env_optional_int(env: Mapping[str, str], key: str, default: int | None) -> int | None:
@@ -241,14 +254,5 @@ def env_optional_int(env: Mapping[str, str], key: str, default: int | None) -> i
 
     Returns:
         パース済み整数値、``None``、またはデフォルト。
-
-    Raises:
-        ConfigError: 値を整数として解釈できない場合。
     """
-    value = env.get(key)
-    if value is None:
-        return default
-    try:
-        return int(value)
-    except ValueError as exc:
-        raise ConfigError(_env_type_error_message(key, "an integer")) from exc
+    return _env_parse(env, key, default, int, "an integer")
