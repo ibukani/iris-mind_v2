@@ -208,6 +208,7 @@ Before changing code, read the relevant files in this order:
 8. `.agents/rules/typing.md`
 9. `.agents/rules/testing.md`
 10. The workflow under `.agents/workflows/` that matches the task
+11. The skill under `.agents/skills/` that matches the review scope, if any
 
 If a task touches existing behavior, also inspect the matching tests under `tests/` before editing.
 

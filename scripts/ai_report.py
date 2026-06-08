@@ -99,9 +99,10 @@ def main() -> int:
     write_bullets(
         "検証",
         [
-            "make ai-test-target TARGET=<必要なテスト>",
-            "make ai-quick",
+            "make check",
             "make ai-check",
+            "make ai-quick",
+            "make ai-test-target TARGET=tests/path.py::test_name",
         ],
     )
     write_bullets(

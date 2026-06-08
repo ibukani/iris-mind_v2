@@ -45,6 +45,14 @@ CHECKLISTS: tuple[str, ...] = (
     ".agents/checklists/failure-analysis.md",
 )
 
+SKILLS: tuple[str, ...] = (
+    ".agents/skills/architecture-review/SKILL.md",
+    ".agents/skills/entropy-audit/SKILL.md",
+    ".agents/skills/feature-boundary/SKILL.md",
+    ".agents/skills/prompt-compression/SKILL.md",
+    ".agents/skills/test-repair/SKILL.md",
+)
+
 COMMANDS: tuple[str, ...] = (
     "make ai-test-target TARGET=tests/path_or_file.py",
     "make ai-arch",
@@ -81,9 +89,10 @@ def main() -> int:
     write_section("Core instruction files", existing_paths(CORE_FILES))
     write_section("Task workflows", existing_paths(WORKFLOWS))
     write_section("Checklists", existing_paths(CHECKLISTS))
+    write_section("Skills", existing_paths(SKILLS))
     write_section("Verification commands", COMMANDS)
 
-    missing = missing_paths((*CORE_FILES, *WORKFLOWS, *CHECKLISTS))
+    missing = missing_paths((*CORE_FILES, *WORKFLOWS, *CHECKLISTS, *SKILLS))
     if missing:
         write_section("Missing expected files", missing)
         return 1
