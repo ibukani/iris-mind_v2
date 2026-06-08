@@ -81,9 +81,6 @@ mypy-init-return = true
 suppress-dummy-args = false
 suppress-none-returning = false
 
-[tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
-
 [tool.ruff.lint.flake8-pytest-style]
 fixture-parentheses = false
 mark-parentheses = false
