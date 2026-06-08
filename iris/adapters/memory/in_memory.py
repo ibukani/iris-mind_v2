@@ -10,15 +10,17 @@ import dataclasses
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.memory.ports import MutableMemoryStore
-from iris.contracts.memory import (
-    MemoryId,
-    MemoryQuery,
-    MemoryRecord,
-    MemorySearchResult,
-)
+from iris.adapters.memory.utils import matches_query, rank_text_matches
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from iris.contracts.memory import (
+        MemoryId,
+        MemoryQuery,
+        MemoryRecord,
+        MemorySearchResult,
+    )
 
 
 class InMemoryMemoryStore(MutableMemoryStore):
@@ -91,18 +93,7 @@ class InMemoryMemoryStore(MutableMemoryStore):
         Returns:
             Sequence[MemoryRecord]: フィルタ条件に一致したレコードのシーケンス。
         """
-        results: list[MemoryRecord] = []
-        for record in self._records:
-            if query.actor_id is not None and record.actor_id != query.actor_id:
-                continue
-            if query.space_id is not None and record.space_id != query.space_id:
-                continue
-            if query.kind is not None and record.kind != query.kind:
-                continue
-            if not query.include_archived and record.archived:
-                continue
-            results.append(record)
-        return tuple(results)
+        return tuple(record for record in self._records if matches_query(record, query))
 
     @override
     def search(self, query: MemoryQuery) -> Sequence[MemorySearchResult]:
@@ -111,24 +102,4 @@ class InMemoryMemoryStore(MutableMemoryStore):
         Returns:
             Sequence[MemorySearchResult]: スコア降順の検索結果。
         """
-        if query.limit <= 0:
-            return ()
-
-        eligible = self.filter(query)
-        terms = tuple(term.casefold() for term in query.text.split() if term.strip())
-        ranked: list[tuple[int, int, MemorySearchResult]] = []
-        for index, record in enumerate(eligible):
-            score = _score_record(record, terms)
-            if score <= 0:
-                continue
-            ranked.append((score, index, MemorySearchResult(record=record, score=float(score))))
-
-        ranked.sort(key=lambda item: (-item[0], item[1]))
-        return tuple(result for _, _, result in ranked[: query.limit])
-
-
-def _score_record(record: MemoryRecord, terms: tuple[str, ...]) -> int:
-    if not terms:
-        return 0
-    text = record.text.casefold()
-    return sum(1 for term in terms if term in text)
+        return rank_text_matches(self.filter(query), query)

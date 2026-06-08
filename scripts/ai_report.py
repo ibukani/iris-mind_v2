@@ -6,10 +6,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
-import subprocess  # noqa: S404 -- local report helper runs fixed git command tuples only
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from scripts._subprocess_runner import run as _run_command
 
 
 @dataclass(frozen=True)
@@ -33,7 +35,7 @@ def run_git(args: tuple[str, ...]) -> CommandResult:
         return CommandResult(("git", *args), 127, "", "git executable not found")
 
     command = (git_path, *args)
-    completed = subprocess.run(
+    completed = _run_command(
         command,
         cwd=REPO_ROOT,
         check=False,
@@ -97,9 +99,10 @@ def main() -> int:
     write_bullets(
         "検証",
         [
-            "make ai-test-target TARGET=<必要なテスト>",
-            "make ai-quick",
+            "make check",
             "make ai-check",
+            "make ai-quick",
+            "make ai-test-target TARGET=tests/path.py::test_name",
         ],
     )
     write_bullets(

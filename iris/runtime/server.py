@@ -39,13 +39,12 @@ class RuntimeComponents:
     space_resolver: EphemeralSpaceResolver
 
 
-def _fake_embed_text(text: str) -> Sequence[float]:
+def _fake_embed_text(_text: str) -> Sequence[float]:
     """プレースホルダー埋め込み関数（ハイブリッド検索有効化用）。
 
     Returns:
         Sequence[float]: 固定ゼロベクトル。
     """
-    _ = text
     return [0.0] * 384
 
 
@@ -166,7 +165,3 @@ def main() -> None:
         )
     except KeyboardInterrupt:
         return
-
-
-if __name__ == "__main__":
-    main()

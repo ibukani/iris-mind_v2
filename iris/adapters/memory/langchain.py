@@ -239,4 +239,7 @@ def _metadata_float(metadata: Mapping[str, object], key: str) -> float:
         return 0.0
     if isinstance(value, int | float):
         return float(value)
-    return float(str(value))
+    try:
+        return float(str(value))
+    except ValueError:
+        return 0.0

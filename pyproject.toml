@@ -54,10 +54,16 @@ preview = true
     # Pytest intentionally uses assert and public test function names.
     "S101",
     "PLR2004",
+    # Test methods in classes often do not use self and omit docstrings.
+    "PLR6301",
+    "D102",
 ]
 "scripts/**/*.py" = [
     # Scripts may invoke subprocesses as part of the local harness.
     "S603",
+    # Scripts may insert repo root into sys.path before importing sibling modules
+    # when run directly (e.g. python scripts/verify.py).
+    "E402",
 ]
 "tests/architecture/test_cognitive_runtime_anti_patterns.py" = [
     # Architecture tests are intentionally deeply nested for exhaustive checks.

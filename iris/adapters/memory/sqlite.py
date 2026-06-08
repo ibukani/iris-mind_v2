@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
-from datetime import UTC, datetime
 import json
 from pathlib import Path
 import sqlite3
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.memory.ports import MutableMemoryStore
+from iris.adapters.memory.utils import matches_query, rank_text_matches
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,
@@ -18,10 +18,12 @@ from iris.contracts.memory import (
     MemoryRecord,
     MemorySearchResult,
 )
+from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.core.ids import ActorId, ObservationId, SpaceId
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
+    from datetime import datetime
 
 
 class SQLiteMemoryStore(MutableMemoryStore):
@@ -123,7 +125,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         results: list[MemorySearchResult] = []
         for row in raw_rows:
             record = self.get(MemoryId(row["memory_id"]))
-            if record is None or not _matches_query(record, query):
+            if record is None or not matches_query(record, query):
                 continue
             score = -float(row["rank"])
             results.append(MemorySearchResult(record=record, score=score))
@@ -145,7 +147,8 @@ class SQLiteMemoryStore(MutableMemoryStore):
             text: インデックス対象テキスト。
             conn: 既存の接続。省略時は新しいトランザクションを開く。
         """
-        if conn is not None:
+
+        def _sync(conn: sqlite3.Connection) -> None:
             conn.execute(
                 "DELETE FROM memories_fts5 WHERE memory_id = ?",
                 (str(memory_id),),
@@ -154,16 +157,12 @@ class SQLiteMemoryStore(MutableMemoryStore):
                 "INSERT INTO memories_fts5(text, memory_id) VALUES(?, ?)",
                 (text, str(memory_id)),
             )
+
+        if conn is not None:
+            _sync(conn)
             return
         with self._transaction() as c:
-            c.execute(
-                "DELETE FROM memories_fts5 WHERE memory_id = ?",
-                (str(memory_id),),
-            )
-            c.execute(
-                "INSERT INTO memories_fts5(text, memory_id) VALUES(?, ?)",
-                (text, str(memory_id)),
-            )
+            _sync(c)
 
     @override
     def put(self, record: MemoryRecord) -> None:
@@ -245,7 +244,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         Returns:
             MemoryRecord | None: 更新後レコード。存在しない ID の場合は None。
         """
-        now_iso = datetime.now(tz=UTC).isoformat()
+        now_iso = now_utc().isoformat()
         with self._transaction() as conn:
             cursor = conn.execute(
                 "SELECT memory_id FROM memories WHERE memory_id = ?",
@@ -308,29 +307,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         Returns:
             Sequence[MemorySearchResult]: スコア降順の検索結果。
         """
-        if query.limit <= 0:
-            return ()
-
-        eligible = self.filter(query)
-        terms = tuple(term.casefold() for term in query.text.split() if term.strip())
-        ranked: list[tuple[int, int, MemorySearchResult]] = []
-        for index, record in enumerate(eligible):
-            score = _score_record(record, terms)
-            if score <= 0:
-                continue
-            ranked.append((score, index, MemorySearchResult(record=record, score=float(score))))
-
-        ranked.sort(key=lambda item: (-item[0], item[1]))
-        return tuple(result for _, _, result in ranked[: query.limit])
-
-
-def _now_utc() -> datetime:
-    """現在の timezone-aware UTC datetime を返す。
-
-    Returns:
-        datetime: timezone-aware な UTC タイムスタンプ。
-    """
-    return datetime.now(tz=UTC)
+        return rank_text_matches(self.filter(query), query)
 
 
 def _normalize_for_put(record: MemoryRecord) -> MemoryRecord:
@@ -346,12 +323,12 @@ def _normalize_for_put(record: MemoryRecord) -> MemoryRecord:
         MemoryRecord: タイムスタンプを補完した新しいメモリレコード。
     """
     if record.created_at is None and record.updated_at is None:
-        now = _now_utc()
+        now = now_utc()
         return dataclasses.replace(record, created_at=now, updated_at=now)
     if record.created_at is None:
         created = record.updated_at
         if created is None:  # pragma: no cover -- defensive
-            created = _now_utc()
+            created = now_utc()
         return dataclasses.replace(record, created_at=created)
     if record.updated_at is None:
         return dataclasses.replace(record, updated_at=record.created_at)
@@ -384,19 +361,19 @@ def _normalize_for_update(
             return dataclasses.replace(
                 record,
                 created_at=existing_created,
-                updated_at=_now_utc(),
+                updated_at=now_utc(),
             )
-        now = _now_utc()
+        now = now_utc()
         return dataclasses.replace(record, created_at=now, updated_at=now)
 
     if record.created_at is None:
         if existing_created is not None:
             record = dataclasses.replace(record, created_at=existing_created)
         else:
-            record = dataclasses.replace(record, created_at=_now_utc())
+            record = dataclasses.replace(record, created_at=now_utc())
 
     if record.updated_at is None:
-        record = dataclasses.replace(record, updated_at=_now_utc())
+        record = dataclasses.replace(record, updated_at=now_utc())
 
     return record
 
@@ -434,8 +411,8 @@ def _row_to_record(row: sqlite3.Row) -> MemoryRecord:
         source_observation_id=(
             ObservationId(source_observation_id_value) if source_observation_id_value else None
         ),
-        created_at=_parse_datetime(row["created_at"]),
-        updated_at=_parse_datetime(row["updated_at"]),
+        created_at=parse_datetime(row["created_at"]),
+        updated_at=parse_datetime(row["updated_at"]),
         archived=bool(row["archived"]),
         metadata=json.loads(metadata_raw) if metadata_raw else {},
     )
@@ -445,37 +422,3 @@ def _isoformat(value: datetime | None) -> str | None:
     if value is None:
         return None
     return value.isoformat()
-
-
-def _parse_datetime(value: object) -> datetime | None:
-    if not value:
-        return None
-
-    if isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(str(value))
-
-
-def _matches_query(record: MemoryRecord, query: MemoryQuery) -> bool:
-    """レコードが MemoryQuery のフィルタ条件に一致するか判定する。
-
-    Args:
-        record: 判定対象のメモリレコード。
-        query: フィルタ条件を含むクエリ。
-
-    Returns:
-        bool: すべての条件を満たす場合は True 。
-    """
-    return (
-        (query.include_archived or not record.archived)
-        and (query.actor_id is None or record.actor_id == query.actor_id)
-        and (query.space_id is None or record.space_id == query.space_id)
-        and (query.kind is None or record.kind == query.kind)
-    )
-
-
-def _score_record(record: MemoryRecord, terms: tuple[str, ...]) -> int:
-    if not terms:
-        return 0
-    text = record.text.casefold()
-    return sum(1 for term in terms if term in text)

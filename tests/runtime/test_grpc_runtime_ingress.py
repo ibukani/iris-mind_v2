@@ -13,13 +13,12 @@ from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver
 from iris.adapters.app_gateway.ports import SpaceResolver
 from iris.adapters.grpc.mappers import GrpcRuntimeMapper, timestamp_from_datetime
 from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
-from iris.contracts.actions import PresentedOutput
 from iris.contracts.spaces import InteractionSpace
 from iris.core.ids import SpaceId
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from iris.runtime.service import IrisRuntimeService, RuntimeResponse
-from tests.helpers.grpc_test import grpc_call
+from tests.helpers.grpc_test import RecordingRuntimeService, grpc_call
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -41,7 +40,7 @@ _OCCURRED_AT = datetime(2026, 6, 5, 13, 0, tzinfo=UTC)
 @pytest.mark.anyio
 async def test_submit_observation_returns_presented_output() -> None:
     """SubmitObservationがRuntimeServiceへ委譲しPresentedOutputを返すことを確認する。"""
-    runtime_service = _RecordingRuntimeService("grpc response")
+    runtime_service = RecordingRuntimeService("grpc response")
 
     async with _GrpcRuntimeHarness(runtime_service) as stub:
         response = cast(
@@ -57,7 +56,7 @@ async def test_submit_observation_returns_presented_output() -> None:
 @pytest.mark.anyio
 async def test_submit_observation_invalid_request_returns_invalid_argument() -> None:
     """Invalid proto inputがINVALID_ARGUMENTになることを確認する。"""
-    async with _GrpcRuntimeHarness(_RecordingRuntimeService("unused")) as stub:
+    async with _GrpcRuntimeHarness(RecordingRuntimeService("unused")) as stub:
         coro = stub.SubmitObservation(
             runtime_pb2.SubmitObservationRequest(
                 correlation_id="corr-1",
@@ -89,7 +88,7 @@ async def test_submit_observation_runtime_failure_returns_internal() -> None:
 @pytest.mark.anyio
 async def test_submit_observation_with_account_ref_resolves_identity() -> None:
     """account_refを持つSubmitObservationがgRPC境界でIdentityへ解決されることを確認する。"""
-    runtime_service = _RecordingRuntimeService("account_ref response")
+    runtime_service = RecordingRuntimeService("account_ref response")
     resolver = FakeIdentityResolver()
 
     async with _GrpcRuntimeHarness(runtime_service, identity_resolver=resolver) as stub:
@@ -108,7 +107,7 @@ async def test_submit_observation_with_account_ref_resolves_identity() -> None:
 @pytest.mark.anyio
 async def test_submit_observation_account_ref_without_resolver_is_invalid_argument() -> None:
     """resolver未注入でaccount_refを使うとINVALID_ARGUMENTになることを確認する。"""
-    async with _GrpcRuntimeHarness(_RecordingRuntimeService("unused")) as stub:
+    async with _GrpcRuntimeHarness(RecordingRuntimeService("unused")) as stub:
         coro = stub.SubmitObservation(_account_ref_request())
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await grpc_call(coro)
@@ -146,7 +145,7 @@ async def test_submit_observation_with_actor_and_account_ref_returns_invalid_arg
     )
 
     async with _GrpcRuntimeHarness(
-        _RecordingRuntimeService("unused"), identity_resolver=resolver
+        RecordingRuntimeService("unused"), identity_resolver=resolver
     ) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await grpc_call(stub.SubmitObservation(request))
@@ -177,7 +176,7 @@ async def test_submit_observation_account_ref_and_account_id_is_invalid() -> Non
     )
 
     async with _GrpcRuntimeHarness(
-        _RecordingRuntimeService("unused"), identity_resolver=FakeIdentityResolver()
+        RecordingRuntimeService("unused"), identity_resolver=FakeIdentityResolver()
     ) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await grpc_call(stub.SubmitObservation(request))
@@ -188,7 +187,7 @@ async def test_submit_observation_account_ref_and_account_id_is_invalid() -> Non
 @pytest.mark.anyio
 async def test_submit_observation_with_space_ref_resolves_space() -> None:
     """space_refを持つSubmitObservationがgRPC境界でInteractionSpaceへ解決されることを確認する。"""
-    runtime_service = _RecordingRuntimeService("space_ref response")
+    runtime_service = RecordingRuntimeService("space_ref response")
     resolver = _RecordingSpaceResolver()
 
     async with _GrpcRuntimeHarness(runtime_service, space_resolver=resolver) as stub:
@@ -204,7 +203,7 @@ async def test_submit_observation_with_space_ref_resolves_space() -> None:
 @pytest.mark.anyio
 async def test_submit_observation_space_ref_without_resolver_is_invalid_argument() -> None:
     """space_resolver未注入でspace_refを使うとINVALID_ARGUMENTになることを確認する。"""
-    async with _GrpcRuntimeHarness(_RecordingRuntimeService("unused")) as stub:
+    async with _GrpcRuntimeHarness(RecordingRuntimeService("unused")) as stub:
         coro = stub.SubmitObservation(_space_ref_request())
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await grpc_call(coro)
@@ -220,7 +219,7 @@ async def test_submit_observation_with_space_ref_and_space_id_returns_invalid_ar
     request.observation.context.space_id = "space-existing"
 
     async with _GrpcRuntimeHarness(
-        _RecordingRuntimeService("unused"), space_resolver=resolver
+        RecordingRuntimeService("unused"), space_resolver=resolver
     ) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await grpc_call(stub.SubmitObservation(request))
@@ -233,7 +232,7 @@ async def test_submit_observation_with_account_ref_and_space_ref_succeeds() -> N
     """account_refとspace_refの両方が設定され、両方のresolverが注入されている場合に成功することを確認する。"""
     id_resolver = FakeIdentityResolver()
     space_resolver = _RecordingSpaceResolver()
-    runtime_service = _RecordingRuntimeService("both response")
+    runtime_service = RecordingRuntimeService("both response")
 
     request = _space_ref_request()
     request.observation.context.account_ref.CopyFrom(
@@ -263,7 +262,7 @@ async def test_submit_observation_with_account_ref_and_space_ref_succeeds() -> N
 @pytest.mark.anyio
 async def test_get_runtime_info_returns_supported_features() -> None:
     """GetRuntimeInfoがサポートする機能とバージョン情報を返すことを確認する。"""
-    async with _GrpcRuntimeHarness(_RecordingRuntimeService("unused")) as stub:
+    async with _GrpcRuntimeHarness(RecordingRuntimeService("unused")) as stub:
         request = runtime_pb2.GetRuntimeInfoRequest()
         response = cast(
             "runtime_pb2.GetRuntimeInfoResponse",
@@ -283,7 +282,7 @@ async def test_submit_observation_with_cli_like_request_succeeds() -> None:
     """CLI想定のSubmitObservationリクエストが正しく受け付けられることを確認する。"""
     id_resolver = FakeIdentityResolver()
     space_resolver = _RecordingSpaceResolver()
-    runtime_service = _RecordingRuntimeService("cli response")
+    runtime_service = RecordingRuntimeService("cli response")
 
     request = runtime_pb2.SubmitObservationRequest(
         correlation_id="cli-req-1",
@@ -407,28 +406,6 @@ def _space_ref_request() -> runtime_pb2.SubmitObservationRequest:
             actor_message=observations_pb2.ActorMessagePayload(text="hello grpc"),
         ),
     )
-
-
-class _RecordingRuntimeService(IrisRuntimeService):
-    """Fake runtime service that records envelopes and returns fixed output."""
-
-    def __init__(self, text: str) -> None:
-        """Initialize with fixed response text."""
-        self._text = text
-        self.envelope: ObservationEnvelope | None = None
-
-    @override
-    async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
-        """Record envelope and return fixed RuntimeResponse.
-
-        Returns:
-            RuntimeResponse: Fixed runtime response.
-        """
-        self.envelope = envelope
-        return RuntimeResponse(
-            output=PresentedOutput(text=self._text),
-            correlation_id=envelope.correlation_id,
-        )
 
 
 class _FailingRuntimeService(IrisRuntimeService):

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, override
 
 import grpc
 import pytest
@@ -11,15 +10,10 @@ import pytest
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver
 from iris.adapters.grpc.mappers import GrpcRuntimeMapper, timestamp_from_datetime
 from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
-from iris.contracts.actions import PresentedOutput
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
-from iris.runtime.service import IrisRuntimeService, RuntimeResponse
 from iris.runtime.wiring.grpc import add_iris_runtime_servicer, create_grpc_server
-
-if TYPE_CHECKING:
-    from iris.runtime.service import ObservationEnvelope
-
+from tests.helpers.grpc_test import RecordingRuntimeService
 
 _OCCURRED_AT = datetime(2026, 6, 5, 14, 0, tzinfo=UTC)
 
@@ -28,7 +22,7 @@ _OCCURRED_AT = datetime(2026, 6, 5, 14, 0, tzinfo=UTC)
 async def test_add_iris_runtime_servicer_registers_servicer_without_resolver() -> None:
     """resolver未注入でもservicerが登録され、account_refはINVALID_ARGUMENTになることを確認する。"""
     server = grpc.aio.server()
-    add_iris_runtime_servicer(server, _RecordingRuntimeService("ok"))
+    add_iris_runtime_servicer(server, RecordingRuntimeService("ok"))
     port = server.add_insecure_port("127.0.0.1:0")
     await server.start()
     try:
@@ -44,7 +38,7 @@ async def test_add_iris_runtime_servicer_registers_servicer_without_resolver() -
 @pytest.mark.anyio
 async def test_add_iris_runtime_servicer_uses_injected_resolver() -> None:
     """注入されたresolverでaccount_refが解決されることを確認する。"""
-    runtime_service = _RecordingRuntimeService("resolved")
+    runtime_service = RecordingRuntimeService("resolved")
     server = grpc.aio.server()
     add_iris_runtime_servicer(server, runtime_service, identity_resolver=FakeIdentityResolver())
     port = server.add_insecure_port("127.0.0.1:0")
@@ -64,7 +58,7 @@ async def test_add_iris_runtime_servicer_uses_injected_resolver() -> None:
 async def test_create_grpc_server_returns_started_server() -> None:
     """create_grpc_serverがservicerを内包したserverを返すことを確認する。"""
     server = create_grpc_server(
-        _RecordingRuntimeService("created"),
+        RecordingRuntimeService("created"),
         port=0,
         identity_resolver=FakeIdentityResolver(),
     )
@@ -76,7 +70,7 @@ async def test_create_grpc_server_returns_started_server() -> None:
 @pytest.mark.anyio
 async def test_servicer_construction_uses_injected_mapper() -> None:
     """constructorへ渡したmapperがaccount_ref解決に使われることを確認する。"""
-    runtime_service = _RecordingRuntimeService("mapper")
+    runtime_service = RecordingRuntimeService("mapper")
     mapper = GrpcRuntimeMapper(identity_resolver=FakeIdentityResolver())
     servicer = IrisRuntimeGrpcServicer(runtime_service, mapper=mapper)
     server = grpc.aio.server()
@@ -127,25 +121,3 @@ def _account_ref_request() -> runtime_pb2.SubmitObservationRequest:
             actor_message=observations_pb2.ActorMessagePayload(text="hello grpc"),
         ),
     )
-
-
-class _RecordingRuntimeService(IrisRuntimeService):
-    """Fake runtime service that records envelopes and returns fixed output."""
-
-    def __init__(self, text: str) -> None:
-        """Initialize with fixed response text."""
-        self._text = text
-        self.envelope: ObservationEnvelope | None = None
-
-    @override
-    async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
-        """Record envelope and return fixed RuntimeResponse.
-
-        Returns:
-            RuntimeResponse: Fixed runtime response.
-        """
-        self.envelope = envelope
-        return RuntimeResponse(
-            output=PresentedOutput(text=self._text),
-            correlation_id=envelope.correlation_id,
-        )

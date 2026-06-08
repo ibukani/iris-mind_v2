@@ -7,9 +7,11 @@ help:
 	@echo "  make quick        - run lint, format, mypy, pyright, and architecture checks without coverage"
 	@echo "  make ai-check     - run full AI harness gate and keep going after failures"
 	@echo "  make ai-quick     - run fast AI harness gate and keep going after failures"
-	@echo "  make ai-context   - print AI harness context, workflows, checklists, and commands"
+	@echo "  make ai-context   - print AI harness context, workflows, checklists, skills, and commands"
 	@echo "  make ai-report    - print git-aware completion report skeleton"
 	@echo "  make ai-arch      - run architecture guard tests"
+	@echo "  make ai-skills    - list available on-demand skills"
+	@echo "  make ai-skill SKILL=<name> - display a specific skill (e.g. architecture-review)"
 	@echo "  make ai-test-target TARGET=tests/path.py::test_name - run focused tests without coverage"
 	@echo "  make lint         - run ruff lint with strict ALL-rule config"
 	@echo "  make lint-fix     - run ruff lint autofix after inspecting expected diff"
@@ -47,6 +49,19 @@ ai-report:
 
 ai-arch:
 	uv run pytest tests/architecture -q
+
+ai-skills:
+	@echo "Available skills:"
+	@for skill_dir in $$(ls .agents/skills/ | sort); do \
+		name=$$(basename $$skill_dir); \
+		desc=$$(sed -n '2,/^---$$/{s/^description: //p;}' .agents/skills/$$name/SKILL.md 2>/dev/null | head -n 1); \
+		printf "  %-24s %s\n" "$$name" "$$desc"; \
+	done
+
+ai-skill:
+	@test -n "$(SKILL)" || (echo "SKILL is required, e.g. make ai-skill SKILL=architecture-review" && exit 2)
+	@test -f .agents/skills/$(SKILL)/SKILL.md || (echo "Skill '$(SKILL)' not found" && exit 2)
+	@cat .agents/skills/$(SKILL)/SKILL.md
 
 ai-test-target:
 	@test -n "$(TARGET)" || (echo "TARGET is required, e.g. make ai-test-target TARGET=tests/runtime/test_no_action_flow.py::test_no_action_skips_presenter" && exit 2)

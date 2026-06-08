@@ -7,10 +7,13 @@ iris.generated package layout.
 from __future__ import annotations
 
 from pathlib import Path
-import subprocess  # noqa: S404 -- local generation script runs fixed protoc command
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from scripts._subprocess_runner import run as _run_command
+
 PROTO_DIR = REPO_ROOT / "proto"
 OUTPUT_DIR = REPO_ROOT / "iris" / "generated"
 
@@ -45,7 +48,7 @@ def main() -> int:
             f"--mypy_out={OUTPUT_DIR}",
             *[str(PROTO_DIR / p) for p in MESSAGE_PROTOS],
         ]
-        result = subprocess.run(msg_args, check=False)
+        result = _run_command(msg_args, check=False)
         if result.returncode != 0:
             return result.returncode
 
@@ -61,7 +64,7 @@ def main() -> int:
             f"--mypy_grpc_out={OUTPUT_DIR}",
             *[str(PROTO_DIR / p) for p in SERVICE_PROTOS],
         ]
-        result = subprocess.run(svc_args, check=False)
+        result = _run_command(svc_args, check=False)
         if result.returncode != 0:
             return result.returncode
 

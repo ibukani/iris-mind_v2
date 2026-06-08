@@ -37,6 +37,7 @@ Root entry files:
 5. Pick one workflow from `.agents/workflows/`.
 6. Use `.agents/checklists/pre-change.md` before editing.
 7. Use `.agents/checklists/done.md` before reporting completion.
+8. Use `.agents/skills/` for on-demand deep reviews (architecture, boundaries, entropy audit, test repair, prompt compression).
 
 ## Standard verification
 

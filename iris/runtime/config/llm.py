@@ -25,7 +25,8 @@ if TYPE_CHECKING:
 LLMProvider = Literal["fake", "ollama", "openai"]
 ModelSlotName = Literal["default_chat", "fast_judge", "reasoning"]
 
-_VALID_PROVIDERS: frozenset[str] = frozenset(("fake", "ollama", "openai"))
+_LLM_PROVIDERS: tuple[LLMProvider, ...] = ("fake", "ollama", "openai")
+_VALID_PROVIDERS: frozenset[str] = frozenset(_LLM_PROVIDERS)
 _MODEL_SLOTS: tuple[ModelSlotName, ...] = ("default_chat", "fast_judge", "reasoning")
 
 
@@ -54,12 +55,8 @@ def validate_provider(value: str, path: str) -> LLMProvider:
     Raises:
         ConfigError: 認識できないプロバイダー名の場合。
     """
-    if value == "fake":
-        return "fake"
-    if value == "ollama":
-        return "ollama"
-    if value == "openai":
-        return "openai"
+    if value in _LLM_PROVIDERS:
+        return value
     message = f"Invalid LLM provider for {path}: {value}"
     raise ConfigError(message)
 
@@ -392,11 +389,7 @@ def _replace_slot(
     Returns:
         スロットを差し替えた models config。
     """
-    if slot == "default_chat":
-        return replace(models, default_chat=config)
-    if slot == "fast_judge":
-        return replace(models, fast_judge=config)
-    return replace(models, reasoning=config)
+    return replace(models, **{slot: config})
 
 
 def _slot_config(

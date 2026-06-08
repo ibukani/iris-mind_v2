@@ -96,3 +96,17 @@ class WorkspaceFrame:
     policy_summary: str | None = None
     actor_context: ActorContextSnapshot = field(default_factory=ActorContextSnapshot)
     space_context: SpaceContextSnapshot = field(default_factory=SpaceContextSnapshot)
+
+
+def interpreted_input_text(frame: WorkspaceFrame) -> str | None:
+    """フレームから解釈済みテキスト入力を取得する。
+
+    Args:
+        frame: 対象のワークスペースフレーム。
+
+    Returns:
+        str | None: 解釈済みテキスト入力。存在しない場合は None。
+    """
+    if frame.interpreted_input is None:
+        return None
+    return frame.interpreted_input.text

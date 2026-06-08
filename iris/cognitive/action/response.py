@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING, Protocol, override
 
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
+from iris.cognitive.workspace.frame import WorkspaceFrame, interpreted_input_text
 from iris.contracts.actions import ActionPlan
 
 if TYPE_CHECKING:
-    from iris.cognitive.workspace.frame import WorkspaceFrame
     from iris.contracts.policy import PolicyConstraint
 
 
@@ -49,12 +49,13 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
     Returns:
         ResponsePrompt | None: 構築された応答プロンプト。入力テキストがない場合は None。
     """
-    if frame.interpreted_input is None or frame.interpreted_input.text is None:
+    text = interpreted_input_text(frame)
+    if text is None:
         return None
 
     return ResponsePrompt(
         system_instruction="Generate a concise text response for Iris.",
-        actor_text=frame.interpreted_input.text,
+        actor_text=text,
         memory_snippets=tuple(
             result.record.text for result in frame.memory_summary.retrieved_memories
         ),
