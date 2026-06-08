@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess  # noqa: S404 -- local gate runs fixed repository command tuples only
 import sys
 from typing import TYPE_CHECKING
 
@@ -17,6 +16,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
+
+from scripts._subprocess_runner import run as _run_command
 
 MYPY_TARGETS: tuple[str, ...] = ("iris", "tests", "scripts", "main.py")
 COVERAGE_ARGS: tuple[str, ...] = (
@@ -99,7 +101,7 @@ def run_check(check: Check) -> int:
     command_text = " ".join(check.command)
     sys.stdout.write(f"\n==> {check.name}: {command_text}\n")
     sys.stdout.flush()
-    completed = subprocess.run(check.command, cwd=REPO_ROOT, check=False)
+    completed = _run_command(check.command, cwd=REPO_ROOT, check=False)
     if completed.returncode == 0:
         sys.stdout.write(f"==> {check.name}: passed\n")
     else:
