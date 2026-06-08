@@ -389,11 +389,7 @@ def _replace_slot(
     Returns:
         スロットを差し替えた models config。
     """
-    if slot == "default_chat":
-        return replace(models, default_chat=config)
-    if slot == "fast_judge":
-        return replace(models, fast_judge=config)
-    return replace(models, reasoning=config)
+    return replace(models, **{slot: config})
 
 
 def _slot_config(
