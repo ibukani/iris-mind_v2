@@ -19,6 +19,32 @@ type TomlTable = dict[str, TomlValue]
 _load_toml: Callable[[BinaryIO], TomlTable] = tomllib.load
 
 
+def _type_error_message(path: str, expected: str) -> str:
+    """型不一致の統一エラーメッセージを生成する。
+
+    Args:
+        path: エラーメッセージに使う設定パス。
+        expected: 期待される型の説明文字列。
+
+    Returns:
+        フォーマット済みエラーメッセージ。
+    """
+    return f"Runtime config value '{path}' must be {expected}"
+
+
+def _env_type_error_message(key: str, expected: str) -> str:
+    """環境変数の型不一致統一エラーメッセージを生成する。
+
+    Args:
+        key: 環境変数名。
+        expected: 期待される型の説明文字列。
+
+    Returns:
+        フォーマット済みエラーメッセージ。
+    """
+    return f"Environment variable {key} must be {expected}"
+
+
 def load_toml(file: BinaryIO) -> TomlTable:
     """TOML ドキュメントを、開いているバイナリファイルから読み込む。
 
@@ -68,8 +94,7 @@ def parse_string(value: TomlValue, path: str) -> str:
     """
     if isinstance(value, str):
         return value
-    message = f"Runtime config value '{path}' must be a string"
-    raise ConfigError(message)
+    raise ConfigError(_type_error_message(path, "a string"))
 
 
 def parse_optional_string(value: TomlValue, path: str) -> str | None:
@@ -87,8 +112,7 @@ def parse_optional_string(value: TomlValue, path: str) -> str | None:
     """
     if value is None or isinstance(value, str):
         return value
-    message = f"Runtime config value '{path}' must be a string or null"
-    raise ConfigError(message)
+    raise ConfigError(_type_error_message(path, "a string or null"))
 
 
 def parse_int(value: TomlValue, path: str) -> int:
@@ -105,12 +129,10 @@ def parse_int(value: TomlValue, path: str) -> int:
         ConfigError: 値が整数ではない場合。
     """
     if isinstance(value, bool):
-        message = f"Runtime config value '{path}' must be an integer"
-        raise ConfigError(message)
+        raise ConfigError(_type_error_message(path, "an integer"))
     if isinstance(value, int):
         return value
-    message = f"Runtime config value '{path}' must be an integer"
-    raise ConfigError(message)
+    raise ConfigError(_type_error_message(path, "an integer"))
 
 
 def parse_optional_int(value: TomlValue, path: str) -> int | None:
@@ -142,12 +164,10 @@ def parse_float(value: TomlValue, path: str) -> float:
         ConfigError: 値が数値でない場合。
     """
     if isinstance(value, bool):
-        message = f"Runtime config value '{path}' must be a float"
-        raise ConfigError(message)
+        raise ConfigError(_type_error_message(path, "a float"))
     if isinstance(value, (int, float)):
         return float(value)
-    message = f"Runtime config value '{path}' must be a float"
-    raise ConfigError(message)
+    raise ConfigError(_type_error_message(path, "a float"))
 
 
 def parse_optional_float(value: TomlValue, path: str) -> float | None:
@@ -185,8 +205,7 @@ def env_float(env: Mapping[str, str], key: str, default: float) -> float:
     try:
         return float(value)
     except ValueError as exc:
-        message = f"Environment variable {key} must be a float"
-        raise ConfigError(message) from exc
+        raise ConfigError(_env_type_error_message(key, "a float")) from exc
 
 
 def env_optional_float(env: Mapping[str, str], key: str, default: float | None) -> float | None:
@@ -209,8 +228,7 @@ def env_optional_float(env: Mapping[str, str], key: str, default: float | None) 
     try:
         return float(value)
     except ValueError as exc:
-        message = f"Environment variable {key} must be a float"
-        raise ConfigError(message) from exc
+        raise ConfigError(_env_type_error_message(key, "a float")) from exc
 
 
 def env_optional_int(env: Mapping[str, str], key: str, default: int | None) -> int | None:
@@ -233,5 +251,4 @@ def env_optional_int(env: Mapping[str, str], key: str, default: int | None) -> i
     try:
         return int(value)
     except ValueError as exc:
-        message = f"Environment variable {key} must be an integer"
-        raise ConfigError(message) from exc
+        raise ConfigError(_env_type_error_message(key, "an integer")) from exc

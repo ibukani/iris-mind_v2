@@ -10,6 +10,7 @@ import dataclasses
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.memory.ports import MutableMemoryStore
+from iris.adapters.memory.utils import score_text_match
 from iris.contracts.memory import (
     MemoryId,
     MemoryQuery,
@@ -118,17 +119,10 @@ class InMemoryMemoryStore(MutableMemoryStore):
         terms = tuple(term.casefold() for term in query.text.split() if term.strip())
         ranked: list[tuple[int, int, MemorySearchResult]] = []
         for index, record in enumerate(eligible):
-            score = _score_record(record, terms)
+            score = score_text_match(record, terms)
             if score <= 0:
                 continue
             ranked.append((score, index, MemorySearchResult(record=record, score=float(score))))
 
         ranked.sort(key=lambda item: (-item[0], item[1]))
         return tuple(result for _, _, result in ranked[: query.limit])
-
-
-def _score_record(record: MemoryRecord, terms: tuple[str, ...]) -> int:
-    if not terms:
-        return 0
-    text = record.text.casefold()
-    return sum(1 for term in terms if term in text)

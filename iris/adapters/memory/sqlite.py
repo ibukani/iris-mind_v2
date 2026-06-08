@@ -11,6 +11,7 @@ import sqlite3
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.memory.ports import MutableMemoryStore
+from iris.adapters.memory.utils import score_text_match
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,
@@ -18,6 +19,7 @@ from iris.contracts.memory import (
     MemoryRecord,
     MemorySearchResult,
 )
+from iris.core.datetime_utils import parse_datetime
 from iris.core.ids import ActorId, ObservationId, SpaceId
 
 if TYPE_CHECKING:
@@ -315,7 +317,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         terms = tuple(term.casefold() for term in query.text.split() if term.strip())
         ranked: list[tuple[int, int, MemorySearchResult]] = []
         for index, record in enumerate(eligible):
-            score = _score_record(record, terms)
+            score = score_text_match(record, terms)
             if score <= 0:
                 continue
             ranked.append((score, index, MemorySearchResult(record=record, score=float(score))))
@@ -434,8 +436,8 @@ def _row_to_record(row: sqlite3.Row) -> MemoryRecord:
         source_observation_id=(
             ObservationId(source_observation_id_value) if source_observation_id_value else None
         ),
-        created_at=_parse_datetime(row["created_at"]),
-        updated_at=_parse_datetime(row["updated_at"]),
+        created_at=parse_datetime(row["created_at"]),
+        updated_at=parse_datetime(row["updated_at"]),
         archived=bool(row["archived"]),
         metadata=json.loads(metadata_raw) if metadata_raw else {},
     )
@@ -445,15 +447,6 @@ def _isoformat(value: datetime | None) -> str | None:
     if value is None:
         return None
     return value.isoformat()
-
-
-def _parse_datetime(value: object) -> datetime | None:
-    if not value:
-        return None
-
-    if isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(str(value))
 
 
 def _matches_query(record: MemoryRecord, query: MemoryQuery) -> bool:
@@ -472,10 +465,3 @@ def _matches_query(record: MemoryRecord, query: MemoryQuery) -> bool:
         and (query.space_id is None or record.space_id == query.space_id)
         and (query.kind is None or record.kind == query.kind)
     )
-
-
-def _score_record(record: MemoryRecord, terms: tuple[str, ...]) -> int:
-    if not terms:
-        return 0
-    text = record.text.casefold()
-    return sum(1 for term in terms if term in text)
