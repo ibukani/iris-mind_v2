@@ -135,7 +135,7 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=str,
-        help="Path to TOML configuration file",
+        help="Use this TOML configuration file instead of default discovery",
     )
     parser.add_argument(
         "--host",
@@ -215,7 +215,15 @@ def _run_init_config_command(args: argparse.Namespace) -> None:
         message = f"Runtime config created: {result.path}"
     else:
         message = f"Runtime config already exists: {result.path}"
-    sys.stdout.write(f"{message}\n")
+    sys.stdout.write(
+        "".join(
+            (
+                f"{message}\n",
+                "Iris-Mind will load this file automatically on normal startup.\n",
+                "Use --config PATH to run with a different config file.\n",
+            ),
+        ),
+    )
 
 
 if __name__ == "__main__":

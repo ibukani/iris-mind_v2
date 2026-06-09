@@ -25,7 +25,9 @@ from iris.runtime.config import (
     RuntimeOllamaConfig,
     RuntimeOpenAIConfig,
     default_runtime_config,
+    discover_default_config_path,
     load_runtime_config,
+    normalize_config_path,
     parse_llm_provider,
 )
 from iris.runtime.wiring.app import build_app_from_config
@@ -256,11 +258,148 @@ def test_missing_config_path_raises_config_error(tmp_path: Path) -> None:
         load_runtime_config(missing, env={})
 
 
-def test_omitted_config_is_allowed() -> None:
-    """Omitted config file path uses defaults."""
-    config = load_runtime_config(None, env={})
+def test_omitted_config_without_default_file_is_allowed(tmp_path: Path) -> None:
+    """Omitted config file path uses defaults when no default file exists."""
+    config = load_runtime_config(None, env={}, cwd=tmp_path)
 
     assert config.models.default_chat.provider == "fake"
+
+
+def test_normalize_config_path_resolves_relative_path_against_cwd(
+    tmp_path: Path,
+) -> None:
+    """Relative config paths are resolved against the provided cwd."""
+    assert normalize_config_path("local.toml", cwd=tmp_path) == tmp_path / "local.toml"
+
+
+def test_discover_default_config_path_prefers_project_config(
+    tmp_path: Path,
+) -> None:
+    """Project-local config is the first default discovery candidate."""
+    local_config = tmp_path / ".iris/config/llm.toml"
+    _write_toml(
+        local_config,
+        """
+        [models.default_chat]
+        provider = "fake"
+        model = "local-model"
+        """,
+    )
+
+    assert discover_default_config_path(cwd=tmp_path, env={}, home=tmp_path) == local_config
+
+
+def test_load_runtime_config_uses_project_default_config(tmp_path: Path) -> None:
+    """Omitted --config loads .iris/config/llm.toml when it exists."""
+    _write_toml(
+        tmp_path / ".iris/config/llm.toml",
+        """
+        [models.default_chat]
+        provider = "fake"
+        model = "local-model"
+        """,
+    )
+
+    config = load_runtime_config(None, env={}, cwd=tmp_path)
+
+    assert config.models.default_chat.model == "local-model"
+
+
+def test_explicit_config_replaces_default_discovery(tmp_path: Path) -> None:
+    """Explicit --config path wins over discovered defaults."""
+    _write_toml(
+        tmp_path / ".iris/config/llm.toml",
+        """
+        [models.default_chat]
+        provider = "fake"
+        model = "local-model"
+        """,
+    )
+    explicit_config = _write_toml(
+        tmp_path / "explicit.toml",
+        """
+        [models.default_chat]
+        provider = "fake"
+        model = "explicit-model"
+        """,
+    )
+    env = {"IRIS_MIND_CONFIG": str(tmp_path / "env.toml")}
+
+    config = load_runtime_config(explicit_config, env=env, cwd=tmp_path)
+
+    assert config.models.default_chat.model == "explicit-model"
+
+
+def test_load_runtime_config_uses_iris_mind_config_env(tmp_path: Path) -> None:
+    """IRIS_MIND_CONFIG points discovery at an explicit environment file."""
+    env_config = _write_toml(
+        tmp_path / "env.toml",
+        """
+        [models.default_chat]
+        provider = "fake"
+        model = "env-file-model"
+        """,
+    )
+
+    config = load_runtime_config(
+        None,
+        env={"IRIS_MIND_CONFIG": str(env_config)},
+        cwd=tmp_path,
+    )
+
+    assert config.models.default_chat.model == "env-file-model"
+
+
+def test_missing_iris_mind_config_env_raises_config_error(tmp_path: Path) -> None:
+    """Missing IRIS_MIND_CONFIG file is an explicit user error."""
+    with pytest.raises(ConfigError):
+        load_runtime_config(
+            None,
+            env={"IRIS_MIND_CONFIG": "missing.toml"},
+            cwd=tmp_path,
+        )
+
+
+def test_load_runtime_config_uses_xdg_config_home(tmp_path: Path) -> None:
+    """XDG config is loaded when no project-local config exists."""
+    xdg_config = _write_toml(
+        tmp_path / "xdg/iris-mind/llm.toml",
+        """
+        [models.default_chat]
+        provider = "fake"
+        model = "xdg-model"
+        """,
+    )
+
+    config = load_runtime_config(
+        None,
+        env={"XDG_CONFIG_HOME": str(xdg_config.parents[1])},
+        cwd=tmp_path,
+    )
+
+    assert config.models.default_chat.model == "xdg-model"
+
+
+def test_config_precedence_without_cli_uses_env_then_file(tmp_path: Path) -> None:
+    """Environment overrides discovered config, and config overrides defaults."""
+    _write_toml(
+        tmp_path / ".iris/config/llm.toml",
+        """
+        [models.default_chat]
+        provider = "fake"
+        model = "file-model"
+        """,
+    )
+
+    file_config = load_runtime_config(None, env={}, cwd=tmp_path)
+    env_config = load_runtime_config(
+        None,
+        env={"IRIS_DEFAULT_CHAT_MODEL": "env-model"},
+        cwd=tmp_path,
+    )
+
+    assert file_config.models.default_chat.model == "file-model"
+    assert env_config.models.default_chat.model == "env-model"
 
 
 def test_invalid_provider_raises_config_error(tmp_path: Path) -> None:
@@ -408,6 +547,12 @@ def _write_config(tmp_path: Path, content: str) -> Path:
     return path
 
 
+def _write_toml(path: Path, content: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
 def _example_config_path() -> Path:
     return _repo_path(".iris/config/llm.example.toml")
 
@@ -478,7 +623,9 @@ def test_config_package_exposes_stable_public_api() -> None:
         "RuntimeStateConfig",
         "apply_runtime_overrides",
         "default_runtime_config",
+        "discover_default_config_path",
         "load_runtime_config",
+        "normalize_config_path",
         "parse_llm_provider",
     }
     assert set(config_pkg.__all__) == expected

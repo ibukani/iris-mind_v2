@@ -22,7 +22,9 @@ from iris.runtime.config.root import (
     RuntimeConfigOverrides,
     apply_runtime_overrides,
     default_runtime_config,
+    discover_default_config_path,
     load_runtime_config,
+    normalize_config_path,
     parse_llm_provider,
 )
 from iris.runtime.config.server import RuntimeServerConfig
@@ -43,6 +45,8 @@ __all__ = [
     "RuntimeStateConfig",
     "apply_runtime_overrides",
     "default_runtime_config",
+    "discover_default_config_path",
     "load_runtime_config",
+    "normalize_config_path",
     "parse_llm_provider",
 ]
