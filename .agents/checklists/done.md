@@ -1,34 +1,31 @@
 # Done Checklist
 
-A task is not complete until the implementation, tests, and report are aligned.
+A task is complete only when implementation, tests, and report align.
 
-## Automated by scripts/verify.py
+## Full Gate
 
-Run the full gate before reporting completion:
+Run before reporting completion:
 
 ```bash
 make check
 ```
 
-`verify.py` automatically runs lint, format, type, pyright, architecture tests, and coverage. If any check fails, it prints the failure class, first failing location, and recommended next command.
+`scripts/verify.py` runs lint, format, mypy, pyright, architecture tests, and coverage.
 
 Use `make quick` only for iteration. Do not present it as full completion verification.
 
-If only documentation changed, run the smallest relevant command and explain why full verification was not needed.
+For docs-only changes, run the smallest relevant command and explain why full verification was not needed.
 
-## Human checklist
+## Human Checks
 
-These items still require human judgment:
+- Code changes implement only the requested behavior.
+- Architecture boundaries still match `AGENTS.md` and `.agents/rules/architecture.md`.
+- No unrelated rewrites, broad autofix churn, or hidden TODOs.
+- New or changed behavior has focused tests when practical.
+- Final report is Japanese, compact, and includes commands/results.
+- If a check was not run, report the reason.
 
-- [ ] Code implements only the requested behavior.
-- [ ] Architecture boundaries are preserved (architecture tests run automatically by `make check`).
-- [ ] Tests cover the new or fixed behavior; existing tests were not weakened.
-- [ ] Documentation is updated if behavior, commands, or architecture changed.
-- [ ] No new TODOs hide required work.
-- [ ] Final report is in Japanese, compact, and follows the template below.
-- [ ] If a check was not run, say so and include the reason.
-
-## Final report template
+## Final Report Template
 
 ```text
 変更ファイル
@@ -39,15 +36,14 @@ These items still require human judgment:
 
 検証
 - command: result
-- command: result
 
 残リスク
 - ...
 ```
 
-## Fallback (when verify.py cannot run)
+## Fallback
 
-Run each step manually:
+If `make check` cannot run, report the failure and run relevant manual steps when possible:
 
 1. `uv run ruff check .`
 2. `uv run ruff format --check .`

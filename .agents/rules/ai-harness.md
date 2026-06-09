@@ -1,54 +1,40 @@
 # AI Harness Rules
 
-These rules define how Codex, OpenCode, Claude Code, and other coding agents should operate in this repository. They complement the strict lint/type/test gate; they do not replace it.
+These rules define repeatable, inspectable agent work. They complement strict lint/type/test gates; they do not replace them.
 
-## Primary goal
-
-Optimize for repeatable, inspectable agent work. Every agent session should leave behind code that can be checked by deterministic commands, not by trust in the model.
-
-## Required operating loop
+## Operating Loop
 
 1. Restate the task as a compact implementation contract.
 2. Identify the matching workflow in `.agents/workflows/`.
-3. Read only the rules needed for that workflow after the mandatory files in `AGENTS.md`.
+3. Read only task-relevant rules after the mandatory context in `AGENTS.md`.
 4. Inspect existing tests before changing behavior.
 5. Make the smallest architecture-preserving change that satisfies the task.
 6. Run focused tests while iterating.
-7. Run `make ai-check` or explain exactly why it could not run.
-8. Report changed files, checks, failures, and residual risk in Japanese.
+7. Run `make ai-quick`, `make ai-check`, or stronger before handoff; report if impossible.
+8. Report changed files, checks, failures, residual risk, and reusable lessons in Japanese.
 
-## Do not hide uncertainty
+## Quality Gate Invariants
 
-If a check fails, keep the failure visible. Do not claim the task is complete unless the failure is unrelated and explicitly documented.
-
-## No quality-gate escape hatches
-
-Do not weaken the scoped quality policy to make a task pass.
-
-Keep these invariants:
-
+- Do not weaken Ruff, mypy, pyright, pytest, or coverage policy.
 - Ruff keeps `select = ["ALL"]` unless a documented project-wide policy change is requested.
 - Core architecture code keeps maximum mypy `Any` restrictions.
-- `adapters` may handle incomplete external-library typing only at the provider boundary.
-- `tests` and `scripts` may use lighter decorator/third-party-helper strictness, but must not become untyped dumping grounds.
-- pyright stays strict for production code and standard for tests/scripts unless a documented policy change is requested.
-- pytest warning behavior, marker strictness, and xfail strictness stay enabled.
-- coverage threshold stays at 90% for the full gate.
-- architecture guard tests and no-action contract tests stay active.
+- Adapters may handle incomplete external typing only at provider boundaries.
+- Tests and scripts stay typed.
+- Coverage threshold stays 90% for the full gate.
 
-Fix the code, tests, or task scope instead of relaxing the policy for convenience.
+## Autofix
 
-## Autofix rule
+Use `make format-write` or `make lint-fix` only after inspecting the expected target diff.
 
-Use `make lint-fix` or `make format-write` only after inspecting the target files and understanding the expected diff. Do not run broad autofix to hide unrelated failures.
+Do not use broad autofix to hide unrelated failures or rewrite unrelated code.
 
-## Context budget rule
+## Context Budget
 
-For long sessions, prefer file paths, exact commands, and failing diagnostics over broad prose. Do not paste entire files into prompts when a path and symbol name are sufficient.
+Prefer file paths, symbols, exact commands, and failing diagnostics over broad prose. Do not paste entire files into prompts when a path and symbol name are enough.
 
-## Multi-agent handoff rule
+## Handoff
 
-When handing work from one agent to another, include only:
+Include only:
 
 - goal
 - changed files

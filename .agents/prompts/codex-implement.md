@@ -1,32 +1,11 @@
 # Prompt: Codex Implementation
 
 ```text
-You are working in the Iris repository.
-
-Read `AGENTS.md`, then follow `.agents/workflows/implement.md`, `.agents/rules/anti-patterns.md`, and `.agents/rules/typing.md`.
-
-Implement this task:
-<task>
-
-Hard constraints:
-- Preserve layer boundaries.
-- `cognitive/` must not import from `adapters/`, `runtime/`, or `features/`.
-- Use typed contracts, not `dict[str, Any]` boundary objects.
-- Do not add service locators or global registries.
-- Do not add compatibility shims unless this is an explicit migration task with removal criteria and tests.
-- Preserve no-action semantics.
-
-Before finishing, run the narrowest relevant tests, then:
-
-```bash
-make check
-```
-
-If you cannot run a command, report why.
-
-Final report format in Japanese:
-- 変更ファイル
-- 概要
-- 検証
-- 残リスク
+Goal: <task>.
+Read: AGENTS.md, .agents/README.md, .agents/workflows/implement.md.
+Also read task-relevant rules from AGENTS.md Required context routing.
+Do not: service locator, global registry, dict boundary, compatibility shim unless explicit migration, safety/presenter bypass.
+Keep: Iris layer boundaries, typed contracts, no-action semantics, small reviewable patch.
+Test: narrowest relevant tests while iterating; make check before final when possible.
+Report: Japanese. 変更ファイル, 概要, 検証, 残リスク.
 ```

@@ -1,86 +1,66 @@
 # Iris Agent Harness
 
-This directory is the repository-level harness for AI coding agents.
+Repository-level harness for Codex, OpenCode, Claude Code, and other coding agents.
 
-It exists to make agent work repeatable by supplying:
+Purpose:
 
-- stable project rules
-- task-specific workflows
-- completion checklists
-- reusable prompts
-- token-saving prompt policy embedded in `AGENTS.md`
-- documentation/comment language policy
-- on-demand skills
+- keep durable project rules
+- route tasks to the right workflow
+- keep verification commands stable
+- keep token/language policy discoverable
+- provide skills and checklists for repeated review/repair work
 
 Root entry files:
 
-- `AGENTS.md` is the shared entry point for Codex, OpenCode, and other agents that read AGENTS files.
-- `CLAUDE.md` is the Claude Code entry point.
+- `AGENTS.md`: shared entry point for agents that read AGENTS files.
+- `CLAUDE.md`: Claude Code entry point; delegates common rules here.
 
-## Directory map
+## Directory Map
 
 ```text
 .agents/
-├── rules/       # Stable architecture and implementation rules
-├── workflows/   # Task contracts for implementation, refactor, bugfix, review, docs
-├── checklists/  # Pre-change, pre-commit, done, and review checks
-├── prompts/     # Copyable prompts for Codex, OpenCode, Claude Code
-└── skills/      # On-demand reusable skills
+├── rules/       stable architecture, language, verification, output rules
+├── workflows/   task contracts for implementation, docs, review, repair
+├── checklists/  pre-change, done, harness, failure-analysis checks
+├── prompts/     copyable agent prompts
+└── skills/      on-demand deep review and repair skills
 ```
 
-## How to use this harness
+## Task Routing
 
-1. Start from `AGENTS.md` or `CLAUDE.md`.
-2. Read the relevant rule files.
-3. Apply the Primitive Prompt Mode and token/language policy embedded in `AGENTS.md`.
-4. Apply `.agents/rules/documentation-language.md` for documentation, docstring, and comment language choice.
-5. Pick one workflow from `.agents/workflows/`.
-6. Use `.agents/checklists/pre-change.md` before editing.
-7. Use `.agents/checklists/done.md` before reporting completion.
-8. Use `.agents/skills/` for on-demand deep reviews (architecture, boundaries, entropy audit, test repair, prompt compression).
+Start with `AGENTS.md`, then read only task-relevant harness files.
 
-## Standard verification
+- Any task: matching `.agents/workflows/*.md`.
+- Documentation, comments, docstrings, prompts, or reports: `.agents/rules/documentation-language.md`.
+- Behavior, runtime wiring, architecture, or tests: architecture, boundaries, cognitive-cycle, anti-patterns, typing, and testing rules.
+- AI harness, Makefile, agent rules, prompts, or verification scripts: `.agents/rules/ai-harness.md` and `.agents/rules/verification.md`.
+- Output compression examples: `.agents/rules/output-compression.md`.
+- Deep review/repair: matching `.agents/skills/*/SKILL.md`.
 
-Use one canonical command before reporting completion:
+## Verification
+
+Canonical full gate:
 
 ```bash
 make check
 ```
 
-`make verify` is an alias. Both call `scripts/verify.py` and run strict Ruff, format check, mypy, pyright, architecture tests, and the full test suite with coverage gate. Use `make quick` for iteration only.
+Use `make quick` or `make ai-quick` while iterating. Use `make ai-check` before handoff when a keep-going failure list is useful. Do not weaken strict gates.
 
-## Source of truth
+## Source Of Truth
 
-The project architecture is enforced by tests under `tests/architecture/`.
+Architecture is enforced by `tests/architecture/`. When docs and tests disagree, inspect implementation and architecture tests before changing either.
 
-When documentation and tests disagree, do not guess. Inspect implementation and architecture tests, then update documentation and tests together if the architecture intentionally changed.
+Detailed command policy lives in `.agents/rules/verification.md`. Quality strictness lives in `pyproject.toml` plus `.agents/rules/testing.md`.
 
-## Existing flat files
+## Language
 
-Older flat files may exist directly under `.agents/`, such as `.agents/architecture.md`, `.agents/cognitive.md`, `.agents/rules.md`, and `.agents/tests.md`.
+Human-facing documentation, docstrings, explanatory comments, reports, and PR text are Japanese by default.
 
-Prefer the structured files under this directory for new agent sessions. Keep the flat files only as compatibility references unless a separate migration task removes them.
+Agent-facing prompts, harness rules, and machine-oriented contracts may use English when it improves precision.
 
-## Token-saving mode
+## Legacy Files
 
-Primitive Prompt Mode and the token/language policy are embedded directly in `AGENTS.md` so every agent session loads them. Do not move those mandatory rules into optional prompt files.
+Older flat files may exist directly under `.agents/` such as `.agents/architecture.md`, `.agents/cognitive.md`, `.agents/rules.md`, and `.agents/tests.md`.
 
-## Documentation language
-
-Use `.agents/rules/documentation-language.md` when changing README, docs, design notes, review summaries, implementation explanations, PR text, comments, docstrings, prompts, or harness rules.
-
-Human-facing documentation, docstrings, and explanatory comments are Japanese by default. Agent-facing prompts and machine-oriented rules may stay English when useful.
-
-## AI harness additions
-
-Use these files for Codex/OpenCode harness work:
-
-- `.agents/rules/ai-harness.md` — agent operating loop and handoff rules.
-- `.agents/rules/verification.md` — command hierarchy and failure reporting rules.
-- `.agents/workflows/test-fix.md` — strict gate repair workflow.
-- `.agents/workflows/architecture.md` — architecture change workflow.
-- `.agents/workflows/ai-harness.md` — instruction and verification harness maintenance workflow.
-- `.agents/checklists/ai-harness.md` — checklist for instruction/command changes.
-- `.agents/checklists/failure-analysis.md` — checklist for strict gate failures.
-
-Prefer `make ai-quick` during iteration and `make ai-check` before handoff.
+Prefer structured files under `.agents/rules/`, `.agents/workflows/`, `.agents/checklists/`, and `.agents/skills/`. Keep legacy flat files only as compatibility references unless a migration task removes them.

@@ -2,45 +2,43 @@
 
 Use deterministic commands as the source of truth for agent work.
 
-## Command hierarchy
+## Command Hierarchy
 
-- `make ai-test-target TARGET=tests/path_or_file.py`: focused loop for the code being changed.
-- `make ai-test-target TARGET='tests/path.py::test_name'`: focused loop for one test case.
-- `make ai-arch`: architecture boundary and anti-pattern guard loop.
-- `make ai-quick`: fast strict loop; runs lint, format, mypy, pyright, and architecture checks.
-- `make ai-check`: full strict loop; runs every configured gate and keeps going after failures.
-- `make check`: final full gate; stops on first failure and mirrors CI validation.
+- `make ai-test-target TARGET=tests/path_or_file.py`: focused test loop.
+- `make ai-test-target TARGET='tests/path.py::test_name'`: focused one-test loop.
+- `make ai-arch`: architecture and anti-pattern guard loop.
+- `make ai-quick`: fast strict loop; lint, format, mypy, pyright, architecture tests.
+- `make ai-check`: full strict loop; keeps going after failures.
+- `make check`: final full gate; stop-on-first-failure CI-like validation.
 - `make coverage`: coverage-only full test loop.
 
-## Expected use
+## Expected Use
 
-During implementation:
-
-1. Run the smallest focused test that covers the edit.
+1. Run the smallest relevant focused command while editing.
 2. Run `make ai-quick` after local failures are fixed.
-3. Run `make ai-check` before handoff or final report.
+3. Run `make ai-check` before handoff when a full failure list is useful.
+4. Run `make check` for final validation when possible.
 
-Use `make check` when a stop-on-first-failure command is preferable, such as CI-like validation.
+`make verify` is an alias for `make check`.
 
-## Autofix commands
+## Autofix Commands
 
-- `make format-write` applies Ruff formatting.
-- `make lint-fix` applies Ruff fixes.
+- `make format-write`: apply Ruff formatting.
+- `make lint-fix`: apply Ruff fixes after inspecting the expected target diff.
 
-Use these only after inspecting the target files and understanding the expected diff. Do not run broad autofix to hide unrelated failures or rewrite unrelated code.
+Do not run broad autofix to hide unrelated failures or rewrite unrelated code.
 
-## Failure reporting
+## Failure Reporting
 
-For every failed command, report:
+When a command fails, report:
 
 - exact command
 - exit status if known
 - first failing file or test
-- whether the failure existed before the current edit if known
+- whether failure likely predates current edit, if known
 - next recommended fix
 
-## Prohibited verification claims
+## Prohibited Claims
 
-Do not write `all checks passed` unless the full command actually passed in the current environment.
-
-Do not replace a failed strict gate with a weaker command and call it equivalent.
+- Do not write `all checks passed` unless the full command actually passed.
+- Do not replace a failed strict gate with a weaker command and call it equivalent.

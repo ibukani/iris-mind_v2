@@ -60,59 +60,21 @@ Avoid:
 
 Use for English agent-visible replies, progress notes, handoffs, and completion reports.
 
-Core rule:
+Core rule: terse English, all technical substance, no fluff.
 
-```text
-Respond terse like smart caveman. All technical substance stay. Only fluff die.
-```
+Drop pleasantries, filler, unsupported hedging, and generic background. Keep identifiers, commands, paths, URLs, errors, stack traces, and API names exact.
 
-Compress English by default:
-
-- Drop pleasantries: `Sure`, `I'd be happy to`, `Thanks for`, `Great question`.
-- Drop filler: `just`, `really`, `basically`, `actually`, `quite`, `very` unless meaning changes.
-- Drop hedging when evidence is enough: `might`, `perhaps`, `it seems`, `I think`.
-- Drop articles and helper words when clear: `the`, `a`, `an`, `that`, `in order to`.
-- Prefer direct technical fragments, bullets, `path:line`, commands, and code blocks.
-- Preserve code, identifiers, commands, paths, URLs, stack traces, quoted errors, API names, and type names exactly.
-
-Examples:
-
-```text
-Before: Sure, I'd be happy to help. The issue is likely caused by the authentication middleware where the token expiry check uses `<` instead of `<=`.
-After: Bug: auth middleware token expiry check uses `<`, need `<=`.
-
-Before: In order to fix this issue, you should update the configuration file and then run the full test suite.
-After: Fix: update config. Verify: run full test suite.
-```
+Examples and edge cases: `.agents/rules/output-compression.md`.
 
 ### Genshijin Output Compression Mode
 
 Use for Japanese agent-visible replies, progress notes, handoffs, and completion reports.
 
-Core rule:
+Core rule: 賢い原始人のように短く返す。技術情報は残す。無駄だけ消す。
 
-```text
-賢い原始人のように短く返す。技術情報は残す。無駄だけ消す。
-```
+削る: 挨拶、謝意、クッション語、冗長な敬語、motivational wording、既知背景。残す: identifiers, commands, paths, URLs, errors, stack traces, API names。
 
-Compress Japanese by default:
-
-- Delete greetings, thanks, apologies, cushion words, motivational wording, and business-politeness padding.
-- Convert polite endings to compact technical Japanese where natural.
-- Compress redundant phrases: `することができます` → `可能` / `できる`, `ということになります` → `になる`.
-- Delete obvious particles when readable: `認証ミドルウェアのトークンの有効期限チェック` → `認証middleware token期限check`.
-- Prefer noun/verb fragments, dense bullets, checklists, `path:line`, and command blocks.
-- Omit obvious background, generic tutorials, and repeated architecture summaries.
-
-Examples:
-
-```text
-Before: 修正することができます。
-After: 修正可能。
-
-Before: 認証ミドルウェアにおけるトークンの有効期限チェックの部分に原因がある可能性があります。
-After: 原因: 認証middleware token期限check。
-```
+Examples and edge cases: `.agents/rules/output-compression.md`.
 
 ### Mode selection and safety valve
 
@@ -196,21 +158,20 @@ If nothing remains, write `なし` under `残リスク`.
 
 ## Required context
 
-Before changing code, read the relevant files in this order:
+Always read:
 
-1. `AGENTS.md` fully, including the token, language, and output compression policy above
-2. `.agents/README.md`
-3. `.agents/rules/documentation-language.md`
-4. `.agents/rules/architecture.md`
-5. `.agents/rules/boundaries.md`
-6. `.agents/rules/cognitive-cycle.md`
-7. `.agents/rules/anti-patterns.md`
-8. `.agents/rules/typing.md`
-9. `.agents/rules/testing.md`
-10. The workflow under `.agents/workflows/` that matches the task
-11. The skill under `.agents/skills/` that matches the review scope, if any
+1. `AGENTS.md` fully, including token, language, and output compression policy.
+2. `.agents/README.md`.
+3. The matching workflow under `.agents/workflows/`.
+4. Any named or clearly matching skill under `.agents/skills/`.
 
-If a task touches existing behavior, also inspect the matching tests under `tests/` before editing.
+Read extra rules by task:
+
+- Documentation, comments, docstrings, prompts, or reports: `.agents/rules/documentation-language.md`.
+- Behavior, runtime wiring, architecture, or tests: `.agents/rules/architecture.md`, `.agents/rules/boundaries.md`, `.agents/rules/cognitive-cycle.md`, `.agents/rules/anti-patterns.md`, `.agents/rules/typing.md`, `.agents/rules/testing.md`.
+- AI harness, Makefile, agent rules, prompts, or verification scripts: `.agents/rules/ai-harness.md`, `.agents/rules/verification.md`.
+
+If a task touches existing behavior, inspect matching tests under `tests/` before editing.
 
 ## Project purpose
 
@@ -283,16 +244,14 @@ Use `make ai-context` to show the active harness paths. Use `make ai-report` to 
 
 Do not weaken lint, type, pyright, pytest, or coverage settings to make work pass. This repository prioritizes strict AI-coding feedback over short-term convenience. Fix code and tests instead of relaxing configuration.
 
-The strictness policy is scoped, not uniform:
+Stable policy:
 
-- Ruff uses `select = ["ALL"]`; only formatter conflicts and explicitly documented context exceptions are ignored.
-- mypy runs strict checks across `iris`, `tests`, `scripts`, and `main.py`.
-- mypy maximum `Any` restrictions apply to core architecture code: `contracts`, `core`, `cognitive`, `features`, `presentation`, `safety`, and `runtime`.
-- `adapters` may tolerate incomplete external-library typing at the boundary, but must not leak untyped values into internal contracts.
-- `tests` and `scripts` stay typed, but are not held to the same decorator/third-party-helper strictness as production architecture code.
-- pyright runs in strict mode across production code and in standard mode across tests/scripts.
-- pytest treats config, markers, xfail, and warnings strictly.
-- Coverage is part of the full gate and fails below 90%.
+- Ruff stays `select = ["ALL"]` except documented project-wide ignores.
+- mypy stays strict across `iris`, `tests`, `scripts`, and `main.py`.
+- Core architecture code keeps maximum `Any` restrictions.
+- Adapters may handle incomplete external-library typing only at provider boundaries.
+- pyright, pytest strictness, and 90% coverage gate remain enabled.
+- Source of truth: `pyproject.toml`, `.agents/rules/testing.md`, `.agents/rules/verification.md`.
 
 ## Suppression Policy
 
@@ -316,18 +275,11 @@ Use the repository verification entry point before reporting completion.
 make check
 ```
 
-`make verify` is an alias for `make check`. Both run `scripts/verify.py`, which executes:
+`make verify` is an alias. Both run `scripts/verify.py`: Ruff check, Ruff format check, mypy, pyright, architecture tests, full pytest with branch coverage and 90% threshold.
 
-1. `uv run ruff check .`
-2. `uv run ruff format --check .`
-3. `uv run mypy iris tests scripts main.py`
-4. `uv run pyright .`
-5. `uv run pytest tests/architecture -q`
-6. `uv run pytest tests/ --cov=iris --cov-branch --cov-report=term-missing:skip-covered --cov-report=html --cov-fail-under=90`
+Use `make quick` while iterating: lint, format, mypy, pyright, architecture tests.
 
-Use `make quick` while iterating when the full suite is too broad for the current edit. It still runs lint, format, mypy, pyright, and architecture checks.
-
-Use `make ai-quick` and `make ai-check` for agent sessions that should keep running after the first failure and produce a fuller failure list. These are diagnostics wrappers around the same strict checks, not weaker gates.
+Use `make ai-quick` and `make ai-check` when an agent needs keep-going diagnostics. They are wrappers, not weaker gates.
 
 If the environment cannot run a command, report the command, the failure reason, and what you verified instead.
 
@@ -337,36 +289,47 @@ When done, report in Japanese:
 
 1. Files changed
 2. Behavioral or architectural impact
-3. Tests/checks run
-4. Any commands that could not be run
+3. Tests/checks run and results
+4. Commands that could not run
 5. Remaining risks or follow-up work
+
+## Post-task retrospective
+
+After non-trivial tasks, include compact lessons in the final report or handoff:
+
+- What changed.
+- Problems encountered.
+- Root causes.
+- How issues were resolved.
+- Validation commands and results.
+- Reusable lessons for future agents.
+- AGENTS.md update candidates, if any.
+
+Update `AGENTS.md` only for durable guidance:
+
+- recurring mistakes seen across tasks
+- stable project-specific conventions
+- repeated review feedback
+- routing guidance that prevents unnecessary file reading
+- validation commands that agents should run often
+
+Do not add:
+
+- one-off errors or temporary task notes
+- long logs, stack traces, or troubleshooting transcripts
+- stale implementation details likely to drift
+- vague preferences without project-specific action
+- content better suited for `docs/troubleshooting.md`, architecture docs, or `.agents/`
+
+If `AGENTS.md` grows too large, move detailed guidance to `.agents/` or `docs/` and link the path here.
 
 
 <!-- headroom:rtk-instructions -->
 # RTK Command Filtering for Iris
 
-RTK is an optional token-saving command filter for local agent sessions. It is not an Iris dependency, not part of CI, and not the source of truth for verification. Prefer repository commands first; wrap them with `rtk` only when the tool is available and filtered output is useful.
+RTK is optional local output filtering. It is not an Iris dependency, CI contract, or source of truth. Canonical commands remain the `make` / `uv` commands above.
 
-## Canonical Iris commands
-
-Use these commands as the canonical project interface:
-
-```bash
-make ai-context
-make ai-test-target TARGET=tests/path_or_file.py
-make ai-arch
-make ai-quick
-make ai-check
-make check
-make verify
-make ai-report
-```
-
-`make check` and `make verify` remain the completion gates. `make ai-quick` and `make ai-check` are diagnostic wrappers, not weaker alternatives.
-
-## Safe RTK usage
-
-When logs are too large, RTK may wrap Iris commands without changing the command contract:
+Use RTK only as a wrapper when filtered output helps:
 
 ```bash
 rtk make ai-context
@@ -376,23 +339,11 @@ rtk make ai-check
 rtk make check
 ```
 
-For narrow debugging, RTK may also wrap the exact `uv` commands already documented in this file:
+Rules:
 
-```bash
-rtk uv run ruff check .
-rtk uv run ruff format --check .
-rtk uv run mypy iris tests scripts main.py
-rtk uv run pyright .
-rtk uv run pytest tests/architecture -q
-rtk uv run pytest tests/path_or_file.py -q
-```
-
-## Rules
-
-- Do not require RTK in project setup, CI, Makefile targets, docs, or tests.
-- Do not replace canonical `make` / `uv` commands with RTK-only commands.
-- Do not introduce examples for unrelated ecosystems such as Cargo, npm, Docker, Kubernetes, or TypeScript unless the repository actually adds those tools.
-- Use raw commands when exact output, full logs, or debugging context matters.
-- In completion reports, write the command that was actually run and note when RTK filtered output.
-- If RTK is unavailable, continue with the raw `make` / `uv` command and report normally.
+- Do not require RTK in setup, CI, Makefiles, docs, or tests.
+- Do not document RTK-only commands as canonical.
+- Use raw commands when exact output or full logs matter.
+- Report the command actually run and note when RTK filtered output.
+- If RTK is unavailable, run the raw `make` / `uv` command.
 <!-- /headroom:rtk-instructions -->

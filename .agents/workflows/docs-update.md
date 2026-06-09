@@ -1,47 +1,36 @@
 # Workflow: Documentation Update
 
+Use when changing README, docs, agent rules, prompts, checklists, comments, or docstrings.
 
-Language policy: think/work in English when available; write the final user-facing report in Japanese; keep it compact.
-Use this workflow when changing README, docs, agent rules, prompts, checklists, comments, or docstrings.
+Language policy: work in English when useful; user-facing final report in Japanese; keep it compact.
 
-## Documentation rules
+## Rules
 
 - Keep `AGENTS.md` and `CLAUDE.md` concise.
-- Put detailed instructions under `.agents/`.
-- Apply `.agents/rules/documentation-language.md` when choosing Japanese or English.
-- Write human-facing documentation in Japanese by default.
-- Write human-facing docstrings and explanatory comments in Japanese by default.
-- Agent-facing prompts, harness rules, and machine-oriented contracts may stay English when useful.
-- Do not duplicate long rule text across many files.
-- Update docs with code behavior when architecture changes.
-- Prefer command examples that are valid for this repository.
+- Put detailed durable guidance under `.agents/` or `docs/`.
+- Apply `.agents/rules/documentation-language.md`.
+- Human-facing docs, docstrings, and explanatory comments are Japanese by default.
+- Agent-facing prompts, harness rules, and machine-oriented contracts may use English when useful.
+- Do not duplicate long rules across many files.
+- Document only commands that work in this repository unless explicitly marked proposed.
 
-## Required consistency checks
+## Consistency Checks
 
-When editing docs, compare against:
+Compare changed docs against relevant sources:
 
 - `README.md`
 - `pyproject.toml`
-- `docs/architecture.md`
-- `docs/rules.md`
-- `docs/tests.md`
+- `Makefile`
+- `.agents/README.md`
 - `.agents/rules/documentation-language.md`
+- `.agents/rules/verification.md`
 - `tests/architecture/`
+- surrounding code style for comments/docstrings
 
-When editing comments or docstrings, compare against the surrounding code style and preserve identifiers, protocol names, commands, and external API names exactly.
-
-## Do not invent commands
-
-Only document commands that work with this project unless explicitly marked as proposed.
-
-Known commands:
-
-```bash
-make check
-```
-
-For documentation-only edits, run the smallest relevant check and state why full verification was not required. If command documentation changed, run `make check` when possible.
+Preserve identifiers, protocol names, commands, paths, and external API names exactly.
 
 ## Verification
 
-For docs-only changes, at minimum inspect rendered Markdown mentally for broken links and stale paths. If commands or architecture claims changed, run the relevant tests or report why they were not run.
+For docs-only changes, at minimum inspect Markdown structure for broken links, stale paths, bad fences, and stale commands.
+
+If command, architecture, or harness behavior claims changed, run the relevant make target or report why it could not run.

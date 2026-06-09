@@ -1,33 +1,13 @@
 # Shared Agent Task Template
 
-Use this template when asking any coding agent to work on Iris. For shorter prompts, apply the Primitive Prompt Mode embedded in `AGENTS.md`.
+Use this template when asking any coding agent to work on Iris. Compress further with Primitive Prompt Mode when context is tight.
 
 ```text
-Task:
-<one clear task>
-
-Context:
-- This is the Iris cognitive runtime repository.
-- Read AGENTS.md first.
-- Use the token/language policy embedded in `AGENTS.md`.
-- Think/work in English; final report in Japanese.
-- Follow `.agents/workflows/<workflow>.md`.
-- Preserve architecture boundaries from `.agents/rules/architecture.md`.
-
-Constraints:
-- Do not introduce service locators or global mutable registries.
-- Do not use `dict[str, Any]` at internal boundaries.
-- Do not bypass ActionPlan → Safety → Presenter → OutputSafety flow.
-- Do not change behavior outside the task scope.
-
-Acceptance criteria:
-- <observable result>
-- <tests added/updated>
-- `make check` passes, or any inability to run it is reported exactly.
-
-Report in Japanese:
-- 変更ファイル
-- 概要
-- 検証
-- 残リスク
+Goal: <one clear task>.
+Read: AGENTS.md, .agents/README.md, .agents/workflows/<workflow>.md.
+Also read task-relevant rules from AGENTS.md Required context routing.
+Scope: <files/directories>.
+Do not: broaden scope, break layer boundaries, add service locator/global registry, use dict boundary, bypass safety/presentation.
+Acceptance: <observable result>; <tests added/updated>; make check passes or failure is reported exactly.
+Report: Japanese. 変更ファイル, 概要, 検証, 残リスク.
 ```
