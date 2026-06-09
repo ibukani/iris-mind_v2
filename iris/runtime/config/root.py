@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.llm import (
     LLMProvider,
     RuntimeModelConfig,
@@ -48,6 +49,10 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from iris.runtime.config.parsing import TomlTable
+
+_PROJECT_CONFIG_PATH = Path(".iris/config/llm.toml")
+_ENV_CONFIG_KEY = "IRIS_MIND_CONFIG"
+_XDG_CONFIG_PATH = Path("iris-mind/llm.toml")
 
 
 @dataclass(frozen=True)
@@ -106,6 +111,7 @@ def load_runtime_config(
     *,
     env: Mapping[str, str] | None = None,
     overrides: RuntimeConfigOverrides | None = None,
+    cwd: Path | None = None,
 ) -> IrisRuntimeConfig:
     """デフォルト・TOML・環境変数・オーバーライドからランタイム設定を読み込む。
 
@@ -113,19 +119,91 @@ def load_runtime_config(
         config_path: 任意の明示的 TOML ファイルパス。
         env: 環境変数のマッピング。デフォルトは ``os.environ``。
         overrides: 任意のオーバーライド値。
+        cwd: 相対 config path と default discovery の基準ディレクトリ。
 
     Returns:
         検証済みのランタイム設定。
     """
     config = default_runtime_config()
-    if config_path is not None:
-        config = _apply_toml(config, read_toml_file(Path(config_path)))
-    config = _apply_env(config, os.environ if env is None else env)
+    runtime_env = os.environ if env is None else env
+    runtime_cwd = Path.cwd() if cwd is None else cwd
+    selected_config_path = (
+        normalize_config_path(config_path, cwd=runtime_cwd)
+        if config_path is not None
+        else discover_default_config_path(cwd=runtime_cwd, env=runtime_env)
+    )
+    if selected_config_path is not None:
+        config = _apply_toml(config, read_toml_file(selected_config_path))
+    config = _apply_env(config, runtime_env)
     if overrides is not None:
         config = apply_runtime_overrides(config, overrides)
 
     config = replace(config, server=validate_server_config(config.server))
     return replace(config, state=validate_state_config(config.state))
+
+
+def normalize_config_path(path: str | Path, *, cwd: Path) -> Path:
+    """設定ファイルパスを起動ディレクトリ基準の絶対パスへ正規化する。
+
+    Args:
+        path: 設定ファイルパス。
+        cwd: 相対パスの基準ディレクトリ。
+
+    Returns:
+        正規化済みの設定ファイルパス。
+    """
+    expanded_path = Path(path).expanduser()
+    if expanded_path.is_absolute():
+        return expanded_path
+    return cwd / expanded_path
+
+
+def discover_default_config_path(
+    *,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    home: Path | None = None,
+) -> Path | None:
+    """通常起動で利用する既定設定ファイルを決定的な順序で探す。
+
+    Args:
+        cwd: project-local config と相対 env path の基準ディレクトリ。
+        env: default discovery に使う環境変数。
+        home: home config 探索の基準ディレクトリ。
+
+    Returns:
+        最初に見つかった既定設定ファイル。見つからない場合は ``None``。
+
+    Raises:
+        ConfigError: ``IRIS_MIND_CONFIG`` が存在しない設定ファイルを指す場合。
+    """
+    runtime_cwd = Path.cwd() if cwd is None else cwd
+    runtime_env = os.environ if env is None else env
+    runtime_home = Path.home() if home is None else home
+
+    project_config_path = runtime_cwd / _PROJECT_CONFIG_PATH
+    if project_config_path.exists():
+        return project_config_path
+
+    env_config = runtime_env.get(_ENV_CONFIG_KEY)
+    if env_config is not None:
+        env_config_path = normalize_config_path(env_config, cwd=runtime_cwd)
+        if env_config_path.exists():
+            return env_config_path
+        message = f"Runtime config file does not exist: {env_config_path}"
+        raise ConfigError(message)
+
+    config_candidates: list[Path] = []
+    xdg_config_home = runtime_env.get("XDG_CONFIG_HOME")
+    if xdg_config_home is not None:
+        xdg_config_path = normalize_config_path(xdg_config_home, cwd=runtime_cwd)
+        config_candidates.append(xdg_config_path / _XDG_CONFIG_PATH)
+    config_candidates.append(runtime_home / ".config" / _XDG_CONFIG_PATH)
+    for config_candidate in config_candidates:
+        if config_candidate.exists():
+            return config_candidate
+
+    return None
 
 
 def apply_runtime_overrides(

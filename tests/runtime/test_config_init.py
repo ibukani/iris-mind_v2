@@ -136,18 +136,41 @@ def test_init_config_cli_reports_created_and_existing(
 
     main()
 
-    assert capsys.readouterr().out == "Runtime config created: .iris/config/llm.toml\n"
+    assert capsys.readouterr().out == (
+        "Runtime config created: .iris/config/llm.toml\n"
+        "Iris-Mind will load this file automatically on normal startup.\n"
+        "Use --config PATH to run with a different config file.\n"
+    )
 
     main()
 
-    assert capsys.readouterr().out == "Runtime config already exists: .iris/config/llm.toml\n"
+    assert capsys.readouterr().out == (
+        "Runtime config already exists: .iris/config/llm.toml\n"
+        "Iris-Mind will load this file automatically on normal startup.\n"
+        "Use --config PATH to run with a different config file.\n"
+    )
 
 
-def test_existing_config_loading_behavior_remains_unchanged(tmp_path: Path) -> None:
-    """Config loading still uses defaults unless an explicit missing path is provided."""
-    config = load_runtime_config(None, env={})
+def test_missing_default_config_loading_uses_defaults(tmp_path: Path) -> None:
+    """Config loading uses defaults when no default file exists."""
+    config = load_runtime_config(None, env={}, cwd=tmp_path)
     missing_path = tmp_path / "missing.toml"
 
     assert config.models.default_chat.provider == "fake"
     with pytest.raises(ConfigError):
         load_runtime_config(missing_path, env={})
+
+
+def test_init_config_output_is_loaded_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """init-config creates the project-local config loaded by normal startup."""
+    _write_example(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)
+
+    init_runtime_config()
+    config = load_runtime_config(None, env={}, cwd=tmp_path)
+
+    assert config.models.default_chat.provider == "ollama"
+    assert config.models.default_chat.model == "qwen3:8b"

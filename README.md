@@ -5,14 +5,24 @@ AI コンパニオン — Cognitive Runtime Architecture v0.1 ターゲット MV
 ## Usage
 
 ```bash
+uv run python -m iris.runtime.server init-config
 uv run python -m iris.runtime.server
-uv run python -m iris.runtime.server --config .iris/config/llm.toml
+uv run python -m iris.runtime.server --config ./configs/dev.toml
 uv run python -m iris.runtime.server --host 127.0.0.1 --port 50051
 ```
 
+通常起動は、次の順序で最初に存在する config を自動ロードする。
+
+1. `./.iris/config/llm.toml`
+2. `$IRIS_MIND_CONFIG`
+3. `$XDG_CONFIG_HOME/iris-mind/llm.toml`
+4. `~/.config/iris-mind/llm.toml`
+
+config が見つからない場合はエラーにしない。組み込み defaults、環境変数、CLI overrides だけで起動する。`--config PATH` は default discovery を無効化して指定 TOML を直接使う。`--config PATH` が存在しない場合、または `$IRIS_MIND_CONFIG` が存在しない path を指す場合は `ConfigError`。
+
 **Note:** `iris-mind_v2` はサーバ専用ランタイムである。ユーザ向け CLI 機能 は `iris-cli_v2` 側に属する。以前のワンターン CLI エントリポイント (`iris/runtime/cli.py`) は意図的に削除済み。外部クライアントは gRPC Runtime API を利用する。CLI 向けの `SubmitObservation` 契約は [`docs/runtime-api.md`](docs/runtime-api.md) を参照。モデルとプロバイダの設定は TOML または環境変数で行う。
 
-- `--config`: ランタイムの TOML ファイル（通常は `.iris/config/llm.toml`）を 1 つ指定して読み込む。
+- `--config`: default discovery を無効化し、指定 TOML を直接読み込む。
 - `--host`: `server.host` を上書きする。
 - `--port`: `server.port` を上書きする。
 
@@ -43,7 +53,7 @@ uv run python -m iris.runtime.server init-config
 必要に応じてモデル名を編集し、次を実行する:
 
 ```bash
-uv run python -m iris.runtime.server --config .iris/config/llm.toml
+uv run python -m iris.runtime.server
 ```
 
 `.iris/config/llm.toml` はローカル開発者用設定であり、コミットしない。
@@ -74,7 +84,7 @@ API キー、auth トークン、パスワード、その他の認証情報を T
 Iris は設定を低い優先度から高い優先度まで順に適用し、後のステップが前のステップを上書きする:
 
 1. 組み込みのデフォルト
-2. `--config` で渡された TOML ファイル
+2. default discovery で見つかった TOML、または `--config` で渡された TOML ファイル
 3. `IRIS_DEFAULT_CHAT_PROVIDER`、`IRIS_DEFAULT_CHAT_MODEL`、`IRIS_OLLAMA_HOST`、`IRIS_OPENAI_MODEL` などの環境変数
 4. CLI フラグ: `--host`、`--port`
 
