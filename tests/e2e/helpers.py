@@ -74,6 +74,8 @@ def start_runtime_process(
     command = [
         uv_path,
         "run",
+        "--project",
+        str(repo_root),
         "python",
         "-m",
         "iris.runtime.server",
@@ -87,7 +89,7 @@ def start_runtime_process(
 
     process = subprocess.Popen(  # noqa: S603 -- E2E runs a fixed uv command tuple.
         command,
-        cwd=repo_root,
+        cwd=runtime_home,
         env=_runtime_env(runtime_home=runtime_home, extra_env=extra_env),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

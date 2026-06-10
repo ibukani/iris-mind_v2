@@ -22,7 +22,8 @@ if TYPE_CHECKING:
 @pytest.mark.anyio
 async def test_runtime_process_starts_without_config_file(tmp_path: Path, repo_root: Path) -> None:
     """Runtime subprocess starts with built-in defaults and no config file."""
-    assert not (tmp_path / ".iris/config/llm.toml").exists()
+    config_path = tmp_path / ".iris/config/llm.toml"
+    assert not config_path.exists()
 
     runtime = start_runtime_process(
         port=find_free_port(),
