@@ -164,7 +164,14 @@ async def stop_runtime_process(
     return stdout, stderr
 
 
-def build_cli_submit_observation_request() -> runtime_pb2.SubmitObservationRequest:
+def build_cli_submit_observation_request(
+    *,
+    correlation_id: str = "e2e-corr-1",
+    observation_id: str = "e2e-obs-1",
+    session_id: str = "e2e-session-1",
+    external_message_id: str = "e2e-message-1",
+    text: str = "hello from process e2e",
+) -> runtime_pb2.SubmitObservationRequest:
     """Build a CLI-like SubmitObservation request.
 
     Returns:
@@ -174,10 +181,10 @@ def build_cli_submit_observation_request() -> runtime_pb2.SubmitObservationReque
     occurred_at.FromDatetime(datetime(2026, 6, 10, 12, 0, tzinfo=UTC))
 
     return runtime_pb2.SubmitObservationRequest(
-        correlation_id="e2e-corr-1",
+        correlation_id=correlation_id,
         observation=observations_pb2.Observation(
-            observation_id="e2e-obs-1",
-            session_id="e2e-session-1",
+            observation_id=observation_id,
+            session_id=session_id,
             kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
             occurred_at=occurred_at,
             context=observations_pb2.ObservationContext(
@@ -196,8 +203,8 @@ def build_cli_submit_observation_request() -> runtime_pb2.SubmitObservationReque
                 ),
             ),
             actor_message=observations_pb2.ActorMessagePayload(
-                text="hello from process e2e",
-                external_message_id="e2e-message-1",
+                text=text,
+                external_message_id=external_message_id,
             ),
         ),
     )
