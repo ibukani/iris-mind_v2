@@ -31,24 +31,24 @@ class _ObservationKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Obser
     OBSERVATION_KIND_UNSPECIFIED: _ObservationKind.ValueType  # 0
     OBSERVATION_KIND_ACTOR_MESSAGE: _ObservationKind.ValueType  # 1
     OBSERVATION_KIND_TRANSCRIPT: _ObservationKind.ValueType  # 2
-    """Defined for future use. Not currently accepted by the gRPC mapper."""
+    """Not currently accepted by the gRPC mapper."""
     OBSERVATION_KIND_IDLE_TICK: _ObservationKind.ValueType  # 3
     OBSERVATION_KIND_AUDIENCE_MESSAGE: _ObservationKind.ValueType  # 4
-    """Defined for future use. Not currently accepted by the gRPC mapper."""
+    """Not currently accepted by the gRPC mapper."""
     OBSERVATION_KIND_GAME_EVENT: _ObservationKind.ValueType  # 5
-    """Defined for future use. Not currently accepted by the gRPC mapper."""
+    """Not currently accepted by the gRPC mapper."""
 
 class ObservationKind(_ObservationKind, metaclass=_ObservationKindEnumTypeWrapper): ...
 
 OBSERVATION_KIND_UNSPECIFIED: ObservationKind.ValueType  # 0
 OBSERVATION_KIND_ACTOR_MESSAGE: ObservationKind.ValueType  # 1
 OBSERVATION_KIND_TRANSCRIPT: ObservationKind.ValueType  # 2
-"""Defined for future use. Not currently accepted by the gRPC mapper."""
+"""Not currently accepted by the gRPC mapper."""
 OBSERVATION_KIND_IDLE_TICK: ObservationKind.ValueType  # 3
 OBSERVATION_KIND_AUDIENCE_MESSAGE: ObservationKind.ValueType  # 4
-"""Defined for future use. Not currently accepted by the gRPC mapper."""
+"""Not currently accepted by the gRPC mapper."""
 OBSERVATION_KIND_GAME_EVENT: ObservationKind.ValueType  # 5
-"""Defined for future use. Not currently accepted by the gRPC mapper."""
+"""Not currently accepted by the gRPC mapper."""
 Global___ObservationKind: _TypeAlias = ObservationKind  # noqa: Y015
 
 @_typing.final
@@ -132,19 +132,21 @@ class ObservationContext(_message.Message):
     device_id: _builtins.str
     space_id: _builtins.str
     source: _builtins.str
-    """Should be "cli" for iris-cli_v2."""
+    """Stable source/provider label. Should be "cli" for iris-cli_v2."""
     @_builtins.property
     def actor(self) -> _identity_pb2.Identity: ...
     @_builtins.property
     def account_ref(self) -> _identity_pb2.ExternalAccountRef:
-        """External clients should usually send account_ref to identify the user."""
+        """account_ref lets the runtime resolve a stable Iris identity.
+        provider_subject must be stable within provider; display_name is not a key.
+        """
 
     @_builtins.property
     def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
     @_builtins.property
     def space_ref(self) -> _spaces_pb2.ExternalSpaceRef:
         """space_ref is optional and represents interaction context.
-        It is resolved ephemerally and is not persisted.
+        provider_space_ref must be stable within provider; display_name is not a key.
         """
 
     def __init__(
@@ -179,23 +181,16 @@ class Observation(_message.Message):
     ACTOR_MESSAGE_FIELD_NUMBER: _builtins.int
     IDLE_TICK_FIELD_NUMBER: _builtins.int
     observation_id: _builtins.str
-    """Client-generated unique observation ID."""
+    """Client-generated observation ID."""
     session_id: _builtins.str
-    """Client-generated session ID.
-    For one-shot CLI prompt calls, this may be per command.
-    For CLI REPL, keep this stable for the REPL session.
-    """
+    """Client-generated session ID."""
     kind: Global___ObservationKind.ValueType
     """Observation kind.
-    Currently accepted by the gRPC mapper:
-    - OBSERVATION_KIND_ACTOR_MESSAGE
-    - OBSERVATION_KIND_IDLE_TICK
+    OBSERVATION_KIND_ACTOR_MESSAGE and OBSERVATION_KIND_IDLE_TICK are accepted.
     """
     @_builtins.property
     def occurred_at(self) -> _timestamp_pb2.Timestamp:
-        """Time when the client observed this event.
-        Required by the current server mapper.
-        """
+        """Time when the client observed this event. Required by mapper."""
 
     @_builtins.property
     def context(self) -> Global___ObservationContext: ...

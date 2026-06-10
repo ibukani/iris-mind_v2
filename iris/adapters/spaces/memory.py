@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from iris.contracts.spaces import SpaceBinding
-    from iris.core.ids import ExternalRef
+    from iris.core.ids import ExternalRef, SpaceId
 
 
 class InMemorySpaceBindingStore(SpaceBindingStore):
@@ -20,16 +20,23 @@ class InMemorySpaceBindingStore(SpaceBindingStore):
     def __init__(self, bindings: Iterable[SpaceBinding] = ()) -> None:
         """Initialize the store with optional existing bindings."""
         self._bindings: dict[tuple[str, ExternalRef], SpaceBinding] = {}
+        self._refs_by_space_id: dict[SpaceId, tuple[str, ExternalRef]] = {}
         for binding in bindings:
             self._put_sync(binding)
 
     def _put_sync(self, binding: SpaceBinding) -> SpaceBinding:
         key = (binding.provider, binding.provider_space_ref)
+        existing_ref = self._refs_by_space_id.get(binding.space_id)
+        if existing_ref is not None and existing_ref != key:
+            msg = f"space_id conflict: {binding.space_id}"
+            raise SpaceBindingStoreError(msg)
+
         existing = self._bindings.get(key)
         if existing is not None and existing.space_id != binding.space_id:
-            msg = f"Binding for {key} already exists with different space_id {existing.space_id}"
-            raise SpaceBindingStoreError(msg)
+            self._refs_by_space_id.pop(existing.space_id, None)
+
         self._bindings[key] = binding
+        self._refs_by_space_id[binding.space_id] = key
         return binding
 
     @override
@@ -49,9 +56,9 @@ class InMemorySpaceBindingStore(SpaceBindingStore):
 
     @override
     async def put(self, binding: SpaceBinding) -> SpaceBinding:
-        """Create or replace a space binding.
+        """Create or update a space binding.
 
         Returns:
-            SpaceBinding: The saved space binding.
+            SpaceBinding: Stored binding.
         """
         return self._put_sync(binding)

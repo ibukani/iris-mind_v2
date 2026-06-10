@@ -14,26 +14,26 @@ enum ActorKind {
 message Identity {
   string actor_id = 1;
   ActorKind actor_kind = 2;
+  // Display-only name captured for this observation. Not an identity key.
   string display_name = 3;
+  // Stable external provider identifier, for example "cli" or "discord".
   string provider = 4;
+  // Stable subject identifier within the provider. Not a display name.
   string provider_subject = 5;
+  // Iris-internal account binding ID. External clients should not invent this.
   string account_id = 6;
   string device_id = 7;
   map<string, string> metadata = 8;
 }
 
 message ExternalAccountRef {
-  // Should be "cli" for iris-cli_v2.
+  // Stable provider identifier. Should be "cli" for iris-cli_v2.
   string provider = 1;
-
-  // A stable user identifier from the client side.
+  // Stable account identifier on the client/provider side. Must not be display_name.
   string provider_subject = 2;
-
-  // Required by the current server mapper.
+  // Human-readable display name. Mutable and never used as an identity key.
   string display_name = 3;
-
-  // Should usually be ACTOR_KIND_HUMAN for a human user.
+  // Clients should specify the observed actor kind. Unspecified is rejected by the mapper.
   ActorKind actor_kind = 4;
-
   map<string, string> metadata = 5;
 }

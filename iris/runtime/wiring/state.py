@@ -9,9 +9,11 @@ from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.adapters.spaces.memory import InMemorySpaceBindingStore
+from iris.adapters.spaces.sqlite import SQLiteSpaceBindingStore
 
 if TYPE_CHECKING:
-    from iris.adapters.app_gateway.ports import AccountStore
+    from iris.adapters.app_gateway.ports import AccountStore, SpaceBindingStore
     from iris.adapters.memory.ports import MutableMemoryStore
     from iris.runtime.config import IrisRuntimeConfig
 
@@ -22,6 +24,7 @@ class RuntimeStateStores:
 
     account_store: AccountStore
     memory_store: MutableMemoryStore
+    space_binding_store: SpaceBindingStore
 
 
 def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
@@ -36,8 +39,14 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     if config.state.backend == "sqlite":
         account_store: AccountStore = SQLiteAccountStore(config.state.sqlite_path)
         memory_store: MutableMemoryStore = SQLiteMemoryStore(config.state.sqlite_path)
+        space_binding_store: SpaceBindingStore = SQLiteSpaceBindingStore(config.state.sqlite_path)
     else:
         account_store = InMemoryAccountStore()
         memory_store = InMemoryMemoryStore()
+        space_binding_store = InMemorySpaceBindingStore()
 
-    return RuntimeStateStores(account_store=account_store, memory_store=memory_store)
+    return RuntimeStateStores(
+        account_store=account_store,
+        memory_store=memory_store,
+        space_binding_store=space_binding_store,
+    )

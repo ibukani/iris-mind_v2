@@ -11,14 +11,16 @@ enum SpaceKind {
   SPACE_KIND_BROADCAST = 5;
 }
 
-// Represents an external interaction context.
-// Accepted by the server but not persisted.
-// For CLI prompt, it may be omitted.
-// For CLI REPL, it is recommended to send a stable session-specific space_ref.
+// External interaction context. It is contextual scope, not the primary owner
+// of long-term memory or relationship state.
 message ExternalSpaceRef {
+  // Stable provider identifier. Should match the account provider when applicable.
   string provider = 1;
+  // Stable space identifier within the provider, e.g. channel ID or thread ID.
   string provider_space_ref = 2;
+  // Display-only space name. Not a stable key.
   string display_name = 3;
+  // Clients should specify the observed space kind. Unspecified is rejected by the mapper.
   SpaceKind space_kind = 4;
   map<string, string> metadata = 5;
 }

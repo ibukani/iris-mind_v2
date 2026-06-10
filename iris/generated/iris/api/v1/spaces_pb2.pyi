@@ -44,10 +44,8 @@ Global___SpaceKind: _TypeAlias = SpaceKind  # noqa: Y015
 
 @_typing.final
 class ExternalSpaceRef(_message.Message):
-    """Represents an external interaction context.
-    Accepted by the server but not persisted.
-    For CLI prompt, it may be omitted.
-    For CLI REPL, it is recommended to send a stable session-specific space_ref.
+    """External interaction context. It is contextual scope, not the primary owner
+    of long-term memory or relationship state.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -78,9 +76,13 @@ class ExternalSpaceRef(_message.Message):
     SPACE_KIND_FIELD_NUMBER: _builtins.int
     METADATA_FIELD_NUMBER: _builtins.int
     provider: _builtins.str
+    """Stable provider identifier. Should match the account provider when applicable."""
     provider_space_ref: _builtins.str
+    """Stable space identifier within the provider, e.g. channel ID or thread ID."""
     display_name: _builtins.str
+    """Display-only space name. Not a stable key."""
     space_kind: Global___SpaceKind.ValueType
+    """Clients should specify the observed space kind. Unspecified is rejected by the mapper."""
     @_builtins.property
     def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
     def __init__(

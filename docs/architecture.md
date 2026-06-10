@@ -786,3 +786,9 @@ CLI / main.py / iris.runtime.server
 - legacy.md: 削除済みアーキテクチャ情報
 - tests.md: アーキテクチャテスト受入基準
 - external.md: 外部アプリとの責務分離
+## Identity and Space Scoping
+
+Use `actor_id` as the primary owner for memory and relationship semantics.
+Use `space_id` as contextual scope, not as the primary owner of user memory.
+Do not use `display_name` as a stable identifier.
+Do not store conversation history directly on `SpaceBinding`.

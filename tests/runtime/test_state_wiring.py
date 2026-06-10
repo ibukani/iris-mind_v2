@@ -9,6 +9,8 @@ from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.adapters.spaces.memory import InMemorySpaceBindingStore
+from iris.adapters.spaces.sqlite import SQLiteSpaceBindingStore
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateConfig
 from iris.runtime.wiring.state import wire_runtime_state
@@ -23,6 +25,7 @@ def test_wire_memory_backend() -> None:
     stores = wire_runtime_state(config)
     assert isinstance(stores.account_store, InMemoryAccountStore)
     assert isinstance(stores.memory_store, InMemoryMemoryStore)
+    assert isinstance(stores.space_binding_store, InMemorySpaceBindingStore)
 
 
 def test_wire_sqlite_backend(tmp_path: Path) -> None:
@@ -33,6 +36,7 @@ def test_wire_sqlite_backend(tmp_path: Path) -> None:
     stores = wire_runtime_state(config)
     assert isinstance(stores.account_store, SQLiteAccountStore)
     assert isinstance(stores.memory_store, SQLiteMemoryStore)
+    assert isinstance(stores.space_binding_store, SQLiteSpaceBindingStore)
     assert db_path.exists()
 
 

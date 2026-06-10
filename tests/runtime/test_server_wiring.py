@@ -70,7 +70,7 @@ def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> 
 def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
     tmp_path: Path,
 ) -> None:
-    """build_runtime_components feeds the state account_store into the identity resolver."""
+    """build_runtime_components feeds state stores into runtime resolvers."""
     db_path = tmp_path / "state.db"
     config = default_runtime_config()
     config = replace(
@@ -83,6 +83,10 @@ def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
     assert (
         get_private_attr(components.identity_resolver, "_account_store")
         is components.stores.account_store
+    )
+    assert (
+        get_private_attr(components.space_resolver, "_binding_store")
+        is components.stores.space_binding_store
     )
 
 

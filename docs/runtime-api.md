@@ -111,3 +111,25 @@ request = runtime_pb2.SubmitObservationRequest(
 - **`style_hint`, `emotion_hint`, `expression_hint`**: 任意の UI 提示ヒント。
 - **`delay_ms`, `priority`, `interruptible`**: 提示タイミングと挙動のヒント。単純な CLI クライアントは最初は無視してよい。
 - **空の出力**: `output.text` が空の場合、CLI はクラッシュを避け、フォールバック表示するか何も出力しないかしてよい。
+## Identity and Space Resolution Semantics
+
+External clients should send stable external references. They should not send
+Iris-internal `account_id` values.
+
+- `provider` is a stable provider identifier such as `cli`, `discord`, or `web`.
+- `provider_subject` is stable within the provider and identifies the external account.
+- `display_name` is display-only and must not be used as an identity key.
+- `provider_space_ref` is stable within the provider and identifies the external interaction context.
+- `space_kind` should be specified by clients.
+
+Examples:
+
+- CLI one-shot: `provider=cli`, stable local `provider_subject`, and an optional one-shot `space_ref`.
+- CLI REPL: same account ref across turns and a session-stable `provider_space_ref`.
+- Discord DM: Discord user ID as `provider_subject`; stable DM conversation ID as `provider_space_ref` when available.
+- Discord channel: Discord user ID as `provider_subject`; channel ID as `provider_space_ref`.
+- Discord thread: Discord user ID as `provider_subject`; thread ID as `provider_space_ref`.
+- Future proactive/system observation: use a system or Iris actor kind and a stable system/provider space ref when there is an interaction context.
+
+Actor identity is the primary owner for memory and relationship semantics.
+`space_id` is contextual scope, not the primary owner of user memory.
