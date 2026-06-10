@@ -48,3 +48,12 @@ target = ".iris/config/llm.toml"
 source = ".iris/config/llm.example.toml"
 method = "copy"
 overwrite = false
+
+[[editable_configs]]
+id = "llm"
+label = "LLM Runtime Config"
+path = ".iris/config/llm.toml"
+template = ".iris/config/llm.example.toml"
+format = "toml"
+restart_required = true
+secret_policy = "warn"
