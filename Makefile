@@ -1,4 +1,6 @@
-.PHONY: check verify quick ai-check ai-quick ai-context ai-report ai-arch ai-test-target lint lint-fix format format-write type pyright arch test coverage deps doctor ci generate-protos help
+.PHONY: check verify quick ai-check ai-quick ai-context ai-report ai-arch ai-test-target e2e lint lint-fix format format-write type pyright arch test coverage deps doctor ci generate-protos help
+
+DEFAULT_TEST_TARGETS := tests/adapters tests/architecture tests/cognitive tests/contracts tests/core tests/features tests/presentation tests/runtime tests/scripts tests/test_oneturn_flow.py
 
 help:
 	@echo "Iris strict AI-coding verification targets:"
@@ -67,6 +69,9 @@ ai-test-target:
 	@test -n "$(TARGET)" || (echo "TARGET is required, e.g. make ai-test-target TARGET=tests/runtime/test_no_action_flow.py::test_no_action_skips_presenter" && exit 2)
 	uv run pytest $(TARGET) -q
 
+e2e:
+	uv run pytest tests/e2e -m "e2e and not llm_live"
+
 lint:
 	uv run ruff check .
 
@@ -89,10 +94,10 @@ arch:
 	uv run pytest tests/architecture -q
 
 test:
-	uv run pytest tests/
+	uv run pytest $(DEFAULT_TEST_TARGETS)
 
 coverage:
-	uv run pytest tests/ --cov=iris --cov-branch --cov-report=term-missing:skip-covered --cov-report=html --cov-fail-under=90
+	uv run pytest $(DEFAULT_TEST_TARGETS) --cov=iris --cov-branch --cov-report=term-missing:skip-covered --cov-report=html --cov-fail-under=90
 
 deps:
 	uv sync --all-groups

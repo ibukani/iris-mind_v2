@@ -218,7 +218,9 @@ markers = [
     "integration: 統合テスト",
     "architecture: v0.1 architecture boundary tests",
     "target: v0.1 target architecture tests and runtime tests",
-    "slow: 低速テスト",
+    "e2e: end-to-end tests",
+    "slow: slow tests",
+    "llm_live: tests requiring live LLM provider",
     "anyio: anyio-based async tests",
 ]
 

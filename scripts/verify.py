@@ -27,6 +27,18 @@ sys.path.insert(0, str(REPO_ROOT))
 from scripts._subprocess_runner import run as _run_command
 
 MYPY_TARGETS: tuple[str, ...] = ("iris", "tests", "scripts", "main.py")
+DEFAULT_TEST_TARGETS: tuple[str, ...] = (
+    "tests/adapters",
+    "tests/architecture",
+    "tests/cognitive",
+    "tests/contracts",
+    "tests/core",
+    "tests/features",
+    "tests/presentation",
+    "tests/runtime",
+    "tests/scripts",
+    "tests/test_oneturn_flow.py",
+)
 COVERAGE_ARGS: tuple[str, ...] = (
     "--cov=iris",
     "--cov-branch",
@@ -76,7 +88,7 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check(
         "tests+coverage",
-        ("uv", "run", "pytest", "tests/", *COVERAGE_ARGS),
+        ("uv", "run", "pytest", *DEFAULT_TEST_TARGETS, *COVERAGE_ARGS),
         full_only=True,
         failure_class="tests+coverage",
     ),
