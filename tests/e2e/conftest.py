@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 
@@ -13,3 +15,13 @@ def anyio_backend() -> str:
         AnyIO backend name.
     """
     return "asyncio"
+
+
+@pytest.fixture
+def repo_root() -> Path:
+    """Resolve the repository root for subprocess execution.
+
+    Returns:
+        Repository root path.
+    """
+    return Path(__file__).resolve().parents[2]

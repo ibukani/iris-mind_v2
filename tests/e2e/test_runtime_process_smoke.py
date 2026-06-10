@@ -25,9 +25,16 @@ if TYPE_CHECKING:
 
 @pytest.mark.e2e
 @pytest.mark.anyio
-async def test_runtime_process_starts_and_returns_runtime_info(tmp_path: Path) -> None:
+async def test_runtime_process_starts_and_returns_runtime_info(
+    tmp_path: Path,
+    repo_root: Path,
+) -> None:
     """Runtime subprocess exposes metadata over gRPC."""
-    runtime = start_runtime_process(port=find_free_port(), cwd=tmp_path)
+    runtime = start_runtime_process(
+        port=find_free_port(),
+        repo_root=repo_root,
+        runtime_home=tmp_path,
+    )
     try:
         response = await wait_for_runtime_ready(runtime)
     finally:
@@ -38,9 +45,16 @@ async def test_runtime_process_starts_and_returns_runtime_info(tmp_path: Path) -
 
 @pytest.mark.e2e
 @pytest.mark.anyio
-async def test_runtime_process_accepts_cli_like_submit_observation(tmp_path: Path) -> None:
+async def test_runtime_process_accepts_cli_like_submit_observation(
+    tmp_path: Path,
+    repo_root: Path,
+) -> None:
     """Runtime subprocess accepts a CLI-like SubmitObservation request."""
-    runtime = start_runtime_process(port=find_free_port(), cwd=tmp_path)
+    runtime = start_runtime_process(
+        port=find_free_port(),
+        repo_root=repo_root,
+        runtime_home=tmp_path,
+    )
     try:
         await wait_for_runtime_ready(runtime)
         response = await _submit_cli_observation(runtime.port)
@@ -54,9 +68,16 @@ async def test_runtime_process_accepts_cli_like_submit_observation(tmp_path: Pat
 
 @pytest.mark.e2e
 @pytest.mark.anyio
-async def test_runtime_process_shutdown_does_not_leave_child_process(tmp_path: Path) -> None:
+async def test_runtime_process_shutdown_does_not_leave_child_process(
+    tmp_path: Path,
+    repo_root: Path,
+) -> None:
     """Runtime subprocess cleanup leaves no child process running."""
-    runtime = start_runtime_process(port=find_free_port(), cwd=tmp_path)
+    runtime = start_runtime_process(
+        port=find_free_port(),
+        repo_root=repo_root,
+        runtime_home=tmp_path,
+    )
     try:
         await wait_for_runtime_ready(runtime)
     finally:

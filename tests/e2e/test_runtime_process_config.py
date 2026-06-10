@@ -20,11 +20,15 @@ if TYPE_CHECKING:
 
 @pytest.mark.e2e
 @pytest.mark.anyio
-async def test_runtime_process_starts_without_config_file(tmp_path: Path) -> None:
+async def test_runtime_process_starts_without_config_file(tmp_path: Path, repo_root: Path) -> None:
     """Runtime subprocess starts with built-in defaults and no config file."""
     assert not (tmp_path / ".iris/config/llm.toml").exists()
 
-    runtime = start_runtime_process(port=find_free_port(), cwd=tmp_path)
+    runtime = start_runtime_process(
+        port=find_free_port(),
+        repo_root=repo_root,
+        runtime_home=tmp_path,
+    )
     try:
         response = await wait_for_runtime_ready(runtime)
     finally:
@@ -34,11 +38,15 @@ async def test_runtime_process_starts_without_config_file(tmp_path: Path) -> Non
 
 
 @pytest.mark.e2e
-def test_runtime_process_fails_with_missing_explicit_config(tmp_path: Path) -> None:
+def test_runtime_process_fails_with_missing_explicit_config(
+    tmp_path: Path,
+    repo_root: Path,
+) -> None:
     """Runtime subprocess fails clearly for an explicit missing config path."""
     runtime = start_runtime_process(
         port=find_free_port(),
-        cwd=tmp_path,
+        repo_root=repo_root,
+        runtime_home=tmp_path,
         config_path=tmp_path / "missing.toml",
     )
     stdout, stderr = _communicate_or_kill(runtime.process)

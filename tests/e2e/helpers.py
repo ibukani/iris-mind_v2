@@ -54,7 +54,8 @@ def find_free_port() -> int:
 def start_runtime_process(
     *,
     port: int,
-    cwd: Path,
+    repo_root: Path,
+    runtime_home: Path,
     config_path: Path | None = None,
     extra_env: Mapping[str, str] | None = None,
 ) -> RuntimeProcess:
@@ -86,8 +87,8 @@ def start_runtime_process(
 
     process = subprocess.Popen(  # noqa: S603 -- E2E runs a fixed uv command tuple.
         command,
-        cwd=cwd,
-        env=_runtime_env(cwd=cwd, extra_env=extra_env),
+        cwd=repo_root,
+        env=_runtime_env(runtime_home=runtime_home, extra_env=extra_env),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -200,12 +201,12 @@ def build_cli_submit_observation_request() -> runtime_pb2.SubmitObservationReque
     )
 
 
-def _runtime_env(*, cwd: Path, extra_env: Mapping[str, str] | None) -> dict[str, str]:
+def _runtime_env(*, runtime_home: Path, extra_env: Mapping[str, str] | None) -> dict[str, str]:
     env = os.environ.copy()
     env.pop("IRIS_MIND_CONFIG", None)
-    env["XDG_CONFIG_HOME"] = str(cwd / "xdg-config")
-    env["HOME"] = str(cwd / "home")
-    env["UV_CACHE_DIR"] = str(cwd / "uv-cache")
+    env["XDG_CONFIG_HOME"] = str(runtime_home / "xdg-config")
+    env["HOME"] = str(runtime_home / "home")
+    env["UV_CACHE_DIR"] = str(runtime_home / "uv-cache")
     if extra_env is not None:
         env.update(extra_env)
     return env
