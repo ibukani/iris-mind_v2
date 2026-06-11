@@ -47,12 +47,6 @@ cwd = "."
 command = "make"
 args = ["check"]
 
-[[config_templates]]
-target = ".iris/config/llm.toml"
-source = ".iris/config/llm.example.toml"
-method = "copy"
-overwrite = false
-
 [[editable_configs]]
 id = "llm"
 label = "LLM Runtime Config"
@@ -62,3 +56,4 @@ format = "toml"
 schema = "iris-mind.runtime.v1"
 restart_required = true
 secret_policy = "warn"
+provision = "copy_if_missing"
