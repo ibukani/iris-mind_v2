@@ -75,11 +75,11 @@ async def test_account_persists_across_runtime_restart(
 
 @pytest.mark.e2e
 @pytest.mark.anyio
-async def test_display_name_change_does_not_change_identity(
+async def test_display_name_change_updates_account_without_creating_new_account(
     tmp_path: Path,
     repo_root: Path,
 ) -> None:
-    """display_name update preserves account and provisional actor identity."""
+    """display_name変更は既存accountを更新し、新規accountを作成しない。"""
     db_path = tmp_path / "state.sqlite3"
     config_path = _write_sqlite_config(tmp_path, db_path)
     runtime = start_runtime_process(
@@ -91,16 +91,18 @@ async def test_display_name_change_does_not_change_identity(
     try:
         await wait_for_runtime_ready(runtime)
         await _submit_cli_messages(runtime.port, ("msg-1",), display_name="Local User")
+        first_account_id = _single_account_id(db_path)
         await _submit_cli_messages(runtime.port, ("msg-2",), display_name="Renamed User")
     finally:
         await stop_runtime_process(runtime)
 
-    rows = _account_rows(db_path)
-    assert len(rows) == 1
-    account_id = AccountId(cast("str", rows[0]["account_id"]))
-    assert rows[0]["display_name"] == "Renamed User"
-    assert rows[0]["linked_actor_id"] is None
-    assert stable_actor_id(account_id) == stable_actor_id(account_id)
+    second_rows = _account_rows(db_path)
+    assert len(second_rows) == 1
+    second_account_id = AccountId(cast("str", second_rows[0]["account_id"]))
+    assert second_account_id == first_account_id
+    assert second_rows[0]["display_name"] == "Renamed User"
+    assert second_rows[0]["linked_actor_id"] is None
+    assert stable_actor_id(second_account_id) == stable_actor_id(first_account_id)
 
 
 @pytest.mark.e2e
@@ -230,3 +232,9 @@ def _account_rows(db_path: Path) -> list[sqlite3.Row]:
         return list(rows)
     finally:
         conn.close()
+
+
+def _single_account_id(db_path: Path) -> AccountId:
+    rows = _account_rows(db_path)
+    assert len(rows) == 1
+    return AccountId(cast("str", rows[0]["account_id"]))
