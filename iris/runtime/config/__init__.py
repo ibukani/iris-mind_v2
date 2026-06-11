@@ -20,6 +20,7 @@ from iris.runtime.config.logging import RuntimeLoggingConfig
 from iris.runtime.config.root import (
     IrisRuntimeConfig,
     RuntimeConfigOverrides,
+    all_model_slots_are_fake,
     apply_runtime_overrides,
     default_runtime_config,
     discover_default_config_path,
@@ -27,6 +28,7 @@ from iris.runtime.config.root import (
     normalize_config_path,
     parse_llm_provider,
 )
+from iris.runtime.config.safety import RuntimeSafetyConfig
 from iris.runtime.config.server import RuntimeServerConfig
 from iris.runtime.config.state import RuntimeStateConfig
 
@@ -41,8 +43,10 @@ __all__ = [
     "RuntimeModelsConfig",
     "RuntimeOllamaConfig",
     "RuntimeOpenAIConfig",
+    "RuntimeSafetyConfig",
     "RuntimeServerConfig",
     "RuntimeStateConfig",
+    "all_model_slots_are_fake",
     "apply_runtime_overrides",
     "default_runtime_config",
     "discover_default_config_path",

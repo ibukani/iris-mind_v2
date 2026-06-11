@@ -8,12 +8,12 @@ from pathlib import Path
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
-from iris.cognitive.memory.hybrid import HybridMemoryRetriever
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateConfig
 from iris.runtime.server import build_runtime_components
 from iris.runtime.wiring.app import build_app_from_config
+from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
 from tests.helpers.private_access import get_private_attr, get_private_attr_path
 
 _MODULE_PATH = Path("iris/runtime/wiring/app.py")
@@ -28,10 +28,10 @@ def _read_app_wiring_source() -> str:
     return _MODULE_PATH.read_text(encoding="utf-8")
 
 
-def test_build_runtime_components_uses_hybrid_retrieval_for_sqlite(
+def test_build_runtime_components_uses_fts5_retrieval_for_sqlite(
     tmp_path: Path,
 ) -> None:
-    """SQLite バックエンドではハイブリッド検索が有効化される。"""
+    """埋め込み関数なしのSQLiteバックエンドではFTS5検索が使われる。"""
     db_path = tmp_path / "state.db"
     config = default_runtime_config()
     config = replace(
@@ -48,8 +48,8 @@ def test_build_runtime_components_uses_hybrid_retrieval_for_sqlite(
     ]
     assert len(retrieval_steps) == 1
     retriever = get_private_attr(retrieval_steps[0], "_retriever")
-    assert isinstance(retriever, HybridMemoryRetriever)
-    assert get_private_attr_path(retriever, "_fts", "_store") is components.stores.memory_store
+    assert isinstance(retriever, SQLiteFTS5MemoryRetriever)
+    assert get_private_attr(retriever, "_store") is components.stores.memory_store
 
 
 def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> None:

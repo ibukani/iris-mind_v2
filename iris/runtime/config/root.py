@@ -30,6 +30,7 @@ from iris.runtime.config.llm import (
 )
 from iris.runtime.config.logging import RuntimeLoggingConfig
 from iris.runtime.config.parsing import table_or_empty
+from iris.runtime.config.safety import RuntimeSafetyConfig, apply_safety_env
 from iris.runtime.config.server import (
     RuntimeServerConfig,
     apply_server_env,
@@ -65,6 +66,7 @@ class IrisRuntimeConfig:
     ollama: RuntimeOllamaConfig
     openai: RuntimeOpenAIConfig
     logging: RuntimeLoggingConfig
+    safety: RuntimeSafetyConfig
 
 
 @dataclass(frozen=True)
@@ -103,6 +105,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         ollama=RuntimeOllamaConfig(),
         openai=RuntimeOpenAIConfig(),
         logging=RuntimeLoggingConfig(),
+        safety=RuntimeSafetyConfig(),
     )
 
 
@@ -256,6 +259,24 @@ def parse_llm_provider(value: str) -> LLMProvider:
     return validate_provider(value, "models.default_chat.provider")
 
 
+def all_model_slots_are_fake(config: IrisRuntimeConfig) -> bool:
+    """全モデルスロットが fake プロバイダか判定する。
+
+    開発・テスト用の判断に使う。
+
+    Args:
+        config: ランタイム設定。
+
+    Returns:
+        bool: 全モデルスロットが fake プロバイダなら True。
+    """
+    return (
+        config.models.default_chat.provider == "fake"
+        and config.models.fast_judge.provider == "fake"
+        and config.models.reasoning.provider == "fake"
+    )
+
+
 def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfig:
     """最上位 TOML テーブルをランタイム設定全体に適用する。
 
@@ -302,6 +323,7 @@ def _apply_env(
     """
     server = apply_server_env(config.server, env)
     state = apply_state_env(config.state, env)
+    safety = apply_safety_env(config.safety, env)
 
     models, ollama, openai, logging = apply_env(
         config.models, config.ollama, config.openai, config.logging, env
@@ -314,4 +336,5 @@ def _apply_env(
         ollama=ollama,
         openai=openai,
         logging=logging,
+        safety=safety,
     )

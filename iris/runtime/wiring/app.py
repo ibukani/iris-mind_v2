@@ -18,12 +18,17 @@ from iris.runtime.wiring.cognitive import (
     wire_text_response_cognitive_cycle,
 )
 from iris.runtime.wiring.llm import LLMClientFactory, wire_response_generator
-from iris.runtime.wiring.memory import wire_sqlite_hybrid_memory_retriever
+from iris.runtime.wiring.memory import (
+    SQLiteFTS5MemoryRetriever,
+    wire_sqlite_hybrid_memory_retriever,
+)
+from iris.runtime.wiring.presentation import wire_action_safety_gate, wire_output_safety_gate
 
 if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
     from iris.adapters.memory.ports import MemoryStore
     from iris.adapters.memory.vector import EmbeddingFunction
+    from iris.cognitive.memory.retrieval import MemoryRetriever
     from iris.runtime.config import IrisRuntimeConfig
 
 
@@ -142,13 +147,16 @@ def build_app_from_config(
     client = factory.create_client(model_config, config)
     model = factory.resolve_model(model_config, config)
 
-    memory_retriever = None
+    memory_retriever: MemoryRetriever | None = None
     vector_index = None
-    if embed_text is not None and isinstance(memory_store, SQLiteMemoryStore):
-        memory_retriever, vector_index = wire_sqlite_hybrid_memory_retriever(
-            store=memory_store,
-            embed_text=embed_text,
-        )
+    if isinstance(memory_store, SQLiteMemoryStore):
+        if embed_text is not None:
+            memory_retriever, vector_index = wire_sqlite_hybrid_memory_retriever(
+                store=memory_store,
+                embed_text=embed_text,
+            )
+        else:
+            memory_retriever = SQLiteFTS5MemoryRetriever(memory_store)
 
     response_generator = ResponseGenerationStep(
         wire_response_generator(
@@ -165,4 +173,8 @@ def build_app_from_config(
         vector_index=vector_index,
         response_generator=response_generator,
     )
-    return IrisApp(cycle=cycle)
+    return IrisApp(
+        cycle=cycle,
+        action_safety_gate=wire_action_safety_gate(),
+        output_safety_gate=wire_output_safety_gate(safety_config=config.safety),
+    )
