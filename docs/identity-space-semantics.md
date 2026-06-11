@@ -1,56 +1,53 @@
 # Identity and Space Semantics
 
-This document defines the stable identity and space terms used by the Iris runtime.
+Iris-Mind runtime における Account、Actor、Identity、Space の意味を定義する。
 
 ## Account
 
-An Account represents an external provider account binding, not the person itself.
+Account は外部provider上のアカウント binding を表す。人物そのものではない。
 
-Examples:
-
-- `cli:local-user-id`
-- `discord:discord-user-id`
-- `github:github-user-id`
-- `web:web-user-id`
-
-The natural key is `provider + provider_subject`. `display_name` is mutable,
-display-only data and must never be used as an identity key. `account_id` is an
-Iris-internal ID. Multiple Accounts may be linked to one Actor.
+- identity key: `provider + provider_subject`
+- `display_name`: 可変の表示用データ。identity key に使わない。
+- `account_id`: Iris 内部ID。
+- 複数 Account は同じ Actor に link できる。
 
 ## Actor
 
-Actor is the Iris-internal subject. It is the primary scope for long-term memory,
-relationship state, future persona patches, and future user profile inference.
+Actor は Iris 内部の主体。長期記憶、関係性、将来のpersona状態の主スコープ。
 
-Actor can represent a human, device, service, system, or Iris itself. One human
-may have multiple provider accounts. Linking or merging accounts changes future
-resolution, but must not delete memory by default.
+Actor は human、device、service、system、Iris 自身を表せる。1人のhumanが複数provider accountを持つ場合、Account link で同じ Actor に束ねる。Account unlink は既定で記憶を削除しない。
 
 ## Identity
 
-Identity is a resolved per-observation snapshot of an Actor. It is not a store
-and not the durable profile itself.
+Identity は1 observation内で解決済みの snapshot。永続aggregateではない。
 
-Identity includes `actor_id`, `actor_kind`, `display_name`, optional provider
-info, optional `account_id`, optional `device_id`, and metadata. Resolved
-Identity is passed into the cognitive runtime as context.
+Identity は `actor_id`, `actor_kind`, `display_name`, optional provider info, optional `account_id`, optional `device_id`, metadata を含む。
 
-## Space
+## Space Persistence Policy
 
-Space is the external interaction context, such as a CLI one-shot request, CLI
-REPL session, Discord DM, Discord channel, Discord thread, or future voice room.
+Default Iris-Mind runtime は `SpaceBinding` を永続化しない。
 
-Space is not the primary owner of user memory. It may narrow memory retrieval as
-a context key, but must not store full conversation history or persona state.
-Space should remain lightweight.
+Space は `ExternalSpaceRef` から導出されるエフェメラルで決定論的なcontext。Space の安定identityは `provider + provider_space_ref` から計算される。このため、永続binding tableなしで安定した `space_id` を得られる。
+
+Space は将来の conversation log や memory record にcontextとして記録してよい。ただし Space 自体は durable aggregate root ではない。
+
+| Concept | Persisted? | Primary purpose |
+|---|---:|---|
+| AccountProfile | Yes | External account binding |
+| Account → Actor link | Yes | Cross-account identity continuity |
+| Actor | Yes / logically durable | Main subject for memory and relationship |
+| Identity | No | Per-observation resolved snapshot |
+| Space | No | External interaction context |
+| SpaceBinding | No in default runtime | Reserved extension only |
+| MemoryRecord | Yes | Long-term memory |
+| ConversationLog | Future yes | Raw event/log history |
 
 ## SpaceBinding
 
-SpaceBinding maps `provider + provider_space_ref` to a stable Iris-internal
-`space_id`. A binding may be persisted.
+`SpaceBinding` と `SpaceBindingStore` は予約済みextension contract。default runtime では永続化せず、配線しない。
 
-SpaceBinding may store provider, provider space ref, internal space ID, display
-name, space kind, and small metadata.
+明示的な外部integrationが将来必要になった場合のみ使う。その場合も conversation history、long-term personality state、user memory body、relationship state を SpaceBinding に置いてはならない。
 
-SpaceBinding must not store conversation history, long-term personality state,
-user memory body, or relationship state.
+## Scope Rule
+
+Memory、relationship、persona semantics の主スコープは `actor_id`。`space_id` は外部interactionのcontext scopeとしてのみ扱う。

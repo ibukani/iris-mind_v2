@@ -139,15 +139,14 @@ message ExternalSpaceRef {
 
 - **InteractionSpace**: Iris 内部の会話コンテキスト。ランタイムのコンテキストラベルとして使われます。
 - **ExternalSpaceRef**: 外部プロバイダのロケーション情報（例: Discordのチャンネル、CLIルームなど）。
-- **SpaceBinding**: 外部プロバイダのロケーションと Iris 内部の `space_id` とのマッピング。
-- **SpaceBindingStore**: 非永続的、あるいは設定ベースのバインディングのルックアップソース。
+- **SpaceBinding**: 予約済みextension contract。default runtime では永続化も配線もしない。
+- **SpaceBindingStore**: 予約済みextension contract。通常のspace解決には使わない。
 - **RawInteractionLog**: （将来構想）バックアップや再処理のために生のObservationとResponseを保存する場所。
 
 解決の流れの例:
 ```text
 ExternalSpaceRef(provider="discord", provider_space_ref="123")
-→ SpaceBinding(space_id="bound-space-...")
-→ 存在しない場合はフォールバックとして決定論的 SpaceId(space-discord-<hash>) を生成
+→ deterministic SpaceId(space-discord-<hash>)
 ```
 
 **注意事項**:

@@ -133,3 +133,18 @@ Examples:
 
 Actor identity is the primary owner for memory and relationship semantics.
 `space_id` is contextual scope, not the primary owner of user memory.
+## ExternalSpaceRef space semantics
+
+`ExternalSpaceRef` は default server でエフェメラルかつ決定論的に解決される。default runtime は `SpaceBinding` を永続化しない。
+
+安定した `space_id` が必要な client は、provider内で安定した `provider_space_ref` を送ること。
+
+例:
+
+- CLI one-shot: `provider = "cli"`、`provider_space_ref = "oneshot:<request-id>"`。one-shot context が不要なら省略可能なruntime経路では送らない。
+- CLI REPL: `provider = "cli"`、`provider_space_ref = "session:<stable-repl-session-id>"`
+- Discord DM: `provider = "discord"`、`provider_space_ref = "dm:<stable-dm-id>"`
+- Discord channel: `provider = "discord"`、`provider_space_ref = "channel:<channel-id>"`
+- Discord thread: `provider = "discord"`、`provider_space_ref = "thread:<thread-id>"`
+
+`display_name`、metadata、`space_kind` は `space_id` のidentity keyではない。

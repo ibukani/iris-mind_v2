@@ -792,3 +792,8 @@ Use `actor_id` as the primary owner for memory and relationship semantics.
 Use `space_id` as contextual scope, not as the primary owner of user memory.
 Do not use `display_name` as a stable identifier.
 Do not store conversation history directly on `SpaceBinding`.
+## Space Context Rule
+
+Memory、relationship、persona semantics の主スコープは `actor_id`。`space_id` は外部interaction contextとしてのみ使う。
+
+Default runtime は `SpaceBinding` を永続化しない。Space に conversation history や persona state を紐づけない。

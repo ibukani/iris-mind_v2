@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     import grpc
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
-from iris.adapters.app_gateway.space_resolver import SpaceBindingAwareSpaceResolver
+from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.runtime.config import RuntimeConfigOverrides, load_runtime_config
 from iris.runtime.config.init import init_runtime_config, runtime_config_template
@@ -39,7 +39,7 @@ class RuntimeComponents:
     stores: RuntimeStateStores
     runtime_service: IrisRuntimeService
     identity_resolver: AccountBackedIdentityResolver
-    space_resolver: SpaceBindingAwareSpaceResolver
+    space_resolver: EphemeralSpaceResolver
 
 
 def _fake_embed_text(_text: str) -> Sequence[float]:
@@ -76,9 +76,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     )
     runtime_service = IrisRuntimeService(app)
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
-    space_resolver = SpaceBindingAwareSpaceResolver(
-        binding_store=stores.space_binding_store,
-    )
+    space_resolver = EphemeralSpaceResolver()
     return RuntimeComponents(
         stores=stores,
         runtime_service=runtime_service,

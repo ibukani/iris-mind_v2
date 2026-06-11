@@ -1,4 +1,4 @@
-"""Identity and space lifecycle process E2E tests."""
+"""Identity persistence and ephemeral space lifecycle E2E tests."""
 
 from __future__ import annotations
 
@@ -7,8 +7,11 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from iris.adapters.app_gateway.stable_ids import stable_actor_id
-from iris.core.ids import AccountId
+from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
+from iris.adapters.app_gateway.stable_ids import stable_actor_id, stable_space_id
+from iris.contracts.external_refs import ExternalSpaceRef
+from iris.contracts.spaces import SpaceKind
+from iris.core.ids import AccountId, ExternalRef
 from tests.e2e.helpers import (
     build_cli_submit_observation_request,
     create_runtime_channel,
@@ -52,7 +55,6 @@ async def test_account_persists_across_runtime_restart(
     first_rows = _account_rows(db_path)
     assert len(first_rows) == 1
     first_account_id = first_rows[0]["account_id"]
-    assert _space_binding_count(db_path) == 0
 
     restarted = start_runtime_process(
         port=find_free_port(),
@@ -131,6 +133,35 @@ async def test_different_provider_creates_different_account(
     assert len(actor_ids) == 2
 
 
+@pytest.mark.e2e
+@pytest.mark.anyio
+async def test_ephemeral_space_id_is_deterministic_without_persistence() -> None:
+    """同じ外部space refは永続storeなしで同じspace_idに解決される。"""
+    before_restart = EphemeralSpaceResolver()
+    after_restart = EphemeralSpaceResolver()
+    first_ref = ExternalSpaceRef(
+        provider="cli",
+        provider_space_ref=ExternalRef("session:stable-repl-session"),
+        display_name="Initial session",
+        space_kind=SpaceKind.ROOM,
+    )
+    second_ref = ExternalSpaceRef(
+        provider="cli",
+        provider_space_ref=ExternalRef("session:stable-repl-session"),
+        display_name="Renamed session",
+        space_kind=SpaceKind.THREAD,
+    )
+
+    first = await before_restart.resolve_space(first_ref)
+    second = await after_restart.resolve_space(second_ref)
+
+    assert first.space_id == second.space_id
+    assert first.space_id == stable_space_id(
+        "cli",
+        ExternalRef("session:stable-repl-session"),
+    )
+
+
 def _write_sqlite_config(tmp_path: Path, db_path: Path) -> Path:
     config_path = tmp_path / "runtime.toml"
     config_path.write_text(
@@ -199,14 +230,3 @@ def _account_rows(db_path: Path) -> list[sqlite3.Row]:
         return list(rows)
     finally:
         conn.close()
-
-
-def _space_binding_count(db_path: Path) -> int:
-    conn = sqlite3.connect(db_path)
-    try:
-        row = conn.execute("SELECT COUNT(*) FROM space_bindings").fetchone()
-    finally:
-        conn.close()
-    if row is None:
-        return 0
-    return int(row[0])
