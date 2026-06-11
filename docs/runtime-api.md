@@ -56,7 +56,9 @@ message SubmitObservationRequest {
 - **`provider`**: `"cli"` とする。
 - **`provider_subject`**: クライアント側ローカルユーザの安定識別子 (例: ローカル OS ユーザ名や固定 CLI ID)。
 - **`display_name`**: マッパーが要求する。ユーザの表示名。
-- **`actor_kind`**: `ACTOR_KIND_HUMAN` とする。
+- **`actor_kind`**: 既知なら明示する。`ExternalAccountRef` では
+  `ACTOR_KIND_UNSPECIFIED` も受理され、`ACTOR_KIND_HUMAN` として解決される。
+  この既定値は直接指定する `Identity` には適用されない。
 
 ### `ExternalSpaceRef`
 外部インタラクションコンテキストを表す。サーバ側でエフェメラルに解決され、永続化されない。

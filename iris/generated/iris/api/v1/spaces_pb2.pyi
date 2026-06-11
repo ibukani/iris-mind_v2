@@ -45,7 +45,9 @@ Global___SpaceKind: _TypeAlias = SpaceKind  # noqa: Y015
 @_typing.final
 class ExternalSpaceRef(_message.Message):
     """External interaction context. It is contextual scope, not the primary owner
-    of long-term memory or relationship state.
+    of long-term memory, relationship state, persona state, or conversation
+    history. The default server resolves this reference ephemerally and
+    deterministically, and does not persist SpaceBinding.
     """
 
     DESCRIPTOR: _descriptor.Descriptor
@@ -76,11 +78,12 @@ class ExternalSpaceRef(_message.Message):
     SPACE_KIND_FIELD_NUMBER: _builtins.int
     METADATA_FIELD_NUMBER: _builtins.int
     provider: _builtins.str
-    """Stable provider identifier. Should match the account provider when applicable."""
     provider_space_ref: _builtins.str
-    """Stable space identifier within the provider, e.g. channel ID or thread ID."""
+    """Stable provider-local space identifier. Clients must keep this stable when
+    they want stable space_id behavior.
+    """
     display_name: _builtins.str
-    """Display-only space name. Not a stable key."""
+    """Display-only space name. It does not participate in identity."""
     space_kind: Global___SpaceKind.ValueType
     """Clients should specify the observed space kind. Unspecified is rejected by the mapper."""
     @_builtins.property

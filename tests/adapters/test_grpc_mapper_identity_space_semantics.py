@@ -10,6 +10,7 @@ from iris.adapters.grpc.mappers import (
     GrpcMappingError,
     external_account_ref_from_proto,
     external_space_ref_from_proto,
+    identity_from_proto,
 )
 from iris.contracts.identity import ActorKind
 from iris.contracts.spaces import SpaceKind
@@ -83,6 +84,20 @@ def test_unspecified_actor_kind_defaults_to_human_for_external_account_ref() -> 
     )
 
     assert ref.actor_kind is ActorKind.HUMAN
+
+
+def test_unspecified_actor_kind_is_rejected_for_direct_identity() -> None:
+    """Direct Identity rejects unspecified actor_kind."""
+    with pytest.raises(GrpcMappingError, match="actor kind"):
+        identity_from_proto(
+            identity_pb2.Identity(
+                actor_id="actor-1",
+                actor_kind=identity_pb2.ACTOR_KIND_UNSPECIFIED,
+                display_name="Mina",
+                provider="discord",
+                provider_subject="user-1",
+            )
+        )
 
 
 def test_unspecified_space_kind_is_rejected_for_external_space_ref() -> None:

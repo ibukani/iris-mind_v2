@@ -33,7 +33,7 @@ message ExternalAccountRef {
   string provider_subject = 2;
   // Mutable display name. Never used as an identity key.
   string display_name = 3;
-  // Clients should specify actor kind. Unspecified is rejected by the mapper.
+  // Clients should specify actor kind when known. Unspecified defaults to HUMAN.
   ActorKind actor_kind = 4;
   map<string, string> metadata = 5;
 }

@@ -77,11 +77,11 @@ class Identity(_message.Message):
     actor_id: _builtins.str
     actor_kind: Global___ActorKind.ValueType
     display_name: _builtins.str
-    """Display-only name captured for this observation. Not an identity key."""
+    """Display-only name captured for presentation. Not an identity key."""
     provider: _builtins.str
     """Stable external provider identifier, for example "cli" or "discord"."""
     provider_subject: _builtins.str
-    """Stable subject identifier within the provider. Not a display name."""
+    """Stable provider-local account identifier. Not a display name."""
     account_id: _builtins.str
     """Iris-internal account binding ID. External clients should not invent this."""
     device_id: _builtins.str
@@ -139,11 +139,11 @@ class ExternalAccountRef(_message.Message):
     provider: _builtins.str
     """Stable provider identifier. Should be "cli" for iris-cli_v2."""
     provider_subject: _builtins.str
-    """Stable account identifier on the client/provider side. Must not be display_name."""
+    """Stable provider-local account identifier. Must not be display_name."""
     display_name: _builtins.str
-    """Human-readable display name. Mutable and never used as an identity key."""
+    """Mutable display name. Never used as an identity key."""
     actor_kind: Global___ActorKind.ValueType
-    """Clients should specify the observed actor kind. Unspecified is rejected by the mapper."""
+    """Clients should specify actor kind when known. Unspecified defaults to HUMAN."""
     @_builtins.property
     def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]: ...
     def __init__(
