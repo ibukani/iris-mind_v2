@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.parsing import parse_float, parse_int, parse_string
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -85,15 +86,11 @@ def apply_server_toml(
     """
     host = config.host
     if "host" in table:
-        host = str(table["host"])
+        host = parse_string(table["host"], "server.host")
 
     port = config.port
     if "port" in table:
-        try:
-            port = int(str(table["port"]))
-        except (ValueError, TypeError) as err:
-            message = f"Invalid server port: {table['port']}"
-            raise ConfigError(message) from err
+        port = parse_int(table["port"], "server.port")
         port = validate_server_port(port, source="server.port")
 
     local_only = config.local_only
@@ -106,11 +103,13 @@ def apply_server_toml(
 
     shutdown_grace = config.shutdown_grace_seconds
     if "shutdown_grace_seconds" in table:
-        try:
-            shutdown_grace = float(str(table["shutdown_grace_seconds"]))
-        except (ValueError, TypeError) as err:
-            message = f"Invalid server shutdown_grace_seconds: {table['shutdown_grace_seconds']}"
-            raise ConfigError(message) from err
+        shutdown_grace = parse_float(
+            table["shutdown_grace_seconds"],
+            "server.shutdown_grace_seconds",
+        )
+        if shutdown_grace < 0:
+            message = "server.shutdown_grace_seconds must be zero or greater"
+            raise ConfigError(message)
 
     return replace(
         config,

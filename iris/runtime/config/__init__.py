@@ -19,6 +19,7 @@ from iris.runtime.config.llm import (
 from iris.runtime.config.logging import RuntimeLoggingConfig
 from iris.runtime.config.root import (
     IrisRuntimeConfig,
+    RuntimeConfigMetadata,
     RuntimeConfigOverrides,
     all_model_slots_are_fake,
     apply_runtime_overrides,
@@ -27,16 +28,20 @@ from iris.runtime.config.root import (
     load_runtime_config,
     normalize_config_path,
     parse_llm_provider,
+    resolve_runtime_config_path,
 )
 from iris.runtime.config.safety import RuntimeSafetyConfig
 from iris.runtime.config.server import RuntimeServerConfig
+from iris.runtime.config.spec import ConfigFieldSpec, runtime_config_specs
 from iris.runtime.config.state import RuntimeStateConfig
 
 __all__ = [
     "ConfigError",
+    "ConfigFieldSpec",
     "IrisRuntimeConfig",
     "LLMProvider",
     "ModelSlotName",
+    "RuntimeConfigMetadata",
     "RuntimeConfigOverrides",
     "RuntimeLoggingConfig",
     "RuntimeModelConfig",
@@ -53,4 +58,6 @@ __all__ = [
     "load_runtime_config",
     "normalize_config_path",
     "parse_llm_provider",
+    "resolve_runtime_config_path",
+    "runtime_config_specs",
 ]

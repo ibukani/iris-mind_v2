@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.parsing import parse_string
 
 if TYPE_CHECKING:
     from iris.runtime.config.parsing import TomlTable
@@ -79,11 +80,11 @@ def apply_state_toml(config: RuntimeStateConfig, table: TomlTable) -> RuntimeSta
     sqlite_path = config.sqlite_path
 
     if "backend" in table:
-        value = str(table["backend"])
+        value = parse_string(table["backend"], "state.backend")
         backend = validate_backend(value, "state.backend in TOML")
 
     if "sqlite_path" in table:
-        sqlite_path = str(table["sqlite_path"])
+        sqlite_path = parse_string(table["sqlite_path"], "state.sqlite_path")
 
     new_config = replace(config, backend=backend, sqlite_path=sqlite_path)
     return validate_state_config(new_config)

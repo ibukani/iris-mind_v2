@@ -7,8 +7,8 @@ from pathlib import Path
 
 from iris.runtime.config.errors import ConfigError
 
-DEFAULT_RUNTIME_CONFIG_PATH = Path(".iris/config/llm.toml")
-EXAMPLE_RUNTIME_CONFIG_PATH = Path(".iris/config/llm.example.toml")
+DEFAULT_RUNTIME_CONFIG_PATH = Path(".iris/config/runtime.toml")
+EXAMPLE_RUNTIME_CONFIG_PATH = Path(__file__).parents[3] / ".iris/config/runtime.example.toml"
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ def init_runtime_config(
     """サンプル TOML からローカルランタイム設定を初期化する。
 
     Args:
-        path: 作成先の TOML パス。省略時は `.iris/config/llm.toml`。
+        path: 作成先の TOML パス。省略時は `.iris/config/runtime.toml`。
         force: 既存ファイルを上書きするかどうか。
         print_only: テンプレート内容のみ返すため、ファイルを書かない。
 

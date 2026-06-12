@@ -1,27 +1,7 @@
+# Legacy LLM-only partial example.
+# The canonical full template is .iris/config/runtime.example.toml.
+# Existing .iris/config/llm.toml files remain discoverable for compatibility.
+
 [models.default_chat]
 provider = "ollama"
 model = "qwen3:8b"
-temperature = 0.7
-max_output_tokens = 512
-
-[models.fast_judge]
-provider = "ollama"
-model = "qwen3:4b"
-temperature = 0.0
-max_output_tokens = 128
-
-[models.reasoning]
-provider = "ollama"
-model = "deepseek-r1:8b"
-temperature = 0.0
-max_output_tokens = 1024
-
-[ollama]
-base_url = "http://localhost:11434"
-timeout_seconds = 120.0
-keep_alive = "5m"
-
-[openai]
-model = "gpt-5-mini"
-timeout_seconds = 60.0
-max_output_tokens = 512

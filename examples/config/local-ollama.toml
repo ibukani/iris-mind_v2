@@ -4,7 +4,7 @@
 # Omitted fields keep the built-in defaults.
 #
 # Apply with:
-#   uv run python main.py --config examples/config/local-ollama.toml --text "hello"
+#   uv run python -m iris.runtime.server --config examples/config/local-ollama.toml
 #
 # Sensitive material such as provider keys, auth tokens, and passwords
 # must never be stored here. Use environment variables (or your secret

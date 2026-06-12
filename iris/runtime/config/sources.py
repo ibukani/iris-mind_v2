@@ -19,7 +19,7 @@ from iris.runtime.config.logging import (
     apply_logging_env,
     apply_logging_toml,
 )
-from iris.runtime.config.parsing import TomlTable, load_toml, table_or_empty
+from iris.runtime.config.parsing import TomlTable, load_toml, table_or_empty, validate_toml_keys
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -42,7 +42,9 @@ def read_toml_file(path: Path) -> TomlTable:
         message = f"Runtime config file does not exist: {path}"
         raise ConfigError(message)
     with path.open("rb") as file:
-        return load_toml(file)
+        table = load_toml(file)
+    validate_toml_keys(table, source=str(path))
+    return table
 
 
 def apply_toml(

@@ -11,12 +11,16 @@ uv run python -m iris.runtime.server --config ./configs/dev.toml
 uv run python -m iris.runtime.server --host 127.0.0.1 --port 50051
 ```
 
-通常起動は、次の順序で最初に存在する config を自動ロードする。
+通常起動は**単一TOML source policy**を採用する。次の順序で最初に存在する
+configだけをロードする。
 
-1. `./.iris/config/llm.toml`
-2. `$IRIS_MIND_CONFIG`
-3. `$XDG_CONFIG_HOME/iris-mind/llm.toml`
-4. `~/.config/iris-mind/llm.toml`
+1. `./.iris/config/runtime.toml`
+2. `./.iris/config/llm.toml` (非推奨の互換fallback)
+3. `$IRIS_MIND_CONFIG`
+4. `$XDG_CONFIG_HOME/iris-mind/runtime.toml`
+5. `$XDG_CONFIG_HOME/iris-mind/llm.toml` (非推奨の互換fallback)
+6. `~/.config/iris-mind/runtime.toml`
+7. `~/.config/iris-mind/llm.toml` (非推奨の互換fallback)
 
 config が見つからない場合はエラーにしない。組み込み defaults、環境変数、CLI overrides だけで起動する。`--config PATH` は default discovery を無効化して指定 TOML を直接使う。`--config PATH` が存在しない場合、または `$IRIS_MIND_CONFIG` が存在しない path を指す場合は `ConfigError`。
 
@@ -40,11 +44,11 @@ ollama pull deepseek-r1:8b
 
 
 
-## ランタイム LLM 設定
+## ランタイム設定
 
 Iris は設定ファイルなしでも起動し、組み込みデフォルトを使う。
 ランタイム設定をカスタマイズしたい場合だけ、ローカル設定ファイルを明示的に作成する。
-推奨パスは `.iris/config/llm.toml`。
+推奨パスは `.iris/config/runtime.toml`。
 
 ```bash
 uv run python -m iris.runtime.server init-config
@@ -56,8 +60,14 @@ uv run python -m iris.runtime.server init-config
 uv run python -m iris.runtime.server
 ```
 
-`.iris/config/llm.toml` はローカル開発者用設定であり、コミットしない。
-`.iris/config/llm.example.toml` はコミット済みサンプルである。OpenAI の認証情報などの秘密情報は TOML には書かず、`OPENAI_API_KEY` などの環境変数で渡す。
+`.iris/config/runtime.toml` はローカル開発者用設定であり、コミットしない。
+`.iris/config/runtime.example.toml` は全非secret user-editable項目を示すcanonical sample。
+`.iris/config/llm.example.toml` は旧LLM設定向けのpartial sampleであり、
+新規設定の基準には使わない。OpenAIの認証情報などの秘密情報はTOMLには書かず、
+`OPENAI_API_KEY`などの環境変数で渡す。
+
+設定ファイル形式は`[config] version = 1`。version省略は後方互換としてv1扱い。
+未知version、未知section、未知key、未知model slotは`ConfigError`になる。
 
 ### 設定ソースの役割分担
 
@@ -84,11 +94,21 @@ API キー、auth トークン、パスワード、その他の認証情報を T
 Iris は設定を低い優先度から高い優先度まで順に適用し、後のステップが前のステップを上書きする:
 
 1. 組み込みのデフォルト
-2. default discovery で見つかった TOML、または `--config` で渡された TOML ファイル
+2. default discoveryで最初に見つかった単一TOML、または`--config`で渡された単一TOML
 3. `IRIS_DEFAULT_CHAT_PROVIDER`、`IRIS_DEFAULT_CHAT_MODEL`、`IRIS_OLLAMA_HOST`、`IRIS_OPENAI_MODEL` などの環境変数
 4. CLI フラグ: `--host`、`--port`
 
 `OPENAI_API_KEY` は TOML ではなく環境変数で渡す。Iris は OpenAI クライアント生成時にプロセス環境から直接読み取る。
+
+### Control Plane manifestとdrift防止
+
+`iris.runtime.config.runtime_config_specs()`がuser-facing config metadataの正規仕様。
+`.iris/control-plane/runtime-config.schema.json`はControl Plane編集UI向けmanifestであり、
+field path、type、default、allowed values、env、secret/editable metadataを持つ。
+
+新しい設定fieldを追加する場合はtyped config、ConfigSpec、parser/env/validation、
+canonical example、manifest、READMEを同時更新する。testsはdefaults、example、
+manifest、env名、secret露出をConfigSpecと比較し、不一致をCI failureにする。
 
 ### 設定モジュールの構成
 
@@ -97,10 +117,12 @@ Iris は設定を低い優先度から高い優先度まで順に適用し、後
 ```python
 from iris.runtime.config import (
     ConfigError,
+    ConfigFieldSpec,
     IrisRuntimeConfig,
     LLMProvider,
     ModelSlotName,
     RuntimeConfigOverrides,
+    RuntimeConfigMetadata,
     RuntimeModelConfig,
     RuntimeModelsConfig,
     RuntimeOllamaConfig,
@@ -109,6 +131,8 @@ from iris.runtime.config import (
     default_runtime_config,
     load_runtime_config,
     parse_llm_provider,
+    resolve_runtime_config_path,
+    runtime_config_specs,
 )
 ```
 

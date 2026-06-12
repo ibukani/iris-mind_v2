@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import difflib
 import tomllib
 from typing import TYPE_CHECKING
 
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.spec import runtime_config_specs
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -76,6 +78,48 @@ def table_or_empty(table: TomlTable, key: str) -> TomlTable:
     if isinstance(value, dict):
         return value
     message = f"Runtime config section '{key}' must be a table"
+    raise ConfigError(message)
+
+
+def validate_toml_keys(table: TomlTable, *, source: str) -> None:
+    """TOMLの全keyがConfigSpecに存在することを検証する。
+
+    Args:
+        table: 検証するトップレベルTOMLテーブル。
+        source: エラーに含める設定ファイルパス。
+
+    """
+    allowed_paths = frozenset(spec.path for spec in runtime_config_specs() if spec.toml)
+    section_paths = frozenset(
+        ".".join(parts[:index])
+        for path in allowed_paths
+        for parts in (path.split("."),)
+        for index in range(1, len(parts))
+    )
+    _validate_table_keys(table, "", allowed_paths, section_paths, source)
+
+
+def _validate_table_keys(
+    table: TomlTable,
+    prefix: str,
+    allowed_paths: frozenset[str],
+    section_paths: frozenset[str],
+    source: str,
+) -> None:
+    for key, value in table.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            if path not in section_paths:
+                _raise_unknown_key(path, allowed_paths, source)
+            _validate_table_keys(value, path, allowed_paths, section_paths, source)
+        elif path not in allowed_paths:
+            _raise_unknown_key(path, allowed_paths, source)
+
+
+def _raise_unknown_key(path: str, allowed_paths: frozenset[str], source: str) -> None:
+    suggestion = difflib.get_close_matches(path, allowed_paths, n=1)
+    suffix = f" Did you mean: {suggestion[0]}?" if suggestion else ""
+    message = f"Unknown runtime config key in {source}: {path}.{suffix}"
     raise ConfigError(message)
 
 
