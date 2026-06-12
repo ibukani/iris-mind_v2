@@ -32,7 +32,11 @@ from iris.runtime.config.root import (
 )
 from iris.runtime.config.safety import RuntimeSafetyConfig
 from iris.runtime.config.server import RuntimeServerConfig
-from iris.runtime.config.spec import ConfigFieldSpec, runtime_config_specs
+from iris.runtime.config.spec import (
+    ConfigFieldSpec,
+    runtime_config_specs,
+    runtime_config_specs_for_version,
+)
 from iris.runtime.config.state import RuntimeStateConfig
 
 __all__ = [
@@ -60,4 +64,5 @@ __all__ = [
     "parse_llm_provider",
     "resolve_runtime_config_path",
     "runtime_config_specs",
+    "runtime_config_specs_for_version",
 ]

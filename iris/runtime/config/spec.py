@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from iris.runtime.config.errors import ConfigError
+
 type ConfigValueType = Literal[
     "str",
     "int",
@@ -227,3 +229,21 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             env="IRIS_SAFETY_MAX_OUTPUT_CHARS",
         ),
     )
+
+
+def runtime_config_specs_for_version(version: int) -> tuple[ConfigFieldSpec, ...]:
+    """指定versionに対応するランタイム設定仕様を返す。
+
+    Args:
+        version: TOMLから読み取った設定version。
+
+    Returns:
+        指定versionの設定フィールド仕様。
+
+    Raises:
+        ConfigError: versionが未対応の場合。
+    """
+    if version == 1:
+        return runtime_config_specs()
+    message = f"Unsupported runtime config version: {version}. Supported version: 1"
+    raise ConfigError(message)

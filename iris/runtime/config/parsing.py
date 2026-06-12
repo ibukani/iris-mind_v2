@@ -7,7 +7,7 @@ import tomllib
 from typing import TYPE_CHECKING
 
 from iris.runtime.config.errors import ConfigError
-from iris.runtime.config.spec import runtime_config_specs
+from iris.runtime.config.spec import ConfigFieldSpec, runtime_config_specs_for_version
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -81,15 +81,21 @@ def table_or_empty(table: TomlTable, key: str) -> TomlTable:
     raise ConfigError(message)
 
 
-def validate_toml_keys(table: TomlTable, *, source: str) -> None:
+def validate_toml_keys(
+    table: TomlTable,
+    *,
+    source: str,
+    specs: tuple[ConfigFieldSpec, ...],
+) -> None:
     """TOMLの全keyがConfigSpecに存在することを検証する。
 
     Args:
         table: 検証するトップレベルTOMLテーブル。
         source: エラーに含める設定ファイルパス。
+        specs: 検証対象versionの設定フィールド仕様。
 
     """
-    allowed_paths = frozenset(spec.path for spec in runtime_config_specs() if spec.toml)
+    allowed_paths = frozenset(spec.path for spec in specs if spec.toml)
     section_paths = frozenset(
         ".".join(parts[:index])
         for path in allowed_paths
@@ -177,6 +183,23 @@ def parse_int(value: TomlValue, path: str) -> int:
     if isinstance(value, int):
         return value
     raise ConfigError(_type_error_message(path, "an integer"))
+
+
+def parse_raw_config_version(table: TomlTable) -> int:
+    """Raw TOMLからconfig versionを読み、対応schemaがあることを検証する。
+
+    Args:
+        table: key検証前のトップレベルTOMLテーブル。
+
+    Returns:
+        検証済みconfig version。省略時は後方互換として1。
+    """
+    config_table = table_or_empty(table, "config")
+    version = 1
+    if "version" in config_table:
+        version = parse_int(config_table["version"], "config.version")
+    runtime_config_specs_for_version(version)
+    return version
 
 
 def parse_optional_int(value: TomlValue, path: str) -> int | None:

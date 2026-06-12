@@ -32,10 +32,73 @@ def test_unsupported_config_version_is_rejected(tmp_path: Path) -> None:
         load_runtime_config(_write(tmp_path, "[config]\nversion = 2\n"), env={})
 
 
+def test_unsupported_config_version_is_reported_before_unknown_keys(
+    tmp_path: Path,
+) -> None:
+    """Unsupported versionはfuture key検証より先に報告される。"""
+    config_path = _write(
+        tmp_path,
+        """
+        [config]
+        version = 2
+
+        [future_section]
+        enabled = true
+        """,
+    )
+
+    with pytest.raises(ConfigError, match="Unsupported runtime config version: 2"):
+        load_runtime_config(config_path, env={})
+
+
 def test_invalid_config_version_type_is_rejected(tmp_path: Path) -> None:
     """versionの型不一致はConfigErrorになる。"""
     with pytest.raises(ConfigError, match=r"config\.version.*integer"):
         load_runtime_config(_write(tmp_path, "[config]\nversion = '1'\n"), env={})
+
+
+def test_invalid_config_version_type_is_rejected_before_key_validation(
+    tmp_path: Path,
+) -> None:
+    """Version型不正はfuture key検証より先に報告される。"""
+    config_path = _write(
+        tmp_path,
+        """
+        [config]
+        version = "2"
+
+        [future_section]
+        enabled = true
+        """,
+    )
+
+    with pytest.raises(ConfigError, match=r"config\.version.*integer"):
+        load_runtime_config(config_path, env={})
+
+
+def test_config_section_must_be_table(tmp_path: Path) -> None:
+    """Config sectionはversion読取前にtable形状を要求する。"""
+    config_path = _write(tmp_path, 'config = "invalid"\n')
+
+    with pytest.raises(ConfigError, match=r"config.*table"):
+        load_runtime_config(config_path, env={})
+
+
+def test_version_one_still_rejects_unknown_keys(tmp_path: Path) -> None:
+    """Version 1ではstrict key検証を維持する。"""
+    config_path = _write(
+        tmp_path,
+        """
+        [config]
+        version = 1
+
+        [server]
+        address = "localhost"
+        """,
+    )
+
+    with pytest.raises(ConfigError, match=r"server\.address"):
+        load_runtime_config(config_path, env={})
 
 
 def test_safety_toml_is_applied(tmp_path: Path) -> None:
