@@ -5,7 +5,7 @@
 # omitted field falls back to the built-in default.
 #
 # Apply with:
-#   uv run python main.py --config examples/config/minimal.toml --text "hello"
+#   uv run python -m iris.runtime.server --config examples/config/minimal.toml
 
 [models.default_chat]
 provider = "ollama"

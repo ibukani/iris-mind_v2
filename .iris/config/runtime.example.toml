@@ -1,0 +1,58 @@
+# Iris full runtime config example.
+# This file is a complete editable runtime config sample.
+# It is not a pure dump of built-in defaults.
+# Omitted fields in partial configs fall back to built-in defaults.
+# Provider credentials must be supplied by environment variables or an
+# external credential manager. Do not add tokens or passwords here.
+
+[config]
+version = 1
+
+[server]
+host = "127.0.0.1"
+port = 50051
+local_only = true
+shutdown_grace_seconds = 5.0
+
+[state]
+backend = "memory"
+sqlite_path = ".iris/runtime/state.sqlite3"
+
+[models.default_chat]
+provider = "fake"
+model = "fake-llm"
+temperature = 0.0
+max_output_tokens = 512
+
+[models.fast_judge]
+provider = "fake"
+model = "fake-llm"
+temperature = 0.0
+max_output_tokens = 128
+
+[models.reasoning]
+provider = "fake"
+model = "fake-llm"
+temperature = 0.0
+max_output_tokens = 1024
+
+[ollama]
+base_url = "http://localhost:11434"
+timeout_seconds = 120.0
+keep_alive = "5m"
+
+[openai]
+model = "gpt-5-mini"
+timeout_seconds = 60.0
+max_output_tokens = 512
+
+[logging]
+level = "INFO"
+format = "text"
+# file_path is omitted by default. Set it to a path to enable file logging.
+rotation = "10 MB"
+retention = "7 days"
+
+[safety]
+mode = "development"
+max_output_chars = 4000

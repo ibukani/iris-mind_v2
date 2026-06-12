@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal
 
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.parsing import parse_optional_string, parse_string
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -64,11 +65,33 @@ def apply_logging_toml(base: RuntimeLoggingConfig, table: TomlTable) -> RuntimeL
     Returns:
         RuntimeLoggingConfig: オーバーライドを反映した新しいインスタンス。
     """
-    level = validate_level(str(table["level"])) if "level" in table else base.level
-    format_val = validate_format(str(table["format"])) if "format" in table else base.format
-    file_path = str(table["file_path"]) if "file_path" in table else base.file_path
-    rotation = str(table["rotation"]) if "rotation" in table else base.rotation
-    retention = str(table["retention"]) if "retention" in table else base.retention
+    level = (
+        validate_level(parse_string(table["level"], "logging.level"))
+        if "level" in table
+        else base.level
+    )
+    format_val = (
+        validate_format(parse_string(table["format"], "logging.format"))
+        if "format" in table
+        else base.format
+    )
+    file_path = (
+        parse_optional_string(table["file_path"], "logging.file_path")
+        if "file_path" in table
+        else base.file_path
+    )
+    if not file_path:
+        file_path = None
+    rotation = (
+        parse_string(table["rotation"], "logging.rotation")
+        if "rotation" in table
+        else base.rotation
+    )
+    retention = (
+        parse_string(table["retention"], "logging.retention")
+        if "retention" in table
+        else base.retention
+    )
 
     return replace(
         base,

@@ -43,7 +43,11 @@ def test_default_config_uses_fake_default_chat() -> None:
     """Default config uses fake for default_chat."""
     config = default_runtime_config()
 
-    assert config.models.default_chat == RuntimeModelConfig(provider="fake", model="fake-llm")
+    assert config.models.default_chat == RuntimeModelConfig(
+        provider="fake",
+        model="fake-llm",
+        max_output_tokens=512,
+    )
 
 
 def test_default_config_includes_fast_judge_and_reasoning_slots() -> None:
@@ -89,8 +93,8 @@ def test_example_config_parses_successfully() -> None:
     """Committed example config parses through the runtime config loader."""
     config = load_runtime_config(_example_config_path(), env={})
 
-    assert config.models.default_chat.provider == "ollama"
-    assert config.models.default_chat.model == "qwen3:8b"
+    assert config.models.default_chat.provider == "fake"
+    assert config.models.default_chat.model == "fake-llm"
     assert config.ollama.base_url == "http://localhost:11434"
 
 
@@ -98,9 +102,9 @@ def test_example_config_contains_all_model_slots() -> None:
     """Committed example config includes all supported model slots."""
     config = load_runtime_config(_example_config_path(), env={})
 
-    assert config.models.default_chat.model == "qwen3:8b"
-    assert config.models.fast_judge.model == "qwen3:4b"
-    assert config.models.reasoning.model == "deepseek-r1:8b"
+    assert config.models.default_chat.model == "fake-llm"
+    assert config.models.fast_judge.model == "fake-llm"
+    assert config.models.reasoning.model == "fake-llm"
 
 
 def test_example_config_contains_no_obvious_secret_fields() -> None:
@@ -120,7 +124,9 @@ def test_local_runtime_config_files_are_gitignored() -> None:
     gitignore = _repo_path(".gitignore").read_text(encoding="utf-8")
 
     assert ".iris/config/llm.toml" in gitignore
+    assert ".iris/config/runtime.toml" in gitignore
     assert ".iris/config/local.toml" in gitignore
+    assert ".iris/config/runtime.example.toml" not in gitignore
     assert ".iris/config/llm.example.toml" not in gitignore
 
 
@@ -276,7 +282,7 @@ def test_discover_default_config_path_prefers_project_config(
     tmp_path: Path,
 ) -> None:
     """Project-local config is the first default discovery candidate."""
-    local_config = tmp_path / ".iris/config/llm.toml"
+    local_config = tmp_path / ".iris/config/runtime.toml"
     _write_toml(
         local_config,
         """
@@ -290,9 +296,9 @@ def test_discover_default_config_path_prefers_project_config(
 
 
 def test_load_runtime_config_uses_project_default_config(tmp_path: Path) -> None:
-    """Omitted --config loads .iris/config/llm.toml when it exists."""
+    """Omitted --config loads .iris/config/runtime.toml when it exists."""
     _write_toml(
-        tmp_path / ".iris/config/llm.toml",
+        tmp_path / ".iris/config/runtime.toml",
         """
         [models.default_chat]
         provider = "fake"
@@ -305,10 +311,26 @@ def test_load_runtime_config_uses_project_default_config(tmp_path: Path) -> None
     assert config.models.default_chat.model == "local-model"
 
 
+def test_load_runtime_config_supports_legacy_project_config(tmp_path: Path) -> None:
+    """Legacy .iris/config/llm.toml remains a discovery fallback."""
+    _write_toml(
+        tmp_path / ".iris/config/llm.toml",
+        """
+        [models.default_chat]
+        provider = "fake"
+        model = "legacy-model"
+        """,
+    )
+
+    config = load_runtime_config(None, env={}, cwd=tmp_path)
+
+    assert config.models.default_chat.model == "legacy-model"
+
+
 def test_explicit_config_replaces_default_discovery(tmp_path: Path) -> None:
     """Explicit --config path wins over discovered defaults."""
     _write_toml(
-        tmp_path / ".iris/config/llm.toml",
+        tmp_path / ".iris/config/runtime.toml",
         """
         [models.default_chat]
         provider = "fake"
@@ -383,7 +405,7 @@ def test_load_runtime_config_uses_xdg_config_home(tmp_path: Path) -> None:
 def test_config_precedence_without_cli_uses_env_then_file(tmp_path: Path) -> None:
     """Environment overrides discovered config, and config overrides defaults."""
     _write_toml(
-        tmp_path / ".iris/config/llm.toml",
+        tmp_path / ".iris/config/runtime.toml",
         """
         [models.default_chat]
         provider = "fake"
@@ -554,7 +576,7 @@ def _write_toml(path: Path, content: str) -> Path:
 
 
 def _example_config_path() -> Path:
-    return _repo_path(".iris/config/llm.example.toml")
+    return _repo_path(".iris/config/runtime.example.toml")
 
 
 def _repo_path(relative_path: str) -> Path:
@@ -610,6 +632,8 @@ def test_config_package_exposes_stable_public_api() -> None:
     """The public config package __all__ is a stable contract."""
     expected = {
         "RuntimeConfigOverrides",
+        "RuntimeConfigMetadata",
+        "ConfigFieldSpec",
         "ConfigError",
         "IrisRuntimeConfig",
         "LLMProvider",
@@ -627,6 +651,8 @@ def test_config_package_exposes_stable_public_api() -> None:
         "load_runtime_config",
         "normalize_config_path",
         "parse_llm_provider",
+        "resolve_runtime_config_path",
+        "runtime_config_specs",
         "RuntimeSafetyConfig",
         "all_model_slots_are_fake",
     }

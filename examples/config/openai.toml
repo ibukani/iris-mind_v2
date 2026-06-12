@@ -5,7 +5,7 @@
 #
 # Apply with:
 #   OPENAI_API_KEY="<your key>" \
-#     uv run python main.py --config examples/config/openai.toml --text "hello"
+#     uv run python -m iris.runtime.server --config examples/config/openai.toml
 #
 # The OpenAI credential must be supplied through an environment variable,
 # not TOML. Never put provider keys, auth tokens, passwords, or

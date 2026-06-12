@@ -14,6 +14,8 @@ build/
 !.iris/data/iris_profile.md
 .iris/secrets.yaml
 .iris/config/llm.toml
+.iris/config/runtime.toml
+.iris/config/runtime.local.toml
 .iris/config/local.toml
 
 # Test artifacts

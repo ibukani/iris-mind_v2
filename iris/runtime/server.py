@@ -16,7 +16,12 @@ if TYPE_CHECKING:
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
-from iris.runtime.config import IrisRuntimeConfig, RuntimeConfigOverrides, load_runtime_config
+from iris.runtime.config import (
+    IrisRuntimeConfig,
+    RuntimeConfigOverrides,
+    load_runtime_config,
+    resolve_runtime_config_path,
+)
 from iris.runtime.config.init import init_runtime_config, runtime_config_template
 from iris.runtime.config.root import all_model_slots_are_fake
 from iris.runtime.observability.logging import configure_runtime_logging
@@ -79,7 +84,8 @@ async def serve(
         config_path: 任意の TOML 設定ファイルパス。
         overrides: 任意のランタイム設定オーバーライド。
     """
-    config = load_runtime_config(config_path, overrides=overrides)
+    selected_config_path = resolve_runtime_config_path(config_path)
+    config = load_runtime_config(selected_config_path, overrides=overrides)
 
     configure_runtime_logging(config.logging)
 
@@ -94,11 +100,24 @@ async def serve(
         logger.warning("safety mode is 'development'; all safety gates are pass-through")
 
     logger.info("runtime server starting")
+    if selected_config_path is None:
+        logger.info("config source: built-in defaults; no TOML file found")
+    else:
+        logger.info("config source: {}", selected_config_path)
+        if selected_config_path.name == "llm.toml":
+            logger.warning(
+                "legacy config filename llm.toml is deprecated; rename it to runtime.toml"
+            )
+    logger.info("config source policy: single TOML < environment < CLI")
     logger.info("host: {}", config.server.host)
     logger.info("port: {}", config.server.port)
     logger.info("state backend: {}", config.state.backend)
+    logger.info("default_chat provider: {}", config.models.default_chat.provider)
+    logger.info("fast_judge provider: {}", config.models.fast_judge.provider)
+    logger.info("reasoning provider: {}", config.models.reasoning.provider)
     logger.info("log level: {}", config.logging.level)
     logger.info("log format: {}", config.logging.format)
+    logger.info("safety mode: {}", config.safety.mode)
     if config.logging.file_path:
         logger.info("log file path: {}", config.logging.file_path)
 

@@ -29,8 +29,8 @@ from iris.runtime.config.llm import (
     validate_provider,
 )
 from iris.runtime.config.logging import RuntimeLoggingConfig
-from iris.runtime.config.parsing import table_or_empty
-from iris.runtime.config.safety import RuntimeSafetyConfig, apply_safety_env
+from iris.runtime.config.parsing import parse_int, table_or_empty
+from iris.runtime.config.safety import RuntimeSafetyConfig, apply_safety_env, apply_safety_toml
 from iris.runtime.config.server import (
     RuntimeServerConfig,
     apply_server_env,
@@ -51,15 +51,26 @@ if TYPE_CHECKING:
 
     from iris.runtime.config.parsing import TomlTable
 
-_PROJECT_CONFIG_PATH = Path(".iris/config/llm.toml")
+_PROJECT_CONFIG_PATH = Path(".iris/config/runtime.toml")
+_LEGACY_PROJECT_CONFIG_PATH = Path(".iris/config/llm.toml")
 _ENV_CONFIG_KEY = "IRIS_MIND_CONFIG"
-_XDG_CONFIG_PATH = Path("iris-mind/llm.toml")
+_XDG_CONFIG_PATH = Path("iris-mind/runtime.toml")
+_LEGACY_XDG_CONFIG_PATH = Path("iris-mind/llm.toml")
+_SUPPORTED_CONFIG_VERSION = 1
+
+
+@dataclass(frozen=True)
+class RuntimeConfigMetadata:
+    """ランタイム設定ファイル自体のメタデータ。"""
+
+    version: int = _SUPPORTED_CONFIG_VERSION
 
 
 @dataclass(frozen=True)
 class IrisRuntimeConfig:
     """アプリケーションワイヤリングが利用するランタイム設定。"""
 
+    config: RuntimeConfigMetadata
     server: RuntimeServerConfig
     state: RuntimeStateConfig
     models: RuntimeModelsConfig
@@ -87,10 +98,15 @@ def default_runtime_config() -> IrisRuntimeConfig:
         デフォルトのランタイム設定。
     """
     return IrisRuntimeConfig(
+        config=RuntimeConfigMetadata(),
         server=RuntimeServerConfig(),
         state=RuntimeStateConfig(),
         models=RuntimeModelsConfig(
-            default_chat=RuntimeModelConfig(provider="fake", model="fake-llm"),
+            default_chat=RuntimeModelConfig(
+                provider="fake",
+                model="fake-llm",
+                max_output_tokens=512,
+            ),
             fast_judge=RuntimeModelConfig(
                 provider="fake",
                 model="fake-llm",
@@ -126,23 +142,53 @@ def load_runtime_config(
 
     Returns:
         検証済みのランタイム設定。
+
+    Raises:
+        ConfigError: 設定ファイル、値、version、keyが不正な場合。
     """
     config = default_runtime_config()
     runtime_env = os.environ if env is None else env
     runtime_cwd = Path.cwd() if cwd is None else cwd
-    selected_config_path = (
-        normalize_config_path(config_path, cwd=runtime_cwd)
-        if config_path is not None
-        else discover_default_config_path(cwd=runtime_cwd, env=runtime_env)
+    selected_config_path = resolve_runtime_config_path(
+        config_path,
+        cwd=runtime_cwd,
+        env=runtime_env,
     )
     if selected_config_path is not None:
-        config = _apply_toml(config, read_toml_file(selected_config_path))
+        try:
+            config = _apply_toml(config, read_toml_file(selected_config_path))
+        except ConfigError as exc:
+            message = f"Runtime config error in {selected_config_path}: {exc}"
+            raise ConfigError(message) from exc
     config = _apply_env(config, runtime_env)
     if overrides is not None:
         config = apply_runtime_overrides(config, overrides)
 
     config = replace(config, server=validate_server_config(config.server))
     return replace(config, state=validate_state_config(config.state))
+
+
+def resolve_runtime_config_path(
+    config_path: str | Path | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+    cwd: Path | None = None,
+) -> Path | None:
+    """明示指定またはdefault discoveryから単一TOML sourceを解決する。
+
+    Args:
+        config_path: 任意の明示的TOMLファイルパス。
+        env: discoveryに使う環境変数。
+        cwd: 相対pathとproject discoveryの基準。
+
+    Returns:
+        選択された設定ファイル。見つからない場合は``None``。
+    """
+    runtime_cwd = Path.cwd() if cwd is None else cwd
+    runtime_env = os.environ if env is None else env
+    if config_path is not None:
+        return normalize_config_path(config_path, cwd=runtime_cwd)
+    return discover_default_config_path(cwd=runtime_cwd, env=runtime_env)
 
 
 def normalize_config_path(path: str | Path, *, cwd: Path) -> Path:
@@ -184,9 +230,10 @@ def discover_default_config_path(
     runtime_env = os.environ if env is None else env
     runtime_home = Path.home() if home is None else home
 
-    project_config_path = runtime_cwd / _PROJECT_CONFIG_PATH
-    if project_config_path.exists():
-        return project_config_path
+    for project_path in (_PROJECT_CONFIG_PATH, _LEGACY_PROJECT_CONFIG_PATH):
+        project_config_path = runtime_cwd / project_path
+        if project_config_path.exists():
+            return project_config_path
 
     env_config = runtime_env.get(_ENV_CONFIG_KEY)
     if env_config is not None:
@@ -200,8 +247,18 @@ def discover_default_config_path(
     xdg_config_home = runtime_env.get("XDG_CONFIG_HOME")
     if xdg_config_home is not None:
         xdg_config_path = normalize_config_path(xdg_config_home, cwd=runtime_cwd)
-        config_candidates.append(xdg_config_path / _XDG_CONFIG_PATH)
-    config_candidates.append(runtime_home / ".config" / _XDG_CONFIG_PATH)
+        config_candidates.extend(
+            (
+                xdg_config_path / _XDG_CONFIG_PATH,
+                xdg_config_path / _LEGACY_XDG_CONFIG_PATH,
+            )
+        )
+    config_candidates.extend(
+        (
+            runtime_home / ".config" / _XDG_CONFIG_PATH,
+            runtime_home / ".config" / _LEGACY_XDG_CONFIG_PATH,
+        )
+    )
     for config_candidate in config_candidates:
         if config_candidate.exists():
             return config_candidate
@@ -287,8 +344,10 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     Returns:
         TOML 値を反映したランタイム設定。
     """
+    metadata = _apply_config_toml(config.config, table_or_empty(table, "config"))
     server = apply_server_toml(config.server, table_or_empty(table, "server"))
     state = apply_state_toml(config.state, table_or_empty(table, "state"))
+    safety = apply_safety_toml(config.safety, table_or_empty(table, "safety"))
 
     models, ollama, openai, logging = apply_toml(
         config.models,
@@ -299,13 +358,31 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     )
     return replace(
         config,
+        config=metadata,
         server=server,
         state=state,
         models=models,
         ollama=ollama,
         openai=openai,
         logging=logging,
+        safety=safety,
     )
+
+
+def _apply_config_toml(
+    config: RuntimeConfigMetadata,
+    table: TomlTable,
+) -> RuntimeConfigMetadata:
+    version = config.version
+    if "version" in table:
+        version = parse_int(table["version"], "config.version")
+    if version != _SUPPORTED_CONFIG_VERSION:
+        message = (
+            f"Unsupported runtime config version: {version}. "
+            f"Supported version: {_SUPPORTED_CONFIG_VERSION}"
+        )
+        raise ConfigError(message)
+    return RuntimeConfigMetadata(version=version)
 
 
 def _apply_env(

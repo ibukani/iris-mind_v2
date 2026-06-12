@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 
 from iris.runtime.config.errors import ConfigError
 
-DEFAULT_RUNTIME_CONFIG_PATH = Path(".iris/config/llm.toml")
-EXAMPLE_RUNTIME_CONFIG_PATH = Path(".iris/config/llm.example.toml")
+DEFAULT_RUNTIME_CONFIG_PATH = Path(".iris/config/runtime.toml")
+_TEMPLATE_PACKAGE = "iris.runtime.config.templates"
+_TEMPLATE_NAME = "runtime.example.toml"
 
 
 @dataclass(frozen=True)
@@ -30,7 +32,7 @@ def init_runtime_config(
     """サンプル TOML からローカルランタイム設定を初期化する。
 
     Args:
-        path: 作成先の TOML パス。省略時は `.iris/config/llm.toml`。
+        path: 作成先の TOML パス。省略時は `.iris/config/runtime.toml`。
         force: 既存ファイルを上書きするかどうか。
         print_only: テンプレート内容のみ返すため、ファイルを書かない。
 
@@ -77,7 +79,12 @@ def runtime_config_template() -> str:
 
 
 def _read_template() -> str:
-    if not EXAMPLE_RUNTIME_CONFIG_PATH.exists():
-        message = f"Runtime config template does not exist: {EXAMPLE_RUNTIME_CONFIG_PATH}"
-        raise ConfigError(message)
-    return EXAMPLE_RUNTIME_CONFIG_PATH.read_text(encoding="utf-8")
+    try:
+        return _read_template_resource()
+    except FileNotFoundError as exc:
+        message = f"Runtime config template does not exist: {_TEMPLATE_PACKAGE}/{_TEMPLATE_NAME}"
+        raise ConfigError(message) from exc
+
+
+def _read_template_resource() -> str:
+    return resources.files(_TEMPLATE_PACKAGE).joinpath(_TEMPLATE_NAME).read_text(encoding="utf-8")
