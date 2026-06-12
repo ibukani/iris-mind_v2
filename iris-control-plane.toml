@@ -7,7 +7,7 @@ toolchain = "python"
 
 [setup]
 required_tools = ["uv", "python"]
-check_files = ["pyproject.toml", "iris/runtime/server.py", ".iris/config/llm.example.toml"]
+check_files = ["pyproject.toml", "iris/runtime/server.py", ".iris/config/runtime.example.toml"]
 
 [launch]
 cwd = "."
@@ -18,7 +18,7 @@ args = [
   "-m",
   "iris.runtime.server",
   "--config",
-  ".iris/config/llm.toml",
+  ".iris/config/runtime.toml",
   "--host",
   "127.0.0.1",
   "--port",
@@ -48,12 +48,13 @@ command = "make"
 args = ["check"]
 
 [[editable_configs]]
-id = "llm"
-label = "LLM Runtime Config"
-path = ".iris/config/llm.toml"
-template = ".iris/config/llm.example.toml"
+id = "runtime"
+label = "Runtime Config"
+path = ".iris/config/runtime.toml"
+template = ".iris/config/runtime.example.toml"
 format = "toml"
 schema = "iris-mind.runtime.v1"
+schema_manifest = ".iris/control-plane/runtime-config.schema.json"
 restart_required = true
-secret_policy = "warn"
+secret_policy = "deny"
 provision = "copy_if_missing"

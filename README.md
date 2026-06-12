@@ -109,8 +109,12 @@ Iris は設定を低い優先度から高い優先度まで順に適用し、後
 ### Control Plane manifestとdrift防止
 
 `iris.runtime.config.runtime_config_specs()`がuser-facing config metadataの正規仕様。
-`.iris/control-plane/runtime-config.schema.json`はControl Plane編集UI向けmanifestであり、
-field path、type、default、allowed values、env、secret/editable metadataを持つ。
+Control Planeは`iris-control-plane.toml`の`[[editable_configs]]`を通じてruntime configを管理する。
+
+- 管理対象config: `.iris/config/runtime.toml`
+- Template (copy_if_missing用): `.iris/config/runtime.example.toml`
+- Schema manifest (field-level editing/validation用): `.iris/control-plane/runtime-config.schema.json`
+- SecretsはTOMLに書かず、環境変数またはsecret managerで供給する。
 
 新しい設定fieldを追加する場合はtyped config、ConfigSpec、parser/env/validation、
 canonical example、manifest、READMEを同時更新する。testsはdefaults、example、
