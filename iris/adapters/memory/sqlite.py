@@ -75,13 +75,16 @@ class SQLiteMemoryStore(MutableMemoryStore):
             )
 
     def _connect(self) -> sqlite3.Connection:
-        """Get a configured sqlite3 connection.
+        """Get a configured sqlite3 connection with runtime pragmas.
 
         Returns:
             sqlite3.Connection: A new configured connection.
         """
         conn = sqlite3.connect(self._db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA journal_mode = WAL;")
         return conn
 
     @contextlib.contextmanager

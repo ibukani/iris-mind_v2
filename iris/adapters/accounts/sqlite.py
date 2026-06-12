@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 from pathlib import Path
@@ -19,9 +20,8 @@ if TYPE_CHECKING:
 class SQLiteAccountStore(AccountStore):
     """SQLite-backed account store.
 
-    Note: This is a simple/local adapter that executes synchronous sqlite3 I/O
-    directly. Long-term, this could be migrated to aiosqlite or asyncio.to_thread
-    if event loop blocking becomes a concern under high concurrent load.
+    Executes synchronous sqlite3 I/O via ``asyncio.to_thread`` to avoid
+    blocking the event loop under concurrent gRPC requests.
     """
 
     def __init__(self, db_path: str | Path) -> None:
@@ -49,13 +49,16 @@ class SQLiteAccountStore(AccountStore):
             conn.execute(query)
 
     def _connect(self) -> sqlite3.Connection:
-        """Get a configured sqlite3 connection.
+        """Get a configured sqlite3 connection with runtime pragmas.
 
         Returns:
             sqlite3.Connection: A new configured connection.
         """
         conn = sqlite3.connect(self._db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA journal_mode = WAL;")
         return conn
 
     @contextlib.contextmanager
@@ -85,18 +88,14 @@ class SQLiteAccountStore(AccountStore):
             metadata=json.loads(row["metadata_json"]),
         )
 
-    @override
-    async def get_by_external_ref(
+    # -- synchronous implementation helpers (offloaded via asyncio.to_thread) --
+
+    def _get_by_external_ref_sync(
         self,
         *,
         provider: str,
         provider_subject: ExternalRef,
     ) -> AccountProfile | None:
-        """Get an account profile by provider and subject.
-
-        Returns:
-            AccountProfile | None: The found account profile, or None.
-        """
         query = "SELECT * FROM accounts WHERE provider = ? AND provider_subject = ?"
         with self._transaction() as conn:
             cursor = conn.execute(query, (provider, str(provider_subject)))
@@ -105,16 +104,7 @@ class SQLiteAccountStore(AccountStore):
                 return None
             return self._row_to_profile(row)
 
-    @override
-    async def get_by_account_id(
-        self,
-        account_id: AccountId,
-    ) -> AccountProfile | None:
-        """Get an account profile by its internal AccountId.
-
-        Returns:
-            AccountProfile | None: The found account profile, or None.
-        """
+    def _get_by_account_id_sync(self, account_id: AccountId) -> AccountProfile | None:
         query = "SELECT * FROM accounts WHERE account_id = ?"
         with self._transaction() as conn:
             cursor = conn.execute(query, (str(account_id),))
@@ -123,22 +113,8 @@ class SQLiteAccountStore(AccountStore):
                 return None
             return self._row_to_profile(row)
 
-    @override
-    async def put(
-        self,
-        account: AccountProfile,
-    ) -> AccountProfile:
-        """Create or update an account profile.
-
-        Returns:
-            AccountProfile: The inserted or updated account profile.
-
-        Raises:
-            AccountStoreError: On duplicate account ID with different refs,
-                or duplicate ref with different account ID.
-        """
+    def _put_sync(self, account: AccountProfile) -> AccountProfile:
         with self._transaction() as conn:
-            # Check for existing by account_id
             cursor = conn.execute(
                 "SELECT provider, provider_subject FROM accounts WHERE account_id = ?",
                 (str(account.account_id),),
@@ -151,7 +127,6 @@ class SQLiteAccountStore(AccountStore):
                 msg = "account_id conflict: already exists with different external refs"
                 raise AccountStoreError(msg)
 
-            # Check for existing by external ref
             cursor = conn.execute(
                 "SELECT account_id FROM accounts WHERE provider = ? AND provider_subject = ?",
                 (account.provider, str(account.provider_subject)),
@@ -161,11 +136,9 @@ class SQLiteAccountStore(AccountStore):
                 msg = "external ref conflict: already exists with different account_id"
                 raise AccountStoreError(msg)
 
-            # Insert or update
             metadata_json = json.dumps(dict(account.metadata))
             linked_id = str(account.linked_actor_id) if account.linked_actor_id else None
 
-            # SQLite UPSERT
             query = """
             INSERT INTO accounts (
                 account_id, provider, provider_subject, display_name,
@@ -188,24 +161,14 @@ class SQLiteAccountStore(AccountStore):
                     metadata_json,
                 ),
             )
-
         return account
 
-    @override
-    async def link_account_to_actor(
+    def _link_account_to_actor_sync(
         self,
         *,
         account_id: AccountId,
         actor_id: ActorId,
     ) -> AccountProfile:
-        """Link an account to an internal ActorId.
-
-        Returns:
-            AccountProfile: The updated account profile.
-
-        Raises:
-            AccountStoreError: If the account_id does not exist.
-        """
         with self._transaction() as conn:
             cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
             row = cursor.fetchone()
@@ -223,19 +186,7 @@ class SQLiteAccountStore(AccountStore):
             updated_row = cursor.fetchone()
             return self._row_to_profile(updated_row)
 
-    @override
-    async def unlink_account(
-        self,
-        account_id: AccountId,
-    ) -> AccountProfile:
-        """Remove any actor linking from an account.
-
-        Returns:
-            AccountProfile: The updated account profile.
-
-        Raises:
-            AccountStoreError: If the account_id does not exist.
-        """
+    def _unlink_account_sync(self, account_id: AccountId) -> AccountProfile:
         with self._transaction() as conn:
             cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
             row = cursor.fetchone()
@@ -252,3 +203,77 @@ class SQLiteAccountStore(AccountStore):
             cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
             updated_row = cursor.fetchone()
             return self._row_to_profile(updated_row)
+
+    # -- async public interface --
+
+    @override
+    async def get_by_external_ref(
+        self,
+        *,
+        provider: str,
+        provider_subject: ExternalRef,
+    ) -> AccountProfile | None:
+        """Get an account profile by provider and subject.
+
+        Returns:
+            AccountProfile | None: The found account profile, or None.
+        """
+        return await asyncio.to_thread(
+            self._get_by_external_ref_sync,
+            provider=provider,
+            provider_subject=provider_subject,
+        )
+
+    @override
+    async def get_by_account_id(
+        self,
+        account_id: AccountId,
+    ) -> AccountProfile | None:
+        """Get an account profile by its internal AccountId.
+
+        Returns:
+            AccountProfile | None: The found account profile, or None.
+        """
+        return await asyncio.to_thread(self._get_by_account_id_sync, account_id)
+
+    @override
+    async def put(
+        self,
+        account: AccountProfile,
+    ) -> AccountProfile:
+        """Create or update an account profile.
+
+        Returns:
+            AccountProfile: The inserted or updated account profile.
+        """
+        return await asyncio.to_thread(self._put_sync, account)
+
+    @override
+    async def link_account_to_actor(
+        self,
+        *,
+        account_id: AccountId,
+        actor_id: ActorId,
+    ) -> AccountProfile:
+        """Link an account to an internal ActorId.
+
+        Returns:
+            AccountProfile: The updated account profile.
+        """
+        return await asyncio.to_thread(
+            self._link_account_to_actor_sync,
+            account_id=account_id,
+            actor_id=actor_id,
+        )
+
+    @override
+    async def unlink_account(
+        self,
+        account_id: AccountId,
+    ) -> AccountProfile:
+        """Remove any actor linking from an account.
+
+        Returns:
+            AccountProfile: The updated account profile.
+        """
+        return await asyncio.to_thread(self._unlink_account_sync, account_id)

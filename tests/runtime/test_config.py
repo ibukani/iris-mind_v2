@@ -627,6 +627,8 @@ def test_config_package_exposes_stable_public_api() -> None:
         "load_runtime_config",
         "normalize_config_path",
         "parse_llm_provider",
+        "RuntimeSafetyConfig",
+        "all_model_slots_are_fake",
     }
     assert set(config_pkg.__all__) == expected
 

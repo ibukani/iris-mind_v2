@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from typing import TYPE_CHECKING, override
 
@@ -104,9 +105,10 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
                 metadata=candidate.metadata,
             )
 
-            self._store.update(record)
+            await asyncio.to_thread(self._store.update, record)
             if self._vector_index is not None:
-                self._vector_index.upsert(
+                await asyncio.to_thread(
+                    self._vector_index.upsert,
                     memory_id,
                     record.text,
                     dict(record.metadata),
