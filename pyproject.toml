@@ -20,6 +20,9 @@ dependencies = [
 [tool.setuptools.packages.find]
 include = ["iris*"]
 
+[tool.setuptools.package-data]
+"iris.runtime.config.templates" = ["*.toml"]
+
 [tool.ruff]
 target-version = "py313"
 line-length = 100

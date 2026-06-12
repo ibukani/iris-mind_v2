@@ -99,6 +99,15 @@ def test_control_plane_manifest_matches_config_spec() -> None:
     assert manifest["fields"] == expected
 
 
+def test_all_partial_example_configs_load_successfully() -> None:
+    """README掲載を含む全partial config exampleをruntime loaderで検証する。"""
+    paths = tuple(sorted(_repo_path("examples/config").glob("*.toml")))
+
+    assert paths, "expected at least one partial config example"
+    for path in paths:
+        load_runtime_config(path, env={})
+
+
 def _runtime_defaults() -> dict[str, str | int | float | bool | None]:
     return _flatten_mapping(cast("dict[str, object]", asdict(default_runtime_config())))
 

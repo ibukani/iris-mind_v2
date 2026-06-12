@@ -61,7 +61,10 @@ uv run python -m iris.runtime.server
 ```
 
 `.iris/config/runtime.toml` はローカル開発者用設定であり、コミットしない。
-`.iris/config/runtime.example.toml` は全非secret user-editable項目を示すcanonical sample。
+`.iris/config/runtime.example.toml` は全非secret user-editable項目を示すcomplete editable
+sampleであり、組み込みdefaultsのpure dumpではない。任意項目には実用的なsample値を
+含む場合がある。`init-config`はPython package内に同梱した同一templateを使うため、
+source checkout外のインストール環境でも生成できる。
 `.iris/config/llm.example.toml` は旧LLM設定向けのpartial sampleであり、
 新規設定の基準には使わない。OpenAIの認証情報などの秘密情報はTOMLには書かず、
 `OPENAI_API_KEY`などの環境変数で渡す。
@@ -88,6 +91,9 @@ API キー、auth トークン、パスワード、その他の認証情報を T
 - `examples/config/minimal.toml` — `models.default_chat` のみを上書き。
 - `examples/config/local-ollama.toml` — 全モデルスロットと共通 `ollama` ブロックを設定。
 - `examples/config/openai.toml` — OpenAI のモデル設定を行う。`OPENAI_API_KEY` は含めない。env で供給する。
+
+これらはpartial override exampleであり、省略fieldは組み込みdefaultsへfallbackする。
+全`examples/config/*.toml`はruntime loaderでCI検証される。
 
 ### 設定の優先順位
 

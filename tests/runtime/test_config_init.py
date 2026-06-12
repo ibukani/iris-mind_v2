@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import sys
 import tomllib
-from typing import TYPE_CHECKING
 
 import pytest
 
 from iris.runtime.config import ConfigError, load_runtime_config
 from iris.runtime.config import init as config_init
-from iris.runtime.config.init import init_runtime_config
+from iris.runtime.config.init import init_runtime_config, runtime_config_template
 from iris.runtime.server import main
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _TEMPLATE = """[config]
 version = 1
@@ -26,11 +23,9 @@ model = "fake-llm"
 
 
 def _write_example(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Write an isolated example template and point config init at it."""
-    example_path = tmp_path / ".iris/config/runtime.example.toml"
-    example_path.parent.mkdir(parents=True)
-    example_path.write_text(_TEMPLATE, encoding="utf-8")
-    monkeypatch.setattr(config_init, "EXAMPLE_RUNTIME_CONFIG_PATH", example_path)
+    """Replace the packaged template reader with isolated template content."""
+    (tmp_path / ".iris/config").mkdir(parents=True)
+    monkeypatch.setattr(config_init, "_read_template_resource", lambda: _TEMPLATE)
 
 
 def test_init_runtime_config_creates_default_config(
@@ -68,6 +63,29 @@ def test_committed_init_template_is_complete_and_loadable(tmp_path: Path) -> Non
         "safety",
     }
     assert config.config.version == 1
+
+
+def test_committed_runtime_example_matches_packaged_template() -> None:
+    """Repository sample and packaged init template cannot drift."""
+    committed = _repo_path(".iris/config/runtime.example.toml").read_text(encoding="utf-8")
+
+    assert committed == runtime_config_template()
+
+
+def test_runtime_config_template_returns_packaged_full_template() -> None:
+    """Packaged template includes every supported runtime section."""
+    document = tomllib.loads(runtime_config_template())
+
+    assert set(document) == {
+        "config",
+        "server",
+        "state",
+        "models",
+        "ollama",
+        "openai",
+        "logging",
+        "safety",
+    }
 
 
 def test_init_runtime_config_creates_parent_directories(
@@ -133,7 +151,7 @@ def test_init_runtime_config_print_only_does_not_write_file(
 
     main()
 
-    assert capsys.readouterr().out == _TEMPLATE
+    assert capsys.readouterr().out == runtime_config_template()
     assert not target_path.exists()
 
 
@@ -142,11 +160,15 @@ def test_init_runtime_config_missing_example_raises_config_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Missing example template raises ConfigError with a clear message."""
-    missing_example = tmp_path / ".iris/config/runtime.example.toml"
-    monkeypatch.setattr(config_init, "EXAMPLE_RUNTIME_CONFIG_PATH", missing_example)
+    del tmp_path
+
+    def _raise_missing_template() -> str:
+        raise FileNotFoundError
+
+    monkeypatch.setattr(config_init, "_read_template_resource", _raise_missing_template)
 
     with pytest.raises(ConfigError, match="Runtime config template does not exist"):
-        init_runtime_config(path=tmp_path / ".iris/config/runtime.toml")
+        runtime_config_template()
 
 
 def test_init_config_cli_reports_created_and_existing(
@@ -199,3 +221,7 @@ def test_init_config_output_is_loaded_by_default(
 
     assert config.models.default_chat.provider == "fake"
     assert config.models.default_chat.model == "fake-llm"
+
+
+def _repo_path(relative_path: str) -> Path:
+    return Path(__file__).resolve().parents[2] / relative_path

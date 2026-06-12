@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 
 from iris.runtime.config.errors import ConfigError
 
 DEFAULT_RUNTIME_CONFIG_PATH = Path(".iris/config/runtime.toml")
-EXAMPLE_RUNTIME_CONFIG_PATH = Path(__file__).parents[3] / ".iris/config/runtime.example.toml"
+_TEMPLATE_PACKAGE = "iris.runtime.config.templates"
+_TEMPLATE_NAME = "runtime.example.toml"
 
 
 @dataclass(frozen=True)
@@ -77,7 +79,12 @@ def runtime_config_template() -> str:
 
 
 def _read_template() -> str:
-    if not EXAMPLE_RUNTIME_CONFIG_PATH.exists():
-        message = f"Runtime config template does not exist: {EXAMPLE_RUNTIME_CONFIG_PATH}"
-        raise ConfigError(message)
-    return EXAMPLE_RUNTIME_CONFIG_PATH.read_text(encoding="utf-8")
+    try:
+        return _read_template_resource()
+    except FileNotFoundError as exc:
+        message = f"Runtime config template does not exist: {_TEMPLATE_PACKAGE}/{_TEMPLATE_NAME}"
+        raise ConfigError(message) from exc
+
+
+def _read_template_resource() -> str:
+    return resources.files(_TEMPLATE_PACKAGE).joinpath(_TEMPLATE_NAME).read_text(encoding="utf-8")
