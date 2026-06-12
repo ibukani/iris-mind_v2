@@ -29,7 +29,11 @@ from iris.runtime.config.llm import (
     validate_provider,
 )
 from iris.runtime.config.logging import RuntimeLoggingConfig
-from iris.runtime.config.parsing import parse_int, table_or_empty
+from iris.runtime.config.parsing import (
+    parse_raw_config_version,
+    table_or_empty,
+    validate_toml_keys,
+)
 from iris.runtime.config.safety import RuntimeSafetyConfig, apply_safety_env, apply_safety_toml
 from iris.runtime.config.server import (
     RuntimeServerConfig,
@@ -39,6 +43,7 @@ from iris.runtime.config.server import (
     validate_server_port,
 )
 from iris.runtime.config.sources import apply_env, apply_toml, read_toml_file
+from iris.runtime.config.spec import runtime_config_specs_for_version
 from iris.runtime.config.state import (
     RuntimeStateConfig,
     apply_state_env,
@@ -156,7 +161,11 @@ def load_runtime_config(
     )
     if selected_config_path is not None:
         try:
-            config = _apply_toml(config, read_toml_file(selected_config_path))
+            table = read_toml_file(selected_config_path)
+            version = parse_raw_config_version(table)
+            specs = runtime_config_specs_for_version(version)
+            validate_toml_keys(table, source=str(selected_config_path), specs=specs)
+            config = _apply_toml(config, table)
         except ConfigError as exc:
             message = f"Runtime config error in {selected_config_path}: {exc}"
             raise ConfigError(message) from exc
@@ -344,7 +353,7 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     Returns:
         TOML 値を反映したランタイム設定。
     """
-    metadata = _apply_config_toml(config.config, table_or_empty(table, "config"))
+    metadata = _apply_config_toml(table_or_empty(table, "config"))
     server = apply_server_toml(config.server, table_or_empty(table, "server"))
     state = apply_state_toml(config.state, table_or_empty(table, "state"))
     safety = apply_safety_toml(config.safety, table_or_empty(table, "safety"))
@@ -369,19 +378,8 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     )
 
 
-def _apply_config_toml(
-    config: RuntimeConfigMetadata,
-    table: TomlTable,
-) -> RuntimeConfigMetadata:
-    version = config.version
-    if "version" in table:
-        version = parse_int(table["version"], "config.version")
-    if version != _SUPPORTED_CONFIG_VERSION:
-        message = (
-            f"Unsupported runtime config version: {version}. "
-            f"Supported version: {_SUPPORTED_CONFIG_VERSION}"
-        )
-        raise ConfigError(message)
+def _apply_config_toml(table: TomlTable) -> RuntimeConfigMetadata:
+    version = parse_raw_config_version({"config": table})
     return RuntimeConfigMetadata(version=version)
 
 

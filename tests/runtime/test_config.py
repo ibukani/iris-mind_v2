@@ -653,6 +653,7 @@ def test_config_package_exposes_stable_public_api() -> None:
         "parse_llm_provider",
         "resolve_runtime_config_path",
         "runtime_config_specs",
+        "runtime_config_specs_for_version",
         "RuntimeSafetyConfig",
         "all_model_slots_are_fake",
     }
