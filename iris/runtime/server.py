@@ -104,10 +104,6 @@ async def serve(
         logger.info("config source: built-in defaults; no TOML file found")
     else:
         logger.info("config source: {}", selected_config_path)
-        if selected_config_path.name == "llm.toml":
-            logger.warning(
-                "legacy config filename llm.toml is deprecated; rename it to runtime.toml"
-            )
     logger.info("config source policy: single TOML < environment < CLI")
     logger.info("host: {}", config.server.host)
     logger.info("port: {}", config.server.port)

@@ -98,27 +98,6 @@ def test_runtime_example_loads_through_loader() -> None:
     assert config is not None
 
 
-def test_manifest_contains_legacy_llm_editable_config() -> None:
-    """LLM legacy editable configが互換性のため残っている。"""
-    configs = _editable_configs()
-    llm = _find_editable_config(configs, "llm")
-    assert llm is not None, "llm legacy editable_configs entry is missing"
-
-
-def test_legacy_llm_editable_config_path() -> None:
-    """LLM legacy editable configのpathは.iris/config/llm.toml。"""
-    llm = _find_editable_config(_editable_configs(), "llm")
-    assert llm is not None
-    assert llm["path"] == ".iris/config/llm.toml"
-
-
-def test_legacy_llm_editable_config_template() -> None:
-    """LLM legacy editable configのtemplateは.iris/config/llm.example.toml。"""
-    llm = _find_editable_config(_editable_configs(), "llm")
-    assert llm is not None
-    assert llm["template"] == ".iris/config/llm.example.toml"
-
-
 def _load_manifest() -> dict[str, Any]:
     path = _repo_path("iris-control-plane.toml")
     return tomllib.loads(path.read_text(encoding="utf-8"))

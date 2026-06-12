@@ -57,10 +57,8 @@ if TYPE_CHECKING:
     from iris.runtime.config.parsing import TomlTable
 
 _PROJECT_CONFIG_PATH = Path(".iris/config/runtime.toml")
-_LEGACY_PROJECT_CONFIG_PATH = Path(".iris/config/llm.toml")
 _ENV_CONFIG_KEY = "IRIS_MIND_CONFIG"
 _XDG_CONFIG_PATH = Path("iris-mind/runtime.toml")
-_LEGACY_XDG_CONFIG_PATH = Path("iris-mind/llm.toml")
 _SUPPORTED_CONFIG_VERSION = 1
 
 
@@ -239,10 +237,9 @@ def discover_default_config_path(
     runtime_env = os.environ if env is None else env
     runtime_home = Path.home() if home is None else home
 
-    for project_path in (_PROJECT_CONFIG_PATH, _LEGACY_PROJECT_CONFIG_PATH):
-        project_config_path = runtime_cwd / project_path
-        if project_config_path.exists():
-            return project_config_path
+    project_config_path = runtime_cwd / _PROJECT_CONFIG_PATH
+    if project_config_path.exists():
+        return project_config_path
 
     env_config = runtime_env.get(_ENV_CONFIG_KEY)
     if env_config is not None:
@@ -256,18 +253,8 @@ def discover_default_config_path(
     xdg_config_home = runtime_env.get("XDG_CONFIG_HOME")
     if xdg_config_home is not None:
         xdg_config_path = normalize_config_path(xdg_config_home, cwd=runtime_cwd)
-        config_candidates.extend(
-            (
-                xdg_config_path / _XDG_CONFIG_PATH,
-                xdg_config_path / _LEGACY_XDG_CONFIG_PATH,
-            )
-        )
-    config_candidates.extend(
-        (
-            runtime_home / ".config" / _XDG_CONFIG_PATH,
-            runtime_home / ".config" / _LEGACY_XDG_CONFIG_PATH,
-        )
-    )
+        config_candidates.append(xdg_config_path / _XDG_CONFIG_PATH)
+    config_candidates.append(runtime_home / ".config" / _XDG_CONFIG_PATH)
     for config_candidate in config_candidates:
         if config_candidate.exists():
             return config_candidate

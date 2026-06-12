@@ -1,7 +1,0 @@
-# Legacy LLM-only partial example.
-# The canonical full template is .iris/config/runtime.example.toml.
-# Existing .iris/config/llm.toml files remain discoverable for compatibility.
-
-[models.default_chat]
-provider = "ollama"
-model = "qwen3:8b"

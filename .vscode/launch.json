@@ -15,7 +15,7 @@
       "type": "debugpy",
       "request": "launch",
       "module": "iris.runtime.server",
-      "args": ["--config", ".iris/config/llm.toml", "--host", "127.0.0.1", "--port", "50051"],
+      "args": ["--config", ".iris/config/runtime.toml", "--host", "127.0.0.1", "--port", "50051"],
       "console": "integratedTerminal",
       "justMyCode": false
     },

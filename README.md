@@ -15,12 +15,9 @@ uv run python -m iris.runtime.server --host 127.0.0.1 --port 50051
 configだけをロードする。
 
 1. `./.iris/config/runtime.toml`
-2. `./.iris/config/llm.toml` (非推奨の互換fallback)
-3. `$IRIS_MIND_CONFIG`
-4. `$XDG_CONFIG_HOME/iris-mind/runtime.toml`
-5. `$XDG_CONFIG_HOME/iris-mind/llm.toml` (非推奨の互換fallback)
-6. `~/.config/iris-mind/runtime.toml`
-7. `~/.config/iris-mind/llm.toml` (非推奨の互換fallback)
+2. `$IRIS_MIND_CONFIG`
+3. `$XDG_CONFIG_HOME/iris-mind/runtime.toml`
+4. `~/.config/iris-mind/runtime.toml`
 
 config が見つからない場合はエラーにしない。組み込み defaults、環境変数、CLI overrides だけで起動する。`--config PATH` は default discovery を無効化して指定 TOML を直接使う。`--config PATH` が存在しない場合、または `$IRIS_MIND_CONFIG` が存在しない path を指す場合は `ConfigError`。
 
@@ -65,8 +62,7 @@ uv run python -m iris.runtime.server
 sampleであり、組み込みdefaultsのpure dumpではない。任意項目には実用的なsample値を
 含む場合がある。`init-config`はPython package内に同梱した同一templateを使うため、
 source checkout外のインストール環境でも生成できる。
-`.iris/config/llm.example.toml` は旧LLM設定向けのpartial sampleであり、
-新規設定の基準には使わない。OpenAIの認証情報などの秘密情報はTOMLには書かず、
+OpenAIの認証情報などの秘密情報はTOMLには書かず、
 `OPENAI_API_KEY`などの環境変数で渡す。
 
 設定ファイル形式は`[config] version = 1`。version省略は後方互換としてv1扱い。
