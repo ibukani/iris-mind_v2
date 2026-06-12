@@ -58,7 +58,12 @@ class SpaceResolver(Protocol):
 
 
 class SpaceBindingStore(Protocol):
-    """External provider space binding to internal space_id storage protocol."""
+    """Reserved extension protocol for external space binding storage.
+
+    The default Iris-Mind runtime does not persist or wire SpaceBinding.
+    Default space resolution is ephemeral and deterministic from
+    provider + provider_space_ref.
+    """
 
     async def get_by_external_ref(
         self,

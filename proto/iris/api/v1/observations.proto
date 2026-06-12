@@ -9,12 +9,12 @@ import "iris/api/v1/spaces.proto";
 enum ObservationKind {
   OBSERVATION_KIND_UNSPECIFIED = 0;
   OBSERVATION_KIND_ACTOR_MESSAGE = 1;
-  // Defined for future use. Not currently accepted by the gRPC mapper.
+  // Not currently accepted by the gRPC mapper.
   OBSERVATION_KIND_TRANSCRIPT = 2;
   OBSERVATION_KIND_IDLE_TICK = 3;
-  // Defined for future use. Not currently accepted by the gRPC mapper.
+  // Not currently accepted by the gRPC mapper.
   OBSERVATION_KIND_AUDIENCE_MESSAGE = 4;
-  // Defined for future use. Not currently accepted by the gRPC mapper.
+  // Not currently accepted by the gRPC mapper.
   OBSERVATION_KIND_GAME_EVENT = 5;
 }
 
@@ -30,47 +30,32 @@ message IdleTickPayload {
 
 message ObservationContext {
   Identity actor = 1;
-
   // External clients should not send internal account_id or device_id.
   string account_id = 2;
   string device_id = 3;
-
   string space_id = 4;
-
-  // Should be "cli" for iris-cli_v2.
+  // Stable source/provider label. Should be "cli" for iris-cli_v2.
   string source = 5;
-
-  // External clients should usually send account_ref to identify the user.
+  // account_ref lets the runtime resolve a stable Iris identity.
+  // provider_subject must be stable within provider; display_name is not a key.
   ExternalAccountRef account_ref = 6;
-
   map<string, string> metadata = 7;
-
   // space_ref is optional and represents interaction context.
-  // It is resolved ephemerally and is not persisted.
+  // provider_space_ref must be stable within provider; display_name is not a key.
   ExternalSpaceRef space_ref = 8;
 }
 
 message Observation {
-  // Client-generated unique observation ID.
+  // Client-generated observation ID.
   string observation_id = 1;
-
   // Client-generated session ID.
-  // For one-shot CLI prompt calls, this may be per command.
-  // For CLI REPL, keep this stable for the REPL session.
   string session_id = 2;
-
   // Observation kind.
-  // Currently accepted by the gRPC mapper:
-  // - OBSERVATION_KIND_ACTOR_MESSAGE
-  // - OBSERVATION_KIND_IDLE_TICK
+  // OBSERVATION_KIND_ACTOR_MESSAGE and OBSERVATION_KIND_IDLE_TICK are accepted.
   ObservationKind kind = 3;
-
-  // Time when the client observed this event.
-  // Required by the current server mapper.
+  // Time when the client observed this event. Required by mapper.
   google.protobuf.Timestamp occurred_at = 4;
-
   ObservationContext context = 5;
-
   oneof payload {
     ActorMessagePayload actor_message = 10;
     IdleTickPayload idle_tick = 11;

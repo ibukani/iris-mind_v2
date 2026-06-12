@@ -185,3 +185,8 @@ Scheduler (runtime)
 
 - architecture.md: 全体構造、各層の責務、依存方向
 - rules.md: 認知サイクルに関する Do/Don't
+## Space Context Rule
+
+Cognitive flow は memory、relationship、persona semantics の主スコープとして `actor_id` を使う。`space_id` は observation が発生した外部contextの補助scope。
+
+Default runtime は `SpaceBinding` を永続化しない。Space に conversation history や persona state を紐づけない。

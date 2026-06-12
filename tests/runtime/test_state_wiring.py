@@ -18,29 +18,35 @@ if TYPE_CHECKING:
 
 
 def test_wire_memory_backend() -> None:
-    """Test wiring with memory backend."""
+    """Default state backend wires account and memory stores only."""
     config = default_runtime_config()
     stores = wire_runtime_state(config)
+
     assert isinstance(stores.account_store, InMemoryAccountStore)
     assert isinstance(stores.memory_store, InMemoryMemoryStore)
+    assert not hasattr(stores, "space_binding_store")
 
 
 def test_wire_sqlite_backend(tmp_path: Path) -> None:
-    """Test wiring with sqlite backend."""
+    """SQLite backend persists accounts and memory, not SpaceBinding."""
     db_path = tmp_path / "state.db"
     config = default_runtime_config()
     config = replace(config, state=RuntimeStateConfig(backend="sqlite", sqlite_path=str(db_path)))
+
     stores = wire_runtime_state(config)
+
     assert isinstance(stores.account_store, SQLiteAccountStore)
     assert isinstance(stores.memory_store, SQLiteMemoryStore)
+    assert not hasattr(stores, "space_binding_store")
     assert db_path.exists()
 
 
 def test_wire_memory_backend_uses_independent_stores() -> None:
-    """Memory backend provides fresh, independent stores per call."""
+    """Each in-memory state wiring call returns independent store instances."""
     config = default_runtime_config()
+
     stores_a = wire_runtime_state(config)
     stores_b = wire_runtime_state(config)
 
-    assert stores_a.memory_store is not stores_b.memory_store
     assert stores_a.account_store is not stores_b.account_store
+    assert stores_a.memory_store is not stores_b.memory_store

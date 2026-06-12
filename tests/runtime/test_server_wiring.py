@@ -6,6 +6,7 @@ from dataclasses import replace
 import inspect
 from pathlib import Path
 
+from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.cognitive.memory.hybrid import HybridMemoryRetriever
@@ -42,6 +43,8 @@ def test_build_runtime_components_uses_hybrid_retrieval_for_sqlite(
     components = build_runtime_components(config)
 
     assert isinstance(components.stores.memory_store, SQLiteMemoryStore)
+    assert isinstance(components.space_resolver, EphemeralSpaceResolver)
+    assert not hasattr(components.stores, "space_binding_store")
     cycle = get_private_attr_path(components.runtime_service, "_app", "_cycle")
     retrieval_steps = [
         step for step in get_private_attr(cycle, "_steps") if isinstance(step, MemoryRetrievalStep)
@@ -59,6 +62,8 @@ def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> 
     components = build_runtime_components(config)
 
     assert isinstance(components.stores.memory_store, InMemoryMemoryStore)
+    assert isinstance(components.space_resolver, EphemeralSpaceResolver)
+    assert not hasattr(components.stores, "space_binding_store")
     cycle = get_private_attr_path(components.runtime_service, "_app", "_cycle")
     retrieval_steps = [
         step for step in get_private_attr(cycle, "_steps") if isinstance(step, MemoryRetrievalStep)
@@ -70,7 +75,7 @@ def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> 
 def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
     tmp_path: Path,
 ) -> None:
-    """build_runtime_components feeds the state account_store into the identity resolver."""
+    """build_runtime_components feeds state stores into runtime resolvers."""
     db_path = tmp_path / "state.db"
     config = default_runtime_config()
     config = replace(
@@ -80,9 +85,8 @@ def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
 
     components = build_runtime_components(config)
 
-    assert (
-        get_private_attr(components.identity_resolver, "_account_store")
-        is components.stores.account_store
+    assert get_private_attr(components.identity_resolver, "_account_store") is (
+        components.stores.account_store
     )
 
 

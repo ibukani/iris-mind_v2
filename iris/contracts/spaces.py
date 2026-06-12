@@ -71,7 +71,11 @@ class SpaceBindingStoreError(ValueError):
 
 @dataclass(frozen=True)
 class SpaceBinding:
-    """外部プロバイダのスペースを Iris 内部の space_id にバインドする。"""
+    """外部プロバイダのスペースを Iris 内部の space_id にバインドする予約契約。
+
+    デフォルトの Iris-Mind runtime は SpaceBinding を永続化せず、配線もしない。
+    既定のspace解決は provider + provider_space_ref から決定論的に行う。
+    """
 
     provider: str
     provider_space_ref: ExternalRef

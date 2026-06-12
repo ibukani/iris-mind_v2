@@ -28,10 +28,10 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     """永続状態ストアを組み立てて初期化する。
 
     Args:
-        config: ランタイム設定全体。
+        config: ランタイム設定。
 
     Returns:
-        構成済みのランタイム状態ストア。
+        RuntimeStateStores: ランタイムが使う永続ストア。
     """
     if config.state.backend == "sqlite":
         account_store: AccountStore = SQLiteAccountStore(config.state.sqlite_path)
@@ -40,4 +40,7 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         account_store = InMemoryAccountStore()
         memory_store = InMemoryMemoryStore()
 
-    return RuntimeStateStores(account_store=account_store, memory_store=memory_store)
+    return RuntimeStateStores(
+        account_store=account_store,
+        memory_store=memory_store,
+    )

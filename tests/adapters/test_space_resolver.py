@@ -1,123 +1,47 @@
-"""Tests for SpaceResolver implementations."""
+"""SpaceResolver implementation tests."""
 
 from __future__ import annotations
 
 import pytest
 
-from iris.adapters.app_gateway.space_resolver import (
-    EphemeralSpaceResolver,
-    SpaceBindingAwareSpaceResolver,
-)
-from iris.adapters.spaces.memory import InMemorySpaceBindingStore
+from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.contracts.external_refs import ExternalSpaceRef
 from iris.contracts.identity import ActorKind, Identity
-from iris.contracts.spaces import SpaceBinding, SpaceKind
-from iris.core.ids import ActorId, ExternalRef, SpaceId
+from iris.contracts.spaces import SpaceKind
+from iris.core.ids import ActorId, ExternalRef
 
 
-@pytest.fixture
-def binding_store() -> InMemorySpaceBindingStore:
-    """Return an empty InMemorySpaceBindingStore."""
-    return InMemorySpaceBindingStore()
+@pytest.mark.anyio
+async def test_ephemeral_space_resolver_returns_deterministic_id() -> None:
+    """EphemeralSpaceResolver returns a stable deterministic SpaceId."""
+    resolver = EphemeralSpaceResolver()
 
-
-@pytest.fixture
-def resolver(binding_store: InMemorySpaceBindingStore) -> SpaceBindingAwareSpaceResolver:
-    """Return a SpaceBindingAwareSpaceResolver."""
-    return SpaceBindingAwareSpaceResolver(binding_store=binding_store)
-
-
-@pytest.mark.asyncio
-async def test_binding_hit_returns_bound_space_id(
-    resolver: SpaceBindingAwareSpaceResolver,
-    binding_store: InMemorySpaceBindingStore,
-) -> None:
-    """Test that existing binding returns the bound SpaceId."""
-    await binding_store.put(
-        SpaceBinding(
-            provider="discord",
-            provider_space_ref=ExternalRef("123"),
-            space_id=SpaceId("bound-space-1"),
-            display_name="Bound Channel",
-            space_kind=SpaceKind.CHANNEL,
-            metadata={"guild_id": "999"},
-        )
-    )
-
-    space = await resolver.resolve_space(
-        ExternalSpaceRef(
-            provider="discord",
-            provider_space_ref=ExternalRef("123"),
-            display_name="Input Channel",
-            space_kind=SpaceKind.ROOM,
-            metadata={"input_meta": "yes"},
-        )
-    )
-
-    assert space.space_id == "bound-space-1"
-    assert space.display_name == "Bound Channel"
-    assert space.space_kind == SpaceKind.CHANNEL
-    assert space.metadata == {"input_meta": "yes", "guild_id": "999"}
-
-
-@pytest.mark.asyncio
-async def test_missing_binding_returns_deterministic_fallback(
-    resolver: SpaceBindingAwareSpaceResolver,
-) -> None:
-    """Test that missing binding generates deterministic fallback SpaceId."""
     space1 = await resolver.resolve_space(
         ExternalSpaceRef(
-            provider="discord",
-            provider_space_ref=ExternalRef("missing-123"),
-            display_name="Missing Channel",
-            space_kind=SpaceKind.CHANNEL,
-        )
+            provider="test-provider",
+            provider_space_ref=ExternalRef("room-1"),
+            display_name="Room One",
+            space_kind=SpaceKind.ROOM,
+        ),
     )
     space2 = await resolver.resolve_space(
         ExternalSpaceRef(
-            provider="discord",
-            provider_space_ref=ExternalRef("missing-123"),
-            display_name="Missing Channel",
-            space_kind=SpaceKind.CHANNEL,
-        )
+            provider="test-provider",
+            provider_space_ref=ExternalRef("room-1"),
+            display_name="Room One Different Name",
+            space_kind=SpaceKind.ROOM,
+        ),
     )
 
     assert space1.space_id == space2.space_id
-    assert space1.space_id.startswith("space-discord-")
-    assert space1.display_name == "Missing Channel"
-    assert space1.space_kind == SpaceKind.CHANNEL
+    assert space1.space_id.startswith("space-test-provider-")
+    assert space1.display_name == "Room One"
 
 
-@pytest.mark.asyncio
-async def test_different_ref_returns_different_fallback(
-    resolver: SpaceBindingAwareSpaceResolver,
-) -> None:
-    """Test that different refs generate different fallback SpaceIds."""
-    space1 = await resolver.resolve_space(
-        ExternalSpaceRef(
-            provider="discord",
-            provider_space_ref=ExternalRef("missing-1"),
-            display_name="C1",
-            space_kind=SpaceKind.CHANNEL,
-        )
-    )
-    space2 = await resolver.resolve_space(
-        ExternalSpaceRef(
-            provider="discord",
-            provider_space_ref=ExternalRef("missing-2"),
-            display_name="C2",
-            space_kind=SpaceKind.CHANNEL,
-        )
-    )
-
-    assert space1.space_id != space2.space_id
-
-
-@pytest.mark.asyncio
-async def test_participants_converted_to_snapshots(
-    resolver: SpaceBindingAwareSpaceResolver,
-) -> None:
-    """Test that participants are correctly snapshotted in the resolved space."""
+@pytest.mark.anyio
+async def test_ephemeral_space_resolver_maps_participants() -> None:
+    """EphemeralSpaceResolver maps Identity participants into snapshots."""
+    resolver = EphemeralSpaceResolver()
     actor = Identity(
         actor_id=ActorId("actor-1"),
         actor_kind=ActorKind.HUMAN,
@@ -136,65 +60,9 @@ async def test_participants_converted_to_snapshots(
     )
 
     assert len(space.participants) == 1
-    p = space.participants[0]
-    assert p.actor_id == "actor-1"
-    assert p.participant_kind == "human"
-    assert p.display_name == "Alice"
-    assert p.identity == actor
-    assert p.metadata == {"key": "val"}
-
-
-@pytest.mark.asyncio
-async def test_ephemeral_space_resolver_returns_deterministic_id() -> None:
-    """Test that EphemeralSpaceResolver generates a deterministic SpaceId."""
-    resolver = EphemeralSpaceResolver()
-
-    space1 = await resolver.resolve_space(
-        ExternalSpaceRef(
-            provider="test-provider",
-            provider_space_ref=ExternalRef("room-1"),
-            display_name="Room One",
-            space_kind=SpaceKind.ROOM,
-        )
-    )
-
-    space2 = await resolver.resolve_space(
-        ExternalSpaceRef(
-            provider="test-provider",
-            provider_space_ref=ExternalRef("room-1"),
-            display_name="Room One Different Name",
-            space_kind=SpaceKind.ROOM,
-        )
-    )
-
-    assert space1.space_id == space2.space_id
-    assert space1.space_id.startswith("space-test-provider-")
-    assert space1.display_name == "Room One"
-
-
-@pytest.mark.asyncio
-async def test_ephemeral_space_resolver_maps_participants() -> None:
-    """Test that EphemeralSpaceResolver maps participants."""
-    resolver = EphemeralSpaceResolver()
-
-    actor = Identity(
-        actor_id=ActorId("actor-1"),
-        actor_kind=ActorKind.HUMAN,
-        display_name="Alice",
-        metadata={"key": "val"},
-    )
-
-    space = await resolver.resolve_space(
-        ExternalSpaceRef(
-            provider="test",
-            provider_space_ref=ExternalRef("room"),
-            display_name="Room",
-            space_kind=SpaceKind.ROOM,
-        ),
-        participants=[actor],
-    )
-
-    assert len(space.participants) == 1
-    p = space.participants[0]
-    assert p.actor_id == "actor-1"
-    assert p.metadata == {"key": "val"}
+    participant = space.participants[0]
+    assert participant.actor_id == ActorId("actor-1")
+    assert participant.participant_kind.value == "human"
+    assert participant.display_name == "Alice"
+    assert participant.identity == actor
+    assert participant.metadata == {"key": "val"}
