@@ -23,6 +23,7 @@ from iris.cognitive.workspace.frame import (
     InterpretedInput,
     MemorySummary,
     RelationshipSnapshot,
+    SituationContextSnapshot,
     SpaceContextSnapshot,
     WorkspaceFrame,
 )
@@ -35,11 +36,19 @@ class FrameBuilder:
     """型付きパイプライン結果を不変 WorkspaceFrame スナップショットへ適用する。"""
 
     @staticmethod
-    def build_initial(observation: Observation) -> WorkspaceFrame:
+    def build_initial(
+        observation: Observation,
+        *,
+        situation_context: SituationContextSnapshot | None = None,
+    ) -> WorkspaceFrame:
         """観測コンテキストから初期フレームを構築する。
 
+        Args:
+            observation: 入ってきた観測。
+            situation_context: ランタイムから組み立てられた任意の状況コンテキスト。
+
         Returns:
-            actor / space context スナップショットを含む初期ワークスペースフレーム。
+            actor / space / situation context スナップショットを含む初期ワークスペースフレーム。
         """
         context = observation.context
         return WorkspaceFrame(
@@ -50,6 +59,7 @@ class FrameBuilder:
                 device_id=context.device_id,
             ),
             space_context=SpaceContextSnapshot(space_id=context.space_id),
+            situation_context=situation_context or SituationContextSnapshot(),
         )
 
     @staticmethod

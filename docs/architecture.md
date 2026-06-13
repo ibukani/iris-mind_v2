@@ -72,15 +72,23 @@ iris/
 │   ├── spaces.py
 │   ├── memory.py
 │   ├── policy.py
+│   ├── availability.py
 │   └── external_refs.py
 │
 ├── runtime/
 │   ├── app.py
 │   ├── config.py
 │   ├── server.py
+│   ├── activity/
+│   ├── availability/
+│   ├── context/
+│   ├── presence/
+│   ├── spaces/
 │   └── wiring/
 │       ├── app.py
+│       ├── availability.py
 │       ├── cognitive.py
+│       ├── context.py
 │       ├── features.py
 │       ├── llm.py
 │       ├── memory.py
@@ -544,7 +552,7 @@ runtime stateのsource-of-truth:
 
 `ActivityEventRecord` は受理済みruntime eventであり、長期記憶ではない。デフォルトの `InMemoryActivityJournal` はboundedで、provider-event dedupeも同じwindow内の保証に限る。将来の永続activity logは別adapterとして実装し、memory extractionはraw `ActivityEventRecord` ではなく明示的な `MemoryCandidate` eventから行う。
 
-PR3のstoreはin-memoryのみで、availability、workspace context assembly、event reaction、delivery target、persistenceは実装しない。
+PR3のstoreはin-memoryのみ。PR4では `AvailabilityResolver` と `WorkspaceContextAssembler` を追加し、`WorkspaceFrame` が `SituationContextSnapshot` を受け取る。event reaction、delivery target、persistenceは未実装。
 
 基底 `Observation` は以下を運ぶ。
 
@@ -628,9 +636,17 @@ SpaceContextSnapshot
   space_id: SpaceId | None
   space: InteractionSpace | None
   participant_actor_ids: tuple[ActorId, ...]
+
+SituationContextSnapshot
+  latest_activity: ActivityEventRecord | None
+  presence: PresenceSnapshot | None
+  space_occupancy: SpaceOccupancySnapshot | None
+  availability: AvailabilitySnapshot | None
 ```
 
-`FrameBuilder.build_initial()` は `Observation.context` から `actor_context` と `space_context` を作る。
+`FrameBuilder.build_initial()` は `Observation.context` から `actor_context` と `space_context` を作り、オプションで `SituationContextSnapshot` を受け取る。
+`WorkspaceFrame.situation_context` は `iris.runtime.context.WorkspaceContextAssembler` が `ActivityProjectionStore` / `PresenceStore` / `SpaceOccupancyStore` から組み立てて `IrisRuntimeService` 経由で渡される。
+`AvailabilitySnapshot` は `AvailabilityResolver` が `PresenceSnapshot` と `ActivityEventRecord` から決定論的に導出する。
 `WorkspaceFrame` は frozen typed snapshot のまま。resolver、store、adapter、manager、mutable context bag は入れない。
 
 ### Identity / Space resolution
@@ -817,6 +833,7 @@ CLI / main.py / iris.runtime.server
 - proactive_talk feature 実装済み (salience scoring, goal proposal, policy)
 - authenticated ingress capabilityによるtyped activity/presence claimのin-memory runtime integration実装済み
 - trusted voice join/leaveからのin-memory space occupancy integration実装済み
+- `AvailabilityResolver` / `WorkspaceContextAssembler` による `SituationContextSnapshot` の組み立て実装済み
 - 永続ストレージ: SQLiteベースのアカウント永続化を実装済み (`SQLiteAccountStore`)。ただし対話スペースはエフェメラル (`EphemeralSpaceResolver`)。
 - `MotivationResult` 型と `FrameBuilder` 対応は既存、step 実装は未着手
 - LearningHook / BackgroundJob は未実装

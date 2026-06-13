@@ -98,6 +98,7 @@ CognitiveCycle → action step
 - `candidate_action_plans: tuple[ActionPlan, ...]`
 - `actor_context: ActorContextSnapshot`
 - `space_context: SpaceContextSnapshot`
+- `situation_context: SituationContextSnapshot`
 
 入れてはいけないもの。
 
@@ -107,6 +108,17 @@ CognitiveCycle → action step
 - 過去ログ全体
 - 巨大な `dict[str, Any]`
 - LLM prompt 文字列だけの巨大 context
+
+`SituationContextSnapshot` はランタイム state から 1 ターン用に組み立てられた snapshot。
+
+- `latest_activity: ActivityEventRecord | None`
+- `presence: PresenceSnapshot | None`
+- `space_occupancy: SpaceOccupancySnapshot | None`
+- `availability: AvailabilitySnapshot | None`
+
+`availability` は `AvailabilityResolver` が `PresenceSnapshot` / 直近 activity / 時刻から決定論的に導出する。
+`WorkspaceContextAssembler` が `ActivityProjectionStore` / `PresenceStore` / `SpaceOccupancyStore` を読み、`SituationContextSnapshot` を作る。
+認知サイクルはこの snapshot を読み取って応答判断に使うが、store へのアクセスは `runtime` 層に委ねる。
 
 `WorkspaceFrame` は「何でも入る箱」にしない。
 
@@ -149,7 +161,7 @@ ActivityEventObservation(VOICE_JOINED / VOICE_LEFT)
 
 state-onlyのactivity/presence observationはintegration後に `PresentedOutput(text=None)` を返し、通常のtext response生成へ流さない。EventReactionは未実装。
 
-現在のstoreはin-memoryのみ。将来の永続activity logは別adapterで実装し、memory extractionはraw `ActivityEventRecord` ではなく明示的な `MemoryCandidate` eventから行う。availability、workspace context assembly、event reaction、delivery target、persistenceは未実装。
+現在のstoreはin-memoryのみ。将来の永続activity logは別adapterで実装し、memory extractionはraw `ActivityEventRecord` ではなく明示的な `MemoryCandidate` eventから行う。PR4 で availability と workspace context assembly を実装済み。event reaction、delivery target、persistenceは未実装。
 
 ---
 
