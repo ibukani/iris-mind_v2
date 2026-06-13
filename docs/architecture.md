@@ -540,6 +540,10 @@ PresenceIntegrator:
 
 SpaceOccupancyIntegrator:
   trusted VOICE_JOINED / VOICE_LEFTをlive-space occupancyへ反映する
+
+EventReactionRunner:
+  trusted ActivityEventObservationに対し、availabilityとactivity kindに基づく決定論的なreactionを生成する
+  反応可能な場合のみ `PresentedOutput` を返し、text response pipelineには流さない
 ```
 
 runtime stateのsource-of-truth:
@@ -552,7 +556,7 @@ runtime stateのsource-of-truth:
 
 `ActivityEventRecord` は受理済みruntime eventであり、長期記憶ではない。デフォルトの `InMemoryActivityJournal` はboundedで、provider-event dedupeも同じwindow内の保証に限る。将来の永続activity logは別adapterとして実装し、memory extractionはraw `ActivityEventRecord` ではなく明示的な `MemoryCandidate` eventから行う。
 
-PR3のstoreはin-memoryのみ。PR4では `AvailabilityResolver` と `WorkspaceContextAssembler` を追加し、`WorkspaceFrame` が `SituationContextSnapshot` を受け取る。event reaction、delivery target、persistenceは未実装。
+PR3のstoreはin-memoryのみ。PR4では `AvailabilityResolver` と `WorkspaceContextAssembler` を追加し、`WorkspaceFrame` が `SituationContextSnapshot` を受け取った。PR5では `EventReactionPolicy` / `EventReactionPlanner` / `EventReactionRunner` を追加し、trusted `ActivityEventObservation` に対して決定論的なevent reactionを返す。delivery target、persistenceは未実装。
 
 基底 `Observation` は以下を運ぶ。
 

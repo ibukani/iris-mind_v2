@@ -33,13 +33,15 @@ from iris.runtime.config.root import all_model_slots_are_fake
 from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
-from iris.runtime.service import IrisRuntimeService
+from iris.runtime.service import IrisRuntimeService, RuntimeIntegrators
 from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
+from iris.runtime.wiring.event_reaction import wire_event_reaction_runner
 from iris.runtime.wiring.grpc import create_grpc_server
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
+from iris.safety.output_filter import AllowAllOutputGate
 
 
 @dataclass(frozen=True)
@@ -97,12 +99,18 @@ def build_runtime_service(
         availability_resolver=availability_resolver,
         now=current_now,
     )
+    event_reaction_runner = wire_event_reaction_runner()
     return IrisRuntimeService(
         app,
-        activity_integrator=activity_integrator,
-        presence_integrator=presence_integrator,
-        occupancy_integrator=occupancy_integrator,
+        integrators=RuntimeIntegrators(
+            activity=activity_integrator,
+            presence=presence_integrator,
+            occupancy=occupancy_integrator,
+        ),
         workspace_context_assembler=workspace_context_assembler,
+        event_reaction_runner=event_reaction_runner,
+        trust_policy=trust_policy,
+        event_reaction_output_gate=AllowAllOutputGate(),
     )
 
 

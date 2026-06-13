@@ -28,6 +28,21 @@ def test_observation_trust_policy_requires_authentication_and_capabilities() -> 
     assert not policy.can_update_space_occupancy(_ingress(ObservationCapability.INTEGRATE_PRESENCE))
 
 
+def test_can_react_to_activity_event_requires_trust() -> None:
+    """can_react_to_activity_eventは認証済み + INTEGRATE_ACTIVITYを要求する。"""
+    policy = ObservationTrustPolicy()
+
+    assert policy.can_react_to_activity_event(_ingress(ObservationCapability.INTEGRATE_ACTIVITY))
+
+    assert not policy.can_react_to_activity_event(
+        _ingress(ObservationCapability.INTEGRATE_ACTIVITY, authenticated=False)
+    )
+
+    assert not policy.can_react_to_activity_event(
+        _ingress(ObservationCapability.INTEGRATE_PRESENCE)
+    )
+
+
 def _ingress(
     capability: ObservationCapability,
     *,
