@@ -30,11 +30,11 @@ class _SpaceKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_SpaceKind.V
     SPACE_KIND_TEXT_CHANNEL: _SpaceKind.ValueType  # 2
     """Text-based channel space, such as a Discord text channel."""
     SPACE_KIND_THREAD: _SpaceKind.ValueType  # 3
-    SPACE_KIND_VOICE_CHANNEL: _SpaceKind.ValueType  # 4
-    """Live voice space, such as a Discord voice channel."""
-    SPACE_KIND_ROOM: _SpaceKind.ValueType  # 5
+    SPACE_KIND_ROOM: _SpaceKind.ValueType  # 4
     """Generic room-like space."""
-    SPACE_KIND_BROADCAST: _SpaceKind.ValueType  # 6
+    SPACE_KIND_BROADCAST: _SpaceKind.ValueType  # 5
+    SPACE_KIND_VOICE_CHANNEL: _SpaceKind.ValueType  # 6
+    """Live voice space, such as a Discord voice channel."""
 
 class SpaceKind(_SpaceKind, metaclass=_SpaceKindEnumTypeWrapper): ...
 
@@ -43,11 +43,11 @@ SPACE_KIND_DIRECT_MESSAGE: SpaceKind.ValueType  # 1
 SPACE_KIND_TEXT_CHANNEL: SpaceKind.ValueType  # 2
 """Text-based channel space, such as a Discord text channel."""
 SPACE_KIND_THREAD: SpaceKind.ValueType  # 3
-SPACE_KIND_VOICE_CHANNEL: SpaceKind.ValueType  # 4
-"""Live voice space, such as a Discord voice channel."""
-SPACE_KIND_ROOM: SpaceKind.ValueType  # 5
+SPACE_KIND_ROOM: SpaceKind.ValueType  # 4
 """Generic room-like space."""
-SPACE_KIND_BROADCAST: SpaceKind.ValueType  # 6
+SPACE_KIND_BROADCAST: SpaceKind.ValueType  # 5
+SPACE_KIND_VOICE_CHANNEL: SpaceKind.ValueType  # 6
+"""Live voice space, such as a Discord voice channel."""
 Global___SpaceKind: _TypeAlias = SpaceKind  # noqa: Y015
 
 @_typing.final

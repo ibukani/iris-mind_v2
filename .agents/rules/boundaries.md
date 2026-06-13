@@ -9,12 +9,15 @@ All external app events must become typed observations before cognitive code see
 Examples:
 
 - `ActorMessageObservation`
-- `TranscriptObservation`
 - `IdleTickObservation`
-- `AudienceMessageObservation`
-- `GameEventObservation`
+- `ActivityEventObservation`
+- `PresenceSignalObservation`
 
 Do not pass Discord, Twitch, voice, HTTP, or CLI objects into `cognitive/`.
+
+`ActorMessageObservation` is the only actor text-message ingress.
+Actor-scoped activity and all presence signals require a resolved actor/account subject.
+Activity and presence observations are external claims, not commands that mutate runtime state.
 
 ## Cognitive boundary
 

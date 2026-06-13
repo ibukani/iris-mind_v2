@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING, NoReturn, assert_never
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
+from iris.contracts.activity import ActivityKind
 from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
+    ActivityEventObservation,
     ActorMessageObservation,
     IdleTickObservation,
     Observation,
     ObservationContext,
     ObservationKind,
+    PresenceSignalObservation,
 )
+from iris.contracts.presence import PresenceStatus
 from iris.contracts.spaces import SpaceKind
 from iris.core.ids import (
     AccountId,
@@ -30,6 +34,15 @@ from iris.core.ids import (
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
 from iris.runtime.service import ObservationEnvelope
+
+_ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
+    {
+        ActivityKind.ACTOR_TYPING_STARTED,
+        ActivityKind.ACTOR_TYPING_STOPPED,
+        ActivityKind.VOICE_JOINED,
+        ActivityKind.VOICE_LEFT,
+    }
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -85,13 +98,13 @@ class GrpcRuntimeMapper:
         """Map Observation proto to an Iris Observation contract.
 
         Returns:
-            Observation: ActorMessageObservation or IdleTickObservation.
+            Observation: kindとpayloadが一致する型付き観測。
         """
         kind = _observation_kind_from_proto(observation.kind)
+        _validate_observation_kind_and_payload(observation)
         occurred_at = _datetime_from_timestamp(observation)
         context = await self.observation_context_from_proto(observation.context)
         if kind is ObservationKind.ACTOR_MESSAGE:
-            _require_payload(observation, "actor_message", kind)
             actor_payload = observation.actor_message
             return ActorMessageObservation(
                 observation_id=ObservationId(observation.observation_id),
@@ -107,7 +120,6 @@ class GrpcRuntimeMapper:
                 ),
             )
         if kind is ObservationKind.IDLE_TICK:
-            _require_payload(observation, "idle_tick", kind)
             idle_payload = observation.idle_tick
             return IdleTickObservation(
                 observation_id=ObservationId(observation.observation_id),
@@ -118,7 +130,48 @@ class GrpcRuntimeMapper:
                 reason=idle_payload.reason or None,
                 idle_seconds=idle_payload.idle_seconds,
             )
-        return _raise_mapping_error(f"unsupported observation kind: {kind.value}")
+        if kind is ObservationKind.ACTIVITY_EVENT:
+            activity_payload = observation.activity_event
+            if activity_payload.provider_sequence < 0:
+                _raise_mapping_error("activity_event.provider_sequence must not be negative")
+            activity_kind = _activity_kind_from_proto(activity_payload.activity_kind)
+            _require_activity_subject(
+                activity_kind=activity_kind,
+                context=context,
+            )
+            return ActivityEventObservation(
+                observation_id=ObservationId(observation.observation_id),
+                session_id=SessionId(observation.session_id),
+                context=context,
+                occurred_at=occurred_at,
+                kind=kind,
+                activity_kind=activity_kind,
+                provider_event_id=activity_payload.provider_event_id or None,
+                provider_sequence=activity_payload.provider_sequence or None,
+                metadata=_metadata_dict(activity_payload.metadata),
+            )
+        if kind is ObservationKind.PRESENCE_SIGNAL:
+            _require_presence_subject(context)
+            presence_payload = observation.presence_signal
+            expires_at = (
+                _datetime_from_proto_timestamp(
+                    presence_payload.expires_at,
+                    field_name="presence_signal.expires_at",
+                )
+                if presence_payload.HasField("expires_at")
+                else None
+            )
+            return PresenceSignalObservation(
+                observation_id=ObservationId(observation.observation_id),
+                session_id=SessionId(observation.session_id),
+                context=context,
+                occurred_at=occurred_at,
+                kind=kind,
+                status=_presence_status_from_proto(presence_payload.status),
+                expires_at=expires_at,
+                metadata=_metadata_dict(presence_payload.metadata),
+            )
+        assert_never(kind)
 
     async def observation_context_from_proto(
         self,
@@ -347,22 +400,62 @@ def timestamp_from_datetime(value: datetime) -> Timestamp:
 def _datetime_from_timestamp(observation: observations_pb2.Observation) -> datetime:
     if not observation.HasField("occurred_at"):
         _raise_mapping_error("occurred_at is required")
+    return _datetime_from_proto_timestamp(
+        observation.occurred_at,
+        field_name="occurred_at",
+    )
+
+
+def _datetime_from_proto_timestamp(
+    timestamp: Timestamp,
+    *,
+    field_name: str,
+) -> datetime:
     try:
-        occurred_at = observation.occurred_at.ToDatetime(tzinfo=UTC)
+        value = timestamp.ToDatetime(tzinfo=UTC)
     except (OverflowError, ValueError) as exc:
-        _raise_mapping_error("occurred_at is invalid", cause=exc)
-    if occurred_at.tzinfo is None:
-        _raise_mapping_error("occurred_at must be timezone-aware")
-    return occurred_at
+        _raise_mapping_error(f"{field_name} is invalid", cause=exc)
+    if value.tzinfo is None:
+        _raise_mapping_error(f"{field_name} must be timezone-aware")
+    return value
 
 
-def _require_payload(
+def _validate_observation_kind_and_payload(
     observation: observations_pb2.Observation,
-    payload_name: str,
-    kind: ObservationKind,
 ) -> None:
-    if observation.WhichOneof("payload") != payload_name:
-        _raise_mapping_error(f"{kind.value} requires {payload_name} payload")
+    expected_payload_by_kind = {
+        observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE: "actor_message",
+        observations_pb2.OBSERVATION_KIND_IDLE_TICK: "idle_tick",
+        observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT: "activity_event",
+        observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL: "presence_signal",
+    }
+    try:
+        expected_payload = expected_payload_by_kind[observation.kind]
+    except KeyError:
+        _raise_mapping_error(f"unsupported or unspecified observation kind: {observation.kind}")
+    actual_payload = observation.WhichOneof("payload")
+    if actual_payload != expected_payload:
+        _raise_mapping_error(
+            f"observation kind requires {expected_payload} payload, got {actual_payload or 'none'}"
+        )
+
+
+def _require_presence_subject(context: ObservationContext) -> None:
+    if context.actor is None and context.account_id is None:
+        _raise_mapping_error("presence_signal requires actor or account_id")
+
+
+def _require_activity_subject(
+    *,
+    activity_kind: ActivityKind,
+    context: ObservationContext,
+) -> None:
+    if (
+        activity_kind in _ACTOR_SCOPED_ACTIVITY_KINDS
+        and context.actor is None
+        and context.account_id is None
+    ):
+        _raise_mapping_error(f"{activity_kind.value} requires actor or account_id")
 
 
 def _observation_kind_from_proto(
@@ -371,11 +464,49 @@ def _observation_kind_from_proto(
     mapping = {
         observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE: ObservationKind.ACTOR_MESSAGE,
         observations_pb2.OBSERVATION_KIND_IDLE_TICK: ObservationKind.IDLE_TICK,
+        observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT: ObservationKind.ACTIVITY_EVENT,
+        observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL: ObservationKind.PRESENCE_SIGNAL,
     }
     try:
         return mapping[kind]
     except KeyError:
         _raise_mapping_error(f"unsupported or unspecified observation kind: {kind}")
+
+
+def _activity_kind_from_proto(
+    kind: observations_pb2.ActivityKind.ValueType,
+) -> ActivityKind:
+    mapping = {
+        observations_pb2.ACTIVITY_KIND_ACTOR_TYPING_STARTED: ActivityKind.ACTOR_TYPING_STARTED,
+        observations_pb2.ACTIVITY_KIND_ACTOR_TYPING_STOPPED: ActivityKind.ACTOR_TYPING_STOPPED,
+        observations_pb2.ACTIVITY_KIND_APP_OPENED: ActivityKind.APP_OPENED,
+        observations_pb2.ACTIVITY_KIND_APP_CLOSED: ActivityKind.APP_CLOSED,
+        observations_pb2.ACTIVITY_KIND_VOICE_JOINED: ActivityKind.VOICE_JOINED,
+        observations_pb2.ACTIVITY_KIND_VOICE_LEFT: ActivityKind.VOICE_LEFT,
+        observations_pb2.ACTIVITY_KIND_SYSTEM_INTERACTION: ActivityKind.SYSTEM_INTERACTION,
+    }
+    try:
+        return mapping[kind]
+    except KeyError:
+        _raise_mapping_error(f"unsupported or unspecified activity kind: {kind}")
+
+
+def _presence_status_from_proto(
+    status: observations_pb2.PresenceStatus.ValueType,
+) -> PresenceStatus:
+    mapping = {
+        observations_pb2.PRESENCE_STATUS_UNKNOWN: PresenceStatus.UNKNOWN,
+        observations_pb2.PRESENCE_STATUS_ONLINE: PresenceStatus.ONLINE,
+        observations_pb2.PRESENCE_STATUS_OFFLINE: PresenceStatus.OFFLINE,
+        observations_pb2.PRESENCE_STATUS_AWAY: PresenceStatus.AWAY,
+        observations_pb2.PRESENCE_STATUS_IDLE: PresenceStatus.IDLE,
+        observations_pb2.PRESENCE_STATUS_DO_NOT_DISTURB: PresenceStatus.DO_NOT_DISTURB,
+        observations_pb2.PRESENCE_STATUS_INVISIBLE: PresenceStatus.INVISIBLE,
+    }
+    try:
+        return mapping[status]
+    except KeyError:
+        _raise_mapping_error(f"unsupported or unspecified presence status: {status}")
 
 
 def _actor_kind_from_proto(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:

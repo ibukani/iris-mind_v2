@@ -12,7 +12,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from datetime import datetime
 
+    from iris.contracts.activity import ActivityKind
     from iris.contracts.identity import Identity
+    from iris.contracts.presence import PresenceStatus
     from iris.core.ids import (
         AccountId,
         DeviceId,
@@ -24,13 +26,12 @@ if TYPE_CHECKING:
 
 
 class ObservationKind(StrEnum):
-    """観測の種類。"""
+    """型付きruntime ingressが受け付ける観測の種類。"""
 
     ACTOR_MESSAGE = "actor_message"
-    TRANSCRIPT = "transcript"
     IDLE_TICK = "idle_tick"
-    AUDIENCE_MESSAGE = "audience_message"
-    GAME_EVENT = "game_event"
+    ACTIVITY_EVENT = "activity_event"
+    PRESENCE_SIGNAL = "presence_signal"
 
 
 @dataclass(frozen=True)
@@ -74,3 +75,30 @@ class IdleTickObservation(Observation):
 
     reason: str | None = None
     idle_seconds: float = 0.0
+
+
+@dataclass(frozen=True)
+class ActivityEventObservation(Observation):
+    """外部providerから届いた非message activity event観測。"""
+
+    activity_kind: ActivityKind
+    provider_event_id: str | None = None
+    provider_sequence: int | None = None
+    metadata: Mapping[str, str] = EMPTY_METADATA
+
+    def __post_init__(self) -> None:
+        """補助metadataを不変なmapping proxyとして防御的にコピーする。"""
+        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+
+
+@dataclass(frozen=True)
+class PresenceSignalObservation(Observation):
+    """外部providerが観測したactor presence signalの報告。"""
+
+    status: PresenceStatus
+    expires_at: datetime | None = None
+    metadata: Mapping[str, str] = EMPTY_METADATA
+
+    def __post_init__(self) -> None:
+        """補助metadataを不変なmapping proxyとして防御的にコピーする。"""
+        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))

@@ -22,8 +22,15 @@ from iris.adapters.grpc.mappers import (
     timestamp_from_datetime,
 )
 from iris.contracts.actions import PresentedOutput
+from iris.contracts.activity import ActivityKind
 from iris.contracts.identity import ActorKind, Identity
-from iris.contracts.observations import ActorMessageObservation, IdleTickObservation
+from iris.contracts.observations import (
+    ActivityEventObservation,
+    ActorMessageObservation,
+    IdleTickObservation,
+    PresenceSignalObservation,
+)
+from iris.contracts.presence import PresenceStatus
 from iris.contracts.spaces import InteractionSpace, SpaceKind
 from iris.core.ids import (
     AccountId,
@@ -81,6 +88,313 @@ async def test_idle_tick_proto_maps_to_observation() -> None:
     assert isinstance(observation, IdleTickObservation)
     assert observation.reason == "quiet"
     assert observation.idle_seconds == approx(12.5)
+
+
+@pytest.mark.anyio
+async def test_activity_event_proto_maps_to_observation() -> None:
+    """ActivityEvent protoがtyped ActivityEventObservationへmapされることを確認する。"""
+    observation = await _mapper().observation_from_proto(
+        observations_pb2.Observation(
+            observation_id="obs-activity",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            context=observations_pb2.ObservationContext(account_id="account-1"),
+            activity_event=observations_pb2.ActivityEventPayload(
+                activity_kind=observations_pb2.ACTIVITY_KIND_VOICE_JOINED,
+                provider_event_id="event-1",
+                provider_sequence=42,
+                metadata={"discord_guild_id": "guild-1"},
+            ),
+        )
+    )
+
+    assert isinstance(observation, ActivityEventObservation)
+    assert observation.activity_kind is ActivityKind.VOICE_JOINED
+    assert observation.provider_event_id == "event-1"
+    assert observation.provider_sequence == 42
+    assert observation.metadata == {"discord_guild_id": "guild-1"}
+
+
+@pytest.mark.anyio
+async def test_activity_event_zero_sequence_maps_to_none() -> None:
+    """provider_sequence=0が未指定を表すNoneへmapされることを確認する。"""
+    observation = await _mapper().observation_from_proto(
+        observations_pb2.Observation(
+            observation_id="obs-activity",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            activity_event=observations_pb2.ActivityEventPayload(
+                activity_kind=observations_pb2.ACTIVITY_KIND_APP_OPENED,
+            ),
+        )
+    )
+
+    assert isinstance(observation, ActivityEventObservation)
+    assert observation.provider_event_id is None
+    assert observation.provider_sequence is None
+
+
+@pytest.mark.anyio
+async def test_activity_event_core_fields_are_not_read_from_metadata() -> None:
+    """Activityの中核意味がmetadataの競合値で上書きされないことを確認する。"""
+    observation = await _mapper().observation_from_proto(
+        observations_pb2.Observation(
+            observation_id="obs-activity",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            activity_event=observations_pb2.ActivityEventPayload(
+                activity_kind=observations_pb2.ACTIVITY_KIND_APP_OPENED,
+                provider_event_id="typed-event",
+                provider_sequence=7,
+                metadata={
+                    "activity_kind": "voice_left",
+                    "provider_event_id": "metadata-event",
+                    "provider_sequence": "99",
+                },
+            ),
+        )
+    )
+
+    assert isinstance(observation, ActivityEventObservation)
+    assert observation.activity_kind is ActivityKind.APP_OPENED
+    assert observation.provider_event_id == "typed-event"
+    assert observation.provider_sequence == 7
+
+
+@pytest.mark.anyio
+async def test_presence_signal_proto_maps_to_observation() -> None:
+    """PresenceSignal protoがtyped PresenceSignalObservationへmapされることを確認する。"""
+    expires_at = datetime(2026, 6, 5, 13, tzinfo=UTC)
+    observation = await _mapper().observation_from_proto(
+        observations_pb2.Observation(
+            observation_id="obs-presence",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            context=observations_pb2.ObservationContext(account_id="account-1"),
+            presence_signal=observations_pb2.PresenceSignalPayload(
+                status=observations_pb2.PRESENCE_STATUS_DO_NOT_DISTURB,
+                expires_at=timestamp_from_datetime(expires_at),
+                metadata={"client_name": "desktop"},
+            ),
+        )
+    )
+
+    assert isinstance(observation, PresenceSignalObservation)
+    assert observation.status is PresenceStatus.DO_NOT_DISTURB
+    assert observation.expires_at == expires_at
+    assert observation.metadata == {"client_name": "desktop"}
+
+
+@pytest.mark.anyio
+async def test_presence_signal_core_fields_are_not_read_from_metadata() -> None:
+    """Presenceの中核意味がmetadataの競合値で上書きされないことを確認する。"""
+    expires_at = datetime(2026, 6, 5, 13, tzinfo=UTC)
+    observation = await _mapper().observation_from_proto(
+        observations_pb2.Observation(
+            observation_id="obs-presence",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            context=observations_pb2.ObservationContext(account_id="account-1"),
+            presence_signal=observations_pb2.PresenceSignalPayload(
+                status=observations_pb2.PRESENCE_STATUS_AWAY,
+                expires_at=timestamp_from_datetime(expires_at),
+                metadata={
+                    "presence_status": "offline",
+                    "expires_at": "2099-01-01T00:00:00Z",
+                },
+            ),
+        )
+    )
+
+    assert isinstance(observation, PresenceSignalObservation)
+    assert observation.status is PresenceStatus.AWAY
+    assert observation.expires_at == expires_at
+
+
+@pytest.mark.anyio
+async def test_presence_signal_without_expiry_maps_to_none() -> None:
+    """expires_at未指定のpresence updateがNoneを保持することを確認する。"""
+    observation = await _mapper().observation_from_proto(
+        observations_pb2.Observation(
+            observation_id="obs-presence",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            context=observations_pb2.ObservationContext(account_id="account-1"),
+            presence_signal=observations_pb2.PresenceSignalPayload(
+                status=observations_pb2.PRESENCE_STATUS_ONLINE,
+            ),
+        )
+    )
+
+    assert isinstance(observation, PresenceSignalObservation)
+    assert observation.expires_at is None
+
+
+@pytest.mark.anyio
+async def test_presence_signal_without_subject_raises_mapping_error() -> None:
+    """subjectのないpresence signalが拒否されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-presence",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        presence_signal=observations_pb2.PresenceSignalPayload(
+            status=observations_pb2.PRESENCE_STATUS_ONLINE,
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="presence_signal requires actor or account_id"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_presence_signal_with_actor_is_accepted() -> None:
+    """Actor subjectを持つpresence signalが受理されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-presence",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        context=observations_pb2.ObservationContext(actor=_identity_proto()),
+        presence_signal=observations_pb2.PresenceSignalPayload(
+            status=observations_pb2.PRESENCE_STATUS_ONLINE,
+        ),
+    )
+
+    observation = await _mapper().observation_from_proto(request)
+
+    assert isinstance(observation, PresenceSignalObservation)
+    assert observation.context.actor is not None
+
+
+@pytest.mark.anyio
+async def test_presence_signal_with_account_ref_is_accepted() -> None:
+    """解決済みaccount_ref subjectを持つpresence signalが受理されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-presence",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        context=observations_pb2.ObservationContext(
+            account_ref=identity_pb2.ExternalAccountRef(
+                provider="discord",
+                provider_subject="user-1",
+                display_name="User",
+            )
+        ),
+        presence_signal=observations_pb2.PresenceSignalPayload(
+            status=observations_pb2.PRESENCE_STATUS_AWAY,
+        ),
+    )
+
+    observation = await GrpcRuntimeMapper(
+        identity_resolver=_RecordingIdentityResolver()
+    ).observation_from_proto(request)
+
+    assert isinstance(observation, PresenceSignalObservation)
+    assert observation.context.actor is not None
+
+
+@pytest.mark.anyio
+async def test_actor_scoped_activity_without_subject_raises_mapping_error() -> None:
+    """actor-scoped activityがsubjectなしでは拒否されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-activity",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        activity_event=observations_pb2.ActivityEventPayload(
+            activity_kind=observations_pb2.ACTIVITY_KIND_VOICE_JOINED,
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="voice_joined requires actor or account_id"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_actor_scoped_activity_with_actor_is_accepted() -> None:
+    """Actor subjectを持つactor-scoped activityが受理されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-activity",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        context=observations_pb2.ObservationContext(actor=_identity_proto()),
+        activity_event=observations_pb2.ActivityEventPayload(
+            activity_kind=observations_pb2.ACTIVITY_KIND_ACTOR_TYPING_STARTED,
+        ),
+    )
+
+    observation = await _mapper().observation_from_proto(request)
+
+    assert isinstance(observation, ActivityEventObservation)
+    assert observation.context.actor is not None
+
+
+@pytest.mark.anyio
+async def test_actor_scoped_activity_with_account_ref_is_accepted() -> None:
+    """解決済みaccount_ref subjectを持つactor-scoped activityが受理されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-activity",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        context=observations_pb2.ObservationContext(
+            account_ref=identity_pb2.ExternalAccountRef(
+                provider="discord",
+                provider_subject="user-1",
+                display_name="User",
+            )
+        ),
+        activity_event=observations_pb2.ActivityEventPayload(
+            activity_kind=observations_pb2.ACTIVITY_KIND_VOICE_LEFT,
+        ),
+    )
+
+    observation = await GrpcRuntimeMapper(
+        identity_resolver=_RecordingIdentityResolver()
+    ).observation_from_proto(request)
+
+    assert isinstance(observation, ActivityEventObservation)
+    assert observation.context.actor is not None
+
+
+@pytest.mark.anyio
+async def test_system_interaction_without_subject_is_accepted() -> None:
+    """system-level activityはactor/account subjectなしでも受理されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-activity",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        activity_event=observations_pb2.ActivityEventPayload(
+            activity_kind=observations_pb2.ACTIVITY_KIND_SYSTEM_INTERACTION,
+        ),
+    )
+
+    observation = await _mapper().observation_from_proto(request)
+
+    assert isinstance(observation, ActivityEventObservation)
+    assert observation.context.actor is None
+    assert observation.context.account_id is None
+
+
+def test_proto_enum_numbers_preserve_wire_meanings() -> None:
+    """Observation/Space proto enum番号が既存wire意味を保持することを確認する。"""
+    assert observations_pb2.OBSERVATION_KIND_IDLE_TICK == 3
+    assert observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT == 6
+    assert observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL == 7
+    assert spaces_pb2.SPACE_KIND_TEXT_CHANNEL == 2
+    assert spaces_pb2.SPACE_KIND_ROOM == 4
+    assert spaces_pb2.SPACE_KIND_BROADCAST == 5
+    assert spaces_pb2.SPACE_KIND_VOICE_CHANNEL == 6
 
 
 @pytest.mark.anyio
@@ -168,6 +482,93 @@ async def test_idle_tick_kind_without_payload_raises_mapping_error() -> None:
     )
 
     with pytest.raises(GrpcMappingError, match="requires idle_tick payload"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_activity_event_kind_with_presence_payload_raises_mapping_error() -> None:
+    """ACTIVITY_EVENT kindとpresence payloadの不一致が拒否されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        presence_signal=observations_pb2.PresenceSignalPayload(
+            status=observations_pb2.PRESENCE_STATUS_ONLINE,
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="requires activity_event payload"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_presence_signal_kind_with_activity_payload_raises_mapping_error() -> None:
+    """PRESENCE_SIGNAL kindとactivity payloadの不一致が拒否されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        activity_event=observations_pb2.ActivityEventPayload(
+            activity_kind=observations_pb2.ACTIVITY_KIND_APP_CLOSED,
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="requires presence_signal payload"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_unspecified_activity_kind_raises_mapping_error() -> None:
+    """ACTIVITY_KIND_UNSPECIFIEDが拒否されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        activity_event=observations_pb2.ActivityEventPayload(
+            activity_kind=observations_pb2.ACTIVITY_KIND_UNSPECIFIED,
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="unsupported or unspecified activity kind"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_unspecified_presence_status_raises_mapping_error() -> None:
+    """PRESENCE_STATUS_UNSPECIFIEDが拒否されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        context=observations_pb2.ObservationContext(account_id="account-1"),
+        presence_signal=observations_pb2.PresenceSignalPayload(
+            status=observations_pb2.PRESENCE_STATUS_UNSPECIFIED,
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="unsupported or unspecified presence status"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_negative_activity_provider_sequence_raises_mapping_error() -> None:
+    """負のprovider_sequenceが拒否されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        activity_event=observations_pb2.ActivityEventPayload(
+            activity_kind=observations_pb2.ACTIVITY_KIND_SYSTEM_INTERACTION,
+            provider_sequence=-1,
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="provider_sequence must not be negative"):
         await _mapper().observation_from_proto(request)
 
 
@@ -499,6 +900,21 @@ def _actor_message_proto() -> observations_pb2.Observation:
             text="hello grpc",
             external_message_id="message-1",
         ),
+    )
+
+
+def _identity_proto() -> identity_pb2.Identity:
+    """Subject validation用のIdentity protoを作る。
+
+    Returns:
+        identity_pb2.Identity: 外部human actorを表すtest DTO。
+    """
+    return identity_pb2.Identity(
+        actor_id="actor-1",
+        actor_kind=identity_pb2.ACTOR_KIND_HUMAN,
+        display_name="Mina",
+        provider="test",
+        provider_subject="provider-actor-1",
     )
 
 
