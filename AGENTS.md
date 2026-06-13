@@ -169,7 +169,9 @@ Read extra rules by task:
 
 - Documentation, comments, docstrings, prompts, or reports: `.agents/rules/documentation-language.md`.
 - Behavior, runtime wiring, architecture, or tests: `.agents/rules/architecture.md`, `.agents/rules/boundaries.md`, `.agents/rules/cognitive-cycle.md`, `.agents/rules/anti-patterns.md`, `.agents/rules/typing.md`, `.agents/rules/testing.md`.
+- Runtime service, observation integration, event reaction, observation routing, ingress trust, runtime side effects, or proactive runtime behavior: `.agents/rules/runtime-boundary.md`.
 - AI harness, Makefile, agent rules, prompts, or verification scripts: `.agents/rules/ai-harness.md`, `.agents/rules/verification.md`.
+- Architecture-sensitive implementation or review: `.agents/checklists/architecture-review.md`.
 
 If a task touches existing behavior, inspect matching tests under `tests/` before editing.
 
@@ -199,6 +201,7 @@ Observation
 - `features/` must extend through `FeatureDefinition`; do not patch cognitive internals directly.
 - `CognitiveCycle` is a pipeline coordinator, not a God Service.
 - `PipelineStep` implementations return typed results and do not mutate `WorkspaceFrame` directly.
+- Keep runtime boundary behavior split by responsibility: integration, context assembly, routing, reaction planning, presentation, safety filtering, and cognitive processing must not collapse into one service.
 - Do not introduce service locators, global mutable registries, temporary wrappers, or compatibility shims unless the task explicitly requests a migration path with removal criteria and tests.
 - Do not use `dict[str, Any]` or `dict[str, object]` at internal boundaries.
 - Do not add new `action: str` dispatcher branches.

@@ -267,4 +267,6 @@ dev = [
     "mypy-protobuf>=5.1.0",
     "types-protobuf>=7.34.1.20260518",
     "types-grpcio>=1.0.0.20260518",
+    "import-linter",
+    "semgrep",
 ]

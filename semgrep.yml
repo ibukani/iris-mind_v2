@@ -1,0 +1,58 @@
+rules:
+  - id: no-presented-output-in-planner-policy-resolver
+    message: Planner, policy, and resolver modules must not construct PresentedOutput directly.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include:
+        - "**/iris/**/planner.py"
+        - "**/iris/**/policy.py"
+        - "**/iris/**/resolver.py"
+      exclude:
+        - "**/iris/safety/**"
+    pattern: PresentedOutput(...)
+
+  - id: no-app-action-in-planner-policy-resolver
+    message: Planner, policy, and resolver modules must not construct AppAction directly.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include:
+        - "**/iris/**/planner.py"
+        - "**/iris/**/policy.py"
+        - "**/iris/**/resolver.py"
+      exclude:
+        - "**/iris/safety/**"
+    pattern: AppAction(...)
+
+  - id: no-time-sleep-in-async
+    message: Do not call time.sleep inside async functions. Use asyncio.sleep or offload blocking work.
+    severity: ERROR
+    languages: [python]
+    pattern: |
+      async def $F(...):
+          ...
+          time.sleep(...)
+          ...
+
+  - id: no-silent-exception-pass
+    message: Do not silently swallow broad exceptions.
+    severity: ERROR
+    languages: [python]
+    pattern: |
+      try:
+          ...
+      except Exception:
+          pass
+
+  - id: no-object-setattr-workspace-frame
+    message: Do not mutate WorkspaceFrame with object.__setattr__ outside approved construction paths.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include:
+        - "**/iris/cognitive/**"
+      exclude:
+        - "**/iris/cognitive/cycle/frame_builder.py"
+        - "**/iris/cognitive/workspace/frame.py"
+    pattern: object.__setattr__(...)

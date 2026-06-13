@@ -3,39 +3,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from iris.contracts.actions import PresentedOutput
-from iris.contracts.observations import (
-    ActivityEventObservation,
-    PresenceSignalObservation,
+from iris.runtime.observation_router import (
+    ActivityEventRoute,
+    PresenceSignalRoute,
+    route_observation,
 )
-from iris.runtime.observations.ingress import unauthenticated_external_ingress
-from iris.runtime.observations.trust import ObservationTrustPolicy
-from iris.safety.action_gate import GateDecision
-from iris.safety.output_filter import AllowAllOutputGate
+from iris.runtime.observations.ingress import (
+    ObservationCapability,
+    trusted_adapter_ingress,
+    unauthenticated_external_ingress,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from iris.cognitive.workspace.frame import SituationContextSnapshot
-    from iris.contracts.observations import Observation
+    from iris.contracts.observations import ActivityEventObservation, Observation
     from iris.core.ids import CorrelationId
-    from iris.runtime.activity.integrator import ActivityIntegrator
     from iris.runtime.app import IrisApp
-    from iris.runtime.context.workspace_assembler import WorkspaceContextAssembler
-    from iris.runtime.event_reaction.runner import EventReactionRunner
     from iris.runtime.observations.ingress import ObservationIngressContext
-    from iris.runtime.presence.integrator import PresenceIntegrator
-    from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
-    from iris.safety.output_filter import OutputSafetyGate
-
-
-@dataclass(frozen=True)
-class RuntimeIntegrators:
-    """Activity / presence / occupancy 統合のoptional bundle。"""
-
-    activity: ActivityIntegrator | None = None
-    presence: PresenceIntegrator | None = None
-    occupancy: SpaceOccupancyIntegrator | None = None
+    from iris.runtime.observations.integrator import ObservationIntegrator
 
 
 @dataclass(frozen=True)
@@ -64,6 +54,38 @@ class ObservationEnvelope:
             correlation_id=correlation_id,
         )
 
+    @classmethod
+    def trusted_adapter(
+        cls,
+        *,
+        observation: Observation,
+        adapter_id: str,
+        provider: str | None = None,
+        capabilities: frozenset[ObservationCapability] | set[ObservationCapability],
+        correlation_id: CorrelationId | None = None,
+    ) -> ObservationEnvelope:
+        """信頼済みadapter observation用のcapability付きenvelopeを作成する。
+
+        Args:
+            observation: Observation。
+            adapter_id: 信頼済みadapterの識別子。
+            provider: 任意的なprovider名。
+            capabilities: 付与するcapability。呼び出し側が明示的に指定する必要がある。
+            correlation_id: 任意的なcorrelation ID。
+
+        Returns:
+            認証済みingressを持つObservationEnvelope。
+        """
+        return cls(
+            observation=observation,
+            ingress=trusted_adapter_ingress(
+                adapter_id=adapter_id,
+                provider=provider,
+                capabilities=capabilities,
+            ),
+            correlation_id=correlation_id,
+        )
+
 
 @dataclass(frozen=True)
 class RuntimeResponse:
@@ -73,6 +95,55 @@ class RuntimeResponse:
     correlation_id: CorrelationId | None = None
 
 
+class ObservationProcessingPipeline(Protocol):
+    """RuntimeService の observation 統合境界。"""
+
+    async def integrate_observation(
+        self,
+        observation: Observation,
+        ingress: ObservationIngressContext,
+    ) -> None:
+        """Observation claim を runtime state へ統合する。"""
+        ...
+
+
+class WorkspaceContextProvider(Protocol):
+    """RuntimeService に状況 context を供給する境界。"""
+
+    async def assemble(self, observation: Observation) -> SituationContextSnapshot | None:
+        """Observation から workspace context を組み立てる。"""
+        ...
+
+
+class ActivityEventReactionPipeline(Protocol):
+    """Activity event reaction の runtime 境界。"""
+
+    async def handle(
+        self,
+        observation: ActivityEventObservation,
+        situation_context: SituationContextSnapshot | None,
+        ingress: ObservationIngressContext,
+    ) -> PresentedOutput:
+        """Activity event に対する reaction output を返す。"""
+        ...
+
+
+@dataclass(frozen=True)
+class IntegratingObservationPipeline:
+    """複数の observation integrator を一つの runtime 境界として実行する。"""
+
+    integrators: Sequence[ObservationIntegrator]
+
+    async def integrate_observation(
+        self,
+        observation: Observation,
+        ingress: ObservationIngressContext,
+    ) -> None:
+        """登録された integrator を順に実行する。"""
+        for integrator in self.integrators:
+            await integrator.integrate_observation(observation, ingress)
+
+
 class IrisRuntimeService:
     """観測stateを統合し、sendable観測だけをIrisAppへ委譲するruntime境界。"""
 
@@ -80,19 +151,15 @@ class IrisRuntimeService:
         self,
         app: IrisApp,
         *,
-        integrators: RuntimeIntegrators | None = None,
-        workspace_context_assembler: WorkspaceContextAssembler | None = None,
-        event_reaction_runner: EventReactionRunner | None = None,
-        trust_policy: ObservationTrustPolicy | None = None,
-        event_reaction_output_gate: OutputSafetyGate | None = None,
+        observation_pipeline: ObservationProcessingPipeline | None = None,
+        workspace_context_assembler: WorkspaceContextProvider | None = None,
+        activity_event_reaction_handler: ActivityEventReactionPipeline | None = None,
     ) -> None:
-        """明示的に注入されたappとoptional integratorでserviceを生成する。"""
+        """明示的に注入されたappとoptional observation pipelineでserviceを生成する。"""
         self._app = app
-        self._integrators = integrators or RuntimeIntegrators()
+        self._observation_pipeline = observation_pipeline
         self._workspace_context_assembler = workspace_context_assembler
-        self._event_reaction_runner = event_reaction_runner
-        self._trust_policy = trust_policy or ObservationTrustPolicy()
-        self._event_reaction_output_gate = event_reaction_output_gate or AllowAllOutputGate()
+        self._activity_event_reaction_handler = activity_event_reaction_handler
 
     async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
         """State integration後、必要な観測だけをIrisApp経由で処理する。
@@ -104,22 +171,23 @@ class IrisRuntimeService:
         await self._run_integrators(observation, envelope.ingress)
         situation_context = await self._assemble_situation_context(observation)
 
-        if isinstance(observation, ActivityEventObservation):
+        route = route_observation(observation)
+        if isinstance(route, ActivityEventRoute):
             return await self._handle_activity_event(
-                observation,
+                route.observation,
                 situation_context,
                 envelope.ingress,
                 envelope.correlation_id,
             )
 
-        if isinstance(observation, PresenceSignalObservation):
+        if isinstance(route, PresenceSignalRoute):
             return RuntimeResponse(
                 output=PresentedOutput(text=None),
                 correlation_id=envelope.correlation_id,
             )
 
         output = await self._app.process_observation(
-            observation,
+            route.observation,
             situation_context=situation_context,
         )
         return RuntimeResponse(output=output, correlation_id=envelope.correlation_id)
@@ -129,13 +197,9 @@ class IrisRuntimeService:
         observation: Observation,
         ingress: ObservationIngressContext,
     ) -> None:
-        """Optionalなintegratorを観測に適用する。"""
-        if self._integrators.activity is not None:
-            await self._integrators.activity.integrate_observation(observation, ingress)
-        if self._integrators.presence is not None:
-            await self._integrators.presence.integrate_observation(observation, ingress)
-        if self._integrators.occupancy is not None:
-            await self._integrators.occupancy.integrate_observation(observation, ingress)
+        """Optionalなobservation pipelineを観測に適用する。"""
+        if self._observation_pipeline is not None:
+            await self._observation_pipeline.integrate_observation(observation, ingress)
 
     async def _assemble_situation_context(
         self,
@@ -157,39 +221,17 @@ class IrisRuntimeService:
         ingress: ObservationIngressContext,
         correlation_id: CorrelationId | None,
     ) -> RuntimeResponse:
-        """ActivityEventObservationに対し、event reactionがあれば返す。
+        """ActivityEventObservationに対し、event reaction handlerに委譲する。
 
         Returns:
             RuntimeResponse: event reactionまたはno-sendの結果。
         """
-        output: PresentedOutput | None = None
-        if (
-            situation_context is not None
-            and self._event_reaction_runner is not None
-            and self._trust_policy.can_react_to_activity_event(ingress)
-        ):
-            output = await self._event_reaction_runner.react(
+        if self._activity_event_reaction_handler is not None:
+            output = await self._activity_event_reaction_handler.handle(
                 observation,
-                situation_context=situation_context,
+                situation_context,
+                ingress,
             )
-
-        if output is not None and output.is_sendable:
-            output = await self._filter_event_reaction_output(output)
-
-        if output is None:
+        else:
             output = PresentedOutput(text=None)
         return RuntimeResponse(output=output, correlation_id=correlation_id)
-
-    async def _filter_event_reaction_output(
-        self,
-        output: PresentedOutput,
-    ) -> PresentedOutput:
-        """Event reaction出力をoutput safety gateで検査する。
-
-        Returns:
-            PresentedOutput: gate通過後のoutput、またはブロック時はno-send。
-        """
-        decision = await self._event_reaction_output_gate.check_output(output)
-        if decision.decision is GateDecision.BLOCK:
-            return PresentedOutput(text=None)
-        return output

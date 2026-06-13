@@ -5,12 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.contracts.actions import PresentedOutput
 from iris.contracts.observations import ActivityEventObservation, Observation
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import SituationContextSnapshot
+    from iris.contracts.actions import PresentedOutput
     from iris.runtime.event_reaction.planner import EventReactionPlanner
+    from iris.runtime.event_reaction.presenter import EventReactionPresenter
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class EventReactionRunner:
     """ActivityEventObservationに対して決定論的な反応を生成する。"""
 
     planner: EventReactionPlanner
+    presenter: EventReactionPresenter
 
     async def react(
         self,
@@ -28,7 +30,7 @@ class EventReactionRunner:
         """反応条件を満たせばPresentedOutputを返す。
 
         Args:
-            observation: 処理対象の観測。
+            observation: 処理処理対象の観測。
             situation_context: ランタイムから組み立てられた状況スナップショット。
 
         Returns:
@@ -44,10 +46,4 @@ class EventReactionRunner:
         if not decision.should_react or decision.candidate is None:
             return None
 
-        candidate = decision.candidate
-        return PresentedOutput(
-            text=candidate.text,
-            priority=candidate.priority,
-            interruptible=candidate.interruptible,
-            style_hint="event_reaction",
-        )
+        return self.presenter.present(decision.candidate)

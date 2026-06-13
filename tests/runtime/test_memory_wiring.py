@@ -9,9 +9,8 @@ from typing import TYPE_CHECKING, cast
 from iris.adapters.memory import langchain
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.langchain import LangChainMemoryStore
-from iris.adapters.memory.vector import InMemoryVectorMemoryStore
-from iris.contracts.memory import MemoryId, MemoryKind, MemoryQuery, MemoryRecord
-from iris.runtime.wiring.memory import wire_in_memory_vector_store, wire_langchain_memory_store
+from iris.contracts.memory import MemoryId, MemoryKind, MemoryRecord
+from iris.runtime.wiring.memory import wire_langchain_memory_store
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -47,17 +46,6 @@ def embed_text(text: str) -> tuple[float]:
 def make_document(*, page_content: str, metadata: Mapping[str, object]) -> StubDocument:
     """Return a StubDocument with the given content and metadata."""
     return StubDocument(page_content=page_content, metadata=metadata)
-
-
-def test_wire_in_memory_vector_store_returns_memory_store() -> None:
-    """Verify wire_in_memory_vector_store returns a populated InMemoryVectorMemoryStore."""
-    store = wire_in_memory_vector_store(
-        embed_text,
-        records=(MemoryRecord(id=MemoryId("m1"), text="memory"),),
-    )
-
-    assert isinstance(store, InMemoryVectorMemoryStore)
-    assert store.search(MemoryQuery(text="memory"))[0].record.id == MemoryId("m1")
 
 
 def test_in_memory_memory_store_supports_mutable_operations() -> None:

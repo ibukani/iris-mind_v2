@@ -97,8 +97,20 @@ def main() -> int:
     write_bullets("変更ファイル", bullet_lines(changed_files))
     write_bullets("差分概要", bullet_lines(diff_summary))
     write_bullets(
+        "Architecture Impact",
+        [
+            "Layer boundaries changed: yes/no",
+            "Runtime boundary changed: yes/no",
+            "Trust/capability semantics changed: yes/no",
+            "Safety/presentation path changed: yes/no",
+            "Memory lifecycle changed: yes/no",
+            "Config/schema changed: yes/no",
+        ],
+    )
+    write_bullets(
         "検証",
         [
+            "make static-arch",
             "make check",
             "make ai-check",
             "make ai-quick",

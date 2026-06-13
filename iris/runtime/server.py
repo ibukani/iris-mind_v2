@@ -30,10 +30,11 @@ from iris.runtime.config import (
 )
 from iris.runtime.config.init import init_runtime_config, runtime_config_template
 from iris.runtime.config.root import all_model_slots_are_fake
+from iris.runtime.event_reaction.handler import ActivityEventReactionHandler
 from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
-from iris.runtime.service import IrisRuntimeService, RuntimeIntegrators
+from iris.runtime.service import IntegratingObservationPipeline, IrisRuntimeService
 from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.availability import wire_availability_resolver
@@ -100,17 +101,22 @@ def build_runtime_service(
         now=current_now,
     )
     event_reaction_runner = wire_event_reaction_runner()
+    activity_event_reaction_handler = ActivityEventReactionHandler(
+        trust_policy=trust_policy,
+        runner=event_reaction_runner,
+        output_gate=AllowAllOutputGate(),
+    )
     return IrisRuntimeService(
         app,
-        integrators=RuntimeIntegrators(
-            activity=activity_integrator,
-            presence=presence_integrator,
-            occupancy=occupancy_integrator,
+        observation_pipeline=IntegratingObservationPipeline(
+            (
+                activity_integrator,
+                presence_integrator,
+                occupancy_integrator,
+            )
         ),
         workspace_context_assembler=workspace_context_assembler,
-        event_reaction_runner=event_reaction_runner,
-        trust_policy=trust_policy,
-        event_reaction_output_gate=AllowAllOutputGate(),
+        activity_event_reaction_handler=activity_event_reaction_handler,
     )
 
 

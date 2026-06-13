@@ -28,13 +28,18 @@ from iris.runtime.observations.ingress import (
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.presence.store import InMemoryPresenceStore
-from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeIntegrators
+from iris.runtime.service import (
+    IntegratingObservationPipeline,
+    IrisRuntimeService,
+    ObservationEnvelope,
+)
 from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
 
 if TYPE_CHECKING:
     from iris.cognitive.cycle.models import ActionSelectionResult
     from iris.cognitive.workspace.frame import WorkspaceFrame
+    from iris.runtime.observations.integrator import ObservationIntegrator
 
 _OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
 _RECEIVED_AT = _OCCURRED_AT + timedelta(seconds=1)
@@ -140,25 +145,16 @@ def _service(
     occupancy_store: InMemorySpaceOccupancyStore | None = None,
 ) -> IrisRuntimeService:
     trust_policy = ObservationTrustPolicy()
+    integrators: list[ObservationIntegrator] = []
+    if journal is not None and projections is not None:
+        integrators.append(ActivityIntegrator(journal, projections, trust_policy, _now))
+    if presence_store is not None:
+        integrators.append(PresenceIntegrator(presence_store, trust_policy, _now))
+    if occupancy_store is not None:
+        integrators.append(SpaceOccupancyIntegrator(occupancy_store, trust_policy, _now))
     return IrisRuntimeService(
         IrisApp(steps=(_UnexpectedCognitiveStep(),)),
-        integrators=RuntimeIntegrators(
-            activity=(
-                ActivityIntegrator(journal, projections, trust_policy, _now)
-                if journal is not None and projections is not None
-                else None
-            ),
-            presence=(
-                PresenceIntegrator(presence_store, trust_policy, _now)
-                if presence_store is not None
-                else None
-            ),
-            occupancy=(
-                SpaceOccupancyIntegrator(occupancy_store, trust_policy, _now)
-                if occupancy_store is not None
-                else None
-            ),
-        ),
+        observation_pipeline=IntegratingObservationPipeline(tuple(integrators)),
     )
 
 

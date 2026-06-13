@@ -39,18 +39,18 @@ class SpaceOccupancyIntegrator:
 
         context = activity.context
         trusted = self.trust_policy.can_update_space_occupancy(ingress)
-        if trusted and context.actor is not None and context.space_id is not None:
+        if trusted and context.actor_id is not None and context.space_id is not None:
             if activity.activity_kind is ActivityKind.VOICE_LEFT:
                 await self.store.actor_left(
                     space_id=context.space_id,
-                    actor_id=context.actor.actor_id,
+                    actor_id=context.actor_id,
                     at=activity.occurred_at,
                 )
             else:
                 await self.store.actor_joined(
                     space_id=context.space_id,
                     occupant=SpaceOccupant(
-                        actor_id=context.actor.actor_id,
+                        actor_id=context.actor_id,
                         joined_at=activity.occurred_at,
                         last_seen_at=self.now(),
                         metadata=activity.metadata,

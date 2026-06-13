@@ -52,7 +52,7 @@ RECOMMENDATIONS: dict[str, str] = {
     "format": "make format-write  OR  uv run ruff format .",
     "type": "make type  OR  uv run mypy iris tests scripts main.py",
     "pyright": "make pyright  OR  uv run pyright .",
-    "architecture": "make arch  OR  uv run pytest tests/architecture -q",
+    "architecture": "make static-arch OR make arch OR uv run pytest tests/architecture -q",
     "tests+coverage": ("make ai-test-target TARGET=<failing_test>  OR  make coverage"),
     "environment": "Check uv environment and tool versions with make doctor",
 }
@@ -83,7 +83,7 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check(
         "architecture",
-        ("uv", "run", "pytest", "tests/architecture", "-q"),
+        ("make", "static-arch"),
         failure_class="architecture",
     ),
     Check(

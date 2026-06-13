@@ -22,6 +22,7 @@ from iris.contracts.presence import PresenceStatus
 from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
 from iris.runtime.app import IrisApp
 from iris.runtime.config import default_runtime_config
+from iris.runtime.event_reaction.handler import ActivityEventReactionHandler
 from iris.runtime.observations.ingress import (
     ObservationCapability,
     ObservationIngressContext,
@@ -29,7 +30,11 @@ from iris.runtime.observations.ingress import (
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.server import build_runtime_service
-from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeIntegrators
+from iris.runtime.service import (
+    IntegratingObservationPipeline,
+    IrisRuntimeService,
+    ObservationEnvelope,
+)
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.event_reaction import wire_event_reaction_runner
@@ -203,6 +208,7 @@ async def test_voice_joined_reacts_after_presence_and_activity_integration(
             ingress=_ingress(
                 ObservationCapability.INTEGRATE_ACTIVITY,
                 ObservationCapability.UPDATE_SPACE_OCCUPANCY,
+                ObservationCapability.REACT_TO_ACTIVITY,
             ),
         ),
     )
@@ -230,7 +236,10 @@ async def test_app_opened_reacts_when_available(
     response = await service.handle_observation(
         ObservationEnvelope(
             observation=_activity_observation(ActivityKind.APP_OPENED),
-            ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+            ingress=_ingress(
+                ObservationCapability.INTEGRATE_ACTIVITY,
+                ObservationCapability.REACT_TO_ACTIVITY,
+            ),
         ),
     )
 
@@ -308,10 +317,10 @@ async def test_unauthenticated_activity_event_does_not_react(
 
 
 @pytest.mark.anyio
-async def test_activity_event_without_integrate_activity_does_not_react(
+async def test_activity_event_without_reaction_or_integrate_capability_does_not_react(
     service_setup: tuple[IrisRuntimeService, _CaptureFrameStep],
 ) -> None:
-    """INTEGRATE_ACTIVITY capabilityがないingressではevent reactionを実行しない。"""
+    """REACT_TO_ACTIVITY/INTEGRATE_ACTIVITYがないingressではevent reactionを実行しない。"""
     service, _capture = service_setup
 
     await service.handle_observation(
@@ -348,7 +357,10 @@ async def test_trusted_activity_event_reacts(
     response = await service.handle_observation(
         ObservationEnvelope(
             observation=_activity_observation(ActivityKind.VOICE_JOINED),
-            ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+            ingress=_ingress(
+                ObservationCapability.INTEGRATE_ACTIVITY,
+                ObservationCapability.REACT_TO_ACTIVITY,
+            ),
         ),
     )
 
@@ -385,13 +397,17 @@ async def test_blocking_output_gate_prevents_sendable_reaction() -> None:
     )
     event_reaction_runner = wire_event_reaction_runner()
 
+    handler = ActivityEventReactionHandler(
+        trust_policy=trust_policy,
+        runner=event_reaction_runner,
+        output_gate=_BlockAllOutputGate(),
+    )
+
     service = IrisRuntimeService(
         app,
-        integrators=RuntimeIntegrators(presence=presence_integrator),
+        observation_pipeline=IntegratingObservationPipeline((presence_integrator,)),
         workspace_context_assembler=workspace_context_assembler,
-        event_reaction_runner=event_reaction_runner,
-        trust_policy=trust_policy,
-        event_reaction_output_gate=_BlockAllOutputGate(),
+        activity_event_reaction_handler=handler,
     )
 
     await service.handle_observation(
@@ -404,7 +420,10 @@ async def test_blocking_output_gate_prevents_sendable_reaction() -> None:
     response = await service.handle_observation(
         ObservationEnvelope(
             observation=_activity_observation(ActivityKind.VOICE_JOINED),
-            ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+            ingress=_ingress(
+                ObservationCapability.INTEGRATE_ACTIVITY,
+                ObservationCapability.REACT_TO_ACTIVITY,
+            ),
         ),
     )
 

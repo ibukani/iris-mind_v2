@@ -133,6 +133,12 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
     ),
     (
         "iris/adapters",
+        "iris/adapters/grpc/mappers.py",
+        "iris.runtime.observations.ingress",
+        "gRPC ingress mapper needs ObservationCapability for adapter capabilities typing",
+    ),
+    (
+        "iris/adapters",
         "iris/adapters/grpc/server.py",
         "iris.runtime.service",
         "gRPC transport adapter delegates to IrisRuntimeService boundary",

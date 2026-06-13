@@ -19,6 +19,7 @@ from iris.contracts.observations import (
 from iris.core.ids import ActorId, ObservationId, SessionId
 from iris.runtime.event_reaction.planner import EventReactionPlanner
 from iris.runtime.event_reaction.policy import EventReactionPolicy, default_event_reaction_policy
+from iris.runtime.event_reaction.templates import EventReactionTemplateProvider
 
 
 @pytest.fixture
@@ -28,7 +29,10 @@ def planner() -> EventReactionPlanner:
     Returns:
         EventReactionPlanner: テスト用planner。
     """
-    return EventReactionPlanner(policy=default_event_reaction_policy())
+    return EventReactionPlanner(
+        policy=default_event_reaction_policy(),
+        template_provider=EventReactionTemplateProvider(),
+    )
 
 
 @pytest.fixture
@@ -183,7 +187,10 @@ def test_unknown_allowed_kind_without_candidate(
             ActivityKind.SYSTEM_INTERACTION: frozenset({AvailabilityStatus.AVAILABLE}),
         },
     )
-    custom_planner = EventReactionPlanner(policy=policy)
+    custom_planner = EventReactionPlanner(
+        policy=policy,
+        template_provider=EventReactionTemplateProvider(),
+    )
     situation = SituationContextSnapshot(
         availability=AvailabilitySnapshot(
             actor_id=actor_id,
