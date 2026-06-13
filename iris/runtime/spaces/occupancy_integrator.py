@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.observations import Observation
+    from iris.runtime.observations.ingress import ObservationIngressContext
     from iris.runtime.observations.trust import ObservationTrustPolicy
     from iris.runtime.spaces.occupancy_store import SpaceOccupancyStore
 
@@ -26,14 +27,18 @@ class SpaceOccupancyIntegrator:
     trust_policy: ObservationTrustPolicy
     now: Callable[[], datetime]
 
-    async def integrate_observation(self, observation: Observation) -> None:
+    async def integrate_observation(
+        self,
+        observation: Observation,
+        ingress: ObservationIngressContext,
+    ) -> None:
         """VOICE_JOINEDとVOICE_LEFTだけをspace occupancyへ反映する。"""
         activity = _voice_activity(observation)
         if activity is None:
             return
 
         context = activity.context
-        trusted = self.trust_policy.can_integrate_activity_event(context.source)
+        trusted = self.trust_policy.can_update_space_occupancy(ingress)
         if trusted and context.actor is not None and context.space_id is not None:
             if activity.activity_kind is ActivityKind.VOICE_LEFT:
                 await self.store.actor_left(

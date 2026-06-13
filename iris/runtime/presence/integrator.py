@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.observations import Observation
+    from iris.runtime.observations.ingress import ObservationIngressContext
     from iris.runtime.observations.trust import ObservationTrustPolicy
     from iris.runtime.presence.store import PresenceStore
 
@@ -25,12 +26,16 @@ class PresenceIntegrator:
     trust_policy: ObservationTrustPolicy
     now: Callable[[], datetime]
 
-    async def integrate_observation(self, observation: Observation) -> None:
+    async def integrate_observation(
+        self,
+        observation: Observation,
+        ingress: ObservationIngressContext,
+    ) -> None:
         """Resolved actorを持つtrusted PresenceSignalObservationだけを統合する。"""
         if not isinstance(observation, PresenceSignalObservation):
             return
         context = observation.context
-        if not self.trust_policy.can_integrate_presence_signal(context.source):
+        if not self.trust_policy.can_integrate_presence_signal(ingress):
             return
         if context.actor is None:
             return

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from iris.contracts.activity import ActivityKind, ActivityRecord
+from iris.contracts.activity import ActivityEventRecord, ActivityKind
 from iris.core.ids import ActivityId, ObservationId
 from tests.helpers.immutability import assert_frozen_field
 
@@ -23,9 +23,9 @@ def test_activity_kind_exposes_non_message_external_events() -> None:
 
 
 def test_activity_record_is_immutable_and_copies_metadata() -> None:
-    """ActivityRecordがimmutable accepted stateであることを確認する。"""
+    """ActivityEventRecordがimmutable accepted stateであることを確認する。"""
     metadata = {"gateway_shard_id": "1"}
-    record = ActivityRecord(
+    record = ActivityEventRecord(
         activity_id=ActivityId("activity:obs-1"),
         observation_id=ObservationId("obs-1"),
         provider_event_id="provider-event-1",

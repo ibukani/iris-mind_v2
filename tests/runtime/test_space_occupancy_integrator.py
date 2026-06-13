@@ -14,6 +14,10 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
+from iris.runtime.observations.ingress import (
+    ObservationCapability,
+    ObservationIngressContext,
+)
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
@@ -24,37 +28,59 @@ _SPACE_ID = SpaceId("space-1")
 
 
 @pytest.mark.anyio
-async def test_voice_join_and_leave_update_occupancy() -> None:
-    """Trusted voice join/leaveがoccupancyを追加・除去することを確認する。"""
+async def test_voice_join_and_leave_update_occupancy_with_capability() -> None:
+    """UPDATE_SPACE_OCCUPANCY capabilityがある場合だけoccupancyを更新する。"""
     store = InMemorySpaceOccupancyStore()
     integrator = _integrator(store)
 
-    await integrator.integrate_observation(_activity(ActivityKind.VOICE_JOINED))
+    await integrator.integrate_observation(
+        _activity(ActivityKind.VOICE_JOINED),
+        _ingress(),
+    )
 
     joined = await store.get_occupancy(_SPACE_ID, now=_RECEIVED_AT)
     assert tuple(occupant.actor_id for occupant in joined.occupants) == (ActorId("actor-1"),)
     assert joined.occupants[0].joined_at == _OCCURRED_AT
     assert joined.occupants[0].last_seen_at == _RECEIVED_AT
 
-    await integrator.integrate_observation(_activity(ActivityKind.VOICE_LEFT))
+    await integrator.integrate_observation(
+        _activity(ActivityKind.VOICE_LEFT),
+        _ingress(),
+    )
 
     left = await store.get_occupancy(_SPACE_ID, now=_RECEIVED_AT)
     assert left.occupants == ()
 
 
 @pytest.mark.anyio
-async def test_occupancy_integrator_ignores_untrusted_non_voice_or_incomplete_event() -> None:
-    """trust、voice kind、resolved actor/space条件を満たさないeventを無視する。"""
+async def test_occupancy_integrator_rejects_activity_capability_only() -> None:
+    """INTEGRATE_ACTIVITYだけではoccupancyを更新できない。"""
     store = InMemorySpaceOccupancyStore()
     integrator = _integrator(store)
 
-    await integrator.integrate_observation(_activity(ActivityKind.VOICE_JOINED, source="untrusted"))
-    await integrator.integrate_observation(_activity(ActivityKind.APP_OPENED))
     await integrator.integrate_observation(
-        _activity(ActivityKind.VOICE_JOINED, include_actor=False)
+        _activity(ActivityKind.VOICE_JOINED, source="discord_gateway"),
+        _ingress(capabilities=frozenset({ObservationCapability.INTEGRATE_ACTIVITY})),
+    )
+
+    snapshot = await store.get_occupancy(_SPACE_ID, now=_RECEIVED_AT)
+    assert snapshot.occupants == ()
+
+
+@pytest.mark.anyio
+async def test_occupancy_integrator_ignores_non_voice_or_incomplete_event() -> None:
+    """Voice kind、resolved actor/space条件を満たさないeventを無視する。"""
+    store = InMemorySpaceOccupancyStore()
+    integrator = _integrator(store)
+
+    await integrator.integrate_observation(_activity(ActivityKind.APP_OPENED), _ingress())
+    await integrator.integrate_observation(
+        _activity(ActivityKind.VOICE_JOINED, include_actor=False),
+        _ingress(),
     )
     await integrator.integrate_observation(
-        _activity(ActivityKind.VOICE_JOINED, include_space=False)
+        _activity(ActivityKind.VOICE_JOINED, include_space=False),
+        _ingress(),
     )
 
     snapshot = await store.get_occupancy(_SPACE_ID, now=_RECEIVED_AT)
@@ -62,11 +88,11 @@ async def test_occupancy_integrator_ignores_untrusted_non_voice_or_incomplete_ev
 
 
 def _integrator(store: InMemorySpaceOccupancyStore) -> SpaceOccupancyIntegrator:
-    policy = ObservationTrustPolicy(
-        trusted_activity_sources=frozenset({"internal"}),
-        trusted_presence_sources=frozenset(),
+    return SpaceOccupancyIntegrator(
+        store=store,
+        trust_policy=ObservationTrustPolicy(),
+        now=_now,
     )
-    return SpaceOccupancyIntegrator(store=store, trust_policy=policy, now=_now)
 
 
 def _activity(
@@ -96,6 +122,20 @@ def _activity(
         occurred_at=_OCCURRED_AT,
         kind=ObservationKind.ACTIVITY_EVENT,
         activity_kind=kind,
+    )
+
+
+def _ingress(
+    *,
+    capabilities: frozenset[ObservationCapability] = frozenset(
+        {ObservationCapability.UPDATE_SPACE_OCCUPANCY}
+    ),
+) -> ObservationIngressContext:
+    return ObservationIngressContext(
+        adapter_id="trusted-adapter",
+        provider="discord",
+        authenticated=True,
+        capabilities=capabilities,
     )
 
 

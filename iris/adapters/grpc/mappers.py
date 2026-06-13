@@ -86,7 +86,7 @@ class GrpcRuntimeMapper:
             _raise_mapping_error("observation is required")
         correlation_id = CorrelationId(request.correlation_id) if request.correlation_id else None
         observation = await self.observation_from_proto(request.observation)
-        return ObservationEnvelope(
+        return ObservationEnvelope.external_client(
             observation=observation,
             correlation_id=correlation_id,
         )

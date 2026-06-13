@@ -125,13 +125,14 @@ runtime境界が受け付けるtyped observationは次の4種類。
 
 `ActorMessageObservation` はactor text messageの唯一のtyped ingress。typing開始/終了、voice join/leaveなどactor-scoped activityと、すべてのpresence signalは解決済みactorまたはaccount subjectを必須とする。`SYSTEM_INTERACTION` などsystem-level activityはsubjectなしを許可する。
 
-両観測は外部sourceからの報告・claimであり、Iris内部stateの更新commandではない。`ObservationTrustPolicy` がsourceをgateし、`ActivityIntegrator` / `PresenceIntegrator` / `SpaceOccupancyIntegrator` がtrusted claimだけをinternal storeへ統合する。user-controlled metadataだけでtrustを決めない。
+両観測は外部sourceからの報告・claimであり、Iris内部stateの更新commandではない。runtime boundaryが `ObservationEnvelope.ingress` に `ObservationIngressContext` を付与し、`ObservationTrustPolicy` は認証済みingress capabilityだけを検査する。`ObservationContext.source` や user-controlled metadata だけでtrustを決めない。
 
 ```text
 ActivityEventObservation
 → ObservationTrustPolicy
 → ActivityIntegrator
-→ ActivityStore
+→ ActivityJournal
+→ ActivityProjectionStore
 
 PresenceSignalObservation
 → ObservationTrustPolicy
@@ -144,11 +145,11 @@ ActivityEventObservation(VOICE_JOINED / VOICE_LEFT)
 → SpaceOccupancyStore
 ```
 
-`ActivityStore` は受理済みactivity records、`PresenceStore` はactorごとの最新presence、`SpaceOccupancyStore` はlive spaceのcurrent occupantsの正本。Presenceからvoice occupancyを推論しない。`InteractionSpace` にparticipantsを戻さない。
+`ActivityEventRecord` は受理済みruntime eventであり、長期記憶ではない。`ActivityJournal` はデフォルトでbounded runtime journalで、永続conversation historyやmemory candidate storageとして扱わない。`ActivityProjectionStore` はactor/spaceごとのlatest activity projectionだけを持つ。Presenceからvoice occupancyを推論しない。`InteractionSpace` にparticipantsを戻さない。
 
 state-onlyのactivity/presence observationはintegration後に `PresentedOutput(text=None)` を返し、通常のtext response生成へ流さない。EventReactionは未実装。
 
-現在のstoreはin-memoryのみ。source文字列による初期trust gateは完全な認証モデルではなく、将来の認証済みadapter identityで強化する。availability、workspace context assembly、event reaction、delivery target、persistenceは未実装。
+現在のstoreはin-memoryのみ。将来の永続activity logは別adapterで実装し、memory extractionはraw `ActivityEventRecord` ではなく明示的な `MemoryCandidate` eventから行う。availability、workspace context assembly、event reaction、delivery target、persistenceは未実装。
 
 ---
 

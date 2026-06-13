@@ -1,49 +1,66 @@
-"""observation claimの最小trust policy。"""
+"""observation claimのcapability-based trust policy。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from iris.runtime.observations.ingress import (
+    ObservationCapability,
+    ObservationIngressContext,
+)
+
 
 @dataclass(frozen=True)
 class ObservationTrustPolicy:
-    """外部observation claimが内部stateへ影響できるsourceを制限する。"""
+    """外部observation claimが内部stateへ影響できるcapabilityを検査する。"""
 
-    trusted_activity_sources: frozenset[str]
-    trusted_presence_sources: frozenset[str]
-
-    def can_integrate_activity_event(self, source: str | None) -> bool:
-        """Sourceがactivity integrationを許可されているか返す。
-
-        Returns:
-            許可されている場合はTrue。
-        """
-        return source is not None and source in self.trusted_activity_sources
-
-    def can_integrate_presence_signal(self, source: str | None) -> bool:
-        """Sourceがpresence integrationを許可されているか返す。
+    @staticmethod
+    def can_integrate_activity_event(
+        ingress: ObservationIngressContext,
+    ) -> bool:
+        """Activity integration capabilityがあるか返す。
 
         Returns:
             許可されている場合はTrue。
         """
-        return source is not None and source in self.trusted_presence_sources
+        return (
+            ingress.authenticated
+            and ObservationCapability.INTEGRATE_ACTIVITY in ingress.capabilities
+        )
+
+    @staticmethod
+    def can_integrate_presence_signal(
+        ingress: ObservationIngressContext,
+    ) -> bool:
+        """Presence integration capabilityがあるか返す。
+
+        Returns:
+            許可されている場合はTrue。
+        """
+        return (
+            ingress.authenticated
+            and ObservationCapability.INTEGRATE_PRESENCE in ingress.capabilities
+        )
+
+    @staticmethod
+    def can_update_space_occupancy(
+        ingress: ObservationIngressContext,
+    ) -> bool:
+        """Space occupancy update capabilityがあるか返す。
+
+        Returns:
+            許可されている場合はTrue。
+        """
+        return (
+            ingress.authenticated
+            and ObservationCapability.UPDATE_SPACE_OCCUPANCY in ingress.capabilities
+        )
 
 
 def default_observation_trust_policy() -> ObservationTrustPolicy:
-    """既知のruntime adapter sourceだけを許可する初期policyを返す。
+    """capability検査のみを行う初期policyを返す。
 
     Returns:
         初期trust policy。
     """
-    trusted_sources = frozenset(
-        {
-            "discord_gateway",
-            "iris_discordbot",
-            "local_runtime",
-            "internal",
-        }
-    )
-    return ObservationTrustPolicy(
-        trusted_activity_sources=trusted_sources,
-        trusted_presence_sources=trusted_sources,
-    )
+    return ObservationTrustPolicy()

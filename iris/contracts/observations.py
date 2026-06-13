@@ -36,7 +36,11 @@ class ObservationKind(StrEnum):
 
 @dataclass(frozen=True)
 class ObservationContext:
-    """観測に紐づく actor/account/device/space context。"""
+    """観測に紐づく actor/account/device/space context。
+
+    sourceはtransport/adapter報告のaudit/debug labelに限る。trust判定には
+    runtime-owned ObservationIngressContext を使う。
+    """
 
     actor: Identity | None = None
     account_id: AccountId | None = None

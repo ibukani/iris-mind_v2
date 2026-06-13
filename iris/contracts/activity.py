@@ -35,7 +35,7 @@ class ActivityKind(StrEnum):
 
 
 @dataclass(frozen=True)
-class ActivityRecord:
+class ActivityEventRecord:
     """受理済みの非message activity eventを表す内部runtime記録。"""
 
     activity_id: ActivityId

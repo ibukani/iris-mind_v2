@@ -130,7 +130,7 @@ typing開始/終了、voice join/leaveなどactor-scoped activityは、解決済
 
 Activity/Presence observationはIris内部stateを直接変更するcommandではない。
 runtime trust判定、recording、Activity/Presence/SpaceOccupancy state更新は後続PRへ委譲する。
-user-controlled metadataだけをtrusted-source判定に使わない。
+user-controlled metadataや `ObservationContext.source` をtrust判定に使わない。runtime boundaryが付与する `ObservationIngressContext` のauthenticated capabilityだけをtrust判定に使う。
 
 ### ExternalSpaceRef
 

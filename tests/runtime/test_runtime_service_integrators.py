@@ -16,10 +16,15 @@ from iris.contracts.observations import (
     PresenceSignalObservation,
 )
 from iris.contracts.presence import PresenceStatus
-from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
+from iris.core.ids import ActivityId, ActorId, ObservationId, SessionId, SpaceId
 from iris.runtime.activity.integrator import ActivityIntegrator
-from iris.runtime.activity.store import InMemoryActivityStore
+from iris.runtime.activity.journal import InMemoryActivityJournal
+from iris.runtime.activity.projections import InMemoryActivityProjectionStore
 from iris.runtime.app import IrisApp
+from iris.runtime.observations.ingress import (
+    ObservationCapability,
+    ObservationIngressContext,
+)
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.presence.store import InMemoryPresenceStore
@@ -38,19 +43,27 @@ _RECEIVED_AT = _OCCURRED_AT + timedelta(seconds=1)
 @pytest.mark.anyio
 async def test_runtime_service_integrates_activity_without_cognitive_response() -> None:
     """activityをstoreへ統合し、sendable outputを生成しないことを確認する。"""
-    activity_store = InMemoryActivityStore()
+    journal = InMemoryActivityJournal()
+    projections = InMemoryActivityProjectionStore()
     occupancy_store = InMemorySpaceOccupancyStore()
     service = _service(
-        activity_store=activity_store,
+        journal=journal,
+        projections=projections,
         occupancy_store=occupancy_store,
     )
 
     response = await service.handle_observation(
-        ObservationEnvelope(observation=_activity_observation())
+        ObservationEnvelope(
+            observation=_activity_observation(),
+            ingress=_ingress(
+                ObservationCapability.INTEGRATE_ACTIVITY,
+                ObservationCapability.UPDATE_SPACE_OCCUPANCY,
+            ),
+        )
     )
 
     assert not response.output.is_sendable
-    assert await activity_store.latest_for_actor(ActorId("actor-1")) is not None
+    assert await projections.latest_for_actor(ActorId("actor-1")) is not None
     occupancy = await occupancy_store.get_occupancy(
         SpaceId("space-1"),
         now=_RECEIVED_AT,
@@ -64,7 +77,12 @@ async def test_runtime_service_integrates_presence_without_cognitive_response() 
     presence_store = InMemoryPresenceStore()
     service = _service(presence_store=presence_store)
 
-    response = await service.handle_observation(ObservationEnvelope(observation=_presence_signal()))
+    response = await service.handle_observation(
+        ObservationEnvelope(
+            observation=_presence_signal(),
+            ingress=_ingress(ObservationCapability.INTEGRATE_PRESENCE),
+        )
+    )
 
     assert not response.output.is_sendable
     assert (
@@ -77,25 +95,34 @@ async def test_runtime_service_integrates_presence_without_cognitive_response() 
 
 
 @pytest.mark.anyio
-async def test_runtime_service_does_not_mutate_state_for_untrusted_claims() -> None:
-    """Untrusted claimがstoreを更新せず、requestも失敗しないことを確認する。"""
-    activity_store = InMemoryActivityStore()
+async def test_runtime_service_does_not_mutate_state_without_capabilities() -> None:
+    """sourceやmetadataだけではstoreを更新せず、requestも失敗しない。"""
+    journal = InMemoryActivityJournal()
+    projections = InMemoryActivityProjectionStore()
     presence_store = InMemoryPresenceStore()
     service = _service(
-        activity_store=activity_store,
+        journal=journal,
+        projections=projections,
         presence_store=presence_store,
     )
 
     activity_response = await service.handle_observation(
-        ObservationEnvelope(observation=_activity_observation(source="untrusted"))
+        ObservationEnvelope(
+            observation=_activity_observation(source="discord_gateway"),
+            ingress=_ingress(authenticated=False),
+        )
     )
     presence_response = await service.handle_observation(
-        ObservationEnvelope(observation=_presence_signal(source="untrusted"))
+        ObservationEnvelope(
+            observation=_presence_signal(source="internal"),
+            ingress=_ingress(),
+        )
     )
 
     assert not activity_response.output.is_sendable
     assert not presence_response.output.is_sendable
-    assert await activity_store.latest_for_actor(ActorId("actor-1")) is None
+    assert await projections.latest_for_actor(ActorId("actor-1")) is None
+    assert await journal.get_by_id(_activity_id()) is None
     assert (
         await presence_store.get_presence_for_actor(
             ActorId("actor-1"),
@@ -107,19 +134,17 @@ async def test_runtime_service_does_not_mutate_state_for_untrusted_claims() -> N
 
 def _service(
     *,
-    activity_store: InMemoryActivityStore | None = None,
+    journal: InMemoryActivityJournal | None = None,
+    projections: InMemoryActivityProjectionStore | None = None,
     presence_store: InMemoryPresenceStore | None = None,
     occupancy_store: InMemorySpaceOccupancyStore | None = None,
 ) -> IrisRuntimeService:
-    trust_policy = ObservationTrustPolicy(
-        trusted_activity_sources=frozenset({"internal"}),
-        trusted_presence_sources=frozenset({"internal"}),
-    )
+    trust_policy = ObservationTrustPolicy()
     return IrisRuntimeService(
         IrisApp(steps=(_UnexpectedCognitiveStep(),)),
         activity_integrator=(
-            ActivityIntegrator(activity_store, trust_policy, _now)
-            if activity_store is not None
+            ActivityIntegrator(journal, projections, trust_policy, _now)
+            if journal is not None and projections is not None
             else None
         ),
         presence_integrator=(
@@ -169,7 +194,24 @@ def _context(*, source: str, include_space: bool = False) -> ObservationContext:
         ),
         space_id=SpaceId("space-1") if include_space else None,
         source=source,
+        metadata={"capability": "integrate_activity"},
     )
+
+
+def _ingress(
+    *capabilities: ObservationCapability,
+    authenticated: bool = True,
+) -> ObservationIngressContext:
+    return ObservationIngressContext(
+        adapter_id="trusted-adapter",
+        provider="discord",
+        authenticated=authenticated,
+        capabilities=frozenset(capabilities),
+    )
+
+
+def _activity_id() -> ActivityId:
+    return ActivityId("activity:obs-activity")
 
 
 def _now() -> datetime:

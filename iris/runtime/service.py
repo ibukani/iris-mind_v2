@@ -10,12 +10,14 @@ from iris.contracts.observations import (
     ActivityEventObservation,
     PresenceSignalObservation,
 )
+from iris.runtime.observations.ingress import unauthenticated_external_ingress
 
 if TYPE_CHECKING:
     from iris.contracts.observations import Observation
     from iris.core.ids import CorrelationId
     from iris.runtime.activity.integrator import ActivityIntegrator
     from iris.runtime.app import IrisApp
+    from iris.runtime.observations.ingress import ObservationIngressContext
     from iris.runtime.presence.integrator import PresenceIntegrator
     from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 
@@ -25,7 +27,26 @@ class ObservationEnvelope:
     """受信観測を入れるトランスポート非依存コンテナ。"""
 
     observation: Observation
+    ingress: ObservationIngressContext
     correlation_id: CorrelationId | None = None
+
+    @classmethod
+    def external_client(
+        cls,
+        *,
+        observation: Observation,
+        correlation_id: CorrelationId | None = None,
+    ) -> ObservationEnvelope:
+        """外部client request用のcapabilityなしenvelopeを作成する。
+
+        Returns:
+            未認証ingressを持つObservationEnvelope。
+        """
+        return cls(
+            observation=observation,
+            ingress=unauthenticated_external_ingress(),
+            correlation_id=correlation_id,
+        )
 
 
 @dataclass(frozen=True)
@@ -61,11 +82,20 @@ class IrisRuntimeService:
         """
         observation = envelope.observation
         if self._activity_integrator is not None:
-            await self._activity_integrator.integrate_observation(observation)
+            await self._activity_integrator.integrate_observation(
+                observation,
+                envelope.ingress,
+            )
         if self._presence_integrator is not None:
-            await self._presence_integrator.integrate_observation(observation)
+            await self._presence_integrator.integrate_observation(
+                observation,
+                envelope.ingress,
+            )
         if self._occupancy_integrator is not None:
-            await self._occupancy_integrator.integrate_observation(observation)
+            await self._occupancy_integrator.integrate_observation(
+                observation,
+                envelope.ingress,
+            )
 
         if isinstance(
             observation,
