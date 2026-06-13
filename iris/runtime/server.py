@@ -38,6 +38,7 @@ from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
+from iris.runtime.wiring.event_reaction import wire_event_reaction_runner
 from iris.runtime.wiring.grpc import create_grpc_server
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
 
@@ -97,12 +98,14 @@ def build_runtime_service(
         availability_resolver=availability_resolver,
         now=current_now,
     )
+    event_reaction_runner = wire_event_reaction_runner()
     return IrisRuntimeService(
         app,
         activity_integrator=activity_integrator,
         presence_integrator=presence_integrator,
         occupancy_integrator=occupancy_integrator,
         workspace_context_assembler=workspace_context_assembler,
+        event_reaction_runner=event_reaction_runner,
     )
 
 

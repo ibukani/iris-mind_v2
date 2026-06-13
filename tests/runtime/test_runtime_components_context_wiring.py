@@ -73,7 +73,7 @@ async def test_build_runtime_service_wires_context_availability_for_text_observa
 
     activity_response = await service.handle_observation(
         ObservationEnvelope(
-            observation=_activity_observation(ActivityKind.APP_OPENED),
+            observation=_activity_observation(ActivityKind.SYSTEM_INTERACTION),
             ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
         )
     )

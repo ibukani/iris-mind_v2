@@ -63,3 +63,38 @@ def test_workspace_context_assembler_does_not_import_adapters() -> None:
     """WorkspaceContextAssembler は adapters 層に依存してはならない。"""
     path = PROJECT_ROOT / "iris" / "runtime" / "context" / "workspace_assembler.py"
     _assert_no_forbidden_imports(path, ("iris.adapters",))
+
+
+def test_event_reaction_planner_does_not_import_adapters_or_app_gateway() -> None:
+    """EventReactionPlanner は adapters / app_gateway に依存してはならない。"""
+    path = PROJECT_ROOT / "iris" / "runtime" / "event_reaction" / "planner.py"
+    _assert_no_forbidden_imports(
+        path,
+        ("iris.adapters", "iris.runtime.adapters", "iris.runtime.app_gateway"),
+    )
+
+
+def test_event_reaction_runner_does_not_import_adapters_or_app_gateway() -> None:
+    """EventReactionRunner は adapters / app_gateway に依存してはならない。"""
+    path = PROJECT_ROOT / "iris" / "runtime" / "event_reaction" / "runner.py"
+    _assert_no_forbidden_imports(
+        path,
+        ("iris.adapters", "iris.runtime.adapters", "iris.runtime.app_gateway"),
+    )
+
+
+def test_event_reaction_planner_may_import_cognitive_workspace() -> None:
+    """EventReactionPlanner が cognitive.workspace.frame を import できる。"""
+    path = PROJECT_ROOT / "iris" / "runtime" / "event_reaction" / "planner.py"
+    if not path.is_file():
+        pytest.skip("planner.py does not exist yet")
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    imports = _get_imports(tree)
+    assert "iris.cognitive.workspace.frame" in imports
+
+
+def test_event_reaction_contracts_do_not_import_runtime_or_adapters() -> None:
+    """EventReaction 契約層は runtime / adapters に依存してはならない。"""
+    path = PROJECT_ROOT / "iris" / "contracts" / "event_reaction.py"
+    _assert_no_forbidden_imports(path, ("iris.runtime", "iris.adapters"))
