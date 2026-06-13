@@ -33,12 +33,22 @@ def _target_files() -> tuple[Path, ...]:
     return tuple(path for path in sorted(root.rglob("*.py")) if path not in APPROVED_PATHS)
 
 
+FRAME_NAMES = {
+    "frame",
+    "workspace_frame",
+    "current_frame",
+    "next_frame",
+}
+
+
 def _is_frame_attribute(node: ast.AST) -> bool:
-    return (
-        isinstance(node, ast.Attribute)
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "frame"
-    )
+    if not isinstance(node, ast.Attribute):
+        return False
+    if isinstance(node.value, ast.Name):
+        return node.value.id in FRAME_NAMES
+    if isinstance(node.value, ast.Attribute) and isinstance(node.value.value, ast.Name):
+        return node.value.value.id == "self" and node.value.attr in FRAME_NAMES
+    return False
 
 
 def test_workspace_frame_is_not_mutated_directly() -> None:

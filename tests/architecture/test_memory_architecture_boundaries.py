@@ -37,8 +37,40 @@ def test_vector_index_does_not_store_full_memory_records() -> None:
     assert not violations, "\n".join(violations)
 
 
+def _match_self_attr_call(node: ast.Call, object_name: str, method_name: str) -> bool:
+    """self.object_name.method_name() の呼び出しか判定する。
+
+    Returns:
+        匹配する場合 True。
+    """
+    return (
+        isinstance(node.func, ast.Attribute)
+        and node.func.attr == method_name
+        and isinstance(node.func.value, ast.Attribute)
+        and node.func.value.attr == object_name
+        and isinstance(node.func.value.value, ast.Name)
+        and node.func.value.value.id == "self"
+    )
+
+
+def _has_attr_call(tree: ast.AST, object_name: str, method_name: str) -> bool:
+    """AST 内に object_name.method_name() の呼び出しがあるか。
+
+    Returns:
+        該当呼び出しがある場合 True。
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and _match_self_attr_call(node, object_name, method_name):
+            return True
+    return False
+
+
 def test_hybrid_retriever_resolves_records_through_memory_store() -> None:
     """Hybrid retriever は vector id を MemoryStore で record 解決する。"""
-    source = HYBRID_RETRIEVER_PATH.read_text(encoding="utf-8")
-    assert "self._store.get(" in source
-    assert "self._vector.search(" in source
+    tree = parse_python_file(HYBRID_RETRIEVER_PATH)
+    assert _has_attr_call(tree, "_store", "get"), (
+        "hybrid retriever must call self._store.get() for record resolution"
+    )
+    assert _has_attr_call(tree, "_vector", "search"), (
+        "hybrid retriever must call self._vector.search() for vector search"
+    )

@@ -31,10 +31,16 @@ def _target_files() -> tuple[Path, ...]:
     return tuple(sorted(files))
 
 
+def _slice_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Constant) and node.value is Ellipsis:
+        return "Ellipsis"
+    return name_of(node) or ""
+
+
 def _slice_names(node: ast.AST) -> tuple[str, ...]:
     if isinstance(node, ast.Tuple):
-        return tuple(name_of(elt) or "" for elt in node.elts)
-    return (name_of(node) or "",)
+        return tuple(_slice_name(elt) for elt in node.elts)
+    return (_slice_name(node),)
 
 
 def _is_forbidden_annotation(node: ast.AST) -> bool:

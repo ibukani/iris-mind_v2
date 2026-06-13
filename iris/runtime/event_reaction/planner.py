@@ -17,10 +17,7 @@ if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
     from iris.contracts.observations import ActivityEventObservation
     from iris.runtime.event_reaction.policy import EventReactionPolicy
-
-_VOICE_JOINED_TEXT = "Welcome back."
-
-_APP_OPENED_TEXT = "Welcome back. I am here if you want to talk."
+    from iris.runtime.event_reaction.templates import EventReactionTemplateProvider
 
 
 @dataclass(frozen=True)
@@ -28,6 +25,7 @@ class EventReactionPlanner:
     """ActivityEventObservationと状況contextから反応可否を決定する。"""
 
     policy: EventReactionPolicy
+    template_provider: EventReactionTemplateProvider
 
     def plan(
         self,
@@ -60,7 +58,7 @@ class EventReactionPlanner:
                 ),
             )
 
-        candidate = _candidate_for(observation.activity_kind)
+        candidate = _candidate_for(observation.activity_kind, self.template_provider)
         if candidate is None:
             return EventReactionDecision(
                 should_react=False,
@@ -82,18 +80,23 @@ def _status_name(status: AvailabilityStatus | None) -> str:
     return status.value if status is not None else "None"
 
 
-def _candidate_for(kind: ActivityKind) -> ReactionCandidate | None:
+def _candidate_for(
+    kind: ActivityKind, provider: EventReactionTemplateProvider
+) -> ReactionCandidate | None:
+    text = provider.text_for_activity(kind)
+    if text is None:
+        return None
     if kind is ActivityKind.VOICE_JOINED:
         return ReactionCandidate(
             kind=EventReactionKind.GREETING,
-            text=_VOICE_JOINED_TEXT,
+            text=text,
             reason="actor joined voice channel",
             priority=10,
         )
     if kind is ActivityKind.APP_OPENED:
         return ReactionCandidate(
             kind=EventReactionKind.GREETING,
-            text=_APP_OPENED_TEXT,
+            text=text,
             reason="actor opened app",
             priority=5,
         )

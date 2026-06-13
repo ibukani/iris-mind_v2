@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
+from iris.core.ids import ObservationId, SessionId
 from iris.runtime.observations.ingress import (
     ObservationCapability,
     trusted_adapter_ingress,
     unauthenticated_external_ingress,
 )
 from iris.runtime.observations.trust import ObservationTrustPolicy
+from iris.runtime.service import ObservationEnvelope
 
 
 def test_external_client_ingress_is_unauthenticated_without_capabilities() -> None:
@@ -72,3 +77,23 @@ def test_update_space_occupancy_capability_only_enables_occupancy_update() -> No
     assert not policy.can_integrate_presence_signal(ingress)
     assert policy.can_update_space_occupancy(ingress)
     assert not policy.can_react_to_activity_event(ingress)
+
+
+def test_trusted_adapter_envelope_uses_explicit_capabilities_only() -> None:
+    """ObservationEnvelope.trusted_adapter は指定された capability だけを付与する。"""
+    observation = ActorMessageObservation(
+        observation_id=ObservationId("obs-explicit"),
+        session_id=SessionId("session-explicit"),
+        context=ObservationContext(),
+        occurred_at=datetime.now(UTC),
+        kind=ObservationKind.ACTOR_MESSAGE,
+        text="hello",
+    )
+    envelope = ObservationEnvelope.trusted_adapter(
+        observation=observation,
+        adapter_id="test-adapter",
+        capabilities={ObservationCapability.INTEGRATE_ACTIVITY},
+    )
+    assert envelope.ingress.capabilities == frozenset({ObservationCapability.INTEGRATE_ACTIVITY})
+    assert ObservationCapability.REACT_TO_ACTIVITY not in envelope.ingress.capabilities
+    assert ObservationCapability.INTEGRATE_PRESENCE not in envelope.ingress.capabilities

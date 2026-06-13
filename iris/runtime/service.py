@@ -61,7 +61,7 @@ class ObservationEnvelope:
         observation: Observation,
         adapter_id: str,
         provider: str | None = None,
-        capabilities: frozenset[ObservationCapability] | None = None,
+        capabilities: frozenset[ObservationCapability] | set[ObservationCapability],
         correlation_id: CorrelationId | None = None,
     ) -> ObservationEnvelope:
         """信頼済みadapter observation用のcapability付きenvelopeを作成する。
@@ -70,7 +70,7 @@ class ObservationEnvelope:
             observation: Observation。
             adapter_id: 信頼済みadapterの識別子。
             provider: 任意的なprovider名。
-            capabilities: 付与するcapability。デフォルトは全capability。
+            capabilities: 付与するcapability。呼び出し側が明示的に指定する必要がある。
             correlation_id: 任意的なcorrelation ID。
 
         Returns:
@@ -81,7 +81,7 @@ class ObservationEnvelope:
             ingress=trusted_adapter_ingress(
                 adapter_id=adapter_id,
                 provider=provider,
-                capabilities=capabilities or frozenset(ObservationCapability),
+                capabilities=capabilities,
             ),
             correlation_id=correlation_id,
         )

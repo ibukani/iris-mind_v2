@@ -33,6 +33,7 @@ from iris.core.ids import (
 )
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
+from iris.runtime.observations.ingress import ObservationCapability
 from iris.runtime.service import ObservationEnvelope
 
 _ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
@@ -47,13 +48,22 @@ _ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
 _GRPC_ADAPTER_ID = "grpc"
 _GRPC_ADAPTER_PROVIDER = "grpc"
 
+_GRPC_OBSERVATION_CAPABILITIES = frozenset(
+    {
+        ObservationCapability.INTEGRATE_ACTIVITY,
+        ObservationCapability.INTEGRATE_PRESENCE,
+        ObservationCapability.UPDATE_SPACE_OCCUPANCY,
+        ObservationCapability.REACT_TO_ACTIVITY,
+        ObservationCapability.INTERNAL_EVENT,
+    }
+)
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
     from iris.contracts.actions import PresentedOutput
     from iris.contracts.spaces import InteractionSpace
-    from iris.runtime.observations.ingress import ObservationCapability
     from iris.runtime.service import RuntimeResponse
 
 
@@ -85,7 +95,9 @@ class GrpcRuntimeMapper:
         self._identity_resolver = identity_resolver
         self._space_resolver = space_resolver
         self._adapter_capabilities = (
-            frozenset(adapter_capabilities) if adapter_capabilities is not None else None
+            frozenset(adapter_capabilities)
+            if adapter_capabilities is not None
+            else _GRPC_OBSERVATION_CAPABILITIES
         )
 
     async def observation_envelope_from_proto(

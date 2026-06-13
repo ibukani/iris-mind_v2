@@ -5,11 +5,11 @@ rules:
     languages: [python]
     paths:
       include:
-        - "/iris/**/planner.py"
-        - "/iris/**/policy.py"
-        - "/iris/**/resolver.py"
+        - "**/iris/**/planner.py"
+        - "**/iris/**/policy.py"
+        - "**/iris/**/resolver.py"
       exclude:
-        - "/iris/safety/**"
+        - "**/iris/safety/**"
     pattern: PresentedOutput(...)
 
   - id: no-app-action-in-planner-policy-resolver
@@ -18,11 +18,11 @@ rules:
     languages: [python]
     paths:
       include:
-        - "/iris/**/planner.py"
-        - "/iris/**/policy.py"
-        - "/iris/**/resolver.py"
+        - "**/iris/**/planner.py"
+        - "**/iris/**/policy.py"
+        - "**/iris/**/resolver.py"
       exclude:
-        - "/iris/safety/**"
+        - "**/iris/safety/**"
     pattern: AppAction(...)
 
   - id: no-time-sleep-in-async
@@ -51,8 +51,8 @@ rules:
     languages: [python]
     paths:
       include:
-        - "/iris/cognitive/**"
+        - "**/iris/cognitive/**"
       exclude:
-        - "/iris/cognitive/cycle/frame_builder.py"
-        - "/iris/cognitive/workspace/frame.py"
+        - "**/iris/cognitive/cycle/frame_builder.py"
+        - "**/iris/cognitive/workspace/frame.py"
     pattern: object.__setattr__(...)

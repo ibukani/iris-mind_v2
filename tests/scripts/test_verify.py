@@ -11,6 +11,7 @@ from scripts.verify import (
     Check,
     main,
     run_check,
+    selected_checks,
 )
 
 from tests.helpers.private_access import import_private
@@ -161,3 +162,30 @@ def test_main_passed_summary() -> None:
             exit_code = main([])
         assert exit_code == 0
         assert "Verification passed." in captured.getvalue()
+
+
+class TestSelectedChecks:
+    """selected_checks のフィルタリングテスト。"""
+
+    def test_quick_includes_architecture_check(self) -> None:
+        """--quick でも architecture チェック（make static-arch）が含まれる。"""
+        checks = selected_checks(quick=True)
+        names = {check.name for check in checks}
+        assert "architecture" in names
+
+    def test_architecture_check_uses_static_arch(self) -> None:
+        """Architecture チェックは make static-arch を実行する。"""
+        arch_check = next(c for c in CHECKS if c.name == "architecture")
+        assert arch_check.command == ("make", "static-arch")
+
+    def test_quick_excludes_tests_coverage(self) -> None:
+        """--quick では tests+coverage が除外される。"""
+        checks = selected_checks(quick=True)
+        names = {check.name for check in checks}
+        assert "tests+coverage" not in names
+
+    def test_full_includes_all_checks(self) -> None:
+        """Full モードでは全チェックが含まれる。"""
+        checks = selected_checks(quick=False)
+        names = {check.name for check in checks}
+        assert names == {"lint", "format", "type", "pyright", "architecture", "tests+coverage"}

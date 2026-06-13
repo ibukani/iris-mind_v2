@@ -36,12 +36,25 @@ def _is_observation_name(node: ast.AST, concrete: set[str]) -> bool:
     return name_of(node) in concrete
 
 
+def _contains_observation_name(node: ast.AST, concrete: set[str]) -> bool:
+    """Node が concrete Observation 名を直接または tuple 内に含むか。
+
+    Returns:
+        含む場合 True。
+    """
+    if _is_observation_name(node, concrete):
+        return True
+    if isinstance(node, ast.Tuple):
+        return any(_contains_observation_name(elt, concrete) for elt in node.elts)
+    return False
+
+
 def _branching_violations(path: Path, concrete: set[str]) -> list[str]:
     tree = parse_python_file(path)
     violations: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Call) and name_of(node.func) == "isinstance":
-            if len(node.args) >= 2 and _is_observation_name(node.args[1], concrete):
+            if len(node.args) >= 2 and _contains_observation_name(node.args[1], concrete):
                 violations.append(f"{path}:{node.lineno}: isinstance concrete Observation")
         elif isinstance(node, ast.Compare) and _is_type_observation_compare(node, concrete):
             violations.append(f"{path}:{node.lineno}: type(...) concrete Observation compare")
