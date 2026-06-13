@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from iris.contracts.presence import PresenceStatus
     from iris.core.ids import (
         AccountId,
+        ActorId,
         DeviceId,
         ExternalRef,
         ObservationId,
@@ -48,6 +49,11 @@ class ObservationContext:
     space_id: SpaceId | None = None
     source: str | None = None
     metadata: Mapping[str, str] = EMPTY_METADATA
+
+    @property
+    def actor_id(self) -> ActorId | None:
+        """actorが解決済みならactor_idを返す。"""
+        return self.actor.actor_id if self.actor is not None else None
 
     def __post_init__(self) -> None:
         """メタデータを不変な mapping proxy として防御的にコピーする。"""

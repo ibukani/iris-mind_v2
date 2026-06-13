@@ -38,7 +38,7 @@ class WorkspaceContextAssembler:
             SituationContextSnapshot: ランタイム状態を含む認知スナップショット。
         """
         context = observation.context
-        actor_id = context.actor.actor_id if context.actor is not None else None
+        actor_id = context.actor_id
         space_id = context.space_id
 
         latest_activity = None

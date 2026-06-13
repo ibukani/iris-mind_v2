@@ -44,7 +44,7 @@ class EventReactionPlanner:
         Returns:
             EventReactionDecision: 反応するかどうかの決定と候補。
         """
-        if observation.context.actor is None:
+        if observation.context.actor_id is None:
             return EventReactionDecision(
                 should_react=False,
                 reason="actor not resolved",

@@ -41,13 +41,12 @@ class ActivityIntegrator:
         if not self.trust_policy.can_integrate_activity_event(ingress):
             return
 
-        actor_id = context.actor.actor_id if context.actor is not None else None
         event = ActivityEventRecord(
             activity_id=ActivityId(f"activity:{observation.observation_id}"),
             observation_id=observation.observation_id,
             provider_event_id=observation.provider_event_id,
             provider_sequence=observation.provider_sequence,
-            actor_id=actor_id,
+            actor_id=context.actor_id,
             account_id=context.account_id,
             device_id=context.device_id,
             space_id=context.space_id,

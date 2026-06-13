@@ -22,6 +22,7 @@ from iris.contracts.presence import PresenceStatus
 from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
 from iris.runtime.app import IrisApp
 from iris.runtime.config import default_runtime_config
+from iris.runtime.event_reaction.handler import ActivityEventReactionHandler
 from iris.runtime.observations.ingress import (
     ObservationCapability,
     ObservationIngressContext,
@@ -29,7 +30,7 @@ from iris.runtime.observations.ingress import (
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.server import build_runtime_service
-from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeIntegrators
+from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.event_reaction import wire_event_reaction_runner
@@ -392,13 +393,17 @@ async def test_blocking_output_gate_prevents_sendable_reaction() -> None:
     )
     event_reaction_runner = wire_event_reaction_runner()
 
+    handler = ActivityEventReactionHandler(
+        trust_policy=trust_policy,
+        runner=event_reaction_runner,
+        output_gate=_BlockAllOutputGate(),
+    )
+
     service = IrisRuntimeService(
         app,
-        integrators=RuntimeIntegrators(presence=presence_integrator),
+        integrators=[presence_integrator],
         workspace_context_assembler=workspace_context_assembler,
-        event_reaction_runner=event_reaction_runner,
-        trust_policy=trust_policy,
-        event_reaction_output_gate=_BlockAllOutputGate(),
+        activity_event_reaction_handler=handler,
     )
 
     await service.handle_observation(
