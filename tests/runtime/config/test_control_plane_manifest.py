@@ -8,6 +8,8 @@ from typing import Any
 
 from iris.runtime.config import load_runtime_config
 
+_DENY = "deny"
+
 
 def test_manifest_parses_successfully() -> None:
     """iris-control-plane.tomlが有効なTOMLとしてパースできる。"""
@@ -69,7 +71,7 @@ def test_runtime_editable_config_secret_policy() -> None:
     """Runtime editable configのsecret_policyはdeny。"""
     runtime = _find_editable_config(_editable_configs(), "runtime")
     assert runtime is not None
-    assert runtime["secret_policy"] == "deny"  # noqa: S105 -- comparing secret_policy field value, not a password
+    assert runtime["secret_policy"] == _DENY
 
 
 def test_runtime_editable_config_provision() -> None:

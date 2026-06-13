@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -12,6 +12,7 @@ from iris.adapters.app_gateway.stable_ids import stable_actor_id, stable_space_i
 from iris.contracts.external_refs import ExternalSpaceRef
 from iris.contracts.spaces import SpaceKind
 from iris.core.ids import AccountId, ExternalRef
+from iris.generated.iris.runtime.v1 import runtime_pb2
 from tests.e2e.helpers import (
     build_cli_submit_observation_request,
     create_runtime_channel,
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
+    from iris.generated.iris.runtime.v1 import runtime_pb2_grpc
 
 
 @pytest.mark.e2e
@@ -224,8 +225,8 @@ async def _submit_identity_message(
     request.observation.context.space_ref.provider = provider
     request.observation.context.space_ref.provider_space_ref = "space-1"
     response = await grpc_call(stub.SubmitObservation(request))
-    typed_response = cast("runtime_pb2.SubmitObservationResponse", response)
-    assert typed_response.output.text.strip()
+    assert isinstance(response, runtime_pb2.SubmitObservationResponse)
+    assert response.output.text.strip()
 
 
 def _account_rows(db_path: Path) -> list[sqlite3.Row]:

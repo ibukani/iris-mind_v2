@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import grpc
 import pytest
@@ -103,7 +103,8 @@ async def _submit_observations(
                     )
                 )
             )
-            responses.append(cast("runtime_pb2.SubmitObservationResponse", response))
+            assert isinstance(response, runtime_pb2.SubmitObservationResponse)
+            responses.append(response)
         return responses
     finally:
         await channel.close()

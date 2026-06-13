@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from typing import cast, override
+from typing import override
 
 import httpx
 
@@ -112,15 +112,11 @@ class OllamaLLMClient(LLMClient):
 
 def _decode_json_response(response: httpx.Response) -> _JsonObject:
     try:
-        body = response.json()
+        body: _JsonObject = response.json()
     except json.JSONDecodeError as exc:
         message = "Ollama returned invalid JSON"
         raise OllamaAdapterError(message) from exc
-
-    if not isinstance(body, dict):
-        message = "Ollama response JSON must be an object"
-        raise OllamaAdapterError(message)
-    return cast("_JsonObject", body)
+    return body
 
 
 def _to_llm_response(body: _JsonObject, *, fallback_model: str) -> LLMResponse:

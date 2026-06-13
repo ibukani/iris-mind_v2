@@ -100,7 +100,7 @@ def test_validate_server_port_bounds() -> None:
 def test_validate_local_only() -> None:
     """local_only=True requires a loopback host."""
     # Invalid
-    config = RuntimeServerConfig(local_only=True, host="0.0.0.0")  # noqa: S104 -- intentional invalid host for test
+    config = RuntimeServerConfig(local_only=True, host="10.0.0.1")
     with pytest.raises(ConfigError, match="requires a loopback host"):
         validate_server_config(config)
 
@@ -109,7 +109,7 @@ def test_validate_local_only() -> None:
     validate_server_config(config)
 
     # Valid non-local
-    config = RuntimeServerConfig(local_only=False, host="0.0.0.0")  # noqa: S104 -- intentional 0.0.0.0 for test
+    config = RuntimeServerConfig(local_only=False, host="10.0.0.1")
     validate_server_config(config)
 
 

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
+from iris.generated.iris.runtime.v1 import runtime_pb2
 from tests.e2e.helpers import (
     build_cli_submit_observation_request,
     create_runtime_channel,
@@ -19,8 +20,6 @@ from tests.helpers.grpc_test import grpc_call
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from iris.generated.iris.runtime.v1 import runtime_pb2
 
 
 @pytest.mark.e2e
@@ -100,6 +99,7 @@ async def _submit_cli_observation(port: int) -> runtime_pb2.SubmitObservationRes
     try:
         stub = create_runtime_stub(channel)
         response = await grpc_call(stub.SubmitObservation(build_cli_submit_observation_request()))
-        return cast("runtime_pb2.SubmitObservationResponse", response)
+        assert isinstance(response, runtime_pb2.SubmitObservationResponse)
+        return response
     finally:
         await channel.close()

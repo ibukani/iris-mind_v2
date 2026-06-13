@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, override
 
 import grpc
 import pytest
@@ -42,10 +42,8 @@ async def test_submit_observation_returns_presented_output() -> None:
     runtime_service = RecordingRuntimeService("grpc response")
 
     async with _GrpcRuntimeHarness(runtime_service) as stub:
-        response = cast(
-            "runtime_pb2.SubmitObservationResponse",
-            await grpc_call(stub.SubmitObservation(_actor_message_request())),
-        )
+        response = await grpc_call(stub.SubmitObservation(_actor_message_request()))
+        assert isinstance(response, runtime_pb2.SubmitObservationResponse)
     assert runtime_service.envelope is not None
     assert runtime_service.envelope.observation.kind.value == "actor_message"
     assert runtime_service.envelope.ingress.authenticated
@@ -101,10 +99,8 @@ async def test_submit_observation_with_account_ref_resolves_identity() -> None:
     resolver = FakeIdentityResolver()
 
     async with _GrpcRuntimeHarness(runtime_service, identity_resolver=resolver) as stub:
-        response = cast(
-            "runtime_pb2.SubmitObservationResponse",
-            await grpc_call(stub.SubmitObservation(_account_ref_request())),
-        )
+        response = await grpc_call(stub.SubmitObservation(_account_ref_request()))
+        assert isinstance(response, runtime_pb2.SubmitObservationResponse)
     assert response.output.text == "account_ref response"
     assert runtime_service.envelope is not None
     actor = runtime_service.envelope.observation.context.actor
@@ -200,10 +196,8 @@ async def test_submit_observation_with_space_ref_resolves_space() -> None:
     resolver = _RecordingSpaceResolver()
 
     async with _GrpcRuntimeHarness(runtime_service, space_resolver=resolver) as stub:
-        response = cast(
-            "runtime_pb2.SubmitObservationResponse",
-            await grpc_call(stub.SubmitObservation(_space_ref_request())),
-        )
+        response = await grpc_call(stub.SubmitObservation(_space_ref_request()))
+        assert isinstance(response, runtime_pb2.SubmitObservationResponse)
     assert response.output.text == "space_ref response"
     assert runtime_service.envelope is not None
     assert runtime_service.envelope.observation.context.space_id == "resolved-space-discord-chan-1"
@@ -257,10 +251,8 @@ async def test_submit_observation_with_account_ref_and_space_ref_succeeds() -> N
         identity_resolver=id_resolver,
         space_resolver=space_resolver,
     ) as stub:
-        response = cast(
-            "runtime_pb2.SubmitObservationResponse",
-            await grpc_call(stub.SubmitObservation(request)),
-        )
+        response = await grpc_call(stub.SubmitObservation(request))
+        assert isinstance(response, runtime_pb2.SubmitObservationResponse)
     assert response.output.text == "both response"
     assert runtime_service.envelope is not None
     assert runtime_service.envelope.observation.context.space_id == "resolved-space-discord-chan-1"
@@ -273,10 +265,8 @@ async def test_get_runtime_info_returns_supported_features() -> None:
     """GetRuntimeInfoがサポートする機能とバージョン情報を返すことを確認する。"""
     async with _GrpcRuntimeHarness(RecordingRuntimeService("unused")) as stub:
         request = runtime_pb2.GetRuntimeInfoRequest()
-        response = cast(
-            "runtime_pb2.GetRuntimeInfoResponse",
-            await grpc_call(stub.GetRuntimeInfo(request)),
-        )
+        response = await grpc_call(stub.GetRuntimeInfo(request))
+        assert isinstance(response, runtime_pb2.GetRuntimeInfoResponse)
 
     assert response.runtime_name == "iris-mind"
     assert response.runtime_version == "0.1.0"
@@ -327,10 +317,8 @@ async def test_submit_observation_with_cli_like_request_succeeds() -> None:
         identity_resolver=id_resolver,
         space_resolver=space_resolver,
     ) as stub:
-        response = cast(
-            "runtime_pb2.SubmitObservationResponse",
-            await grpc_call(stub.SubmitObservation(request)),
-        )
+        response = await grpc_call(stub.SubmitObservation(request))
+        assert isinstance(response, runtime_pb2.SubmitObservationResponse)
 
     assert response.correlation_id == "cli-req-1"
     assert response.output.text == "cli response"
