@@ -20,6 +20,7 @@ CORE_FILES: tuple[str, ...] = (
     ".agents/rules/boundaries.md",
     ".agents/rules/cognitive-cycle.md",
     ".agents/rules/anti-patterns.md",
+    ".agents/rules/runtime-boundary.md",
     ".agents/rules/typing.md",
     ".agents/rules/testing.md",
     ".agents/rules/ai-harness.md",
@@ -42,6 +43,8 @@ WORKFLOWS: tuple[str, ...] = (
 CHECKLISTS: tuple[str, ...] = (
     ".agents/checklists/pre-change.md",
     ".agents/checklists/done.md",
+    ".agents/checklists/architecture-review.md",
+    ".agents/checklists/completion-report.md",
     ".agents/checklists/ai-harness.md",
     ".agents/checklists/failure-analysis.md",
 )

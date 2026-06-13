@@ -55,3 +55,30 @@ Use this Japanese structure:
 アーキテクチャリスク
 判定
 ```
+
+For architecture-sensitive changes, read and apply:
+
+- `.agents/rules/architecture.md`
+- `.agents/rules/boundaries.md`
+- `.agents/rules/cognitive-cycle.md`
+- `.agents/rules/runtime-boundary.md`
+- `.agents/checklists/architecture-review.md`
+
+Add this block to the final review:
+
+```text
+Architecture verdict:
+- Pass / Needs changes
+
+Main risks:
+- ...
+
+Checklist failures:
+- ...
+
+Required fixes:
+- ...
+
+Optional improvements:
+- ...
+```

@@ -28,6 +28,14 @@ Forbidden refactors:
 2. Find tests that cover it.
 3. Run a narrow baseline test if possible.
 4. Note architecture tests that protect the boundary being changed.
+5. Classify the refactor:
+   - behavior-preserving structure refactor
+   - boundary correction
+   - dependency direction correction
+   - type-safety correction
+   - safety/trust correction
+   - config/schema consistency correction
+6. Write the intended invariant that should remain true after the refactor.
 
 ## During refactor
 
@@ -48,6 +56,14 @@ Refactors should run the full verification path because they can break boundarie
 
 Also run the targeted tests for touched behavior.
 
+Verify:
+
+- no public behavior changed unless explicitly intended;
+- architecture tests pass;
+- targeted behavior tests pass;
+- no broad compatibility shim was added;
+- obsolete code/tests were removed.
+
 ## Report
 
 State clearly in Japanese:
@@ -56,3 +72,5 @@ State clearly in Japanese:
 - 概要
 - 検証
 - 残リスク
+
+For architecture-sensitive refactors, include the impact fields from `.agents/checklists/completion-report.md`.

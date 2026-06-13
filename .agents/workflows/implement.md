@@ -73,6 +73,21 @@ Relevant docs:
 - `docs/tests.md`
 - `.agents/rules/*.md`
 
+## 5.1. Runtime-sensitive task rule
+
+If the task touches runtime service, observation integration, event reaction, observation routing, ingress trust, proactive behavior, or external side effects:
+
+1. Read `.agents/rules/runtime-boundary.md`.
+2. Identify the extension path before editing:
+   - integration pipeline
+   - situation context provider
+   - observation router + runtime handler
+   - cognitive app/cycle
+   - adapter boundary
+3. Do not add direct observation-type branches to `IrisRuntimeService`.
+4. Add or update architecture tests when introducing a new boundary rule.
+5. Add or update behavior tests when changing trust, capability, no-send, safety, or external action semantics.
+
 ## 6. Verify
 
 Run targeted tests first while working. Before handoff or final report, run:
@@ -93,3 +108,5 @@ Report in Japanese:
 - 概要
 - 検証
 - 残リスク
+
+For architecture-sensitive changes, include the impact fields from `.agents/checklists/completion-report.md`.
