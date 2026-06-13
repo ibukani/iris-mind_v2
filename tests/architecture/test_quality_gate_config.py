@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import tomllib
-from typing import cast
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -52,7 +51,7 @@ def _as_dict(value: object) -> dict[str, object]:
         dict[str, object]: The value when it is a mapping, otherwise an empty dict.
     """
     if isinstance(value, dict):
-        return cast("dict[str, object]", value)
+        return {str(key): item for key, item in value.items()}
     return _EMPTY_DICT
 
 
@@ -69,7 +68,7 @@ def _as_list(value: object) -> list[object]:
         list[object]: The value when it is a list, otherwise an empty list.
     """
     if isinstance(value, list):
-        return cast("list[object]", value)
+        return list(value)
     return _EMPTY_LIST
 
 

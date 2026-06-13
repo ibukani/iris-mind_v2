@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from iris.features.proactive_talk.models import ProactiveFrameContext
 
 
-def _idle_frame() -> WorkspaceFrame:
+def _idle_frame() -> ProactiveFrameContext:
     """Return a WorkspaceFrame with an IdleTickObservation and affect/relationship data."""
     return WorkspaceFrame(
         observation=IdleTickObservation(
@@ -36,7 +36,7 @@ def _idle_frame() -> WorkspaceFrame:
 
 def test_proactive_policy_constraints_are_typed_and_deterministic() -> None:
     """Verify proactive policy constraints are deterministic and typed."""
-    frame = cast("ProactiveFrameContext", _idle_frame())
+    frame = _idle_frame()
 
     first = proactive_policy_constraints(frame)
     second = proactive_policy_constraints(frame)

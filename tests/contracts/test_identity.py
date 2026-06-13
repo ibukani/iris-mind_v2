@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
 from iris.contracts.identity import ActorKind, Identity
 from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 from tests.helpers.immutability import assert_frozen_field
-
-if TYPE_CHECKING:
-    from collections.abc import MutableMapping
-
+from tests.helpers.mapping import assert_mapping_rejects_item_assignment
 
 def _identity(*, actor_kind: ActorKind, actor_id: str = "actor-1") -> Identity:
     """Build a test Identity for the given actor kind.
@@ -159,5 +156,4 @@ def test_identity_metadata_is_defensively_copied() -> None:
     metadata["source"] = "changed"
 
     assert identity.metadata["source"] == "discord"
-    with pytest.raises(TypeError):
-        cast("MutableMapping[str, str]", identity.metadata)["new"] = "value"
+    assert_mapping_rejects_item_assignment(identity.metadata)

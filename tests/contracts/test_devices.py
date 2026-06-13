@@ -2,16 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
-
-import pytest
-
 from iris.contracts.devices import DeviceCapability, DeviceKind, DeviceProfile
 from iris.core.ids import ActorId, DeviceId
 from tests.helpers.immutability import assert_frozen_field
-
-if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+from tests.helpers.mapping import assert_mapping_rejects_item_assignment
 
 
 def test_device_profile_stores_kind_and_capabilities() -> None:
@@ -60,8 +54,7 @@ def test_device_capability_metadata_is_defensively_copied() -> None:
     metadata["version"] = "2.0"
 
     assert capability.metadata["version"] == "1.0"
-    with pytest.raises(TypeError):
-        cast("MutableMapping[str, str]", capability.metadata)["new"] = "value"
+    assert_mapping_rejects_item_assignment(capability.metadata)
 
 
 def test_device_profile_metadata_is_defensively_copied() -> None:
@@ -77,5 +70,4 @@ def test_device_profile_metadata_is_defensively_copied() -> None:
     metadata["os"] = "changed"
 
     assert profile.metadata["os"] == "linux"
-    with pytest.raises(TypeError):
-        cast("MutableMapping[str, str]", profile.metadata)["new"] = "value"
+    assert_mapping_rejects_item_assignment(profile.metadata)

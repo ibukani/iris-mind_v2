@@ -4,10 +4,6 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 SCAN_ROOTS: tuple[Path, ...] = (

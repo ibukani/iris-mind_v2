@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from iris.core.metadata import EMPTY_METADATA, immutable_metadata
-
-if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+from tests.helpers.mapping import assert_mapping_rejects_item_assignment
 
 
 def test_immutable_metadata_returns_empty_when_none() -> None:
@@ -48,5 +45,4 @@ def test_immutable_metadata_copies_dict_into_proxy() -> None:
     mutable_dict["source"] = "changed"
     assert result["source"] == "discord"
 
-    with pytest.raises(TypeError):
-        cast("MutableMapping[str, str]", result)["new"] = "value"
+    assert_mapping_rejects_item_assignment(result)

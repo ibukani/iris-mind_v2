@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,9 +14,7 @@ from iris.contracts.spaces import (
 )
 from iris.core.ids import ExternalRef, SpaceId
 from tests.helpers.immutability import assert_frozen_field
-
-if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+from tests.helpers.mapping import assert_mapping_rejects_item_assignment
 
 
 def test_space_kind_enum_exposes_required_values() -> None:
@@ -87,8 +85,7 @@ def test_interaction_space_metadata_is_defensively_copied() -> None:
     metadata["topic"] = "changed"
 
     assert space.metadata["topic"] == "general"
-    with pytest.raises(TypeError):
-        cast("MutableMapping[str, str]", space.metadata)["new"] = "value"
+    assert_mapping_rejects_item_assignment(space.metadata)
 
 
 def test_space_binding_metadata_is_defensively_copied() -> None:
@@ -106,5 +103,4 @@ def test_space_binding_metadata_is_defensively_copied() -> None:
     metadata["region"] = "changed"
 
     assert binding.metadata["region"] == "us-east"
-    with pytest.raises(TypeError):
-        cast("MutableMapping[str, str]", binding.metadata)["new"] = "value"
+    assert_mapping_rejects_item_assignment(binding.metadata)
