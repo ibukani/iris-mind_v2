@@ -28,7 +28,11 @@ from iris.runtime.observations.ingress import (
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.presence.store import InMemoryPresenceStore
-from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
+from iris.runtime.service import (
+    IntegratingObservationPipeline,
+    IrisRuntimeService,
+    ObservationEnvelope,
+)
 from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
 
@@ -150,7 +154,7 @@ def _service(
         integrators.append(SpaceOccupancyIntegrator(occupancy_store, trust_policy, _now))
     return IrisRuntimeService(
         IrisApp(steps=(_UnexpectedCognitiveStep(),)),
-        integrators=integrators,
+        observation_pipeline=IntegratingObservationPipeline(tuple(integrators)),
     )
 
 

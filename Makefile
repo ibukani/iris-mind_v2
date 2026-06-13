@@ -1,4 +1,4 @@
-.PHONY: check verify quick ai-check ai-quick ai-context ai-report ai-arch ai-test-target e2e lint lint-fix format format-write type pyright arch test coverage deps doctor ci generate-protos help
+.PHONY: check verify quick ai-check ai-quick ai-context ai-report ai-arch ai-test-target e2e lint lint-fix format format-write type pyright arch imports semgrep static-arch test coverage deps doctor ci generate-protos help
 
 DEFAULT_TEST_TARGETS := tests/adapters tests/architecture tests/cognitive tests/contracts tests/core tests/features tests/presentation tests/runtime tests/scripts tests/test_oneturn_flow.py
 
@@ -93,6 +93,14 @@ pyright:
 
 arch:
 	uv run pytest tests/architecture -q
+
+imports:
+	uv run lint-imports
+
+semgrep:
+	uv run semgrep scan --config semgrep.yml --error
+
+static-arch: imports semgrep arch
 
 test:
 	uv run pytest $(DEFAULT_TEST_TARGETS)

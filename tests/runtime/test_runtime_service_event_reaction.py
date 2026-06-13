@@ -30,7 +30,11 @@ from iris.runtime.observations.ingress import (
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.server import build_runtime_service
-from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
+from iris.runtime.service import (
+    IntegratingObservationPipeline,
+    IrisRuntimeService,
+    ObservationEnvelope,
+)
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.event_reaction import wire_event_reaction_runner
@@ -401,7 +405,7 @@ async def test_blocking_output_gate_prevents_sendable_reaction() -> None:
 
     service = IrisRuntimeService(
         app,
-        integrators=[presence_integrator],
+        observation_pipeline=IntegratingObservationPipeline((presence_integrator,)),
         workspace_context_assembler=workspace_context_assembler,
         activity_event_reaction_handler=handler,
     )

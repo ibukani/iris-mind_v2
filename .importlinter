@@ -1,0 +1,45 @@
+[importlinter]
+root_package = iris
+
+[importlinter:contract:contracts_are_pure]
+name = contracts must not import implementation layers
+type = forbidden
+source_modules =
+    iris.contracts
+forbidden_modules =
+    iris.cognitive
+    iris.runtime
+    iris.adapters
+    iris.features
+
+[importlinter:contract:cognitive_is_pure]
+name = cognitive must not import runtime, adapters, or features
+type = forbidden
+source_modules =
+    iris.cognitive
+forbidden_modules =
+    iris.runtime
+    iris.adapters
+    iris.features
+
+[importlinter:contract:features_do_not_import_runtime_or_adapters]
+name = features must not import runtime or adapters
+type = forbidden
+source_modules =
+    iris.features
+forbidden_modules =
+    iris.runtime
+    iris.adapters
+
+[importlinter:contract:runtime_service_does_not_import_low_level_effects]
+name = runtime service must not import low level runtime effects
+type = forbidden
+source_modules =
+    iris.runtime.service
+forbidden_modules =
+    iris.runtime.activity
+    iris.runtime.presence
+    iris.runtime.spaces
+    iris.runtime.event_reaction.planner
+    iris.runtime.event_reaction.policy
+    iris.runtime.event_reaction.runner

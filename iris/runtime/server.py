@@ -34,7 +34,7 @@ from iris.runtime.event_reaction.handler import ActivityEventReactionHandler
 from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
-from iris.runtime.service import IrisRuntimeService
+from iris.runtime.service import IntegratingObservationPipeline, IrisRuntimeService
 from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.availability import wire_availability_resolver
@@ -108,11 +108,13 @@ def build_runtime_service(
     )
     return IrisRuntimeService(
         app,
-        integrators=[
-            activity_integrator,
-            presence_integrator,
-            occupancy_integrator,
-        ],
+        observation_pipeline=IntegratingObservationPipeline(
+            (
+                activity_integrator,
+                presence_integrator,
+                occupancy_integrator,
+            )
+        ),
         workspace_context_assembler=workspace_context_assembler,
         activity_event_reaction_handler=activity_event_reaction_handler,
     )

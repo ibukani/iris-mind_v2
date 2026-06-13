@@ -27,7 +27,7 @@ from iris.runtime.wiring.presentation import wire_action_safety_gate, wire_outpu
 if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
     from iris.adapters.memory.ports import MemoryStore
-    from iris.adapters.memory.vector import EmbeddingFunction
+    from iris.adapters.memory.vector_index import EmbeddingFunction
     from iris.cognitive.memory.retrieval import MemoryRetriever
     from iris.runtime.config import IrisRuntimeConfig
 
