@@ -164,7 +164,7 @@ ExternalSpaceRef(provider="discord", provider_space_ref="123")
 
 **注意事項**:
 - この機能は `InteractionSpace` 自体の永続化を導入しません。
-- 現在の在室者は `InteractionSpace` の責務ではありません。後続PRで導入予定の `SpaceOccupancyStore` が正本を担います。
+- 現在の在室者は `InteractionSpace` の責務ではありません。`SpaceOccupancyStore` が正本を担います。
 - ルームの会話履歴（room conversation history）の保存機能も導入しません。
 - メモリと関係性（Relationship）の永続化は、引き続きアクター中心（Actor-centered）です。
 

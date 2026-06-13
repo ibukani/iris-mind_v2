@@ -1,0 +1,113 @@
+"""presence integrator tests。"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from iris.contracts.activity import ActivityKind
+from iris.contracts.identity import ActorKind, Identity
+from iris.contracts.observations import (
+    ActivityEventObservation,
+    ObservationContext,
+    ObservationKind,
+    PresenceSignalObservation,
+)
+from iris.contracts.presence import PresenceStatus
+from iris.core.ids import ActorId, ObservationId, SessionId
+from iris.runtime.observations.trust import ObservationTrustPolicy
+from iris.runtime.presence.integrator import PresenceIntegrator
+from iris.runtime.presence.store import InMemoryPresenceStore
+
+_OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
+_RECEIVED_AT = _OCCURRED_AT + timedelta(seconds=1)
+
+
+@pytest.mark.anyio
+async def test_presence_integrator_records_trusted_signal() -> None:
+    """Trusted presence claimが内部snapshotへ変換されることを確認する。"""
+    store = InMemoryPresenceStore()
+    integrator = _integrator(store)
+    expires_at = _OCCURRED_AT + timedelta(minutes=5)
+
+    await integrator.integrate_observation(_presence_signal(expires_at=expires_at))
+
+    snapshot = await store.get_presence_for_actor(
+        ActorId("actor-1"),
+        now=_OCCURRED_AT,
+    )
+    assert snapshot is not None
+    assert snapshot.status is PresenceStatus.ONLINE
+    assert snapshot.observed_at == _OCCURRED_AT
+    assert snapshot.received_at == _RECEIVED_AT
+    assert snapshot.expires_at == expires_at
+
+
+@pytest.mark.anyio
+async def test_presence_integrator_rejects_untrusted_or_actorless_signal() -> None:
+    """untrustedまたはresolved actorなしのsignalを保存しないことを確認する。"""
+    store = InMemoryPresenceStore()
+    integrator = _integrator(store)
+
+    await integrator.integrate_observation(_presence_signal(source="untrusted"))
+    await integrator.integrate_observation(_presence_signal(include_actor=False))
+
+    assert await store.get_presence_for_actor(ActorId("actor-1"), now=_OCCURRED_AT) is None
+
+
+@pytest.mark.anyio
+async def test_presence_integrator_ignores_activity_event() -> None:
+    """Activity eventがPresenceStoreを更新しないことを確認する。"""
+    store = InMemoryPresenceStore()
+    integrator = _integrator(store)
+    await integrator.integrate_observation(
+        ActivityEventObservation(
+            observation_id=ObservationId("obs-activity"),
+            session_id=SessionId("session-1"),
+            context=ObservationContext(source="internal"),
+            occurred_at=_OCCURRED_AT,
+            kind=ObservationKind.ACTIVITY_EVENT,
+            activity_kind=ActivityKind.SYSTEM_INTERACTION,
+        )
+    )
+
+    assert await store.get_presence_for_actor(ActorId("actor-1"), now=_OCCURRED_AT) is None
+
+
+def _integrator(store: InMemoryPresenceStore) -> PresenceIntegrator:
+    policy = ObservationTrustPolicy(
+        trusted_activity_sources=frozenset(),
+        trusted_presence_sources=frozenset({"internal"}),
+    )
+    return PresenceIntegrator(store=store, trust_policy=policy, now=_now)
+
+
+def _presence_signal(
+    *,
+    source: str = "internal",
+    include_actor: bool = True,
+    expires_at: datetime | None = None,
+) -> PresenceSignalObservation:
+    actor = (
+        Identity(
+            actor_id=ActorId("actor-1"),
+            actor_kind=ActorKind.HUMAN,
+            display_name="Actor",
+        )
+        if include_actor
+        else None
+    )
+    return PresenceSignalObservation(
+        observation_id=ObservationId("obs-presence"),
+        session_id=SessionId("session-1"),
+        context=ObservationContext(actor=actor, source=source),
+        occurred_at=_OCCURRED_AT,
+        kind=ObservationKind.PRESENCE_SIGNAL,
+        status=PresenceStatus.ONLINE,
+        expires_at=expires_at,
+    )
+
+
+def _now() -> datetime:
+    return _RECEIVED_AT

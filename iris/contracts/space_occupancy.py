@@ -1,9 +1,8 @@
-"""外部providerから見えるactor presence契約。"""
+"""live interaction spaceの在室状態契約。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from iris.core.metadata import EMPTY_METADATA, immutable_metadata
@@ -12,35 +11,30 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from datetime import datetime
 
-    from iris.core.ids import AccountId, ActorId, DeviceId
-
-
-class PresenceStatus(StrEnum):
-    """外部providerから見えるactorのpresence状態。"""
-
-    UNKNOWN = "unknown"
-    ONLINE = "online"
-    OFFLINE = "offline"
-    AWAY = "away"
-    IDLE = "idle"
-    DO_NOT_DISTURB = "do_not_disturb"
-    INVISIBLE = "invisible"
+    from iris.core.ids import AccountId, ActorId, DeviceId, SpaceId
 
 
 @dataclass(frozen=True)
-class PresenceSnapshot:
-    """受理済みprovider-visible actor presenceの内部snapshot。"""
+class SpaceOccupant:
+    """live interaction spaceに在室していると判断したactor。"""
 
-    actor_id: ActorId | None
+    actor_id: ActorId
     account_id: AccountId | None
     device_id: DeviceId | None
-    source: str | None
-    status: PresenceStatus
-    observed_at: datetime
-    received_at: datetime
+    joined_at: datetime
+    last_seen_at: datetime
     expires_at: datetime | None = None
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:
         """補助metadataを不変なmapping proxyとして防御的にコピーする。"""
         object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+
+
+@dataclass(frozen=True)
+class SpaceOccupancySnapshot:
+    """spaceごとの受理済みcurrent occupant snapshot。"""
+
+    space_id: SpaceId
+    occupants: tuple[SpaceOccupant, ...]
+    updated_at: datetime
