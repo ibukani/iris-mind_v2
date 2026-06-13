@@ -39,8 +39,6 @@ def _occupant(
 ) -> SpaceOccupant:
     return SpaceOccupant(
         actor_id=ActorId("actor-1"),
-        account_id=None,
-        device_id=None,
         joined_at=datetime(2026, 6, 13, tzinfo=UTC),
         last_seen_at=datetime(2026, 6, 13, 0, 0, 1, tzinfo=UTC),
         metadata=metadata or {},

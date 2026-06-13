@@ -100,8 +100,6 @@ async def test_assemble_collects_activity_presence_and_occupancy() -> None:
         space_id=SpaceId("space-assembler"),
         occupant=SpaceOccupant(
             actor_id=ActorId("actor-assembler"),
-            account_id=None,
-            device_id=None,
             joined_at=_OCCURRED_AT,
             last_seen_at=_NOW,
             expires_at=None,

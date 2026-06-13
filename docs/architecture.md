@@ -607,6 +607,8 @@ metadata: Mapping[str, str]
 
 `InteractionSpace` は現在の在室者を保持せず、可変なルーム状態の正本にはならない。現在の在室者は `SpaceOccupancyStore` が単独で管理する。`WorkspaceFrame` が将来1ターン用の参加者snapshotを持つ場合も、`InteractionSpace` 自体をoccupancyの正本にはしない。
 
+`SpaceOccupant` は actor-level の現在在室メンバーシップのみを表す。account_id / device_id は `IdentityResolver` / `AccountStore` / `Identity` 層が所有する。`ActivityEventRecord` や `PresenceSnapshot` は provenance として account_id / device_id を保持してよいが、`SpaceOccupant` では identity-link を重複して持たない。
+
 `AccountProfile` は外部account identityを表す契約。
 `account_id`、`provider`、`provider_subject`、`display_name`、任意の `linked_actor_id` を持つ。
 AccountId はActorIdへリンクするcontext identifierであり、関係性やmemoryのownerではない。

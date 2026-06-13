@@ -159,6 +159,8 @@ ActivityEventObservation(VOICE_JOINED / VOICE_LEFT)
 
 `ActivityEventRecord` は受理済みruntime eventであり、長期記憶ではない。`ActivityJournal` はデフォルトでbounded runtime journalで、永続conversation historyやmemory candidate storageとして扱わない。`ActivityProjectionStore` はactor/spaceごとのlatest activity projectionだけを持つ。Presenceからvoice occupancyを推論しない。`InteractionSpace` にparticipantsを戻さない。
 
+`SpaceOccupant` は actor-level の現在在室メンバーシップのみを表す。account_id / device_id は `IdentityResolver` / `AccountStore` / `Identity` 層が所有する。`ActivityEventRecord` や `PresenceSnapshot` は provenance として account_id / device_id を保持してよいが、`SpaceOccupant` では identity-link を重複して持たない。
+
 state-onlyのactivity/presence observationはintegration後に `PresentedOutput(text=None)` を返し、通常のtext response生成へ流さない。EventReactionは未実装。
 
 現在のstoreはin-memoryのみ。将来の永続activity logは別adapterで実装し、memory extractionはraw `ActivityEventRecord` ではなく明示的な `MemoryCandidate` eventから行う。PR4 で availability と workspace context assembly を実装済み。event reaction、delivery target、persistenceは未実装。

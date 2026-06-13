@@ -104,8 +104,6 @@ async def test_runtime_service_passes_assembled_situation_context_to_app() -> No
         space_id=SpaceId("space-svc"),
         occupant=SpaceOccupant(
             actor_id=ActorId("actor-svc"),
-            account_id=None,
-            device_id=None,
             joined_at=_OCCURRED_AT,
             last_seen_at=_NOW,
             expires_at=None,

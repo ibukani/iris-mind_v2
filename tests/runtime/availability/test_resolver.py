@@ -292,8 +292,6 @@ def test_space_occupancy_is_ignored_for_now(
         occupants=(
             SpaceOccupant(
                 actor_id=ActorId("other"),
-                account_id=None,
-                device_id=None,
                 joined_at=now,
                 last_seen_at=now,
                 expires_at=None,
