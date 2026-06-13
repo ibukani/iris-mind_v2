@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from iris.adapters.memory import langchain
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     import pytest
 
 
-@dataclass(frozen=True)
+@dataclass
 class StubDocument:
     """Stub document for testing LangChain document factory wiring."""
 
@@ -78,7 +78,8 @@ def test_wire_langchain_memory_store_is_explicit_adapter_wiring(
     """Verify wire_langchain_memory_store returns a LangChainMemoryStore instance."""
 
     def load_document_factory() -> langchain.DocumentFactory:
-        return cast("langchain.DocumentFactory", make_document)
+        assert callable(make_document)
+        return make_document
 
     monkeypatch.setattr(langchain, "_load_document_factory", load_document_factory)
 

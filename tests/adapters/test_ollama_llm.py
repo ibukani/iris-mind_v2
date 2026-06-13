@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from typing import cast
-
 import httpx
 import pytest
 
@@ -21,7 +19,7 @@ type _JsonObject = dict[str, _JsonValue]
 class _RecordedRequest:
     method: str = ""
     path: str = ""
-    payload: _JsonObject | None = None
+    payload: dict[str, object] | None = None
 
 
 @pytest.mark.anyio
@@ -208,7 +206,11 @@ async def test_ollama_client_raises_on_http_exception() -> None:
         await client.generate(LLMRequest(model="qwen3:8b", messages=()))
 
 
-def _load_json_object(request: httpx.Request) -> _JsonObject:
+def _load_json_object(request: httpx.Request) -> dict[str, object]:
     payload = json.loads(request.content.decode())
     assert isinstance(payload, dict)
-    return cast("_JsonObject", payload)
+    result: dict[str, object] = {}
+    for k, v in payload.items():
+        assert isinstance(k, str)
+        result[k] = v
+    return result

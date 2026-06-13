@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 import tomllib
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, override
 
 import pytest
 
@@ -700,7 +700,10 @@ def test_example_config_contains_no_secret_like_keys(config_path: Path) -> None:
     def _walk(value: object, path: str) -> tuple[str, ...]:
         if not isinstance(value, dict):
             return ()
-        table = cast("dict[str, object]", value)
+        table: dict[str, object] = {}
+        for k, v in value.items():
+            assert isinstance(k, str)
+            table[k] = v
         violations: list[str] = []
         for key, child in table.items():
             child_path = f"{path}.{key}" if path else key

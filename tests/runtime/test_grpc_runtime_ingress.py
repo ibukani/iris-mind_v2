@@ -453,11 +453,11 @@ class _GrpcRuntimeHarness:
         self._server: grpc.aio.Server | None = None
         self._channel: grpc.aio.Channel | None = None
 
-    async def __aenter__(self) -> runtime_pb2_grpc.IrisRuntimeServiceStub:
+    async def __aenter__(self) -> runtime_pb2_grpc.IrisRuntimeServiceAsyncStub:
         """Start server and return a connected stub.
 
         Returns:
-            runtime_pb2_grpc.IrisRuntimeServiceStub: Connected gRPC stub.
+            runtime_pb2_grpc.IrisRuntimeServiceAsyncStub: Connected gRPC stub.
         """
         server = grpc.aio.server()
         mapper = GrpcRuntimeMapper(

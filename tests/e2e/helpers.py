@@ -9,7 +9,7 @@ import os
 import shutil
 import socket
 import subprocess  # noqa: S404 -- E2E helpers manage fixed local runtime subprocesses.
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from google.protobuf.timestamp_pb2 import Timestamp
 import grpc
@@ -107,7 +107,7 @@ def create_runtime_channel(port: int) -> grpc.aio.Channel:
     return grpc.aio.insecure_channel(f"{_RUNTIME_HOST}:{port}")
 
 
-def create_runtime_stub(channel: grpc.aio.Channel) -> runtime_pb2_grpc.IrisRuntimeServiceStub:
+def create_runtime_stub(channel: grpc.aio.Channel) -> runtime_pb2_grpc.IrisRuntimeServiceAsyncStub:
     """Create an Iris runtime gRPC stub.
 
     Returns:
@@ -230,7 +230,7 @@ async def _collect_runtime_output(runtime: RuntimeProcess) -> None:
 async def _poll_runtime_ready(
     *,
     runtime: RuntimeProcess,
-    stub: runtime_pb2_grpc.IrisRuntimeServiceStub,
+    stub: runtime_pb2_grpc.IrisRuntimeServiceAsyncStub,
     deadline: float,
 ) -> runtime_pb2.GetRuntimeInfoResponse:
     last_error: str | None = None
@@ -244,7 +244,8 @@ async def _poll_runtime_ready(
                 grpc_call(stub.GetRuntimeInfo(runtime_pb2.GetRuntimeInfoRequest())),
                 timeout=1.0,
             )
-            return cast("runtime_pb2.GetRuntimeInfoResponse", response)
+            assert isinstance(response, runtime_pb2.GetRuntimeInfoResponse)
+            return response
         except grpc.aio.AioRpcError as exc:
             last_error = _format_rpc_error(exc.code(), exc.details())
         except TimeoutError as exc:

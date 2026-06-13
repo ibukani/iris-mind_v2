@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
@@ -42,14 +40,16 @@ def test_wire_fake_llm_client_with_responses() -> None:
 def test_wire_openai_llm_client_returns_client() -> None:
     """wire_openai_llm_client returns an OpenAILLMClient."""
     config = OpenAIConfig(model="gpt-test", api_key="test-key")
-    client = cast("OpenAILLMClient", wire_openai_llm_client(config))
+    client = wire_openai_llm_client(config)
+    assert isinstance(client, OpenAILLMClient)
     assert get_private_attr_path_as(client, ("_config", "model"), str) == "gpt-test"
 
 
 def test_wire_ollama_llm_client_returns_client() -> None:
     """wire_ollama_llm_client returns an OllamaLLMClient."""
     config = OllamaConfig(model="qwen3:8b")
-    client = cast("OllamaLLMClient", wire_ollama_llm_client(config))
+    client = wire_ollama_llm_client(config)
+    assert isinstance(client, OllamaLLMClient)
     assert get_private_attr_path_as(client, ("_config", "model"), str) == "qwen3:8b"
 
 

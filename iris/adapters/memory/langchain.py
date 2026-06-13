@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib
-from typing import TYPE_CHECKING, Protocol, cast, override
+from typing import TYPE_CHECKING, Protocol, override, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -11,7 +11,6 @@ if TYPE_CHECKING:
 from iris.adapters.memory.ports import MemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
 from iris.core.ids import ActorId, SpaceId
-
 _MEMORY_ID_KEY = "iris_memory_id"
 _ACTOR_ID_KEY = "iris_actor_id"
 _SPACE_ID_KEY = "iris_space_id"
@@ -56,10 +55,12 @@ class DocumentFactory(Protocol):
         ...
 
 
+@runtime_checkable
 class _AddDocumentsStore(Protocol):
     def add_documents(self, documents: Sequence[_DocumentLike]) -> object: ...
 
 
+@runtime_checkable
 class _AddTextsStore(Protocol):
     def add_texts(
         self,
@@ -69,6 +70,7 @@ class _AddTextsStore(Protocol):
     ) -> object: ...
 
 
+@runtime_checkable
 class _SimilaritySearchWithScoreStore(Protocol):
     def similarity_search_with_score(
         self,
@@ -78,6 +80,7 @@ class _SimilaritySearchWithScoreStore(Protocol):
     ) -> Sequence[tuple[_DocumentLike, float]]: ...
 
 
+@runtime_checkable
 class _SimilaritySearchStore(Protocol):
     def similarity_search(self, query: str, *, k: int) -> Sequence[_DocumentLike]: ...
 
@@ -121,13 +124,13 @@ class LangChainMemoryStore(MemoryStore):
             LangChainMemoryStoreError: add_documents/add_texts 非サポート時。
         """
         metadata = _metadata_from_record(record)
-        if hasattr(self._vector_store, "add_documents"):
+        if isinstance(self._vector_store, _AddDocumentsStore):
             document = self._document_factory(page_content=record.text, metadata=metadata)
-            cast("_AddDocumentsStore", self._vector_store).add_documents((document,))
+            self._vector_store.add_documents((document,))
             return
 
-        if hasattr(self._vector_store, "add_texts"):
-            cast("_AddTextsStore", self._vector_store).add_texts(
+        if isinstance(self._vector_store, _AddTextsStore):
+            self._vector_store.add_texts(
                 (record.text,),
                 (metadata,),
                 (str(record.id),),
@@ -149,17 +152,14 @@ class LangChainMemoryStore(MemoryStore):
         if query.limit <= 0:
             return ()
 
-        if hasattr(self._vector_store, "similarity_search_with_score"):
-            raw_results = cast(
-                "_SimilaritySearchWithScoreStore",
-                self._vector_store,
-            ).similarity_search_with_score(query.text, k=query.limit)
+        if isinstance(self._vector_store, _SimilaritySearchWithScoreStore):
+            raw_results = self._vector_store.similarity_search_with_score(query.text, k=query.limit)
             results = tuple(
                 MemorySearchResult(record=_record_from_document(document), score=float(score))
                 for document, score in raw_results
             )
-        elif hasattr(self._vector_store, "similarity_search"):
-            documents = cast("_SimilaritySearchStore", self._vector_store).similarity_search(
+        elif isinstance(self._vector_store, _SimilaritySearchStore):
+            documents = self._vector_store.similarity_search(
                 query.text,
                 k=query.limit,
             )
@@ -177,11 +177,11 @@ class LangChainMemoryStore(MemoryStore):
 
 def _load_document_factory() -> DocumentFactory:
     try:
-        document_cls = importlib.import_module("langchain_core.documents").Document
+        document_cls: DocumentFactory = importlib.import_module("langchain_core.documents").Document
     except ImportError as exc:  # pragma: no cover - covered with monkeypatched loader
         raise LangChainMemoryStoreUnavailableError(_ERR_REQUIRES_LANGCHAIN_CORE) from exc
 
-    return cast("DocumentFactory", document_cls)
+    return document_cls
 
 
 def _metadata_from_record(record: MemoryRecord) -> Mapping[str, object]:

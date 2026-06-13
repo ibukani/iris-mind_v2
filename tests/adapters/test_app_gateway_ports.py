@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from iris.adapters.app_gateway.ports import AppGateway
 from iris.contracts.actions import ActionResult, ActionStatus, AppAction
@@ -111,6 +111,5 @@ def test_protocol_rejects_missing_methods() -> None:
 
 def test_protocol_static_method_callable_via_class() -> None:
     """Static methods on the stub are callable from the class itself."""
-    gateway_cls = cast("type", _StubGateway)
-    assert hasattr(gateway_cls, "receive_observation")
-    assert hasattr(gateway_cls, "execute")
+    assert hasattr(_StubGateway, "receive_observation")
+    assert hasattr(_StubGateway, "execute")

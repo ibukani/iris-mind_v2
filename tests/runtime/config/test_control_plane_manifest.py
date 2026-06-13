@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import tomllib
-from typing import Any, cast
+from typing import Any
 
 from iris.runtime.config import load_runtime_config
 
@@ -105,7 +105,13 @@ def _load_manifest() -> dict[str, Any]:
 
 def _editable_configs() -> list[dict[str, Any]]:
     manifest = _load_manifest()
-    return cast("list[dict[str, Any]]", manifest.get("editable_configs", []))
+    configs = manifest.get("editable_configs", [])
+    assert isinstance(configs, list)
+    validated: list[dict[str, Any]] = []
+    for c in configs:
+        assert isinstance(c, dict)
+        validated.append(c)
+    return validated
 
 
 def _find_editable_config(
