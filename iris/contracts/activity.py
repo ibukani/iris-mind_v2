@@ -14,5 +14,4 @@ class ActivityKind(StrEnum):
     APP_CLOSED = "app_closed"
     VOICE_JOINED = "voice_joined"
     VOICE_LEFT = "voice_left"
-    SPACE_MESSAGE = "space_message"
     SYSTEM_INTERACTION = "system_interaction"

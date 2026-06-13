@@ -8,11 +8,11 @@ enum SpaceKind {
   // Text-based channel space, such as a Discord text channel.
   SPACE_KIND_TEXT_CHANNEL = 2;
   SPACE_KIND_THREAD = 3;
-  // Live voice space, such as a Discord voice channel.
-  SPACE_KIND_VOICE_CHANNEL = 4;
   // Generic room-like space.
-  SPACE_KIND_ROOM = 5;
-  SPACE_KIND_BROADCAST = 6;
+  SPACE_KIND_ROOM = 4;
+  SPACE_KIND_BROADCAST = 5;
+  // Live voice space, such as a Discord voice channel.
+  SPACE_KIND_VOICE_CHANNEL = 6;
 }
 
 // External interaction context. It is contextual scope, not the primary owner

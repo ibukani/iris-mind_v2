@@ -35,6 +35,15 @@ from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_p
 from iris.generated.iris.runtime.v1 import runtime_pb2
 from iris.runtime.service import ObservationEnvelope
 
+_ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
+    {
+        ActivityKind.ACTOR_TYPING_STARTED,
+        ActivityKind.ACTOR_TYPING_STOPPED,
+        ActivityKind.VOICE_JOINED,
+        ActivityKind.VOICE_LEFT,
+    }
+)
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -125,18 +134,24 @@ class GrpcRuntimeMapper:
             activity_payload = observation.activity_event
             if activity_payload.provider_sequence < 0:
                 _raise_mapping_error("activity_event.provider_sequence must not be negative")
+            activity_kind = _activity_kind_from_proto(activity_payload.activity_kind)
+            _require_activity_subject(
+                activity_kind=activity_kind,
+                context=context,
+            )
             return ActivityEventObservation(
                 observation_id=ObservationId(observation.observation_id),
                 session_id=SessionId(observation.session_id),
                 context=context,
                 occurred_at=occurred_at,
                 kind=kind,
-                activity_kind=_activity_kind_from_proto(activity_payload.activity_kind),
+                activity_kind=activity_kind,
                 provider_event_id=activity_payload.provider_event_id or None,
                 provider_sequence=activity_payload.provider_sequence or None,
                 metadata=_metadata_dict(activity_payload.metadata),
             )
         if kind is ObservationKind.PRESENCE_SIGNAL:
+            _require_presence_subject(context)
             presence_payload = observation.presence_signal
             expires_at = (
                 _datetime_from_proto_timestamp(
@@ -425,6 +440,24 @@ def _validate_observation_kind_and_payload(
         )
 
 
+def _require_presence_subject(context: ObservationContext) -> None:
+    if context.actor is None and context.account_id is None:
+        _raise_mapping_error("presence_signal requires actor or account_id")
+
+
+def _require_activity_subject(
+    *,
+    activity_kind: ActivityKind,
+    context: ObservationContext,
+) -> None:
+    if (
+        activity_kind in _ACTOR_SCOPED_ACTIVITY_KINDS
+        and context.actor is None
+        and context.account_id is None
+    ):
+        _raise_mapping_error(f"{activity_kind.value} requires actor or account_id")
+
+
 def _observation_kind_from_proto(
     kind: observations_pb2.ObservationKind.ValueType,
 ) -> ObservationKind:
@@ -450,7 +483,6 @@ def _activity_kind_from_proto(
         observations_pb2.ACTIVITY_KIND_APP_CLOSED: ActivityKind.APP_CLOSED,
         observations_pb2.ACTIVITY_KIND_VOICE_JOINED: ActivityKind.VOICE_JOINED,
         observations_pb2.ACTIVITY_KIND_VOICE_LEFT: ActivityKind.VOICE_LEFT,
-        observations_pb2.ACTIVITY_KIND_SPACE_MESSAGE: ActivityKind.SPACE_MESSAGE,
         observations_pb2.ACTIVITY_KIND_SYSTEM_INTERACTION: ActivityKind.SYSTEM_INTERACTION,
     }
     try:

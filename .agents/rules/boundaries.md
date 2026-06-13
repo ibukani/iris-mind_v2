@@ -15,6 +15,10 @@ Examples:
 
 Do not pass Discord, Twitch, voice, HTTP, or CLI objects into `cognitive/`.
 
+`ActorMessageObservation` is the only actor text-message ingress.
+Actor-scoped activity and all presence signals require a resolved actor/account subject.
+Activity and presence observations are external claims, not commands that mutate runtime state.
+
 ## Cognitive boundary
 
 `cognitive/` reads typed contracts and produces an `ActionPlan`. It must not know how an external app sends, speaks, displays, or schedules an action.

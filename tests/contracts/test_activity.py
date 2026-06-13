@@ -14,6 +14,5 @@ def test_activity_kind_exposes_non_message_external_events() -> None:
         "app_closed",
         "voice_joined",
         "voice_left",
-        "space_message",
         "system_interaction",
     }

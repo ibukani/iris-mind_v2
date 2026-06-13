@@ -30,17 +30,17 @@ class _ObservationKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Obser
     DESCRIPTOR: _descriptor.EnumDescriptor
     OBSERVATION_KIND_UNSPECIFIED: _ObservationKind.ValueType  # 0
     OBSERVATION_KIND_ACTOR_MESSAGE: _ObservationKind.ValueType  # 1
-    OBSERVATION_KIND_IDLE_TICK: _ObservationKind.ValueType  # 2
-    OBSERVATION_KIND_ACTIVITY_EVENT: _ObservationKind.ValueType  # 3
-    OBSERVATION_KIND_PRESENCE_SIGNAL: _ObservationKind.ValueType  # 4
+    OBSERVATION_KIND_IDLE_TICK: _ObservationKind.ValueType  # 3
+    OBSERVATION_KIND_ACTIVITY_EVENT: _ObservationKind.ValueType  # 6
+    OBSERVATION_KIND_PRESENCE_SIGNAL: _ObservationKind.ValueType  # 7
 
 class ObservationKind(_ObservationKind, metaclass=_ObservationKindEnumTypeWrapper): ...
 
 OBSERVATION_KIND_UNSPECIFIED: ObservationKind.ValueType  # 0
 OBSERVATION_KIND_ACTOR_MESSAGE: ObservationKind.ValueType  # 1
-OBSERVATION_KIND_IDLE_TICK: ObservationKind.ValueType  # 2
-OBSERVATION_KIND_ACTIVITY_EVENT: ObservationKind.ValueType  # 3
-OBSERVATION_KIND_PRESENCE_SIGNAL: ObservationKind.ValueType  # 4
+OBSERVATION_KIND_IDLE_TICK: ObservationKind.ValueType  # 3
+OBSERVATION_KIND_ACTIVITY_EVENT: ObservationKind.ValueType  # 6
+OBSERVATION_KIND_PRESENCE_SIGNAL: ObservationKind.ValueType  # 7
 Global___ObservationKind: _TypeAlias = ObservationKind  # noqa: Y015
 
 class _ActivityKind:
@@ -56,7 +56,6 @@ class _ActivityKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Activity
     ACTIVITY_KIND_APP_CLOSED: _ActivityKind.ValueType  # 4
     ACTIVITY_KIND_VOICE_JOINED: _ActivityKind.ValueType  # 5
     ACTIVITY_KIND_VOICE_LEFT: _ActivityKind.ValueType  # 6
-    ACTIVITY_KIND_SPACE_MESSAGE: _ActivityKind.ValueType  # 7
     ACTIVITY_KIND_SYSTEM_INTERACTION: _ActivityKind.ValueType  # 8
 
 class ActivityKind(_ActivityKind, metaclass=_ActivityKindEnumTypeWrapper): ...
@@ -68,7 +67,6 @@ ACTIVITY_KIND_APP_OPENED: ActivityKind.ValueType  # 3
 ACTIVITY_KIND_APP_CLOSED: ActivityKind.ValueType  # 4
 ACTIVITY_KIND_VOICE_JOINED: ActivityKind.ValueType  # 5
 ACTIVITY_KIND_VOICE_LEFT: ActivityKind.ValueType  # 6
-ACTIVITY_KIND_SPACE_MESSAGE: ActivityKind.ValueType  # 7
 ACTIVITY_KIND_SYSTEM_INTERACTION: ActivityKind.ValueType  # 8
 Global___ActivityKind: _TypeAlias = ActivityKind  # noqa: Y015
 

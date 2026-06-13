@@ -119,6 +119,19 @@ cognitive 層は `IdentityResolver` も生成protoもimportせず、解決済み
 resolverが未注入のservicerに `account_ref` が来た場合は `INVALID_ARGUMENT` を返す。
 `actor` と `account_ref` の両方が来た場合、および `account_ref` と `account_id` の両方が来た場合は `INVALID_ARGUMENT` を返す（曖昧状態）。
 
+### Typed Activity / Presence Ingress
+
+`ActorMessageObservation` はactor text messageの唯一のtyped ingress。
+`ActivityEventObservation` は非message activityの報告であり、text messageを表さない。
+typing開始/終了、voice join/leaveなどactor-scoped activityは、解決済みactorまたはaccount subjectを必須とする。
+
+`PresenceSignalObservation` はprovider/clientが観測したactor/account-scoped presence claim。
+解決済みactorまたはaccount subjectがないsignalはgRPC mapperが拒否する。
+
+Activity/Presence observationはIris内部stateを直接変更するcommandではない。
+runtime trust判定、recording、Activity/Presence/SpaceOccupancy state更新は後続PRへ委譲する。
+user-controlled metadataだけをtrusted-source判定に使わない。
+
 ### ExternalSpaceRef
 
 Space は主要な永続的会話履歴ではなく、Observation のためのランタイムコンテキストです。
