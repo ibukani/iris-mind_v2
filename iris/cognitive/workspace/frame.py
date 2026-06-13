@@ -7,10 +7,14 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from iris.contracts.actions import ActionPlan
+    from iris.contracts.activity import ActivityEventRecord
+    from iris.contracts.availability import AvailabilitySnapshot
     from iris.contracts.identity import Identity
     from iris.contracts.memory import MemorySearchResult
     from iris.contracts.observations import Observation
     from iris.contracts.policy import ActionPreference, PolicyConstraint
+    from iris.contracts.presence import PresenceSnapshot
+    from iris.contracts.space_occupancy import SpaceOccupancySnapshot
     from iris.contracts.spaces import InteractionSpace
     from iris.core.ids import AccountId, ActorId, DeviceId, SpaceId
 
@@ -81,6 +85,16 @@ class SpaceContextSnapshot:
 
 
 @dataclass(frozen=True)
+class SituationContextSnapshot:
+    """現在の認知ターン向けに、ランタイム状態から組み立てられた状況スナップショット。"""
+
+    latest_activity: ActivityEventRecord | None = None
+    presence: PresenceSnapshot | None = None
+    space_occupancy: SpaceOccupancySnapshot | None = None
+    availability: AvailabilitySnapshot | None = None
+
+
+@dataclass(frozen=True)
 class WorkspaceFrame:
     """1 ターン分の、型付きで不変なワーキングメモリスナップショット。"""
 
@@ -96,6 +110,9 @@ class WorkspaceFrame:
     policy_summary: str | None = None
     actor_context: ActorContextSnapshot = field(default_factory=ActorContextSnapshot)
     space_context: SpaceContextSnapshot = field(default_factory=SpaceContextSnapshot)
+    situation_context: SituationContextSnapshot = field(
+        default_factory=SituationContextSnapshot,
+    )
 
 
 def interpreted_input_text(frame: WorkspaceFrame) -> str | None:

@@ -51,8 +51,6 @@ class SpaceOccupancyIntegrator:
                     space_id=context.space_id,
                     occupant=SpaceOccupant(
                         actor_id=context.actor.actor_id,
-                        account_id=context.account_id,
-                        device_id=context.device_id,
                         joined_at=activity.occurred_at,
                         last_seen_at=self.now(),
                         metadata=activity.metadata,

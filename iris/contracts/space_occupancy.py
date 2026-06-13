@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from datetime import datetime
 
-    from iris.core.ids import AccountId, ActorId, DeviceId, SpaceId
+    from iris.core.ids import ActorId, SpaceId
 
 
 @dataclass(frozen=True)
@@ -19,8 +19,6 @@ class SpaceOccupant:
     """live interaction spaceに在室していると判断したactor。"""
 
     actor_id: ActorId
-    account_id: AccountId | None
-    device_id: DeviceId | None
     joined_at: datetime
     last_seen_at: datetime
     expires_at: datetime | None = None

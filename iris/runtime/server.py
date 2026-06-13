@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING
@@ -12,10 +13,15 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import grpc
+
+    from iris.runtime.app import IrisApp
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
+from iris.runtime.activity.integrator import ActivityIntegrator
 from iris.runtime.config import (
     IrisRuntimeConfig,
     RuntimeConfigOverrides,
@@ -25,13 +31,15 @@ from iris.runtime.config import (
 from iris.runtime.config.init import init_runtime_config, runtime_config_template
 from iris.runtime.config.root import all_model_slots_are_fake
 from iris.runtime.observability.logging import configure_runtime_logging
+from iris.runtime.observations.trust import ObservationTrustPolicy
+from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.service import IrisRuntimeService
+from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.wiring.app import build_app_from_config
+from iris.runtime.wiring.availability import wire_availability_resolver
+from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.grpc import create_grpc_server
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
-
-if TYPE_CHECKING:
-    from iris.runtime.app import IrisApp
 
 
 @dataclass(frozen=True)
@@ -42,6 +50,65 @@ class RuntimeComponents:
     runtime_service: IrisRuntimeService
     identity_resolver: AccountBackedIdentityResolver
     space_resolver: EphemeralSpaceResolver
+
+
+def build_runtime_service(
+    app: IrisApp,
+    stores: RuntimeStateStores,
+    *,
+    now: Callable[[], datetime] | None = None,
+) -> IrisRuntimeService:
+    """IrisApp とランタイムstateストアからサービス境界を組み立てる。
+
+    Activity / presence / occupancy 統合、availability 解決、
+    workspace context assembly を同一ストアインスタンスで配線する。
+
+    Args:
+        app: 観測処理を委譲する IrisApp。
+        stores: ランタイムstateストア群。
+        now: 現在時刻を返す callable。省略時は UTC now。
+
+    Returns:
+        構成済みの IrisRuntimeService。
+    """
+    trust_policy = ObservationTrustPolicy()
+    current_now = now or _utc_now
+    activity_integrator = ActivityIntegrator(
+        journal=stores.activity_journal,
+        projections=stores.activity_projection_store,
+        trust_policy=trust_policy,
+        now=current_now,
+    )
+    presence_integrator = PresenceIntegrator(
+        store=stores.presence_store,
+        trust_policy=trust_policy,
+        now=current_now,
+    )
+    occupancy_integrator = SpaceOccupancyIntegrator(
+        store=stores.space_occupancy_store,
+        trust_policy=trust_policy,
+        now=current_now,
+    )
+    availability_resolver = wire_availability_resolver()
+    workspace_context_assembler = wire_workspace_context_assembler(
+        activity_projection_store=stores.activity_projection_store,
+        presence_store=stores.presence_store,
+        occupancy_store=stores.space_occupancy_store,
+        availability_resolver=availability_resolver,
+        now=current_now,
+    )
+    return IrisRuntimeService(
+        app,
+        activity_integrator=activity_integrator,
+        presence_integrator=presence_integrator,
+        occupancy_integrator=occupancy_integrator,
+        workspace_context_assembler=workspace_context_assembler,
+    )
+
+
+def _utc_now() -> datetime:
+    """Return current UTC time."""
+    return datetime.now(UTC)
 
 
 def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
@@ -63,7 +130,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         config,
         memory_store=stores.memory_store,
     )
-    runtime_service = IrisRuntimeService(app)
+    runtime_service = build_runtime_service(app, stores)
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
     space_resolver = EphemeralSpaceResolver()
     return RuntimeComponents(

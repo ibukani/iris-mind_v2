@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from iris.cognitive.cycle.models import CycleResult, PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
+    from iris.cognitive.workspace.frame import SituationContextSnapshot
     from iris.contracts.observations import Observation
 
 
@@ -70,16 +71,25 @@ class IrisApp:
         self._action_safety_gate = action_safety_gate or AllowAllActionGate()
         self._output_safety_gate = output_safety_gate or AllowAllOutputGate()
 
-    async def process_observation(self, observation: Observation) -> PresentedOutput:
+    async def process_observation(
+        self,
+        observation: Observation,
+        *,
+        situation_context: SituationContextSnapshot | None = None,
+    ) -> PresentedOutput:
         """完全な認知パイプラインを通して単一の観測を処理する.
 
         Args:
             observation: The incoming observation to process.
+            situation_context: Optional runtime-assembled situation context.
 
         Returns:
             Presented output, or an empty output if the action was blocked.
         """
-        cycle_result: CycleResult = await self._cycle.run(observation)
+        cycle_result: CycleResult = await self._cycle.run(
+            observation,
+            situation_context=situation_context,
+        )
         plan: ActionPlan = cycle_result.selected_plan
         if plan.is_no_action:
             return PresentedOutput(text=None)

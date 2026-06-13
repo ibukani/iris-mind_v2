@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
     from iris.cognitive.cycle.frame_builder import FrameBuilder
     from iris.cognitive.cycle.pipeline import PipelineStep
-    from iris.cognitive.workspace.frame import WorkspaceFrame
+    from iris.cognitive.workspace.frame import SituationContextSnapshot, WorkspaceFrame
     from iris.contracts.actions import ActionPlan
     from iris.contracts.observations import Observation
 
@@ -36,13 +36,25 @@ class CognitiveCycle:
         self._frame_builder = frame_builder
         self._fallback_plan = fallback_plan
 
-    async def run(self, observation: Observation) -> CycleResult:
+    async def run(
+        self,
+        observation: Observation,
+        *,
+        situation_context: SituationContextSnapshot | None = None,
+    ) -> CycleResult:
         """与えられた観測に対して認知パイプラインを実行し、結果を返す。
+
+        Args:
+            observation: 処理対象の観測。
+            situation_context: ランタイムから組み立てられた任意の状況コンテキスト。
 
         Returns:
             CycleResult: パイプライン実行結果(最終フレームと選択されたアクションプラン)。
         """
-        frame = self._frame_builder.build_initial(observation)
+        frame = self._frame_builder.build_initial(
+            observation,
+            situation_context=situation_context,
+        )
 
         for step in self._steps:
             result = await step.run(frame)

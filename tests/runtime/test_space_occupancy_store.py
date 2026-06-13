@@ -78,8 +78,6 @@ async def test_replace_occupancy_replaces_full_actor_set() -> None:
 def _occupant(*, expires_at: datetime | None = None) -> SpaceOccupant:
     return SpaceOccupant(
         actor_id=ActorId("actor-1"),
-        account_id=None,
-        device_id=None,
         joined_at=_NOW - timedelta(seconds=1),
         last_seen_at=_NOW,
         expires_at=expires_at,
