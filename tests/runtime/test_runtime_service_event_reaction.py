@@ -203,6 +203,7 @@ async def test_voice_joined_reacts_after_presence_and_activity_integration(
             ingress=_ingress(
                 ObservationCapability.INTEGRATE_ACTIVITY,
                 ObservationCapability.UPDATE_SPACE_OCCUPANCY,
+                ObservationCapability.REACT_TO_ACTIVITY,
             ),
         ),
     )
@@ -230,7 +231,10 @@ async def test_app_opened_reacts_when_available(
     response = await service.handle_observation(
         ObservationEnvelope(
             observation=_activity_observation(ActivityKind.APP_OPENED),
-            ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+            ingress=_ingress(
+                ObservationCapability.INTEGRATE_ACTIVITY,
+                ObservationCapability.REACT_TO_ACTIVITY,
+            ),
         ),
     )
 
@@ -308,10 +312,10 @@ async def test_unauthenticated_activity_event_does_not_react(
 
 
 @pytest.mark.anyio
-async def test_activity_event_without_integrate_activity_does_not_react(
+async def test_activity_event_without_reaction_or_integrate_capability_does_not_react(
     service_setup: tuple[IrisRuntimeService, _CaptureFrameStep],
 ) -> None:
-    """INTEGRATE_ACTIVITY capabilityがないingressではevent reactionを実行しない。"""
+    """REACT_TO_ACTIVITY/INTEGRATE_ACTIVITYがないingressではevent reactionを実行しない。"""
     service, _capture = service_setup
 
     await service.handle_observation(
@@ -348,7 +352,10 @@ async def test_trusted_activity_event_reacts(
     response = await service.handle_observation(
         ObservationEnvelope(
             observation=_activity_observation(ActivityKind.VOICE_JOINED),
-            ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+            ingress=_ingress(
+                ObservationCapability.INTEGRATE_ACTIVITY,
+                ObservationCapability.REACT_TO_ACTIVITY,
+            ),
         ),
     )
 
@@ -404,7 +411,10 @@ async def test_blocking_output_gate_prevents_sendable_reaction() -> None:
     response = await service.handle_observation(
         ObservationEnvelope(
             observation=_activity_observation(ActivityKind.VOICE_JOINED),
-            ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+            ingress=_ingress(
+                ObservationCapability.INTEGRATE_ACTIVITY,
+                ObservationCapability.REACT_TO_ACTIVITY,
+            ),
         ),
     )
 

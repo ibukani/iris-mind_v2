@@ -10,7 +10,11 @@ from iris.contracts.observations import (
     ActivityEventObservation,
     PresenceSignalObservation,
 )
-from iris.runtime.observations.ingress import unauthenticated_external_ingress
+from iris.runtime.observations.ingress import (
+    ObservationCapability,
+    trusted_adapter_ingress,
+    unauthenticated_external_ingress,
+)
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.safety.action_gate import GateDecision
 from iris.safety.output_filter import AllowAllOutputGate
@@ -61,6 +65,38 @@ class ObservationEnvelope:
         return cls(
             observation=observation,
             ingress=unauthenticated_external_ingress(),
+            correlation_id=correlation_id,
+        )
+
+    @classmethod
+    def trusted_adapter(
+        cls,
+        *,
+        observation: Observation,
+        adapter_id: str,
+        provider: str | None = None,
+        capabilities: frozenset[ObservationCapability] | None = None,
+        correlation_id: CorrelationId | None = None,
+    ) -> ObservationEnvelope:
+        """信頼済みadapter observation用のcapability付きenvelopeを作成する。
+
+        Args:
+            observation: Observation。
+            adapter_id: 信頼済みadapterの識別子。
+            provider: 任意的なprovider名。
+            capabilities: 付与するcapability。デフォルトは全capability。
+            correlation_id: 任意的なcorrelation ID。
+
+        Returns:
+            認証済みingressを持つObservationEnvelope。
+        """
+        return cls(
+            observation=observation,
+            ingress=trusted_adapter_ingress(
+                adapter_id=adapter_id,
+                provider=provider,
+                capabilities=capabilities or frozenset(ObservationCapability),
+            ),
             correlation_id=correlation_id,
         )
 

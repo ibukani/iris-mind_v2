@@ -34,13 +34,16 @@ class ObservationTrustPolicy:
     ) -> bool:
         """Activity event observationに対してevent reactionを実行できるか返す。
 
-        integrationとreactionは異なるruntime効果だが、
-        どちらも信頼できるingressを要求する。
+        integrationとreactionは異なるcapabilityであり、
+        独立して付与・検査される。
 
         Returns:
             許可されている場合はTrue。
         """
-        return ObservationTrustPolicy.can_integrate_activity_event(ingress)
+        return (
+            ingress.authenticated
+            and ObservationCapability.REACT_TO_ACTIVITY in ingress.capabilities
+        )
 
     @staticmethod
     def can_integrate_presence_signal(

@@ -44,12 +44,16 @@ _ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
     }
 )
 
+_GRPC_ADAPTER_ID = "grpc"
+_GRPC_ADAPTER_PROVIDER = "grpc"
+
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
     from iris.contracts.actions import PresentedOutput
     from iris.contracts.spaces import InteractionSpace
+    from iris.runtime.observations.ingress import ObservationCapability
     from iris.runtime.service import RuntimeResponse
 
 
@@ -68,10 +72,21 @@ class GrpcRuntimeMapper:
         self,
         identity_resolver: IdentityResolver | None = None,
         space_resolver: SpaceResolver | None = None,
+        adapter_capabilities: Iterable[ObservationCapability] | None = None,
     ) -> None:
-        """Create mapper with an optional resolvers."""
+        """Create mapper with optional resolvers and adapter capabilities.
+
+        Args:
+            identity_resolver: Optional identity resolver for ExternalAccountRef.
+            space_resolver: Optional space resolver for ExternalSpaceRef.
+            adapter_capabilities: Capabilities to grant on the trusted
+                ingress context. Defaults to all standard capabilities.
+        """
         self._identity_resolver = identity_resolver
         self._space_resolver = space_resolver
+        self._adapter_capabilities = (
+            frozenset(adapter_capabilities) if adapter_capabilities is not None else None
+        )
 
     async def observation_envelope_from_proto(
         self,
@@ -86,8 +101,11 @@ class GrpcRuntimeMapper:
             _raise_mapping_error("observation is required")
         correlation_id = CorrelationId(request.correlation_id) if request.correlation_id else None
         observation = await self.observation_from_proto(request.observation)
-        return ObservationEnvelope.external_client(
+        return ObservationEnvelope.trusted_adapter(
             observation=observation,
+            adapter_id=_GRPC_ADAPTER_ID,
+            provider=_GRPC_ADAPTER_PROVIDER,
+            capabilities=self._adapter_capabilities,
             correlation_id=correlation_id,
         )
 
