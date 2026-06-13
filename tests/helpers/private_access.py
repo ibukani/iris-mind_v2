@@ -150,7 +150,7 @@ def import_private_matching(
     return value
 
 
-def _is_callable(value: object) -> TypeGuard[Callable[..., object]]:
+def is_callable(value: object) -> TypeGuard[Callable[..., object]]:
     """Runtime-checkable callable TypeGuard.
 
     Returns:

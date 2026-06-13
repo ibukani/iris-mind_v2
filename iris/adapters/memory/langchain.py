@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 from iris.adapters.memory.ports import MemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
 from iris.core.ids import ActorId, SpaceId
+
 _MEMORY_ID_KEY = "iris_memory_id"
 _ACTOR_ID_KEY = "iris_actor_id"
 _SPACE_ID_KEY = "iris_space_id"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
@@ -18,10 +20,10 @@ from iris.runtime.wiring.llm import (
     wire_response_generator,
 )
 from tests.helpers.private_access import (
-    _is_callable,
     get_private_attr_as,
     get_private_attr_path_as,
     import_private_matching,
+    is_callable,
 )
 
 
@@ -94,8 +96,8 @@ def test_ollama_adapter_config_replaces_fake_llm_model() -> None:
     """_ollama_adapter_config replaces fake-llm with the Ollama default model."""
     config = default_runtime_config()
     model_config = RuntimeModelConfig(provider="ollama", model="fake-llm")
-    ollama_adapter_config = import_private_matching(
-        "iris.runtime.wiring.llm", "_ollama_adapter_config", _is_callable
+    ollama_adapter_config: Any = import_private_matching(
+        "iris.runtime.wiring.llm", "_ollama_adapter_config", is_callable
     )
     result = ollama_adapter_config(model_config, config)
     assert result.model == OllamaConfig().model
@@ -105,8 +107,8 @@ def test_openai_adapter_config_replaces_fake_llm_model() -> None:
     """_openai_adapter_config replaces fake-llm with the OpenAI default model."""
     config = default_runtime_config()
     model_config = RuntimeModelConfig(provider="openai", model="fake-llm")
-    openai_adapter_config = import_private_matching(
-        "iris.runtime.wiring.llm", "_openai_adapter_config", _is_callable
+    openai_adapter_config: Any = import_private_matching(
+        "iris.runtime.wiring.llm", "_openai_adapter_config", is_callable
     )
     result = openai_adapter_config(model_config, config)
     assert result.model == "gpt-5-mini"
@@ -116,8 +118,8 @@ def test_openai_adapter_config_uses_runtime_max_tokens() -> None:
     """_openai_adapter_config uses runtime max_output_tokens when model config has None."""
     config = default_runtime_config()
     model_config = RuntimeModelConfig(provider="openai", model="gpt-test")
-    openai_adapter_config = import_private_matching(
-        "iris.runtime.wiring.llm", "_openai_adapter_config", _is_callable
+    openai_adapter_config: Any = import_private_matching(
+        "iris.runtime.wiring.llm", "_openai_adapter_config", is_callable
     )
     result = openai_adapter_config(model_config, config)
     assert result.max_output_tokens == config.openai.max_output_tokens
@@ -125,8 +127,8 @@ def test_openai_adapter_config_uses_runtime_max_tokens() -> None:
 
 def test_build_user_content_with_no_sections() -> None:
     """_build_user_content returns actor_text when no optional sections are present."""
-    build_user_content = import_private_matching(
-        "iris.runtime.wiring.llm", "_build_user_content", _is_callable
+    build_user_content: Any = import_private_matching(
+        "iris.runtime.wiring.llm", "_build_user_content", is_callable
     )
     prompt = ResponsePrompt(
         system_instruction="sys",

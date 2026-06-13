@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import tomllib
-from typing import Any
+from typing import TypeGuard
 
 from iris.runtime.config import load_runtime_config
 
@@ -100,26 +100,50 @@ def test_runtime_example_loads_through_loader() -> None:
     assert config is not None
 
 
-def _load_manifest() -> dict[str, Any]:
+def _load_manifest() -> dict[str, object]:
     path = _repo_path("iris-control-plane.toml")
-    return tomllib.loads(path.read_text(encoding="utf-8"))
+    raw: object = tomllib.loads(path.read_text(encoding="utf-8"))
+    if _is_dict(raw):
+        return raw
+    msg = "iris-control-plane.toml must be a TOML table"
+    raise AssertionError(msg)
 
 
-def _editable_configs() -> list[dict[str, Any]]:
+def _editable_configs() -> list[dict[str, object]]:
     manifest = _load_manifest()
-    configs = manifest.get("editable_configs", [])
-    assert isinstance(configs, list)
-    validated: list[dict[str, Any]] = []
-    for c in configs:
-        assert isinstance(c, dict)
-        validated.append(c)
-    return validated
+    configs_raw: object = manifest.get("editable_configs", ())
+    if not _is_list(configs_raw):
+        configs_raw = []
+    items: list[object] = list(configs_raw)
+    dict_items: list[dict[str, object]] = [c for c in items if _is_dict(c)]
+    return dict_items
+
+
+def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
+    """Narrow object to dict[str, object] for item iteration.
+
+    Runtime check uses isinstance(dict) which erases type parameters, so the
+    narrowed type uses the widest compatible parameter types.
+
+    Returns:
+        True if value is a dict, narrowing to the widened type.
+    """
+    return isinstance(value, dict)
+
+
+def _is_list(value: object) -> TypeGuard[list[object]]:
+    """Narrow object to list[object] for item iteration.
+
+    Returns:
+        True if value is a list, narrowing to the widened type.
+    """
+    return isinstance(value, list)
 
 
 def _find_editable_config(
-    configs: list[dict[str, Any]],
+    configs: list[dict[str, object]],
     config_id: str,
-) -> dict[str, Any] | None:
+) -> dict[str, object] | None:
     for config in configs:
         if config.get("id") == config_id:
             return config

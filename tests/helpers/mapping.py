@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import operator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -13,5 +13,6 @@ if TYPE_CHECKING:
 
 def assert_mapping_rejects_item_assignment(mapping: Mapping[str, str]) -> None:
     """Assert a mapping rejects item assignment at runtime."""
+    m: Any = mapping
     with pytest.raises(TypeError):
-        operator.setitem(mapping, "new", "value")
+        operator.setitem(m, "new", "value")

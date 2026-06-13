@@ -245,11 +245,12 @@ async def _poll_runtime_ready(
                 timeout=1.0,
             )
             assert isinstance(response, runtime_pb2.GetRuntimeInfoResponse)
-            return response
         except grpc.aio.AioRpcError as exc:
             last_error = _format_rpc_error(exc.code(), exc.details())
         except TimeoutError as exc:
             last_error = str(exc)
+        else:
+            return response
 
         await asyncio.sleep(0.1)
 

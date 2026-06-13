@@ -19,7 +19,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 import re
 import tomllib as _toml_parser
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, TypeGuard, override
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -173,7 +173,7 @@ def _require_mapping(value: object, context: str) -> Mapping[str, object]:
     Raises:
         TypeError: If the value is not a dict.
     """
-    if not isinstance(value, dict):
+    if not _is_dict(value):
         msg = f"{context} must be a TOML table"
         raise TypeError(msg)
     return {str(key): item for key, item in value.items()}
@@ -192,10 +192,31 @@ def _require_sequence(value: object, context: str) -> Sequence[object]:
     Raises:
         TypeError: If the value is not a list.
     """
-    if not isinstance(value, list):
+    if not _is_list(value):
         msg = f"{context} must be a TOML array"
         raise TypeError(msg)
     return value
+
+
+def _is_dict(value: object) -> TypeGuard[dict[object, object]]:
+    """Narrow object to dict[object, object] for item iteration.
+
+    Runtime check uses isinstance(dict) which erases type parameters, so the
+    narrowed type uses the widest compatible parameter types.
+
+    Returns:
+        True if value is a dict, narrowing to the widened type.
+    """
+    return isinstance(value, dict)
+
+
+def _is_list(value: object) -> TypeGuard[list[object]]:
+    """Narrow object to list[object] for item iteration.
+
+    Returns:
+        True if value is a list, narrowing to the widened type.
+    """
+    return isinstance(value, list)
 
 
 def _parse_debt_registry() -> tuple[DebtEntry, ...]:
@@ -214,8 +235,7 @@ def _parse_debt_registry() -> tuple[DebtEntry, ...]:
     debt_list = _require_sequence(data.get("debt", []), "debt registry [[debt]]")
 
     raw_entries: list[dict[str, object]] = [
-        _require_mapping(item, f"debt entry #{i}")
-        for i, item in enumerate(debt_list)
+        dict(_require_mapping(item, f"debt entry #{i}")) for i, item in enumerate(debt_list)
     ]
 
     entries: list[DebtEntry] = []

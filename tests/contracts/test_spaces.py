@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING
-
-import pytest
 
 from iris.contracts.spaces import (
     InteractionSpace,

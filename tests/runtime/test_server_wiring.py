@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 import inspect
 from pathlib import Path
+from typing import Any
 
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
@@ -46,11 +47,8 @@ def test_build_runtime_components_uses_fts5_retrieval_for_sqlite(
     assert isinstance(components.space_resolver, EphemeralSpaceResolver)
     assert not hasattr(components.stores, "space_binding_store")
     cycle = get_private_attr_path_as(components.runtime_service, ("_app", "_cycle"), object)
-    retrieval_steps = [
-        step
-        for step in get_private_attr_as(cycle, "_steps", tuple[object, ...])
-        if isinstance(step, MemoryRetrievalStep)
-    ]
+    steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])
+    retrieval_steps = [step for step in steps if isinstance(step, MemoryRetrievalStep)]
     assert len(retrieval_steps) == 1
     retriever = get_private_attr_as(retrieval_steps[0], "_retriever", object)
     assert isinstance(retriever, SQLiteFTS5MemoryRetriever)
@@ -67,11 +65,8 @@ def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> 
     assert isinstance(components.space_resolver, EphemeralSpaceResolver)
     assert not hasattr(components.stores, "space_binding_store")
     cycle = get_private_attr_path_as(components.runtime_service, ("_app", "_cycle"), object)
-    retrieval_steps = [
-        step
-        for step in get_private_attr_as(cycle, "_steps", tuple[object, ...])
-        if isinstance(step, MemoryRetrievalStep)
-    ]
+    steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])
+    retrieval_steps = [step for step in steps if isinstance(step, MemoryRetrievalStep)]
     assert len(retrieval_steps) == 1
     assert (
         get_private_attr_as(retrieval_steps[0], "_retriever", object)

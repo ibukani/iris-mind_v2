@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
-import pytest
-
 from iris.core.metadata import EMPTY_METADATA, immutable_metadata
 from tests.helpers.mapping import assert_mapping_rejects_item_assignment
 

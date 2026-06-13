@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,11 +13,8 @@ from iris.core.ids import ObservationId, SessionId
 from iris.features.proactive_talk.definition import ProactivePolicyStep
 from iris.features.proactive_talk.policy import proactive_policy_constraints
 
-if TYPE_CHECKING:
-    from iris.features.proactive_talk.models import ProactiveFrameContext
 
-
-def _idle_frame() -> ProactiveFrameContext:
+def _idle_frame() -> WorkspaceFrame:
     """Return a WorkspaceFrame with an IdleTickObservation and affect/relationship data."""
     return WorkspaceFrame(
         observation=IdleTickObservation(

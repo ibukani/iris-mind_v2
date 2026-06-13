@@ -117,19 +117,17 @@ def _node_violations(node: ast.AST, rel_path: Path) -> list[str]:
     Returns:
         list[str]: A list of violation message strings, possibly empty.
     """
-    handlers: tuple[
-        tuple[type[ast.AST], Callable[[ast.AST, Path], list[str]]],
-        ...,
-    ] = (
-        (ast.Assign, cast("Callable[[ast.AST, Path], list[str]]", _assign_violations)),
-        (ast.AugAssign, cast("Callable[[ast.AST, Path], list[str]]", _augassign_violations)),
-        (ast.Delete, cast("Callable[[ast.AST, Path], list[str]]", _delete_violations)),
-        (ast.Call, cast("Callable[[ast.AST, Path], list[str]]", _call_violations)),
-    )
-    for node_type, handler in handlers:
-        if isinstance(node, node_type):
-            return handler(node, rel_path)
-    return []
+    if isinstance(node, ast.Assign):
+        violations = _assign_violations(node, rel_path)
+    elif isinstance(node, ast.AugAssign):
+        violations = _augassign_violations(node, rel_path)
+    elif isinstance(node, ast.Delete):
+        violations = _delete_violations(node, rel_path)
+    elif isinstance(node, ast.Call):
+        violations = _call_violations(node, rel_path)
+    else:
+        violations = []
+    return violations
 
 
 def test_workspace_frame_is_not_mutated_by_steps_or_features() -> None:

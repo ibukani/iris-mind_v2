@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+from typing import TypeGuard
+
 import httpx
 import pytest
 
@@ -207,10 +209,24 @@ async def test_ollama_client_raises_on_http_exception() -> None:
 
 
 def _load_json_object(request: httpx.Request) -> dict[str, object]:
-    payload = json.loads(request.content.decode())
-    assert isinstance(payload, dict)
+    payload: object = json.loads(request.content.decode())
+    if not _is_dict(payload):
+        msg = "request body must be a JSON object"
+        raise AssertionError(msg)
     result: dict[str, object] = {}
     for k, v in payload.items():
         assert isinstance(k, str)
         result[k] = v
     return result
+
+
+def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
+    """Narrow object to dict[str, object] for item iteration.
+
+    Runtime check uses isinstance(dict) which erases type parameters, so the
+    narrowed type uses the widest compatible parameter types.
+
+    Returns:
+        True if value is a dict, narrowing to the widened type.
+    """
+    return isinstance(value, dict)

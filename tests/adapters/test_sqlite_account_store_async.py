@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
 from iris.contracts.accounts import AccountProfile
 from iris.core.ids import AccountId, ActorId, ExternalRef
-from tests.helpers.private_access import _is_callable, get_private_attr_matching
+from tests.helpers.private_access import get_private_attr_matching, is_callable
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -91,11 +91,13 @@ async def test_slow_backend_does_not_block_event_loop(
     """人工的な遅延バックエンドがイベントループをブロックしないことを確認する。"""
     store = SQLiteAccountStore(tmp_path / "slow.sqlite3")
 
-    original_sync = get_private_attr_matching(store, "_put_sync", _is_callable)
+    original_sync: Any = get_private_attr_matching(store, "_put_sync", is_callable)
 
     def slow_put(account: AccountProfile) -> AccountProfile:
         time.sleep(0.1)
-        return original_sync(account)
+        result: object = original_sync(account)
+        assert isinstance(result, AccountProfile)
+        return result
 
     monkeypatch.setattr(store, "_put_sync", slow_put)
 

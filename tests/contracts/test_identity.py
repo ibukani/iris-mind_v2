@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -11,6 +10,7 @@ from iris.contracts.identity import ActorKind, Identity
 from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 from tests.helpers.immutability import assert_frozen_field
 from tests.helpers.mapping import assert_mapping_rejects_item_assignment
+
 
 def _identity(*, actor_kind: ActorKind, actor_id: str = "actor-1") -> Identity:
     """Build a test Identity for the given actor kind.

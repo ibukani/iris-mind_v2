@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from scripts.verify import (
@@ -14,10 +15,10 @@ from scripts.verify import (
     selected_checks,
 )
 
-from tests.helpers.private_access import _is_callable, import_private_matching
+from tests.helpers.private_access import import_private_matching, is_callable
 
-_first_failing_location = import_private_matching(
-    "scripts.verify", "_first_failing_location", _is_callable
+_first_failing_location: Any = import_private_matching(
+    "scripts.verify", "_first_failing_location", is_callable
 )
 
 

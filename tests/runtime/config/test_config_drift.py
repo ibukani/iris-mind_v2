@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import asdict
 import json
 from pathlib import Path
 import tomllib
-from typing import TypeGuard, TypedDict
+from typing import TYPE_CHECKING, TypedDict, TypeGuard
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from iris.runtime.config import default_runtime_config, load_runtime_config, runtime_config_specs
 
@@ -114,7 +116,7 @@ def _flatten_mapping(
     values: dict[str, str | int | float | bool | None] = {}
     for key, value in table.items():
         path = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, dict):
+        if _is_dict(value):
             assert all(isinstance(k, str) for k in value)
             values.update(_flatten_mapping(value, path))
         elif isinstance(value, (str, int, float, bool)) or value is None:
@@ -126,15 +128,43 @@ def _flatten_mapping(
 
 
 def _toml_leaf_paths(path: Path) -> set[str]:
-    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    document_raw: object = tomllib.loads(path.read_text(encoding="utf-8"))
+    document = _as_mapping(document_raw)
     return _mapping_leaf_paths(document, "")
+
+
+def _as_mapping(value: object) -> Mapping[str, object]:
+    if _is_dict(value):
+        return value
+    return {}
+
+
+def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
+    """Narrow object to dict[str, object] for item iteration.
+
+    Runtime check uses isinstance(dict) which erases type parameters, so the
+    narrowed type uses the widest compatible parameter types.
+
+    Returns:
+        True if value is a dict, narrowing to the widened type.
+    """
+    return isinstance(value, dict)
+
+
+def _is_list(value: object) -> TypeGuard[list[object]]:
+    """Narrow object to list[object] for item iteration.
+
+    Returns:
+        True if value is a list, narrowing to the widened type.
+    """
+    return isinstance(value, list)
 
 
 def _mapping_leaf_paths(table: Mapping[str, object], prefix: str) -> set[str]:
     paths: set[str] = set()
     for key, value in table.items():
         path = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, dict):
+        if _is_dict(value):
             assert all(isinstance(k, str) for k in value)
             paths.update(_mapping_leaf_paths(value, path))
         else:
@@ -142,32 +172,49 @@ def _mapping_leaf_paths(table: Mapping[str, object], prefix: str) -> set[str]:
     return paths
 
 
+_MANIFEST_FIELD_REQUIRED_KEYS = ("default", "env")
+
+_MANIFEST_FIELD_TYPES = (
+    ("path", str),
+    ("type", str),
+    ("allowedValues", list),
+    ("secret", bool),
+    ("editable", bool),
+    ("description", str),
+)
+
+
 def _is_manifest(obj: object) -> TypeGuard[_Manifest]:
-    """Validate that obj matches the _Manifest TypedDict shape."""
-    if not isinstance(obj, dict):
+    """Validate that obj matches the _Manifest TypedDict shape.
+
+    Returns:
+        True if obj is a valid _Manifest.
+    """
+    if not _is_dict(obj):
         return False
-    if not isinstance(obj.get("version"), int):
+    version: object = obj.get("version")
+    if not isinstance(version, int):
         return False
-    if not isinstance(obj.get("fields"), list):
+    fields_raw: object = obj.get("fields")
+    if not _is_list(fields_raw):
         return False
-    for field in obj["fields"]:
-        if not isinstance(field, dict):
+    return all(_is_manifest_field(f) for f in fields_raw)
+
+
+def _is_manifest_field(obj: object) -> TypeGuard[_ManifestField]:
+    """Validate that obj matches the _ManifestField TypedDict shape.
+
+    Returns:
+        True if obj is a valid _ManifestField.
+    """
+    if not _is_dict(obj):
+        return False
+    for key in _MANIFEST_FIELD_REQUIRED_KEYS:
+        if key not in obj:
             return False
-        if not isinstance(field.get("path"), str):
-            return False
-        if not isinstance(field.get("type"), str):
-            return False
-        if "default" not in field:
-            return False
-        if not isinstance(field.get("allowedValues"), list):
-            return False
-        if "env" not in field:
-            return False
-        if not isinstance(field.get("secret"), bool):
-            return False
-        if not isinstance(field.get("editable"), bool):
-            return False
-        if not isinstance(field.get("description"), str):
+    for key, expected_type in _MANIFEST_FIELD_TYPES:
+        value: object = obj.get(key)
+        if not isinstance(value, expected_type):
             return False
     return True
 
@@ -176,7 +223,8 @@ def _load_manifest() -> _Manifest:
     text = _repo_path(".iris/control-plane/runtime-config.schema.json").read_text(encoding="utf-8")
     data = json.loads(text)
     if not _is_manifest(data):
-        raise AssertionError("Invalid manifest structure")
+        msg = "Invalid manifest structure"
+        raise AssertionError(msg)
     return data
 
 

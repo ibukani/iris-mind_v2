@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
@@ -66,7 +66,7 @@ def test_wire_affect_cycle_uses_memory_retriever_over_store() -> None:
         memory_retriever=fake,
     )
 
-    steps = get_private_attr_as(cycle, "_steps", tuple[object, ...])
+    steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])
     retrieval_steps = [s for s in steps if isinstance(s, MemoryRetrievalStep)]
     assert len(retrieval_steps) == 1
     assert get_private_attr_as(retrieval_steps[0], "_retriever", object) is fake
@@ -82,7 +82,7 @@ def test_wire_policy_cycle_passes_vector_index_to_write_step() -> None:
         vector_index=vector_index,
     )
 
-    steps = get_private_attr_as(cycle, "_steps", tuple[object, ...])
+    steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])
     write_steps = [s for s in steps if isinstance(s, MemoryWriteStep)]
     assert len(write_steps) == 1
     assert get_private_attr_as(write_steps[0], "_vector_index", object) is vector_index
