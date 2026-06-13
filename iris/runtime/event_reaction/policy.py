@@ -50,14 +50,18 @@ def default_event_reaction_policy() -> EventReactionPolicy:
     """
     return EventReactionPolicy(
         kind_availability={
-            ActivityKind.VOICE_JOINED: frozenset({
-                AvailabilityStatus.AVAILABLE,
-                AvailabilityStatus.INTERRUPTIBLE,
-                AvailabilityStatus.PASSIVE,
-            }),
-            ActivityKind.APP_OPENED: frozenset({
-                AvailabilityStatus.AVAILABLE,
-                AvailabilityStatus.INTERRUPTIBLE,
-            }),
+            ActivityKind.VOICE_JOINED: frozenset(
+                {
+                    AvailabilityStatus.AVAILABLE,
+                    AvailabilityStatus.INTERRUPTIBLE,
+                    AvailabilityStatus.PASSIVE,
+                }
+            ),
+            ActivityKind.APP_OPENED: frozenset(
+                {
+                    AvailabilityStatus.AVAILABLE,
+                    AvailabilityStatus.INTERRUPTIBLE,
+                }
+            ),
         },
     )

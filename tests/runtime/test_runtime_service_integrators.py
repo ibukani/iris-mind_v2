@@ -28,7 +28,7 @@ from iris.runtime.observations.ingress import (
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.presence.store import InMemoryPresenceStore
-from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
+from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeIntegrators
 from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
 
@@ -142,20 +142,22 @@ def _service(
     trust_policy = ObservationTrustPolicy()
     return IrisRuntimeService(
         IrisApp(steps=(_UnexpectedCognitiveStep(),)),
-        activity_integrator=(
-            ActivityIntegrator(journal, projections, trust_policy, _now)
-            if journal is not None and projections is not None
-            else None
-        ),
-        presence_integrator=(
-            PresenceIntegrator(presence_store, trust_policy, _now)
-            if presence_store is not None
-            else None
-        ),
-        occupancy_integrator=(
-            SpaceOccupancyIntegrator(occupancy_store, trust_policy, _now)
-            if occupancy_store is not None
-            else None
+        integrators=RuntimeIntegrators(
+            activity=(
+                ActivityIntegrator(journal, projections, trust_policy, _now)
+                if journal is not None and projections is not None
+                else None
+            ),
+            presence=(
+                PresenceIntegrator(presence_store, trust_policy, _now)
+                if presence_store is not None
+                else None
+            ),
+            occupancy=(
+                SpaceOccupancyIntegrator(occupancy_store, trust_policy, _now)
+                if occupancy_store is not None
+                else None
+            ),
         ),
     )
 

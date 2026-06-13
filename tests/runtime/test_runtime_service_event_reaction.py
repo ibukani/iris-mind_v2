@@ -26,9 +26,18 @@ from iris.runtime.observations.ingress import (
     ObservationCapability,
     ObservationIngressContext,
 )
+from iris.runtime.observations.trust import ObservationTrustPolicy
+from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.server import build_runtime_service
-from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
+from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeIntegrators
+from iris.runtime.wiring.availability import wire_availability_resolver
+from iris.runtime.wiring.context import wire_workspace_context_assembler
+from iris.runtime.wiring.event_reaction import wire_event_reaction_runner
 from iris.runtime.wiring.state import wire_runtime_state
+from iris.safety.action_gate import GateDecision, SafetyDecision
+
+if TYPE_CHECKING:
+    from iris.contracts.actions import PresentedOutput
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
@@ -45,7 +54,7 @@ class _CaptureFrameStep:
     """WorkspaceFrameをキャプチャし、空のaction selection結果を返すtest step。"""
 
     name: str = "capture"
-    frames: list[WorkspaceFrame] = field(default_factory=list)
+    frames: list[WorkspaceFrame] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType] -- list factory type not inferred with annotations future
 
     async def run(self, frame: WorkspaceFrame) -> PipelineStepResult:
         self.frames.append(frame)
@@ -73,6 +82,27 @@ def _ingress(
         authenticated=True,
         capabilities=frozenset(capabilities),
     )
+
+
+def _unauthenticated_ingress(
+    *capabilities: ObservationCapability,
+) -> ObservationIngressContext:
+    return ObservationIngressContext(
+        adapter_id="external_client",
+        provider=None,
+        authenticated=False,
+        capabilities=frozenset(capabilities),
+    )
+
+
+@dataclass(frozen=True)
+class _BlockAllOutputGate:
+    async def check_output(self, output: PresentedOutput) -> SafetyDecision:
+        _ = self, output
+        return SafetyDecision(
+            decision=GateDecision.BLOCK,
+            reason="blocked in test",
+        )
 
 
 def _presence_observation() -> PresenceSignalObservation:
@@ -251,3 +281,131 @@ async def test_actor_message_passes_to_app_with_situation_context(
     frame = capture.frames[0]
     assert frame.observation.kind is ObservationKind.ACTOR_MESSAGE
     assert frame.situation_context.availability is not None
+
+
+@pytest.mark.anyio
+async def test_unauthenticated_activity_event_does_not_react(
+    service_setup: tuple[IrisRuntimeService, _CaptureFrameStep],
+) -> None:
+    """未認証のingressではevent reactionを実行しない。"""
+    service, _capture = service_setup
+
+    await service.handle_observation(
+        ObservationEnvelope(
+            observation=_presence_observation(),
+            ingress=_ingress(ObservationCapability.INTEGRATE_PRESENCE),
+        ),
+    )
+
+    response = await service.handle_observation(
+        ObservationEnvelope(
+            observation=_activity_observation(ActivityKind.VOICE_JOINED),
+            ingress=_unauthenticated_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+        ),
+    )
+
+    assert not response.output.is_sendable
+
+
+@pytest.mark.anyio
+async def test_activity_event_without_integrate_activity_does_not_react(
+    service_setup: tuple[IrisRuntimeService, _CaptureFrameStep],
+) -> None:
+    """INTEGRATE_ACTIVITY capabilityがないingressではevent reactionを実行しない。"""
+    service, _capture = service_setup
+
+    await service.handle_observation(
+        ObservationEnvelope(
+            observation=_presence_observation(),
+            ingress=_ingress(ObservationCapability.INTEGRATE_PRESENCE),
+        ),
+    )
+
+    response = await service.handle_observation(
+        ObservationEnvelope(
+            observation=_activity_observation(ActivityKind.VOICE_JOINED),
+            ingress=_ingress(ObservationCapability.INTEGRATE_PRESENCE),
+        ),
+    )
+
+    assert not response.output.is_sendable
+
+
+@pytest.mark.anyio
+async def test_trusted_activity_event_reacts(
+    service_setup: tuple[IrisRuntimeService, _CaptureFrameStep],
+) -> None:
+    """信頼されたingressではevent reactionが実行される。"""
+    service, _capture = service_setup
+
+    await service.handle_observation(
+        ObservationEnvelope(
+            observation=_presence_observation(),
+            ingress=_ingress(ObservationCapability.INTEGRATE_PRESENCE),
+        ),
+    )
+
+    response = await service.handle_observation(
+        ObservationEnvelope(
+            observation=_activity_observation(ActivityKind.VOICE_JOINED),
+            ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+        ),
+    )
+
+    assert response.output.is_sendable
+    assert response.output.text == "Welcome back."
+    assert response.output.style_hint == "event_reaction"
+
+
+@pytest.mark.anyio
+async def test_blocking_output_gate_prevents_sendable_reaction() -> None:
+    """Output safety gateがBLOCKするとevent reaction出力は送信されない。"""
+    config = default_runtime_config()
+    stores = wire_runtime_state(config)
+    capture = _CaptureFrameStep()
+    app = IrisApp(steps=[capture])
+
+    trust_policy = ObservationTrustPolicy()
+
+    def _now() -> datetime:
+        return _RECEIVED_AT
+
+    presence_integrator = PresenceIntegrator(
+        store=stores.presence_store,
+        trust_policy=trust_policy,
+        now=_now,
+    )
+    availability_resolver = wire_availability_resolver()
+    workspace_context_assembler = wire_workspace_context_assembler(
+        activity_projection_store=stores.activity_projection_store,
+        presence_store=stores.presence_store,
+        occupancy_store=stores.space_occupancy_store,
+        availability_resolver=availability_resolver,
+        now=_now,
+    )
+    event_reaction_runner = wire_event_reaction_runner()
+
+    service = IrisRuntimeService(
+        app,
+        integrators=RuntimeIntegrators(presence=presence_integrator),
+        workspace_context_assembler=workspace_context_assembler,
+        event_reaction_runner=event_reaction_runner,
+        trust_policy=trust_policy,
+        event_reaction_output_gate=_BlockAllOutputGate(),
+    )
+
+    await service.handle_observation(
+        ObservationEnvelope(
+            observation=_presence_observation(),
+            ingress=_ingress(ObservationCapability.INTEGRATE_PRESENCE),
+        ),
+    )
+
+    response = await service.handle_observation(
+        ObservationEnvelope(
+            observation=_activity_observation(ActivityKind.VOICE_JOINED),
+            ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+        ),
+    )
+
+    assert not response.output.is_sendable
