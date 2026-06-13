@@ -496,12 +496,24 @@ safety:
 例。
 
 - `ActorMessageObservation`
-- `TranscriptObservation`
 - `IdleTickObservation`
-- `AudienceMessageObservation`
-- `GameEventObservation`
+- `ActivityEventObservation`
+- `PresenceSignalObservation`
 
 Discord / Voice / Twitch などの具体イベントは、外部アプリまたは AppGateway で Observation に変換する。
+
+型付き ingress の意味:
+
+- `ActorMessageObservation`: actorから届いたテキストmessage。
+- `IdleTickObservation`: runtime内部のidle tick。
+- `ActivityEventObservation`: typing、app open/close、voice join/leaveなどの非message外部activity。
+- `PresenceSignalObservation`: online、away、idleなどprovider/clientが観測したactor presence signal。voice channel在室状態は表さない。
+
+Observation固有の `metadata` はprovider固有の補助情報だけに使う。`activity_kind`、`presence_status`、`provider_event_id`、`provider_sequence`、`expires_at` などの中核意味はtyped fieldまたはenumで表し、metadataから推論しない。
+
+`ActivityEventObservation` と `PresenceSignalObservation` は外部adapter/clientからの報告・claimであり、Iris内部stateを更新するcommandではない。runtimeがそのsourceを信頼し、記録するかは後続PRのtrusted-source policyとrecorderが決定する。user-controlled metadataだけをtrust判定に使ってはならない。
+
+現段階はtyped ingressのみを提供する。Activity/Presence/SpaceOccupancyのstore・recorder、availability、event reactionは後続PRで導入予定であり、未実装。PR2のmapperは内部stateを変更しない。
 
 基底 `Observation` は以下を運ぶ。
 

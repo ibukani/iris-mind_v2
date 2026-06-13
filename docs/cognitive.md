@@ -112,6 +112,23 @@ CognitiveCycle → action step
 
 ---
 
+## Typed Observation Ingress
+
+runtime境界が受け付けるtyped observationは次の4種類。
+
+- `ActorMessageObservation`: actorのテキストmessage。
+- `IdleTickObservation`: runtime内部のidle tick。
+- `ActivityEventObservation`: 非message外部activity event。
+- `PresenceSignalObservation`: provider/clientが観測したactor presence signal。
+
+`ActivityEventObservation` はtext messageを表さず、`PresenceSignalObservation` はvoice channel在室状態を表さない。中核意味はtyped fieldとenumで表し、metadataはprovider固有の補助情報だけに使う。
+
+両観測は外部sourceからの報告・claimであり、Iris内部stateの更新commandではない。runtimeがsourceを信頼して記録するかは後続PRのtrusted-source policyとrecorderが決定する。user-controlled metadataだけでtrustを決めない。
+
+Activity/Presence/SpaceOccupancyのstore・recorder、availability、event reactionは未実装。typed ingressを認知反応や永続化の実装済み機能として扱わない。
+
+---
+
 ## Learning と BackgroundJob（未実装）
 
 Learning は ActionResult 後に行う設計だが、現状未実装。

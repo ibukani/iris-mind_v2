@@ -9,13 +9,32 @@ import "iris/api/v1/spaces.proto";
 enum ObservationKind {
   OBSERVATION_KIND_UNSPECIFIED = 0;
   OBSERVATION_KIND_ACTOR_MESSAGE = 1;
-  // Not currently accepted by the gRPC mapper.
-  OBSERVATION_KIND_TRANSCRIPT = 2;
-  OBSERVATION_KIND_IDLE_TICK = 3;
-  // Not currently accepted by the gRPC mapper.
-  OBSERVATION_KIND_AUDIENCE_MESSAGE = 4;
-  // Not currently accepted by the gRPC mapper.
-  OBSERVATION_KIND_GAME_EVENT = 5;
+  OBSERVATION_KIND_IDLE_TICK = 2;
+  OBSERVATION_KIND_ACTIVITY_EVENT = 3;
+  OBSERVATION_KIND_PRESENCE_SIGNAL = 4;
+}
+
+enum ActivityKind {
+  ACTIVITY_KIND_UNSPECIFIED = 0;
+  ACTIVITY_KIND_ACTOR_TYPING_STARTED = 1;
+  ACTIVITY_KIND_ACTOR_TYPING_STOPPED = 2;
+  ACTIVITY_KIND_APP_OPENED = 3;
+  ACTIVITY_KIND_APP_CLOSED = 4;
+  ACTIVITY_KIND_VOICE_JOINED = 5;
+  ACTIVITY_KIND_VOICE_LEFT = 6;
+  ACTIVITY_KIND_SPACE_MESSAGE = 7;
+  ACTIVITY_KIND_SYSTEM_INTERACTION = 8;
+}
+
+enum PresenceStatus {
+  PRESENCE_STATUS_UNSPECIFIED = 0;
+  PRESENCE_STATUS_UNKNOWN = 1;
+  PRESENCE_STATUS_ONLINE = 2;
+  PRESENCE_STATUS_OFFLINE = 3;
+  PRESENCE_STATUS_AWAY = 4;
+  PRESENCE_STATUS_IDLE = 5;
+  PRESENCE_STATUS_DO_NOT_DISTURB = 6;
+  PRESENCE_STATUS_INVISIBLE = 7;
 }
 
 message ActorMessagePayload {
@@ -26,6 +45,21 @@ message ActorMessagePayload {
 message IdleTickPayload {
   string reason = 1;
   double idle_seconds = 2;
+}
+
+message ActivityEventPayload {
+  ActivityKind activity_kind = 1;
+  string provider_event_id = 2;
+  int64 provider_sequence = 3;
+  // Provider-specific auxiliary details only.
+  map<string, string> metadata = 10;
+}
+
+message PresenceSignalPayload {
+  PresenceStatus status = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  // Provider-specific auxiliary details only.
+  map<string, string> metadata = 10;
 }
 
 message ObservationContext {
@@ -51,7 +85,7 @@ message Observation {
   // Client-generated session ID.
   string session_id = 2;
   // Observation kind.
-  // OBSERVATION_KIND_ACTOR_MESSAGE and OBSERVATION_KIND_IDLE_TICK are accepted.
+  // The kind must match the selected payload exactly.
   ObservationKind kind = 3;
   // Time when the client observed this event. Required by mapper.
   google.protobuf.Timestamp occurred_at = 4;
@@ -59,5 +93,7 @@ message Observation {
   oneof payload {
     ActorMessagePayload actor_message = 10;
     IdleTickPayload idle_tick = 11;
+    ActivityEventPayload activity_event = 12;
+    PresenceSignalPayload presence_signal = 13;
   }
 }

@@ -30,26 +30,74 @@ class _ObservationKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Obser
     DESCRIPTOR: _descriptor.EnumDescriptor
     OBSERVATION_KIND_UNSPECIFIED: _ObservationKind.ValueType  # 0
     OBSERVATION_KIND_ACTOR_MESSAGE: _ObservationKind.ValueType  # 1
-    OBSERVATION_KIND_TRANSCRIPT: _ObservationKind.ValueType  # 2
-    """Not currently accepted by the gRPC mapper."""
-    OBSERVATION_KIND_IDLE_TICK: _ObservationKind.ValueType  # 3
-    OBSERVATION_KIND_AUDIENCE_MESSAGE: _ObservationKind.ValueType  # 4
-    """Not currently accepted by the gRPC mapper."""
-    OBSERVATION_KIND_GAME_EVENT: _ObservationKind.ValueType  # 5
-    """Not currently accepted by the gRPC mapper."""
+    OBSERVATION_KIND_IDLE_TICK: _ObservationKind.ValueType  # 2
+    OBSERVATION_KIND_ACTIVITY_EVENT: _ObservationKind.ValueType  # 3
+    OBSERVATION_KIND_PRESENCE_SIGNAL: _ObservationKind.ValueType  # 4
 
 class ObservationKind(_ObservationKind, metaclass=_ObservationKindEnumTypeWrapper): ...
 
 OBSERVATION_KIND_UNSPECIFIED: ObservationKind.ValueType  # 0
 OBSERVATION_KIND_ACTOR_MESSAGE: ObservationKind.ValueType  # 1
-OBSERVATION_KIND_TRANSCRIPT: ObservationKind.ValueType  # 2
-"""Not currently accepted by the gRPC mapper."""
-OBSERVATION_KIND_IDLE_TICK: ObservationKind.ValueType  # 3
-OBSERVATION_KIND_AUDIENCE_MESSAGE: ObservationKind.ValueType  # 4
-"""Not currently accepted by the gRPC mapper."""
-OBSERVATION_KIND_GAME_EVENT: ObservationKind.ValueType  # 5
-"""Not currently accepted by the gRPC mapper."""
+OBSERVATION_KIND_IDLE_TICK: ObservationKind.ValueType  # 2
+OBSERVATION_KIND_ACTIVITY_EVENT: ObservationKind.ValueType  # 3
+OBSERVATION_KIND_PRESENCE_SIGNAL: ObservationKind.ValueType  # 4
 Global___ObservationKind: _TypeAlias = ObservationKind  # noqa: Y015
+
+class _ActivityKind:
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
+
+class _ActivityKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_ActivityKind.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
+    ACTIVITY_KIND_UNSPECIFIED: _ActivityKind.ValueType  # 0
+    ACTIVITY_KIND_ACTOR_TYPING_STARTED: _ActivityKind.ValueType  # 1
+    ACTIVITY_KIND_ACTOR_TYPING_STOPPED: _ActivityKind.ValueType  # 2
+    ACTIVITY_KIND_APP_OPENED: _ActivityKind.ValueType  # 3
+    ACTIVITY_KIND_APP_CLOSED: _ActivityKind.ValueType  # 4
+    ACTIVITY_KIND_VOICE_JOINED: _ActivityKind.ValueType  # 5
+    ACTIVITY_KIND_VOICE_LEFT: _ActivityKind.ValueType  # 6
+    ACTIVITY_KIND_SPACE_MESSAGE: _ActivityKind.ValueType  # 7
+    ACTIVITY_KIND_SYSTEM_INTERACTION: _ActivityKind.ValueType  # 8
+
+class ActivityKind(_ActivityKind, metaclass=_ActivityKindEnumTypeWrapper): ...
+
+ACTIVITY_KIND_UNSPECIFIED: ActivityKind.ValueType  # 0
+ACTIVITY_KIND_ACTOR_TYPING_STARTED: ActivityKind.ValueType  # 1
+ACTIVITY_KIND_ACTOR_TYPING_STOPPED: ActivityKind.ValueType  # 2
+ACTIVITY_KIND_APP_OPENED: ActivityKind.ValueType  # 3
+ACTIVITY_KIND_APP_CLOSED: ActivityKind.ValueType  # 4
+ACTIVITY_KIND_VOICE_JOINED: ActivityKind.ValueType  # 5
+ACTIVITY_KIND_VOICE_LEFT: ActivityKind.ValueType  # 6
+ACTIVITY_KIND_SPACE_MESSAGE: ActivityKind.ValueType  # 7
+ACTIVITY_KIND_SYSTEM_INTERACTION: ActivityKind.ValueType  # 8
+Global___ActivityKind: _TypeAlias = ActivityKind  # noqa: Y015
+
+class _PresenceStatus:
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
+
+class _PresenceStatusEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_PresenceStatus.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
+    PRESENCE_STATUS_UNSPECIFIED: _PresenceStatus.ValueType  # 0
+    PRESENCE_STATUS_UNKNOWN: _PresenceStatus.ValueType  # 1
+    PRESENCE_STATUS_ONLINE: _PresenceStatus.ValueType  # 2
+    PRESENCE_STATUS_OFFLINE: _PresenceStatus.ValueType  # 3
+    PRESENCE_STATUS_AWAY: _PresenceStatus.ValueType  # 4
+    PRESENCE_STATUS_IDLE: _PresenceStatus.ValueType  # 5
+    PRESENCE_STATUS_DO_NOT_DISTURB: _PresenceStatus.ValueType  # 6
+    PRESENCE_STATUS_INVISIBLE: _PresenceStatus.ValueType  # 7
+
+class PresenceStatus(_PresenceStatus, metaclass=_PresenceStatusEnumTypeWrapper): ...
+
+PRESENCE_STATUS_UNSPECIFIED: PresenceStatus.ValueType  # 0
+PRESENCE_STATUS_UNKNOWN: PresenceStatus.ValueType  # 1
+PRESENCE_STATUS_ONLINE: PresenceStatus.ValueType  # 2
+PRESENCE_STATUS_OFFLINE: PresenceStatus.ValueType  # 3
+PRESENCE_STATUS_AWAY: PresenceStatus.ValueType  # 4
+PRESENCE_STATUS_IDLE: PresenceStatus.ValueType  # 5
+PRESENCE_STATUS_DO_NOT_DISTURB: PresenceStatus.ValueType  # 6
+PRESENCE_STATUS_INVISIBLE: PresenceStatus.ValueType  # 7
+Global___PresenceStatus: _TypeAlias = PresenceStatus  # noqa: Y015
 
 @_typing.final
 class ActorMessagePayload(_message.Message):
@@ -94,6 +142,106 @@ class IdleTickPayload(_message.Message):
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___IdleTickPayload: _TypeAlias = IdleTickPayload  # noqa: Y015
+
+@_typing.final
+class ActivityEventPayload(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    @_typing.final
+    class MetadataEntry(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: _builtins.int
+        VALUE_FIELD_NUMBER: _builtins.int
+        key: _builtins.str
+        value: _builtins.str
+        def __init__(
+            self,
+            *,
+            key: _builtins.str = ...,
+            value: _builtins.str = ...,
+        ) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "value", b"value"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+    ACTIVITY_KIND_FIELD_NUMBER: _builtins.int
+    PROVIDER_EVENT_ID_FIELD_NUMBER: _builtins.int
+    PROVIDER_SEQUENCE_FIELD_NUMBER: _builtins.int
+    METADATA_FIELD_NUMBER: _builtins.int
+    activity_kind: Global___ActivityKind.ValueType
+    provider_event_id: _builtins.str
+    provider_sequence: _builtins.int
+    @_builtins.property
+    def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]:
+        """Provider-specific auxiliary details only."""
+
+    def __init__(
+        self,
+        *,
+        activity_kind: Global___ActivityKind.ValueType = ...,
+        provider_event_id: _builtins.str = ...,
+        provider_sequence: _builtins.int = ...,
+        metadata: _abc.Mapping[_builtins.str, _builtins.str] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["activity_kind", b"activity_kind", "metadata", b"metadata", "provider_event_id", b"provider_event_id", "provider_sequence", b"provider_sequence"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___ActivityEventPayload: _TypeAlias = ActivityEventPayload  # noqa: Y015
+
+@_typing.final
+class PresenceSignalPayload(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    @_typing.final
+    class MetadataEntry(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: _builtins.int
+        VALUE_FIELD_NUMBER: _builtins.int
+        key: _builtins.str
+        value: _builtins.str
+        def __init__(
+            self,
+            *,
+            key: _builtins.str = ...,
+            value: _builtins.str = ...,
+        ) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "value", b"value"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+    STATUS_FIELD_NUMBER: _builtins.int
+    EXPIRES_AT_FIELD_NUMBER: _builtins.int
+    METADATA_FIELD_NUMBER: _builtins.int
+    status: Global___PresenceStatus.ValueType
+    @_builtins.property
+    def expires_at(self) -> _timestamp_pb2.Timestamp: ...
+    @_builtins.property
+    def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]:
+        """Provider-specific auxiliary details only."""
+
+    def __init__(
+        self,
+        *,
+        status: Global___PresenceStatus.ValueType = ...,
+        expires_at: _timestamp_pb2.Timestamp | None = ...,
+        metadata: _abc.Mapping[_builtins.str, _builtins.str] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["expires_at", b"expires_at"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["expires_at", b"expires_at", "metadata", b"metadata", "status", b"status"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___PresenceSignalPayload: _TypeAlias = PresenceSignalPayload  # noqa: Y015
 
 @_typing.final
 class ObservationContext(_message.Message):
@@ -180,13 +328,15 @@ class Observation(_message.Message):
     CONTEXT_FIELD_NUMBER: _builtins.int
     ACTOR_MESSAGE_FIELD_NUMBER: _builtins.int
     IDLE_TICK_FIELD_NUMBER: _builtins.int
+    ACTIVITY_EVENT_FIELD_NUMBER: _builtins.int
+    PRESENCE_SIGNAL_FIELD_NUMBER: _builtins.int
     observation_id: _builtins.str
     """Client-generated observation ID."""
     session_id: _builtins.str
     """Client-generated session ID."""
     kind: Global___ObservationKind.ValueType
     """Observation kind.
-    OBSERVATION_KIND_ACTOR_MESSAGE and OBSERVATION_KIND_IDLE_TICK are accepted.
+    The kind must match the selected payload exactly.
     """
     @_builtins.property
     def occurred_at(self) -> _timestamp_pb2.Timestamp:
@@ -198,6 +348,10 @@ class Observation(_message.Message):
     def actor_message(self) -> Global___ActorMessagePayload: ...
     @_builtins.property
     def idle_tick(self) -> Global___IdleTickPayload: ...
+    @_builtins.property
+    def activity_event(self) -> Global___ActivityEventPayload: ...
+    @_builtins.property
+    def presence_signal(self) -> Global___PresenceSignalPayload: ...
     def __init__(
         self,
         *,
@@ -208,12 +362,14 @@ class Observation(_message.Message):
         context: Global___ObservationContext | None = ...,
         actor_message: Global___ActorMessagePayload | None = ...,
         idle_tick: Global___IdleTickPayload | None = ...,
+        activity_event: Global___ActivityEventPayload | None = ...,
+        presence_signal: Global___PresenceSignalPayload | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["actor_message", b"actor_message", "context", b"context", "idle_tick", b"idle_tick", "occurred_at", b"occurred_at", "payload", b"payload"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["activity_event", b"activity_event", "actor_message", b"actor_message", "context", b"context", "idle_tick", b"idle_tick", "occurred_at", b"occurred_at", "payload", b"payload", "presence_signal", b"presence_signal"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["actor_message", b"actor_message", "context", b"context", "idle_tick", b"idle_tick", "kind", b"kind", "observation_id", b"observation_id", "occurred_at", b"occurred_at", "payload", b"payload", "session_id", b"session_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["activity_event", b"activity_event", "actor_message", b"actor_message", "context", b"context", "idle_tick", b"idle_tick", "kind", b"kind", "observation_id", b"observation_id", "occurred_at", b"occurred_at", "payload", b"payload", "presence_signal", b"presence_signal", "session_id", b"session_id"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    _WhichOneofReturnType_payload: _TypeAlias = _typing.Literal["actor_message", "idle_tick"]  # noqa: Y015
+    _WhichOneofReturnType_payload: _TypeAlias = _typing.Literal["actor_message", "idle_tick", "activity_event", "presence_signal"]  # noqa: Y015
     _WhichOneofArgType_payload: _TypeAlias = _typing.Literal["payload", b"payload"]  # noqa: Y015
     def WhichOneof(self, oneof_group: _WhichOneofArgType_payload) -> _WhichOneofReturnType_payload | None: ...
 

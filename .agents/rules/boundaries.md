@@ -9,10 +9,9 @@ All external app events must become typed observations before cognitive code see
 Examples:
 
 - `ActorMessageObservation`
-- `TranscriptObservation`
 - `IdleTickObservation`
-- `AudienceMessageObservation`
-- `GameEventObservation`
+- `ActivityEventObservation`
+- `PresenceSignalObservation`
 
 Do not pass Discord, Twitch, voice, HTTP, or CLI objects into `cognitive/`.
 
