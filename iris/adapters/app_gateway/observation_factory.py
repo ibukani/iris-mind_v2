@@ -73,10 +73,7 @@ class ObservationFactory:
         )
         space_id = None
         if ingress.space is not None:
-            space = await self._space_resolver.resolve_space(
-                ingress.space,
-                participants=(actor,),
-            )
+            space = await self._space_resolver.resolve_space(ingress.space)
             space_id = space.space_id
 
         return ActorMessageObservation(

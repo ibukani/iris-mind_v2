@@ -11,53 +11,31 @@ from iris.core.metadata import EMPTY_METADATA, immutable_metadata
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from iris.contracts.identity import Identity
-    from iris.core.ids import ActorId, ExternalRef, SpaceId
+    from iris.core.ids import ExternalRef, SpaceId
 
 
 class SpaceKind(StrEnum):
     """相互作用スペースの種類。"""
 
     DIRECT_MESSAGE = "direct_message"
-    CHANNEL = "channel"
+    TEXT_CHANNEL = "text_channel"
     THREAD = "thread"
+    VOICE_CHANNEL = "voice_channel"
     ROOM = "room"
     BROADCAST = "broadcast"
 
 
-class SpaceParticipantKind(StrEnum):
-    """スペース参加者の種類。"""
-
-    HUMAN = "human"
-    DEVICE = "device"
-    SERVICE = "service"
-    SYSTEM = "system"
-    IRIS = "iris"
-
-
-@dataclass(frozen=True)
-class SpaceParticipant:
-    """スペース内の参加者エントリ。"""
-
-    actor_id: ActorId
-    participant_kind: SpaceParticipantKind
-    display_name: str
-    identity: Identity | None = None
-    metadata: Mapping[str, str] = EMPTY_METADATA
-
-    def __post_init__(self) -> None:
-        """メタデータが強固に不変であることを保証する。"""
-        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
-
-
 @dataclass(frozen=True)
 class InteractionSpace:
-    """観察された相互作用のコンテキストとなるスペース。"""
+    """観察された相互作用スペースの安定した識別情報とコンテキスト。
+
+    現在の在室者は保持しない。将来の SpaceOccupancyStore が在室者情報の
+    正本を担う。
+    """
 
     space_id: SpaceId
     space_kind: SpaceKind
     display_name: str
-    participants: tuple[SpaceParticipant, ...] = ()
     metadata: Mapping[str, str] = EMPTY_METADATA
 
     def __post_init__(self) -> None:

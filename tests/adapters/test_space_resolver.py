@@ -6,9 +6,8 @@ import pytest
 
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.contracts.external_refs import ExternalSpaceRef
-from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.spaces import SpaceKind
-from iris.core.ids import ActorId, ExternalRef
+from iris.core.ids import ExternalRef
 
 
 @pytest.mark.anyio
@@ -39,30 +38,20 @@ async def test_ephemeral_space_resolver_returns_deterministic_id() -> None:
 
 
 @pytest.mark.anyio
-async def test_ephemeral_space_resolver_maps_participants() -> None:
-    """EphemeralSpaceResolver maps Identity participants into snapshots."""
+async def test_ephemeral_space_resolver_returns_stable_context_without_occupants() -> None:
+    """EphemeralSpaceResolverが在室者を持たない安定contextを返すことを確認する。"""
     resolver = EphemeralSpaceResolver()
-    actor = Identity(
-        actor_id=ActorId("actor-1"),
-        actor_kind=ActorKind.HUMAN,
-        display_name="Alice",
-        metadata={"key": "val"},
-    )
 
     space = await resolver.resolve_space(
         ExternalSpaceRef(
             provider="discord",
             provider_space_ref=ExternalRef("123"),
             display_name="Channel",
-            space_kind=SpaceKind.CHANNEL,
+            space_kind=SpaceKind.TEXT_CHANNEL,
+            metadata={"key": "val"},
         ),
-        participants=[actor],
     )
 
-    assert len(space.participants) == 1
-    participant = space.participants[0]
-    assert participant.actor_id == ActorId("actor-1")
-    assert participant.participant_kind.value == "human"
-    assert participant.display_name == "Alice"
-    assert participant.identity == actor
-    assert participant.metadata == {"key": "val"}
+    assert space.space_kind is SpaceKind.TEXT_CHANNEL
+    assert space.metadata == {"key": "val"}
+    assert not hasattr(space, "participants")

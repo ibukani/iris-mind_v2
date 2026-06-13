@@ -165,7 +165,7 @@ def test_fake_space_resolver_returns_stable_space_id_for_same_external_ref() -> 
                 provider="discord",
                 provider_space_ref=ExternalRef("channel-1"),
                 display_name="general",
-                space_kind=SpaceKind.CHANNEL,
+                space_kind=SpaceKind.TEXT_CHANNEL,
             )
         )
     )
@@ -175,7 +175,7 @@ def test_fake_space_resolver_returns_stable_space_id_for_same_external_ref() -> 
                 provider="discord",
                 provider_space_ref=ExternalRef("channel-1"),
                 display_name="general-renamed",
-                space_kind=SpaceKind.CHANNEL,
+                space_kind=SpaceKind.TEXT_CHANNEL,
             )
         )
     )
@@ -183,17 +183,8 @@ def test_fake_space_resolver_returns_stable_space_id_for_same_external_ref() -> 
     assert first.space_id == second.space_id
 
 
-def test_fake_space_resolver_preserves_space_fields_and_participants() -> None:
-    """SpaceResolverがspace kind/display name/participants/metadataを保持することを確認する。"""
-    identity = asyncio.run(
-        FakeIdentityResolver().resolve_identity(
-            ExternalAccountRef(
-                provider="discord",
-                provider_subject=ExternalRef("123"),
-                display_name="Mina",
-            )
-        )
-    )
+def test_fake_space_resolver_preserves_stable_space_context() -> None:
+    """SpaceResolverが在室者を持たずspace contextを保持することを確認する。"""
     resolver: SpaceResolver = FakeSpaceResolver()
 
     space = asyncio.run(
@@ -202,16 +193,13 @@ def test_fake_space_resolver_preserves_space_fields_and_participants() -> None:
                 provider="discord",
                 provider_space_ref=ExternalRef("channel-1"),
                 display_name="general",
-                space_kind=SpaceKind.CHANNEL,
+                space_kind=SpaceKind.TEXT_CHANNEL,
                 metadata={"topic": "tea"},
             ),
-            participants=(identity,),
         )
     )
 
-    assert space.space_kind == SpaceKind.CHANNEL
+    assert space.space_kind == SpaceKind.TEXT_CHANNEL
     assert space.display_name == "general"
     assert space.metadata == {"topic": "tea"}
-    assert len(space.participants) == 1
-    assert space.participants[0].actor_id == identity.actor_id
-    assert space.participants[0].identity == identity
+    assert not hasattr(space, "participants")

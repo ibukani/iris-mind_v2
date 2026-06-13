@@ -190,3 +190,5 @@ Scheduler (runtime)
 Cognitive flow は memory、relationship、persona semantics の主スコープとして `actor_id` を使う。`space_id` は observation が発生した外部contextの補助scope。
 
 Default runtime は `SpaceBinding` を永続化しない。Space に conversation history や persona state を紐づけない。
+
+`InteractionSpace` は安定したロケーション識別情報とコンテキストのみを表し、現在の在室者を保持しない。在室者の正本は後続PRで導入予定の `SpaceOccupancyStore` とし、現時点では未実装。

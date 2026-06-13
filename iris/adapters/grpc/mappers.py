@@ -32,7 +32,7 @@ from iris.generated.iris.runtime.v1 import runtime_pb2
 from iris.runtime.service import ObservationEnvelope
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
     from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
     from iris.contracts.actions import PresentedOutput
@@ -130,7 +130,7 @@ class GrpcRuntimeMapper:
             ObservationContext: Typed observation context.
         """
         actor, account_id = await self._resolve_actor_from_context(context)
-        space_id = await self._resolve_space_from_context(context, actor)
+        space_id = await self._resolve_space_from_context(context)
 
         return ObservationContext(
             actor=actor,
@@ -173,16 +173,12 @@ class GrpcRuntimeMapper:
     async def _resolve_space_from_context(
         self,
         context: observations_pb2.ObservationContext,
-        actor: Identity | None,
     ) -> SpaceId | None:
         has_space_ref = context.HasField("space_ref")
         if has_space_ref:
             if context.space_id:
                 _raise_mapping_error("context must not include both space_ref and space_id")
-            resolved_space = await self._resolve_space_ref(
-                context.space_ref,
-                participants=(actor,) if actor is not None else (),
-            )
+            resolved_space = await self._resolve_space_ref(context.space_ref)
             return resolved_space.space_id
         if context.space_id:
             return SpaceId(context.space_id)
@@ -211,8 +207,6 @@ class GrpcRuntimeMapper:
     async def _resolve_space_ref(
         self,
         space_ref: spaces_pb2.ExternalSpaceRef,
-        *,
-        participants: Sequence[Identity],
     ) -> InteractionSpace:
         """Resolve ExternalSpaceRef into an InteractionSpace via the resolver.
 
@@ -224,10 +218,7 @@ class GrpcRuntimeMapper:
 
         dto = external_space_ref_from_proto(space_ref)
 
-        return await self._space_resolver.resolve_space(
-            dto,
-            participants=participants,
-        )
+        return await self._space_resolver.resolve_space(dto)
 
 
 def external_account_ref_from_proto(
@@ -404,8 +395,9 @@ def _actor_kind_from_proto(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
 def _space_kind_from_proto(kind: spaces_pb2.SpaceKind.ValueType) -> SpaceKind:
     mapping = {
         spaces_pb2.SPACE_KIND_DIRECT_MESSAGE: SpaceKind.DIRECT_MESSAGE,
-        spaces_pb2.SPACE_KIND_CHANNEL: SpaceKind.CHANNEL,
+        spaces_pb2.SPACE_KIND_TEXT_CHANNEL: SpaceKind.TEXT_CHANNEL,
         spaces_pb2.SPACE_KIND_THREAD: SpaceKind.THREAD,
+        spaces_pb2.SPACE_KIND_VOICE_CHANNEL: SpaceKind.VOICE_CHANNEL,
         spaces_pb2.SPACE_KIND_ROOM: SpaceKind.ROOM,
         spaces_pb2.SPACE_KIND_BROADCAST: SpaceKind.BROADCAST,
     }
