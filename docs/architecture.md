@@ -130,7 +130,6 @@ iris/
 │   │   ├── ingress.py
 │   │   ├── identity_resolver.py
 │   │   ├── ports.py
-│   │   ├── space_participants.py
 │   │   ├── space_resolver.py
 │   │   └── stable_ids.py
 │   ├── llm/
@@ -194,7 +193,7 @@ iris/
 - `Observation`
 - `Action` / `ActionPlan`
 - `Identity` (actor-centered)
-- `InteractionSpace` / `SpaceParticipant`
+- `InteractionSpace`
 - `Memory` / `MemorySearchResult`
 - `Policy` / `ActionPreference` / `PolicyConstraint`
 
@@ -553,7 +552,9 @@ device_id: DeviceId | None
 metadata: Mapping[str, str]
 ```
 
-`InteractionSpace` は観測が起きた相互作用のコンテキストで、`space_id` / `space_kind` (direct_message / channel / thread / room / broadcast) / `display_name` / `participants` を持つ。`SpaceParticipant` は `actor_id` と `participant_kind` を運ぶ。
+`InteractionSpace` は観測が起きた安定したロケーション識別情報とコンテキストで、`space_id` / `space_kind` (`direct_message` / `text_channel` / `thread` / `voice_channel` / `room` / `broadcast`) / `display_name` / `metadata` を持つ。
+
+`InteractionSpace` は現在の在室者を保持せず、可変なルーム状態の正本にはならない。現在の在室者は後続PRで導入予定の `SpaceOccupancyStore` が単独で管理する。`WorkspaceFrame` が将来1ターン用の参加者snapshotを持つ場合も、`InteractionSpace` 自体をoccupancyの正本にはしない。
 
 `AccountProfile` は外部account identityを表す契約。
 `account_id`、`provider`、`provider_subject`、`display_name`、任意の `linked_actor_id` を持つ。

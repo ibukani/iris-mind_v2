@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast, override
 
@@ -25,7 +25,6 @@ if TYPE_CHECKING:
 
     from iris.adapters.app_gateway.ports import IdentityResolver
     from iris.contracts.external_refs import ExternalSpaceRef
-    from iris.contracts.identity import Identity
     from iris.runtime.service import ObservationEnvelope
 
 
@@ -400,7 +399,7 @@ def _space_ref_request() -> runtime_pb2.SubmitObservationRequest:
                     provider="discord",
                     provider_space_ref="chan-1",
                     display_name="General",
-                    space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+                    space_kind=spaces_pb2.SPACE_KIND_TEXT_CHANNEL,
                 ),
             ),
             actor_message=observations_pb2.ActorMessagePayload(text="hello grpc"),
@@ -487,14 +486,10 @@ class _RecordingSpaceResolver(SpaceResolver):
     async def resolve_space(
         self,
         space_ref: ExternalSpaceRef,
-        *,
-        participants: Sequence[Identity] = (),
     ) -> InteractionSpace:
-        _ = participants
         return InteractionSpace(
             space_id=SpaceId(f"resolved-space-{space_ref.provider}-{space_ref.provider_space_ref}"),
             space_kind=space_ref.space_kind,
             display_name=space_ref.display_name,
-            participants=(),
             metadata=dict(space_ref.metadata),
         )

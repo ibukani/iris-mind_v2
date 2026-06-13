@@ -7,9 +7,8 @@ import pytest
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.app_gateway.stable_ids import stable_space_id
 from iris.contracts.external_refs import ExternalSpaceRef
-from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.spaces import SpaceKind
-from iris.core.ids import ActorId, ExternalRef
+from iris.core.ids import ExternalRef
 
 
 @pytest.mark.anyio
@@ -54,7 +53,7 @@ async def test_display_name_metadata_and_kind_do_not_affect_space_id() -> None:
     first = await resolver.resolve_space(
         _space_ref(
             display_name="General",
-            space_kind=SpaceKind.CHANNEL,
+            space_kind=SpaceKind.TEXT_CHANNEL,
             metadata={"topic": "initial"},
         ),
     )
@@ -73,25 +72,13 @@ async def test_display_name_metadata_and_kind_do_not_affect_space_id() -> None:
 
 
 @pytest.mark.anyio
-async def test_participants_are_mapped_into_interaction_space() -> None:
-    """参加者IdentityはInteractionSpace participant snapshotへ写される。"""
+async def test_interaction_space_does_not_own_current_occupants() -> None:
+    """Space解決結果に現在の在室者フィールドが存在しないことを確認する。"""
     resolver = EphemeralSpaceResolver()
-    participant = Identity(
-        actor_id=ActorId("actor-1"),
-        actor_kind=ActorKind.HUMAN,
-        display_name="Alice",
-        metadata={"role": "member"},
-    )
 
-    space = await resolver.resolve_space(_space_ref(), participants=[participant])
+    space = await resolver.resolve_space(_space_ref())
 
-    assert len(space.participants) == 1
-    mapped = space.participants[0]
-    assert mapped.actor_id == ActorId("actor-1")
-    assert mapped.participant_kind.value == "human"
-    assert mapped.display_name == "Alice"
-    assert mapped.identity == participant
-    assert mapped.metadata == {"role": "member"}
+    assert not hasattr(space, "participants")
 
 
 @pytest.mark.anyio
@@ -110,7 +97,7 @@ def _space_ref(
     provider: str = "discord",
     provider_space_ref: str = "channel-1",
     display_name: str = "General",
-    space_kind: SpaceKind = SpaceKind.CHANNEL,
+    space_kind: SpaceKind = SpaceKind.TEXT_CHANNEL,
     metadata: dict[str, str] | None = None,
 ) -> ExternalSpaceRef:
     return ExternalSpaceRef(

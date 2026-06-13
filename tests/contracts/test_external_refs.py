@@ -46,7 +46,7 @@ def test_external_space_ref_metadata_is_defensively_copied() -> None:
         provider="discord",
         provider_space_ref=ExternalRef("456"),
         display_name="Server",
-        space_kind=SpaceKind.CHANNEL,
+        space_kind=SpaceKind.TEXT_CHANNEL,
         metadata=mutable_dict,
     )
 

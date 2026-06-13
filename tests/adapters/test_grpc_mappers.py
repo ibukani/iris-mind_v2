@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, override
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
     from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 
@@ -604,29 +604,24 @@ class _RecordingSpaceResolver(SpaceResolver):
         self.provider = ""
         self.provider_space_ref = ExternalRef("")
         self.display_name = ""
-        self.space_kind = SpaceKind.CHANNEL
-        self.participants: Sequence[Identity] = ()
+        self.space_kind = SpaceKind.TEXT_CHANNEL
         self.metadata: Mapping[str, str] = {}
 
     @override
     async def resolve_space(
         self,
         space_ref: ExternalSpaceRef,
-        *,
-        participants: Sequence[Identity] = (),
     ) -> InteractionSpace:
         self.calls += 1
         self.provider = space_ref.provider
         self.provider_space_ref = space_ref.provider_space_ref
         self.display_name = space_ref.display_name
         self.space_kind = space_ref.space_kind
-        self.participants = tuple(participants)
         self.metadata = dict(space_ref.metadata)
         return InteractionSpace(
             space_id=SpaceId(f"resolved-space-{space_ref.provider}-{space_ref.provider_space_ref}"),
             space_kind=space_ref.space_kind,
             display_name=space_ref.display_name,
-            participants=(),
             metadata=dict(space_ref.metadata),
         )
 
@@ -640,7 +635,7 @@ async def test_space_ref_resolves_to_space_id_through_resolver() -> None:
             provider="discord",
             provider_space_ref="chan-1",
             display_name="General",
-            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+            space_kind=spaces_pb2.SPACE_KIND_TEXT_CHANNEL,
         )
     )
 
@@ -675,8 +670,8 @@ async def test_space_ref_passes_fields_to_resolver() -> None:
 
 
 @pytest.mark.anyio
-async def test_space_ref_includes_actor_as_participant_when_account_ref_present() -> None:
-    """account_refが解決されたactorが、space_resolverのparticipantsに含まれることを確認する。"""
+async def test_account_and_space_resolution_remain_separate() -> None:
+    """actor解決とspace解決がparticipant snapshotなしで独立することを確認する。"""
     id_resolver = _RecordingIdentityResolver()
     space_resolver = _RecordingSpaceResolver()
     context = observations_pb2.ObservationContext(
@@ -689,7 +684,7 @@ async def test_space_ref_includes_actor_as_participant_when_account_ref_present(
             provider="discord",
             provider_space_ref="chan-1",
             display_name="General",
-            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+            space_kind=spaces_pb2.SPACE_KIND_TEXT_CHANNEL,
         ),
     )
 
@@ -698,8 +693,27 @@ async def test_space_ref_includes_actor_as_participant_when_account_ref_present(
         space_resolver=space_resolver,
     ).observation_context_from_proto(context)
 
-    assert len(space_resolver.participants) == 1
-    assert space_resolver.participants[0].actor_id == "resolved-discord-user-1"
+    assert id_resolver.calls == 1
+    assert space_resolver.calls == 1
+    assert space_resolver.space_kind is SpaceKind.TEXT_CHANNEL
+
+
+@pytest.mark.anyio
+async def test_voice_channel_space_kind_maps_to_resolver() -> None:
+    """VOICE_CHANNEL protoがSpaceKind.VOICE_CHANNELへmapされることを確認する。"""
+    resolver = _RecordingSpaceResolver()
+    context = observations_pb2.ObservationContext(
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="discord",
+            provider_space_ref="voice-1",
+            display_name="Lobby",
+            space_kind=spaces_pb2.SPACE_KIND_VOICE_CHANNEL,
+        )
+    )
+
+    await GrpcRuntimeMapper(space_resolver=resolver).observation_context_from_proto(context)
+
+    assert resolver.space_kind is SpaceKind.VOICE_CHANNEL
 
 
 @pytest.mark.anyio
@@ -710,7 +724,7 @@ async def test_space_ref_without_resolver_raises_mapping_error() -> None:
             provider="discord",
             provider_space_ref="chan-1",
             display_name="General",
-            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+            space_kind=spaces_pb2.SPACE_KIND_TEXT_CHANNEL,
         )
     )
 
@@ -727,7 +741,7 @@ async def test_space_ref_and_space_id_together_raises_mapping_error() -> None:
             provider="discord",
             provider_space_ref="chan-1",
             display_name="General",
-            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+            space_kind=spaces_pb2.SPACE_KIND_TEXT_CHANNEL,
         ),
     )
 
@@ -743,7 +757,7 @@ async def test_space_ref_without_provider_raises_mapping_error() -> None:
         space_ref=spaces_pb2.ExternalSpaceRef(
             provider_space_ref="chan-1",
             display_name="General",
-            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+            space_kind=spaces_pb2.SPACE_KIND_TEXT_CHANNEL,
         )
     )
 
@@ -759,7 +773,7 @@ async def test_space_ref_without_provider_space_ref_raises_mapping_error() -> No
         space_ref=spaces_pb2.ExternalSpaceRef(
             provider="discord",
             display_name="General",
-            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+            space_kind=spaces_pb2.SPACE_KIND_TEXT_CHANNEL,
         )
     )
 
@@ -775,7 +789,7 @@ async def test_space_ref_without_display_name_raises_mapping_error() -> None:
         space_ref=spaces_pb2.ExternalSpaceRef(
             provider="discord",
             provider_space_ref="chan-1",
-            space_kind=spaces_pb2.SPACE_KIND_CHANNEL,
+            space_kind=spaces_pb2.SPACE_KIND_TEXT_CHANNEL,
         )
     )
 

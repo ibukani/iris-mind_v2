@@ -6,14 +6,13 @@ from typing import TYPE_CHECKING, override
 
 from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.app_gateway.ports import AccountStore, IdentityResolver, SpaceResolver
-from iris.adapters.app_gateway.space_participants import space_participant_from_identity
 from iris.adapters.app_gateway.stable_ids import stable_account_id, stable_actor_id, stable_space_id
 from iris.contracts.accounts import AccountProfile
 from iris.contracts.identity import Identity
 from iris.contracts.spaces import InteractionSpace
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
     from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
     from iris.core.ids import ActorId, DeviceId
@@ -95,8 +94,6 @@ class FakeSpaceResolver(SpaceResolver):
     async def resolve_space(
         self,
         space_ref: ExternalSpaceRef,
-        *,
-        participants: Sequence[Identity] = (),
     ) -> InteractionSpace:
         """同じprovider/provider_space_refから同じSpaceIdを持つInteractionSpaceを返す。
 
@@ -108,8 +105,5 @@ class FakeSpaceResolver(SpaceResolver):
             space_id=space_id,
             space_kind=space_ref.space_kind,
             display_name=space_ref.display_name,
-            participants=tuple(
-                space_participant_from_identity(identity) for identity in participants
-            ),
             metadata=dict(space_ref.metadata),
         )

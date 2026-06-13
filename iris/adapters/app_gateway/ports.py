@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from iris.contracts.accounts import AccountProfile
     from iris.contracts.actions import ActionResult, AppAction
     from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
@@ -50,8 +48,6 @@ class SpaceResolver(Protocol):
     async def resolve_space(
         self,
         space_ref: ExternalSpaceRef,
-        *,
-        participants: Sequence[Identity] = (),
     ) -> InteractionSpace:
         """外部provider space refから型付きInteractionSpaceを返す。"""
         ...

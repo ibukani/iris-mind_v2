@@ -137,7 +137,7 @@ message ExternalSpaceRef {
 
 境界の責務と Space 解決モデル:
 
-- **InteractionSpace**: Iris 内部の会話コンテキスト。ランタイムのコンテキストラベルとして使われます。
+- **InteractionSpace**: Iris 内部の安定したロケーション識別情報とコンテキスト。在室者は保持しない。
 - **ExternalSpaceRef**: 外部プロバイダのロケーション情報（例: Discordのチャンネル、CLIルームなど）。
 - **SpaceBinding**: 予約済みextension contract。default runtime では永続化も配線もしない。
 - **SpaceBindingStore**: 予約済みextension contract。通常のspace解決には使わない。
@@ -151,6 +151,7 @@ ExternalSpaceRef(provider="discord", provider_space_ref="123")
 
 **注意事項**:
 - この機能は `InteractionSpace` 自体の永続化を導入しません。
+- 現在の在室者は `InteractionSpace` の責務ではありません。後続PRで導入予定の `SpaceOccupancyStore` が正本を担います。
 - ルームの会話履歴（room conversation history）の保存機能も導入しません。
 - メモリと関係性（Relationship）の永続化は、引き続きアクター中心（Actor-centered）です。
 

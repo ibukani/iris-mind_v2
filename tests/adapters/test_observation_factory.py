@@ -111,7 +111,7 @@ async def test_observation_factory_resolves_space_id_when_ref_present() -> None:
                 provider="discord",
                 provider_space_ref=ExternalRef("channel-1"),
                 display_name="general",
-                space_kind=SpaceKind.CHANNEL,
+                space_kind=SpaceKind.TEXT_CHANNEL,
             ),
             message=ActorMessagePayload(
                 text="Hello in space!",
@@ -124,7 +124,7 @@ async def test_observation_factory_resolves_space_id_when_ref_present() -> None:
             provider="discord",
             provider_space_ref=ExternalRef("channel-1"),
             display_name="general",
-            space_kind=SpaceKind.CHANNEL,
+            space_kind=SpaceKind.TEXT_CHANNEL,
         )
     )
 
