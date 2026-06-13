@@ -13,7 +13,7 @@ from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.actions import ActionPlan
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
-from tests.helpers.private_access import get_private_attr
+from tests.helpers.private_access import _is_callable, get_private_attr_matching
 
 
 def _observation(text: str) -> ActorMessageObservation:
@@ -68,7 +68,7 @@ def test_select_action_plan_returns_first_when_only_one() -> None:
         observation=_observation("test"),
         candidate_action_plans=(plan,),
     )
-    selected = get_private_attr(cycle, "_select_action_plan")(frame)
+    selected = get_private_attr_matching(cycle, "_select_action_plan", _is_callable)(frame)
     assert selected is plan
 
 
@@ -86,7 +86,7 @@ def test_select_action_plan_returns_fallback_when_empty() -> None:
         fallback_plan=fallback,
     )
     frame = WorkspaceFrame(observation=_observation("test"))
-    selected = get_private_attr(cycle, "_select_action_plan")(frame)
+    selected = get_private_attr_matching(cycle, "_select_action_plan", _is_callable)(frame)
     assert selected is fallback
 
 
@@ -124,7 +124,7 @@ def test_select_action_plan_prefers_higher_priority() -> None:
         observation=_observation("test"),
         candidate_action_plans=(low, high, mid),
     )
-    selected = get_private_attr(cycle, "_select_action_plan")(frame)
+    selected = get_private_attr_matching(cycle, "_select_action_plan", _is_callable)(frame)
     assert selected is high
 
 

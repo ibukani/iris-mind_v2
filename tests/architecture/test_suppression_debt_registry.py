@@ -19,7 +19,10 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 import re
 import tomllib as _toml_parser
-from typing import cast, override
+from typing import TYPE_CHECKING, override
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEBT_REGISTRY_PATH = PROJECT_ROOT / ".agents" / "approved-suppression-debt.toml"
@@ -157,6 +160,44 @@ class Occurrence:
 # ---------------------------------------------------------------------------
 
 
+def _require_mapping(value: object, context: str) -> Mapping[str, object]:
+    """Validate a TOML-loaded value is a table and normalize string keys.
+
+    Args:
+        value: Value from tomllib.load.
+        context: Human label for the error message.
+
+    Returns:
+        Typed mapping with string keys.
+
+    Raises:
+        TypeError: If the value is not a dict.
+    """
+    if not isinstance(value, dict):
+        msg = f"{context} must be a TOML table"
+        raise TypeError(msg)
+    return {str(key): item for key, item in value.items()}
+
+
+def _require_sequence(value: object, context: str) -> Sequence[object]:
+    """Validate a TOML-loaded value is an array.
+
+    Args:
+        value: Value from tomllib.load.
+        context: Human label for the error message.
+
+    Returns:
+        Typed sequence.
+
+    Raises:
+        TypeError: If the value is not a list.
+    """
+    if not isinstance(value, list):
+        msg = f"{context} must be a TOML array"
+        raise TypeError(msg)
+    return value
+
+
 def _parse_debt_registry() -> tuple[DebtEntry, ...]:
     """Parse the approved suppression-debt registry TOML file.
 
@@ -168,12 +209,13 @@ def _parse_debt_registry() -> tuple[DebtEntry, ...]:
         return ()
 
     with DEBT_REGISTRY_PATH.open("rb") as fh:
-        data = cast("dict[str, object]", _toml_parser.load(fh))
+        data = _require_mapping(_toml_parser.load(fh), "debt registry root")
 
-    debt_list = cast("list[dict[str, object]]", data.get("debt", []))
+    debt_list = _require_sequence(data.get("debt", []), "debt registry [[debt]]")
 
     raw_entries: list[dict[str, object]] = [
-        {str(k): v for k, v in item.items()} for item in debt_list
+        _require_mapping(item, f"debt entry #{i}")
+        for i, item in enumerate(debt_list)
     ]
 
     entries: list[DebtEntry] = []

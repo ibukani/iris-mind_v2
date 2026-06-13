@@ -14,9 +14,11 @@ from scripts.verify import (
     selected_checks,
 )
 
-from tests.helpers.private_access import import_private
+from tests.helpers.private_access import _is_callable, import_private_matching
 
-_first_failing_location = import_private("scripts.verify", "_first_failing_location")
+_first_failing_location = import_private_matching(
+    "scripts.verify", "_first_failing_location", _is_callable
+)
 
 
 class TestFirstFailingLocation:

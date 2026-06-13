@@ -525,7 +525,7 @@ owner = "team"
 
 [[debt]]
 path = "tests/runtime/test_llm_wiring.py"
-line = 40
+line = 45
 kind = "typing.cast"
 rule_or_error_code = ""
 reason = "wiring 関数の戻り値を具体的な client 型に cast。設定駆動の動的 provider 選択に必要"
@@ -535,7 +535,7 @@ owner = "team"
 
 [[debt]]
 path = "tests/runtime/test_llm_wiring.py"
-line = 47
+line = 52
 kind = "typing.cast"
 rule_or_error_code = ""
 reason = "wiring 関数の戻り値を具体的な client 型に cast。設定駆動の動的 provider 選択に必要"
@@ -570,56 +570,6 @@ kind = "noqa"
 rule_or_error_code = "S104"
 reason = "テスト用に意図的に 0.0.0.0 を bind address として使用"
 alternative_attempted = "テスト用 loopback address の使用"
-expires = "2026-06-30"
-owner = "team"
-
-[[debt]]
-path = "tests/architecture/test_suppression_debt_registry.py"
-line = 171
-kind = "typing.cast"
-rule_or_error_code = ""
-reason = "tomllib.load の戻り値型が不明。TOML パース結果の型を確定させるため cast が必要"
-alternative_attempted = "型付き wrapper、Mapping ガードパターン"
-expires = "2026-06-30"
-owner = "team"
-
-[[debt]]
-path = "tests/architecture/test_suppression_debt_registry.py"
-line = 173
-kind = "typing.cast"
-rule_or_error_code = ""
-reason = "dict.get からの未確定型配列。debt エントリリストの型を確定させるため cast が必要"
-alternative_attempted = "型付き wrapper、要素ごとの isinstance チェック"
-expires = "2026-06-30"
-owner = "team"
-
-[[debt]]
-path = "tests/helpers/private_access.py"
-line = 14
-kind = "noqa"
-rule_or_error_code = "ANN401"
-reason = "白箱テスト用ヘルパー。getattr の戻り値は任意の型。object では不十分で呼び出し側が壊れる"
-alternative_attempted = "object 戻り値型に変更したが、callable/iterable として使う呼び出し側で型エラー連鎖"
-expires = "2026-06-30"
-owner = "team"
-
-[[debt]]
-path = "tests/helpers/private_access.py"
-line = 27
-kind = "noqa"
-rule_or_error_code = "ANN401"
-reason = "白箱テスト用ヘルパー。深さ優先 getattr の戻り値は任意の型"
-alternative_attempted = "object 戻り値型に変更したが、呼び出し側で型エラー連鎖"
-expires = "2026-06-30"
-owner = "team"
-
-[[debt]]
-path = "tests/helpers/private_access.py"
-line = 46
-kind = "noqa"
-rule_or_error_code = "ANN401"
-reason = "白箱テスト用ヘルパー。動的 import の戻り値は任意の型"
-alternative_attempted = "object 戻り値型に変更したが、呼び出し側で型エラー連鎖"
 expires = "2026-06-30"
 owner = "team"
 
