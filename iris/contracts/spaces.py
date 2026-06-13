@@ -29,8 +29,7 @@ class SpaceKind(StrEnum):
 class InteractionSpace:
     """観察された相互作用スペースの安定した識別情報とコンテキスト。
 
-    現在の在室者は保持しない。将来の SpaceOccupancyStore が在室者情報の
-    正本を担う。
+    現在の在室者は保持しない。SpaceOccupancyStore が在室者情報の正本を担う。
     """
 
     space_id: SpaceId

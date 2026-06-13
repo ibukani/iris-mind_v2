@@ -8,15 +8,18 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
-from iris.adapters.memory.fake import FakeMemoryStore
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.contracts.actions import ActionPlan, PresentedOutput
-from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
+from iris.contracts.observations import (
+    ActorMessageObservation,
+    ObservationContext,
+    ObservationKind,
+)
 from iris.core.ids import CorrelationId, ObservationId, SessionId
 from iris.runtime.app import IrisApp
-from iris.runtime.config import default_runtime_config
+from iris.runtime.observations.ingress import unauthenticated_external_ingress
 from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeResponse
-from iris.runtime.wiring.app import build_app_from_config, wire_default_app
+from iris.runtime.wiring.app import wire_default_app
 from tests.helpers.immutability import assert_frozen_field
 
 if TYPE_CHECKING:
@@ -30,6 +33,7 @@ async def test_runtime_service_handles_actor_message_envelope() -> None:
     service = IrisRuntimeService(app)
     envelope = ObservationEnvelope(
         observation=_actor_message("hello"),
+        ingress=unauthenticated_external_ingress(),
         correlation_id=CorrelationId("corr-1"),
     )
 
@@ -43,43 +47,47 @@ async def test_runtime_service_handles_actor_message_envelope() -> None:
 
 @pytest.mark.anyio
 async def test_runtime_service_preserves_no_action_output() -> None:
-    """no_action結果もRuntimeResponseとして返ることを確認する。"""
+    """no_action planがsendable outputを生成しないことを確認する。"""
     app = IrisApp(steps=(_NoActionStep(),))
     service = IrisRuntimeService(app)
 
     response = await service.handle_observation(
         ObservationEnvelope(
-            observation=_actor_message("   "),
+            observation=_actor_message(" "),
+            ingress=unauthenticated_external_ingress(),
             correlation_id=CorrelationId("corr-no-action"),
         )
     )
 
     assert response.output == PresentedOutput(text=None)
+    assert not response.output.is_sendable
     assert response.correlation_id == CorrelationId("corr-no-action")
 
 
 @pytest.mark.anyio
-async def test_runtime_service_full_cycle_app_from_config() -> None:
-    """build_app_from_configで作ったfull-cycle appがRuntimeService経由で動作することを確認する。"""
-    service = IrisRuntimeService(
-        build_app_from_config(default_runtime_config(), memory_store=FakeMemoryStore())
-    )
+async def test_runtime_service_can_use_injected_app() -> None:
+    """注入したIrisAppをRuntimeService経由で実行できることを確認する。"""
+    app = wire_default_app(FakeLLMClient(responses=("configured response",)))
+    service = IrisRuntimeService(app)
 
     response = await service.handle_observation(
         ObservationEnvelope(
             observation=_actor_message("hello service"),
+            ingress=unauthenticated_external_ingress(),
             correlation_id=CorrelationId("corr-full-cycle"),
         )
     )
 
-    assert isinstance(response.output, PresentedOutput)
-    assert response.output.text == "fake response: hello service"
+    assert response.output.text == "configured response"
     assert response.correlation_id == CorrelationId("corr-full-cycle")
 
 
 def test_runtime_service_contracts_are_frozen() -> None:
     """ObservationEnvelopeとRuntimeResponseがfrozen dataclassであることを確認する。"""
-    envelope = ObservationEnvelope(observation=_actor_message("immutable"))
+    envelope = ObservationEnvelope(
+        observation=_actor_message("immutable"),
+        ingress=unauthenticated_external_ingress(),
+    )
     response = RuntimeResponse(output=PresentedOutput(text="immutable"))
 
     assert_frozen_field(envelope, "correlation_id", CorrelationId("changed"))
@@ -87,11 +95,6 @@ def test_runtime_service_contracts_are_frozen() -> None:
 
 
 def _actor_message(text: str) -> ActorMessageObservation:
-    """ActorMessageObservation test fixtureを作る。
-
-    Returns:
-        ActorMessageObservation: RuntimeServiceへ渡す観測。
-    """
     return ActorMessageObservation(
         observation_id=ObservationId("runtime-service-observation"),
         session_id=SessionId("runtime-service-session"),
@@ -103,7 +106,7 @@ def _actor_message(text: str) -> ActorMessageObservation:
 
 
 class _NoActionStep:
-    """Test pipeline step that always selects canonical no_action."""
+    """Test pipeline step that selects canonical no_action."""
 
     name = "no_action"
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import NewType
 
 ObservationId = NewType("ObservationId", str)
+ActivityId = NewType("ActivityId", str)
 ActionId = NewType("ActionId", str)
 TurnId = NewType("TurnId", str)
 SessionId = NewType("SessionId", str)
