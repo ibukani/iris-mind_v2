@@ -25,6 +25,13 @@ Use this workflow when the task is to fix Ruff, mypy, pyright, pytest, coverage,
 
 ## Forbidden fixes
 
+Suppression escape hatches:
+- Do not add `# noqa`, `# type: ignore`, `# pyright: ignore`, `typing.cast`, or `object.__setattr__`.
+- Do not edit `.agents/approved-suppression-debt.toml` during normal implementation tasks.
+- Do not weaken `pyproject.toml`, architecture guards, Ruff, mypy, pyright, or pytest settings.
+- If suppression seems necessary, stop and report the diagnostic and proposed debt entry. Do not apply it.
+
+Additionally:
 - Adding `# noqa` in protected architecture layers.
 - Adding `type: ignore` or `pyright: ignore` in protected architecture layers.
 - Adding `type: ignore` without a specific error code and reason outside protected layers.

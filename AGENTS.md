@@ -260,15 +260,31 @@ Stable policy:
 
 Do not silence quality gates just to make checks pass.
 
-Suppressions are allowed only when they are local, rule-specific, and documented with a reason. Prefer fixing the design, adding a typed boundary, or improving tests before adding a suppression.
+Suppression escape hatches (`# noqa`, `# type: ignore`, `# pyright: ignore`,
+`typing.cast`, `object.__setattr__`) are forbidden by default.
 
-Allowed examples:
+Normal implementation tasks must not add suppressions. Coding agents must not edit
+`.agents/approved-suppression-debt.toml` during normal tasks.
 
-```python
-import subprocess  # noqa: S404 -- subprocess is isolated in the audited process runner boundary
-value = external_api.value  # type: ignore[attr-defined] -- third-party package lacks complete stubs
-result = client.call()  # pyright: ignore[reportUnknownMemberType] -- external API returns dynamically typed object
-```
+If a checker failure seems impossible to fix without suppression, stop and report
+the diagnostic and proposed debt entry for human review. Do not apply the
+suppression or registry entry.
+
+Protected architecture layers (`iris/contracts/`, `iris/core/`, `iris/cognitive/`,
+`iris/features/`, `iris/presentation/`, `iris/safety/`, `iris/runtime/`) must
+never contain escape hatches.
+
+Exception zones (`iris/adapters/`, `tests/`, `scripts/`) may only contain escape
+hatches when registered in `.agents/approved-suppression-debt.toml`.
+
+Bare `# noqa`, bare `# type: ignore`, and bare `# pyright: ignore` are always
+forbidden.
+
+Architecture guards mechanically enforce this policy:
+- `test_suppression_debt_registry.py`
+- `test_suppression_debt_registry_is_frozen.py`
+- `test_no_unapproved_suppressions.py`
+- `test_no_cast_in_protected_layers.py`
 
 ## Verification
 

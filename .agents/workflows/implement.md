@@ -45,6 +45,13 @@ Prefer the closest test level:
 - Add typed result classes instead of dictionaries.
 - Do not add compatibility shims unless the task explicitly requests a migration path with removal criteria and tests.
 
+### Suppression escape hatches
+
+- Do not add `# noqa`, `# type: ignore`, `# pyright: ignore`, `typing.cast`, or `object.__setattr__`.
+- Do not edit `.agents/approved-suppression-debt.toml` during normal implementation tasks.
+- Do not weaken `pyproject.toml`, architecture guards, Ruff, mypy, pyright, or pytest settings.
+- If suppression seems necessary, stop and report the diagnostic and proposed debt entry. Do not apply it.
+
 ## 4.1. Reject local patches that preserve bad structure
 
 If the narrow implementation would require duplicated logic, special-case branching, or preserving a bad boundary, perform a minimal enabling refactor first.

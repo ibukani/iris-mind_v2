@@ -33,6 +33,9 @@ Do not paper over symptoms by:
 - adding broad try/except blocks
 - introducing compatibility wrappers
 - bypassing architecture rules
+- adding `# noqa`, `# type: ignore`, `# pyright: ignore`, `typing.cast`, or `object.__setattr__`
+- editing `.agents/approved-suppression-debt.toml`
+- weakening `pyproject.toml`, Ruff, mypy, pyright, or pytest settings
 
 ## 4. Add regression coverage
 

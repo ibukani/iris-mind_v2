@@ -59,7 +59,7 @@ class _CaptureFrameStep:
     """WorkspaceFrameをキャプチャし、空のaction selection結果を返すtest step。"""
 
     name: str = "capture"
-    frames: list[WorkspaceFrame] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType] -- list factory type not inferred with annotations future
+    frames: list[WorkspaceFrame] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType] -- annotations future interferes with generic inference
 
     async def run(self, frame: WorkspaceFrame) -> PipelineStepResult:
         self.frames.append(frame)

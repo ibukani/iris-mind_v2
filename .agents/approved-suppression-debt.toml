@@ -1,0 +1,644 @@
+# Human-approved suppression debt registry.
+#
+# このファイルは人的承認を受けた抑制債務のレジストリです。
+# 通常の実装タスクでコーディングエージェントがエントリを追加してはいけません。
+# エントリは一時的な債務であり、通常の許可ではありません。
+# 新規エントリには明示的な人的承認が必要です。
+#
+# エントリ形式:
+#   [[debt]]
+#   path = "iris/adapters/grpc/server.py"
+#   line = 103
+#   kind = "noqa"           # "noqa" | "type: ignore" | "pyright: ignore" | "typing.cast" | "object.__setattr__"
+#   rule_or_error_code = "BLE001"
+#   reason = "..."
+#   alternative_attempted = "..."
+#   expires = "2025-12-31"  # YYYY-MM-DD, この日を過ぎるとテストは失敗する
+#   owner = "team"
+#
+# kind 値は以下のいずれか:
+#   "noqa"             - # noqa コメント
+#   "type: ignore"     - # type: ignore コメント
+#   "pyright: ignore"  - # pyright: ignore コメント
+#   "typing.cast"      - typing.cast() 呼び出し
+#   "object.__setattr__" - object.__setattr__() 呼び出し
+
+# ---------------------------------------------------------------------------
+# iris/adapters — 外部ライブラリ境界でのやむを得ない抑制
+# ---------------------------------------------------------------------------
+
+[[debt]]
+path = "iris/adapters/grpc/server.py"
+line = 103
+kind = "noqa"
+rule_or_error_code = "BLE001"
+reason = "gRPC service entry での global fallback。型付きエラーハンドリングへの移行は framework 制約で困難"
+alternative_attempted = "型付きエラーチャネル、gRPC フレームワークが service entry での catch-all を要求"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/llm/openai.py"
+line = 97
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "OpenAI SDK client 型に async variant の完全な stub がない。adapter boundary で cast して内部型安全を確保"
+alternative_attempted = "Protocol、TypeGuard、独自 client wrapper"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/llm/openai.py"
+line = 157
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "OpenAI streaming response items の型が SDK stubs で不完全。adapter boundary で Iterable に cast"
+alternative_attempted = "型付き streaming adapter wrapper"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/llm/openai.py"
+line = 165
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "OpenAI chat completion content の型が SDK stubs で不完全。adapter boundary で Iterable に cast"
+alternative_attempted = "型付き content processor 分離"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/llm/openai.py"
+line = 179
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "OpenAI chat completion choice item の型が SDK stubs で不完全。adapter boundary で Mapping に cast"
+alternative_attempted = "型付き response parser"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/llm/ollama.py"
+line = 123
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "Ollama API response body の型が httpx 応答から未確定。adapter boundary で _JsonObject に cast"
+alternative_attempted = "response 型の typed model 定義"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/memory/langchain.py"
+line = 126
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "LangChain VectorStore 派生クラスに add_documents の stub が不完全。adapter boundary で cast"
+alternative_attempted = "独自 VectorStore protocol 定義"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/memory/langchain.py"
+line = 130
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "LangChain VectorStore 派生クラスに add_texts の stub が不完全。adapter boundary で cast"
+alternative_attempted = "独自 VectorStore protocol 定義"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/memory/langchain.py"
+line = 153
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "LangChain VectorStore 派生クラスに similarity_search_by_vector の stub が不完全"
+alternative_attempted = "独自 VectorStore protocol 定義"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/memory/langchain.py"
+line = 162
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "LangChain VectorStore 派生クラスに similarity_search の stub が不完全。adapter boundary で cast"
+alternative_attempted = "独自 VectorStore protocol 定義"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "iris/adapters/memory/langchain.py"
+line = 184
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "LangChain Document constructor の型が不完全。adapter boundary で DocumentFactory に cast"
+alternative_attempted = "独自 Document 型 wrapper"
+expires = "2026-06-30"
+owner = "team"
+
+# ---------------------------------------------------------------------------
+# scripts — harness 操作用の抑制
+# ---------------------------------------------------------------------------
+
+[[debt]]
+path = "scripts/_subprocess_runner.py"
+line = 9
+kind = "noqa"
+rule_or_error_code = "S404"
+reason = "subprocess は固定コマンドタプルのみを実行する audited process runner 境界内"
+alternative_attempted = "型付きプロセスラッパー導入"
+expires = "2026-06-30"
+owner = "team"
+
+# ---------------------------------------------------------------------------
+# tests — テストインフラ・境界パターンでのやむを得ない抑制
+# ---------------------------------------------------------------------------
+
+# -- tests/adapters --
+
+[[debt]]
+path = "tests/adapters/test_app_gateway_ports.py"
+line = 114
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "StubGateway class の型を type に cast。テスト用スタブの型注釈制約"
+alternative_attempted = "Protocol で stub gateway interface 定義"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/adapters/test_langchain_memory_store.py"
+line = 77
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "LangChain DocumentFactory を cast。テスト用 provider fake の型注釈制約"
+alternative_attempted = "独自 Document 型 wrapper"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/adapters/test_ollama_llm.py"
+line = 214
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "テスト用 JSON ペイロードを _JsonObject に cast。adapter test fixture"
+alternative_attempted = "typed model による応答構築"
+expires = "2026-06-30"
+owner = "team"
+
+# -- tests/architecture -- (複雑度 C901 は exhaustive AST scan パターンで必要)
+
+[[debt]]
+path = "tests/architecture/test_cognitive_runtime_anti_patterns.py"
+line = 137
+kind = "noqa"
+rule_or_error_code = "C901"
+reason = "AST walking helper が各比較・パターン種別ごとに分岐する必要がある exhaustive scan"
+alternative_attempted = "Visitor パターンへの分割、各 check の個別関数化"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/architecture/test_cognitive_runtime_anti_patterns.py"
+line = 532
+kind = "noqa"
+rule_or_error_code = "C901, PLR0912"
+reason = "(layer, forbidden dict pattern) ペアごとの exhaustive type-boundary audit 分岐"
+alternative_attempted = "パラメタ化・テーブル駆動へのリファクタ"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/architecture/test_cognitive_runtime_boundaries.py"
+line = 48
+kind = "noqa"
+rule_or_error_code = "C901"
+reason = "architecture scan が複数の AST node shape を exhaustive にチェックするため"
+alternative_attempted = "個別 test への分割"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/architecture/test_cognitive_runtime_contracts.py"
+line = 382
+kind = "noqa"
+rule_or_error_code = "C901"
+reason = "per-mutation-kind branch の exhaustive AST coverage のための列挙"
+alternative_attempted = "mutation kind テーブル駆動"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/architecture/test_target_architecture_guards.py"
+line = 271
+kind = "noqa"
+rule_or_error_code = "C901"
+reason = "(layer, allowed-import, exception) タプルの exhaustive boundary check 分岐"
+alternative_attempted = "テーブル駆動・パラメタ化"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/architecture/test_target_architecture_guards.py"
+line = 342
+kind = "noqa"
+rule_or_error_code = "C901"
+reason = "forbidden service-locator call pattern の exhaustive wiring check 分岐"
+alternative_attempted = "call pattern テーブル駆動"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/architecture/test_target_architecture_guards.py"
+line = 447
+kind = "noqa"
+rule_or_error_code = "C901"
+reason = "検出された registry pattern の exhaustive global-state audit 分岐"
+alternative_attempted = "registry pattern テーブル駆動"
+expires = "2026-06-30"
+owner = "team"
+
+# -- tests/e2e --
+
+[[debt]]
+path = "tests/e2e/helpers.py"
+line = 11
+kind = "noqa"
+rule_or_error_code = "S404"
+reason = "E2E helpers が固定ローカル runtime subprocess を管理。限定されたコマンドタプルのみ"
+alternative_attempted = "process manager ラッパー"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/helpers.py"
+line = 90
+kind = "noqa"
+rule_or_error_code = "S603"
+reason = "E2E が固定 uv コマンドタプルを実行。ユーザー入力は介在しない"
+alternative_attempted = "typed command builder"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/helpers.py"
+line = 247
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を GetRuntimeInfoResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/test_identity_and_ephemeral_space_lifecycle.py"
+line = 101
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "SQLite query 結果の account_id を str に cast。動的型の DB 結果に必要"
+alternative_attempted = "typed row mapper"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/test_identity_and_ephemeral_space_lifecycle.py"
+line = 133
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "SQLite query 結果の account_id を str に cast。動的型の DB 結果に必要"
+alternative_attempted = "typed row mapper"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/test_identity_and_ephemeral_space_lifecycle.py"
+line = 223
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を SubmitObservationResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/test_identity_and_ephemeral_space_lifecycle.py"
+line = 240
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "SQLite query 結果の account_id を str に cast。動的型の DB 結果に必要"
+alternative_attempted = "typed row mapper"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/test_runtime_process_config.py"
+line = 5
+kind = "noqa"
+rule_or_error_code = "S404"
+reason = "E2E test が固定ローカル runtime subprocess を管理"
+alternative_attempted = "process manager ラッパー"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/test_runtime_process_smoke.py"
+line = 103
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を SubmitObservationResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/test_runtime_process_stateful.py"
+line = 106
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を SubmitObservationResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+# -- tests/runtime --
+
+[[debt]]
+path = "tests/runtime/config/test_config_drift.py"
+line = 50
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "TOML パース結果の型を明示。config manifest の動的型に必要"
+alternative_attempted = "typed schema validation"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/config/test_config_drift.py"
+line = 56
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "TOML パース結果の型を明示。config manifest の動的型に必要"
+alternative_attempted = "typed schema validation"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/config/test_config_drift.py"
+line = 112
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "dataclasses.asdict の戻り値を dict[str, object] に cast。再帰的 flatten に必要"
+alternative_attempted = "typed recursive flatten 関数"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/config/test_config_drift.py"
+line = 123
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "再帰的 flatten 内での nested dict の型を cast"
+alternative_attempted = "typed recursive flatten 関数"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/config/test_config_drift.py"
+line = 134
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "JSON document の型を cast。leaf path extraction に必要"
+alternative_attempted = "typed JSON walker"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/config/test_config_drift.py"
+line = 142
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "再帰的 leaf path extraction 内での nested dict の型を cast"
+alternative_attempted = "typed JSON walker"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/config/test_config_drift.py"
+line = 150
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "json.loads の戻り値を _Manifest に cast。動的 JSON の型に必要"
+alternative_attempted = "typed schema validation"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/config/test_control_plane_manifest.py"
+line = 72
+kind = "noqa"
+rule_or_error_code = "S105"
+reason = "secret_policy フィールド値の比較。パスワードではなく設定値の検証"
+alternative_attempted = "定数経由の比較"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/config/test_control_plane_manifest.py"
+line = 108
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "manifest 内の editable_configs リストを cast。動的 TOML パースの型に必要"
+alternative_attempted = "typed schema validation"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_config.py"
+line = 703
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "TOML value を dict[str, object] に cast。動的 TOML パースの型に必要"
+alternative_attempted = "typed schema validation"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_grpc_runtime_ingress.py"
+line = 45
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を SubmitObservationResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_grpc_runtime_ingress.py"
+line = 104
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を SubmitObservationResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_grpc_runtime_ingress.py"
+line = 203
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を SubmitObservationResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_grpc_runtime_ingress.py"
+line = 260
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を SubmitObservationResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_grpc_runtime_ingress.py"
+line = 276
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を SubmitObservationResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_grpc_runtime_ingress.py"
+line = 330
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "gRPC response を SubmitObservationResponse に cast。動的型の protobuf 応答に必要"
+alternative_attempted = "response validator / TypeGuard"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_llm_wiring.py"
+line = 40
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "wiring 関数の戻り値を具体的な client 型に cast。設定駆動の動的 provider 選択に必要"
+alternative_attempted = "typed provider registry"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_llm_wiring.py"
+line = 47
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "wiring 関数の戻り値を具体的な client 型に cast。設定駆動の動的 provider 選択に必要"
+alternative_attempted = "typed provider registry"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_memory_wiring.py"
+line = 81
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "LangChain DocumentFactory を cast。テスト用 provider fake の型注釈制約"
+alternative_attempted = "独自 Document 型 wrapper"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_server_config.py"
+line = 103
+kind = "noqa"
+rule_or_error_code = "S104"
+reason = "テスト用に意図的に 0.0.0.0 を bind address として使用"
+alternative_attempted = "テスト用 loopback address の使用"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_server_config.py"
+line = 112
+kind = "noqa"
+rule_or_error_code = "S104"
+reason = "テスト用に意図的に 0.0.0.0 を bind address として使用"
+alternative_attempted = "テスト用 loopback address の使用"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/architecture/test_suppression_debt_registry.py"
+line = 171
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "tomllib.load の戻り値型が不明。TOML パース結果の型を確定させるため cast が必要"
+alternative_attempted = "型付き wrapper、Mapping ガードパターン"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/architecture/test_suppression_debt_registry.py"
+line = 173
+kind = "typing.cast"
+rule_or_error_code = ""
+reason = "dict.get からの未確定型配列。debt エントリリストの型を確定させるため cast が必要"
+alternative_attempted = "型付き wrapper、要素ごとの isinstance チェック"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/helpers/private_access.py"
+line = 14
+kind = "noqa"
+rule_or_error_code = "ANN401"
+reason = "白箱テスト用ヘルパー。getattr の戻り値は任意の型。object では不十分で呼び出し側が壊れる"
+alternative_attempted = "object 戻り値型に変更したが、callable/iterable として使う呼び出し側で型エラー連鎖"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/helpers/private_access.py"
+line = 27
+kind = "noqa"
+rule_or_error_code = "ANN401"
+reason = "白箱テスト用ヘルパー。深さ優先 getattr の戻り値は任意の型"
+alternative_attempted = "object 戻り値型に変更したが、呼び出し側で型エラー連鎖"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/helpers/private_access.py"
+line = 46
+kind = "noqa"
+rule_or_error_code = "ANN401"
+reason = "白箱テスト用ヘルパー。動的 import の戻り値は任意の型"
+alternative_attempted = "object 戻り値型に変更したが、呼び出し側で型エラー連鎖"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/runtime/test_runtime_service_event_reaction.py"
+line = 62
+kind = "pyright: ignore"
+rule_or_error_code = "reportUnknownVariableType"
+reason = "from __future__ import annotations 有効時に field(default_factory=list) の型パラメータが推論不能。lambda: [] は PIE807 と競合"
+alternative_attempted = "lambda: [] (ruff PIE807 と競合), list[WorkspaceFrame] (TYPE_CHECKING のため実行時未定義)"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/helpers/grpc_test.py"
+line = 28
+kind = "type: ignore"
+rule_or_error_code = "misc"
+reason = "gRPC 生成 stub が同期型として型付けされているため awai 呼び出し時に mypy が misc エラーを出す。object → Any では ANN401 に、Awaitable[object] では呼び出し側が破綻"
+alternative_attempted = "Awaitable[object] (call site で gRPC stub 型不一致), Any (ANN401 発火)"
+expires = "2026-06-30"
+owner = "team"

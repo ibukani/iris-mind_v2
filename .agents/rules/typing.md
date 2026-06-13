@@ -155,16 +155,54 @@ Use this order:
 5. Move dynamic SDK handling into `adapters`.
 6. Split large functions instead of suppressing complexity rules.
 7. Remove unused arguments or change the design so the argument is needed.
-8. Use a project-level per-file ignore only for stable, documented protocol pass-through cases.
-9. Use inline suppression only outside protected architecture layers, only when local, rule-specific, and reasoned.
 
 Do not add suppressions merely because Ruff, mypy, or pyright reported an error.
 
+Normal implementation tasks must not add suppressions. If a checker failure seems
+impossible to fix without suppression, stop and report:
+
+- exact diagnostic
+- file and line
+- attempted design fixes
+- proposed typed alternative
+- proposed suppression-debt entry for human review only
+
+Do not apply the suppression. Do not apply the registry entry.
+
+Preferred fixes before considering suppression:
+
+- precise signatures
+- dataclasses
+- enums
+- `Protocol`
+- `TypeGuard`
+- adapter-side normalization
+- helper extraction
+- smaller functions
+- test helpers
+
 ## Suppression policy
 
-Suppressions are escape hatches, not normal fixes.
+Suppressions are escape hatches, not normal fixes. They are forbidden by default.
 
-Do not use these in protected architecture layers:
+### Coding agent rule
+
+Normal implementation tasks must not add suppressions. Coding agents must not edit
+`.agents/approved-suppression-debt.toml`.
+
+If a checker failure seems impossible to fix without suppression, stop and report:
+
+- exact diagnostic
+- file and line
+- attempted design fixes
+- proposed typed alternative
+- proposed suppression-debt entry for human review only
+
+Do not apply the suppression. Do not apply the registry entry.
+
+### Escape hatch types
+
+These are never allowed in protected architecture layers:
 
 - `# noqa`
 - `# type: ignore`
@@ -182,29 +220,38 @@ Protected layers are:
 - `iris/safety/`
 - `iris/runtime/`
 
-Allowed exception zones:
+Exception zones (`iris/adapters/`, `tests/`, `scripts/`) may only contain
+suppression escape hatches when the exact occurrence is registered in
+`.agents/approved-suppression-debt.toml`.
 
-- `iris/adapters/` may use local suppressions only at external SDK or provider boundaries.
-- `tests/` should use helpers or fixtures instead of suppressions; frozen dataclass immutability tests must use `tests.helpers.immutability.assert_frozen_field`.
-- local `scripts/` may use local suppressions for harness operations when the reason is documented.
+### Bare suppression rules
 
-Allowed suppression shape outside protected layers:
-
-```python
-import subprocess  # noqa: S404 -- local harness runs fixed command tuples only
-value = client.value  # type: ignore[attr-defined] -- third-party package lacks complete stubs
-```
-
-Forbidden suppression shapes:
+Bare suppressions are always forbidden:
 
 ```python
-x = value  # noqa
-x = value  # noqa: RULE
-x = value  # type: ignore
-object.__setattr__(instance, "field", value)
+x = value  # noqa            # forbidden — no rule code
+x = value  # type: ignore    # forbidden — no error code
+x = value  # pyright: ignore # forbidden — no rule code
 ```
 
-When a suppression seems necessary, prefer precise signatures, a typed contract, `Protocol`, `TypeGuard`, helper extraction, or adapter-side normalization first.
+### Forbidden suppression shapes
+
+These are always forbidden regardless of layer:
+
+```python
+x = value  # noqa             # bare
+x = value  # type: ignore     # bare
+object.__setattr__(instance, "field", value)  # except in __post_init__ for frozen dataclass metadata normalization
+```
+
+### Debt registry
+
+`.agents/approved-suppression-debt.toml` is the human-approved debt registry.
+Architecture test `test_suppression_debt_registry.py` mechanically enforces that
+every exception-zone suppression has a matching entry.
+
+Entries are temporary debt, not normal permission. New entries require explicit
+human approval.
 
 ## Cast policy
 

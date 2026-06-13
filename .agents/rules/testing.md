@@ -46,7 +46,12 @@ Use the closest test first while working:
 
 ## Suppression-free test patterns
 
-Tests should not become a dumping ground for `# noqa`, `type: ignore`, `pyright: ignore`, `typing.cast`, or `object.__setattr__`.
+Tests must not use suppressions as a shortcut. Do not use `# type: ignore`,
+`# noqa`, `# pyright: ignore`, `typing.cast`, or `object.__setattr__` in tests
+unless already human-approved in `.agents/approved-suppression-debt.toml`.
+
+If tests need private access, frozen mutation checks, provider fakes, or type
+assertions, create typed helpers under `tests/helpers/`.
 
 For frozen dataclass immutability checks, use:
 
@@ -63,6 +68,8 @@ instance.field = replacement_value  # type: ignore[misc]
 setattr(instance, "field", replacement_value)  # noqa: B010
 object.__setattr__(instance, "field", replacement_value)  # noqa: PLC2801
 ```
+
+Do not weaken architecture tests to make implementation tasks pass.
 
 ## Architecture tests are mandatory
 

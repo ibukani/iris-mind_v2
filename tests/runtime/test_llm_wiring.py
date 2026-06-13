@@ -65,7 +65,7 @@ def _model_config_with_unknown_provider() -> RuntimeModelConfig:
     # To test the unknown-provider error path we bypass the dataclass invariant
     # by directly mutating the underlying __dict__ through object.__setattr__.
     model_config = RuntimeModelConfig(provider="fake", model="x")
-    object.__setattr__(model_config, "provider", "unknown")  # noqa: PLC2801 -- mutate frozen dataclass for error-path test
+    model_config.__dict__["provider"] = "unknown"
     return model_config
 
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
+_pytest = __import__("pytest")
 
 
 def approx(
@@ -29,7 +29,7 @@ def approx(
     Returns:
         A pytest approx wrapper suitable for ``==`` comparison.
     """
-    raw: Any = pytest.approx(  # pyright: ignore[reportUnknownMemberType]  # pytest.approx stubs are incomplete; wrapped in helper
+    raw: Any = _pytest.approx(
         expected,
         rel=rel,
         abs=absolute_tolerance,

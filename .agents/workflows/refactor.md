@@ -21,6 +21,9 @@ Forbidden refactors:
 - broad rewrites without tests
 - new abstraction layers without repeated use
 - compatibility shims that preserve bad APIs
+- adding `# noqa`, `# type: ignore`, `# pyright: ignore`, `typing.cast`, or `object.__setattr__`
+- editing `.agents/approved-suppression-debt.toml`
+- weakening `pyproject.toml`, architecture guards, Ruff, mypy, pyright, or pytest settings
 
 ## Before editing
 

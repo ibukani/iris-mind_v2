@@ -11,7 +11,7 @@ import importlib
 from typing import Any
 
 
-def get_private_attr(obj: object, name: str) -> Any:  # noqa: ANN401 -- test helper intentionally returns Any for white-box access
+def get_private_attr(obj: object, name: str) -> Any:  # noqa: ANN401 -- white-box test helper must return anything
     """``object`` のプライベート属性 ``name`` を取得する。
 
     Args:
@@ -24,7 +24,7 @@ def get_private_attr(obj: object, name: str) -> Any:  # noqa: ANN401 -- test hel
     return getattr(obj, name)
 
 
-def get_private_attr_path(obj: object, *names: str) -> Any:  # noqa: ANN401 -- test helper intentionally returns Any for white-box access
+def get_private_attr_path(obj: object, *names: str) -> Any:  # noqa: ANN401 -- white-box test helper must return anything
     """``object`` のプライベート属性を深く辿って取得する。
 
     ``get_private_attr(get_private_attr(obj, "a"), "b")`` と書く代わりに
@@ -37,13 +37,13 @@ def get_private_attr_path(obj: object, *names: str) -> Any:  # noqa: ANN401 -- t
     Returns:
         Any: 最後の属性値。
     """
-    value: Any = obj
+    value: object = obj
     for name in names:
         value = getattr(value, name)
     return value
 
 
-def import_private(module: str, name: str) -> Any:  # noqa: ANN401 -- test helper intentionally returns Any for white-box imports
+def import_private(module: str, name: str) -> Any:  # noqa: ANN401 -- white-box import helper must return anything
     """``module`` からプライベート名 ``name`` をインポートする。
 
     インポート文で noqa:PLC2701 / pyright:ignore[reportPrivateUsage]

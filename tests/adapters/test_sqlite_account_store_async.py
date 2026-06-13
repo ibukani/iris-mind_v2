@@ -11,6 +11,7 @@ import pytest
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
 from iris.contracts.accounts import AccountProfile
 from iris.core.ids import AccountId, ActorId, ExternalRef
+from tests.helpers.private_access import get_private_attr
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -90,7 +91,7 @@ async def test_slow_backend_does_not_block_event_loop(
     """人工的な遅延バックエンドがイベントループをブロックしないことを確認する。"""
     store = SQLiteAccountStore(tmp_path / "slow.sqlite3")
 
-    original_sync = store._put_sync  # noqa: SLF001 -- test monkeypatches sync helper for delay detection  # pyright: ignore[reportPrivateUsage] -- same
+    original_sync = get_private_attr(store, "_put_sync")
 
     def slow_put(account: AccountProfile) -> AccountProfile:
         time.sleep(0.1)

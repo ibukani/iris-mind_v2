@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import TYPE_CHECKING, Protocol, cast, override
 
 if TYPE_CHECKING:
@@ -176,13 +177,11 @@ class LangChainMemoryStore(MemoryStore):
 
 def _load_document_factory() -> DocumentFactory:
     try:
-        from langchain_core.documents import (  # noqa: PLC0415  # langchain_core is an optional dependency imported lazily
-            Document,
-        )
+        document_cls = importlib.import_module("langchain_core.documents").Document
     except ImportError as exc:  # pragma: no cover - covered with monkeypatched loader
         raise LangChainMemoryStoreUnavailableError(_ERR_REQUIRES_LANGCHAIN_CORE) from exc
 
-    return cast("DocumentFactory", Document)
+    return cast("DocumentFactory", document_cls)
 
 
 def _metadata_from_record(record: MemoryRecord) -> Mapping[str, object]:

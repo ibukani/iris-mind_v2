@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import operator
 
 import pytest
 
@@ -65,7 +66,7 @@ def test_memory_record_metadata_is_immutable() -> None:
 
     with pytest.raises(TypeError):
         # MappingProxyType は読み取り専用で、要素代入時に TypeError を送出する。
-        record.metadata["k"] = "v2"  # type: ignore[index]  # intentionally probing the read-only proxy at runtime
+        operator.setitem(record.metadata, "k", "v2")
 
 
 def test_memory_record_defaults_apply_when_omitted() -> None:

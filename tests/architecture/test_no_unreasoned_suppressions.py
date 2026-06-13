@@ -30,6 +30,8 @@ SCANNER_FIXTURE_FILES: frozenset[Path] = frozenset(
         Path("tests/architecture/test_no_unreasoned_suppressions.py"),
         Path("tests/architecture/test_no_unapproved_suppressions.py"),
         Path("tests/architecture/test_no_file_level_suppressions.py"),
+        Path("tests/architecture/test_suppression_debt_registry.py"),
+        Path("tests/architecture/test_suppression_debt_registry_is_frozen.py"),
     },
 )
 
