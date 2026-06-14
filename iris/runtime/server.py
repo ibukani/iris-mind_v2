@@ -31,6 +31,7 @@ from iris.runtime.config import (
 from iris.runtime.config.init import init_runtime_config, runtime_config_template
 from iris.runtime.config.root import all_model_slots_are_fake
 from iris.runtime.event_reaction.handler import ActivityEventReactionHandler
+from iris.runtime.observability.diagnostics import run_startup_diagnostics
 from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
@@ -197,6 +198,8 @@ async def serve(
     logger.info("safety mode: {}", config.safety.mode)
     if config.logging.file_path:
         logger.info("log file path: {}", config.logging.file_path)
+
+    await run_startup_diagnostics(config)
 
     components = build_runtime_components(config)
 

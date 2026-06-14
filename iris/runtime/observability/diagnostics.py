@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from loguru import logger
+
 from iris.adapters.llm.diagnostics import (
     ProviderCapability,
     ProviderDiagnosticIssue,
@@ -101,40 +103,221 @@ async def run_startup_diagnostics(
     構築失敗を含む) は失敗 outcome としてキャプチャされ、 runner は他の
     スロットのチェックを続行する。
 
+    ``fail_fast=True`` の場合、いずれかの outcome が FAIL だった時点で
+    ``RuntimeError`` を送出して起動を中断する。 ``fail_fast=False`` の
+    場合は失敗を記録しつつレポートを返す。
+
+    ``log_issues_as_warnings=True`` の場合、検出された各 issue を
+    ``startup.diagnostics.issue`` として WARNING ログに出力する。 False の
+    場合は per-issue の警告ログを抑止する。
+
     Args:
         runtime_config: ランタイム設定。
 
     Returns:
         集計された診断レポート。
+
+    Raises:
+        RuntimeError: ``fail_fast=True`` で 1 件以上の outcome が FAIL の場合。
     """
     diagnostics_config = runtime_config.diagnostics
     if not diagnostics_config.enabled:
+        logger.info("startup.diagnostics.skipped reason=disabled")
         return StartupDiagnosticsReport(outcomes=(), enabled=False)
 
+    logger.bind(
+        mode="strict" if diagnostics_config.fail_fast else "warn",
+        warmup_models=diagnostics_config.warmup_models,
+        log_issues_as_warnings=diagnostics_config.log_issues_as_warnings,
+    ).info("startup.diagnostics.start")
+
+    outcomes = await _probe_all_slots(
+        runtime_config,
+        warmup_models=diagnostics_config.warmup_models,
+        log_issues_as_warnings=diagnostics_config.log_issues_as_warnings,
+    )
+    report = StartupDiagnosticsReport(outcomes=tuple(outcomes), enabled=True)
+    failure_count = sum(1 for outcome in report.outcomes if _outcome_has_failure(outcome))
+    logger.bind(
+        checked_count=report.checked_count,
+        failure_count=failure_count,
+    ).info("startup.diagnostics.complete")
+    if report.has_failures and diagnostics_config.fail_fast:
+        logger.bind(failure_count=failure_count).error(
+            "startup.diagnostics.fail_fast"
+        )
+        message = _build_fail_fast_message(report)
+        raise RuntimeError(message)
+    return report
+
+
+async def _probe_all_slots(
+    runtime_config: IrisRuntimeConfig,
+    *,
+    warmup_models: bool,
+    log_issues_as_warnings: bool,
+) -> list[DiagnosticsCheckOutcome]:
+    """Probe every configured model slot and collect outcomes.
+
+    Args:
+        runtime_config: The runtime configuration to probe.
+        warmup_models: Whether warmup should run when the provider
+            capability allows it.
+        log_issues_as_warnings: Whether to log each issue as a warning.
+
+    Returns:
+        List of outcomes, one per probed slot (skipped fake slots are omitted).
+    """
     outcomes: list[DiagnosticsCheckOutcome] = []
     for slot in _DIAGNOSTICS_MODEL_SLOTS:
-        model_config = _slot_config(runtime_config.models, slot)
-        try:
-            provider_diag = build_provider_diagnostics(model_config, runtime_config)
-        except ConfigError as exc:
-            outcomes.append(_build_construction_failure(slot, model_config, exc))
-            continue
-        if provider_diag is None:
-            continue
-        readiness = await provider_diag.check_readiness(model_config.model)
-        warmup: ProviderReadinessResult | None = None
-        if diagnostics_config.warmup_models and provider_diag.capabilities.warmup:
-            warmup = await provider_diag.warmup(model_config.model)
-        outcomes.append(
-            DiagnosticsCheckOutcome(
-                slot=slot,
-                provider=model_config.provider,
-                model=model_config.model,
-                readiness=readiness,
-                warmup=warmup,
-            ),
+        outcome = await _probe_slot(
+            runtime_config,
+            slot,
+            warmup_models=warmup_models,
+            log_issues_as_warnings=log_issues_as_warnings,
         )
-    return StartupDiagnosticsReport(outcomes=tuple(outcomes), enabled=True)
+        if outcome is not None:
+            outcomes.append(outcome)
+    return outcomes
+
+
+async def _probe_slot(
+    runtime_config: IrisRuntimeConfig,
+    slot: ModelSlotName,
+    *,
+    warmup_models: bool,
+    log_issues_as_warnings: bool,
+) -> DiagnosticsCheckOutcome | None:
+    """Probe a single slot and return the outcome (or None for fake slots).
+
+    Args:
+        runtime_config: The runtime configuration to probe.
+        slot: Slot name to probe.
+        warmup_models: Whether warmup should run when the provider
+            capability allows it.
+        log_issues_as_warnings: Whether to log each issue as a warning.
+
+    Returns:
+        The outcome for the slot, or ``None`` when the slot is skipped
+        (e.g. the provider is ``fake``).
+    """
+    logger.bind(slot=slot).info("startup.diagnostics.check")
+    model_config = _slot_config(runtime_config.models, slot)
+    try:
+        provider_diag = build_provider_diagnostics(model_config, runtime_config)
+    except ConfigError as exc:
+        failure = _build_construction_failure(slot, model_config, exc)
+        _log_outcome_issues(
+            failure,
+            model_config,
+            log_issues_as_warnings=log_issues_as_warnings,
+        )
+        return failure
+    if provider_diag is None:
+        return None
+    readiness = await provider_diag.check_readiness(model_config.model)
+    logger.bind(
+        slot=slot,
+        provider=model_config.provider,
+        model=model_config.model,
+        status=readiness.status.value,
+        latency_ms=round(readiness.latency_ms or 0.0, 2),
+    ).info("startup.diagnostics.readiness")
+    if log_issues_as_warnings:
+        _log_issues(readiness, slot, model_config)
+    warmup: ProviderReadinessResult | None = None
+    if warmup_models and provider_diag.capabilities.warmup:
+        warmup = await provider_diag.warmup(model_config.model)
+        logger.bind(
+            slot=slot,
+            provider=model_config.provider,
+            model=model_config.model,
+            status=warmup.status.value,
+            latency_ms=round(warmup.latency_ms or 0.0, 2),
+        ).info("startup.diagnostics.warmup")
+        if log_issues_as_warnings:
+            _log_issues(warmup, slot, model_config)
+    return DiagnosticsCheckOutcome(
+        slot=slot,
+        provider=model_config.provider,
+        model=model_config.model,
+        readiness=readiness,
+        warmup=warmup,
+    )
+
+
+def _log_issues(
+    result: ProviderReadinessResult,
+    slot: ModelSlotName,
+    model_config: RuntimeModelConfig,
+) -> None:
+    """Emit one WARNING log per issue with safe metadata only.
+
+    Args:
+        result: The readiness / warmup result containing the issues.
+        slot: Slot name being summarized.
+        model_config: Model config for the slot.
+    """
+    for issue in result.issues:
+        logger.bind(
+            slot=slot,
+            provider=model_config.provider,
+            model=model_config.model,
+            issue_code=issue.code,
+            severity=issue.severity.value,
+        ).warning("startup.diagnostics.issue")
+
+
+def _log_outcome_issues(
+    outcome: DiagnosticsCheckOutcome,
+    model_config: RuntimeModelConfig,
+    *,
+    log_issues_as_warnings: bool,
+) -> None:
+    """Log a synthetic readiness result for construction failures.
+
+    Args:
+        outcome: The failed outcome whose readiness result carries the
+            construction failure issues.
+        model_config: The model config that was used to build diagnostics.
+        log_issues_as_warnings: Whether to emit per-issue warnings.
+    """
+    logger.bind(
+        slot=outcome.slot,
+        provider=outcome.provider,
+        model=outcome.model,
+        status=outcome.readiness.status.value,
+    ).info("startup.diagnostics.readiness")
+    if log_issues_as_warnings:
+        _log_issues(outcome.readiness, outcome.slot, model_config)
+
+
+def _build_fail_fast_message(report: StartupDiagnosticsReport) -> str:
+    """Build a fail-fast abort message summarizing failed outcomes.
+
+    Args:
+        report: Aggregated startup diagnostics report.
+
+    Returns:
+        A human-readable abort message listing failed slots and issues.
+    """
+    lines = ["startup diagnostics failed (fail_fast=true)"]
+    for outcome in report.outcomes:
+        if not _outcome_has_failure(outcome):
+            continue
+        failed_results: list[tuple[str, ProviderReadinessResult]] = []
+        if outcome.readiness.status is ReadinessStatus.FAIL:
+            failed_results.append(("readiness", outcome.readiness))
+        if outcome.warmup and outcome.warmup.status is ReadinessStatus.FAIL:
+            failed_results.append(("warmup", outcome.warmup))
+        for stage, result in failed_results:
+            codes = ", ".join(issue.code for issue in result.issues) or "unknown"
+            lines.append(
+                f"  - slot={outcome.slot} provider={outcome.provider} "
+                f"model={outcome.model} stage={stage} "
+                f"status={result.status.value} codes=[{codes}]"
+            )
+    return "\n".join(lines)
 
 
 def _slot_config(
