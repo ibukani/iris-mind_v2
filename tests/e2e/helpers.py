@@ -210,6 +210,222 @@ def build_cli_submit_observation_request(
     )
 
 
+def write_runtime_config(
+    *,
+    path: Path,
+    backend: str | None = None,
+    sqlite_path: Path | None = None,
+    models: Mapping[str, str] | None = None,
+) -> Path:
+    """Write a runtime TOML config for E2E process tests.
+
+    If ``sqlite_path`` is given and ``backend`` is not, ``backend`` defaults
+    to ``"sqlite"``. Otherwise the backend defaults to ``"memory"``.
+
+    Returns:
+        Path to the written TOML config file.
+
+    Raises:
+        ValueError: ``backend='sqlite'`` is requested without ``sqlite_path``.
+    """
+    if backend is None:
+        backend = "sqlite" if sqlite_path is not None else "memory"
+    state_section = f'[state]\nbackend = "{backend}"\n'
+    if backend == "sqlite":
+        if sqlite_path is None:
+            message = "sqlite_path is required when backend='sqlite'"
+            raise ValueError(message)
+        state_section = f'[state]\nbackend = "sqlite"\nsqlite_path = "{sqlite_path}"\n'
+    model_lines: list[str] = []
+    for slot, provider in (models or {"default_chat": "fake"}).items():
+        model_lines.append(f'[models.{slot}]\nprovider = "{provider}"\nmodel = "fake-llm"\n')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = (
+        '[server]\nhost = "127.0.0.1"\nlocal_only = true\n\n'
+        f"{state_section}\n"
+        f"{''.join(model_lines)}\n"
+        '[logging]\nlevel = "WARNING"\nformat = "text"\n\n'
+        '[safety]\nmode = "development"\n'
+    )
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def build_cli_presence_signal_request(
+    *,
+    correlation_id: str,
+    observation_id: str,
+    session_id: str,
+    status: observations_pb2.PresenceStatus.ValueType,
+) -> runtime_pb2.SubmitObservationRequest:
+    """Build a CLI-like presence_signal SubmitObservation request.
+
+    Returns:
+        SubmitObservation request with presence_signal payload and CLI context.
+    """
+    return _build_cli_request(
+        correlation_id=correlation_id,
+        observation_id=observation_id,
+        session_id=session_id,
+        kind=observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL,
+        payload_field="presence_signal",
+        payload_message=observations_pb2.PresenceSignalPayload(status=status),
+    )
+
+
+def build_cli_activity_event_request(
+    *,
+    correlation_id: str,
+    observation_id: str,
+    session_id: str,
+    activity_kind: observations_pb2.ActivityKind.ValueType,
+) -> runtime_pb2.SubmitObservationRequest:
+    """Build a CLI-like activity_event SubmitObservation request.
+
+    Returns:
+        SubmitObservation request with activity_event payload and CLI context.
+    """
+    return _build_cli_request(
+        correlation_id=correlation_id,
+        observation_id=observation_id,
+        session_id=session_id,
+        kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+        payload_field="activity_event",
+        payload_message=observations_pb2.ActivityEventPayload(
+            activity_kind=activity_kind,
+            provider_event_id="evt-1",
+            provider_sequence=1,
+        ),
+    )
+
+
+def build_cli_idle_tick_request(
+    *,
+    correlation_id: str,
+    observation_id: str,
+    session_id: str,
+    reason: str,
+    idle_seconds: float,
+) -> runtime_pb2.SubmitObservationRequest:
+    """Build a CLI-like idle_tick SubmitObservation request.
+
+    Returns:
+        SubmitObservation request with idle_tick payload and CLI context.
+    """
+    return _build_cli_request(
+        correlation_id=correlation_id,
+        observation_id=observation_id,
+        session_id=session_id,
+        kind=observations_pb2.OBSERVATION_KIND_IDLE_TICK,
+        payload_field="idle_tick",
+        payload_message=observations_pb2.IdleTickPayload(
+            reason=reason,
+            idle_seconds=idle_seconds,
+        ),
+    )
+
+
+async def submit_observation(
+    *,
+    port: int,
+    request: runtime_pb2.SubmitObservationRequest,
+) -> runtime_pb2.SubmitObservationResponse:
+    """Open a gRPC channel, submit a request, and close the channel.
+
+    Returns:
+        SubmitObservation response from the runtime.
+    """
+    channel = create_runtime_channel(port)
+    try:
+        stub = create_runtime_stub(channel)
+        response = await grpc_call(stub.SubmitObservation(request))
+    finally:
+        await channel.close()
+    assert isinstance(response, runtime_pb2.SubmitObservationResponse)
+    return response
+
+
+def _build_cli_request(
+    *,
+    correlation_id: str,
+    observation_id: str,
+    session_id: str,
+    kind: observations_pb2.ObservationKind.ValueType,
+    payload_field: str,
+    payload_message: _PayloadMessage,
+) -> runtime_pb2.SubmitObservationRequest:
+    """Build a CLI-style SubmitObservation request with the given payload oneof.
+
+    Returns:
+        SubmitObservation request with the supplied oneof payload.
+    """
+    occurred_at = Timestamp()
+    occurred_at.FromDatetime(datetime(2026, 6, 10, 12, 0, tzinfo=UTC))
+    context = observations_pb2.ObservationContext(
+        source="cli",
+        account_ref=identity_pb2.ExternalAccountRef(
+            provider="cli",
+            provider_subject="local-user",
+            display_name="Local User",
+            actor_kind=identity_pb2.ACTOR_KIND_HUMAN,
+        ),
+        space_ref=spaces_pb2.ExternalSpaceRef(
+            provider="cli",
+            provider_space_ref="cli-session-1",
+            display_name="CLI Session",
+            space_kind=spaces_pb2.SPACE_KIND_DIRECT_MESSAGE,
+        ),
+    )
+    observation = observations_pb2.Observation(
+        observation_id=observation_id,
+        session_id=session_id,
+        kind=kind,
+        occurred_at=occurred_at,
+        context=context,
+    )
+    _set_oneof_payload(observation, payload_field, payload_message)
+    return runtime_pb2.SubmitObservationRequest(
+        correlation_id=correlation_id,
+        observation=observation,
+    )
+
+
+def _set_oneof_payload(
+    observation: observations_pb2.Observation,
+    payload_field: str,
+    payload_message: _PayloadMessage,
+) -> None:
+    """Set a payload oneof field on an Observation using MergeFrom.
+
+    Python protobuf rejects dynamic ``setattr`` on message oneof fields, so
+    we construct a partial sibling Observation and merge the payload in.
+
+    Raises:
+        TypeError: ``payload_field`` is not a known payload oneof name.
+    """
+    partial = observations_pb2.Observation()
+    if payload_field == "actor_message" and isinstance(
+        payload_message, observations_pb2.ActorMessagePayload
+    ):
+        partial.actor_message.CopyFrom(payload_message)
+    elif payload_field == "idle_tick" and isinstance(
+        payload_message, observations_pb2.IdleTickPayload
+    ):
+        partial.idle_tick.CopyFrom(payload_message)
+    elif payload_field == "activity_event" and isinstance(
+        payload_message, observations_pb2.ActivityEventPayload
+    ):
+        partial.activity_event.CopyFrom(payload_message)
+    elif payload_field == "presence_signal" and isinstance(
+        payload_message, observations_pb2.PresenceSignalPayload
+    ):
+        partial.presence_signal.CopyFrom(payload_message)
+    else:
+        message = f"unsupported payload field: {payload_field!r}"
+        raise TypeError(message)
+    observation.MergeFrom(partial)
+
+
 def _runtime_env(*, runtime_home: Path, extra_env: Mapping[str, str] | None) -> dict[str, str]:
     env = os.environ.copy()
     env.pop("IRIS_MIND_CONFIG", None)
@@ -269,3 +485,12 @@ def _raise_process_exited_before_ready(runtime: RuntimeProcess) -> None:
 
 def _format_rpc_error(code: StatusCode, details: str | None) -> str:
     return f"{code.name}: {details}"
+
+
+if TYPE_CHECKING:
+    _PayloadMessage = (
+        observations_pb2.ActorMessagePayload
+        | observations_pb2.IdleTickPayload
+        | observations_pb2.ActivityEventPayload
+        | observations_pb2.PresenceSignalPayload
+    )
