@@ -32,6 +32,22 @@ async def test_activity_journal_appends_new_event() -> None:
 
 
 @pytest.mark.anyio
+async def test_activity_journal_rejects_duplicate_activity_id() -> None:
+    """同じactivity_idの再投入はDUPLICATE_ACTIVITY_IDで拒否する。"""
+    journal = InMemoryActivityJournal()
+    event = _event()
+
+    first = await journal.append(event)
+    second = await journal.append(event)
+
+    assert first.accepted
+    assert not second.accepted
+    assert second.event is None
+    assert second.reason is ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
+    assert await journal.get_by_id(event.activity_id) == event
+
+
+@pytest.mark.anyio
 async def test_activity_journal_rejects_duplicate_provider_event() -> None:
     """同じsource/provider event IDの重複eventを受理しない。"""
     journal = InMemoryActivityJournal()

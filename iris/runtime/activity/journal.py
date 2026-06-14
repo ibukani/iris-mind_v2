@@ -15,7 +15,9 @@ if TYPE_CHECKING:
 class ActivityAppendSkipReason(StrEnum):
     """ActivityJournal.appendがeventを受理しない理由。"""
 
+    DUPLICATE_ACTIVITY_ID = "duplicate_activity_id"
     DUPLICATE_PROVIDER_EVENT = "duplicate_provider_event"
+    BACKEND_UNAVAILABLE = "backend_unavailable"
 
 
 @dataclass(frozen=True)
@@ -28,7 +30,20 @@ class ActivityAppendResult:
 
 
 class ActivityJournal(Protocol):
-    """受理済みactivity eventをbounded journalとして保持するruntime port。"""
+    """受理済みactivity eventをbounded journalとして保持するruntime port。
+
+    ``append`` は次の重複ルールを全実装で統一する:
+
+    - 同じ ``activity_id`` が既に存在する場合 ``accepted=False`` /
+      ``reason=DUPLICATE_ACTIVITY_ID`` を返し、既存行は変更しない。
+    - 同じ ``(source, provider_event_id)`` が既に存在する場合
+      ``accepted=False`` / ``reason=DUPLICATE_PROVIDER_EVENT`` を返し、
+      既存行は変更しない。
+    - 競合によりDB制約違反がraiseされる場合、実装は ``ActivityAppendResult``
+      へ変換して返さなければならない(例外を漏らさない)。
+    - バックエンドが lock 取得失敗等で一時的に利用できない場合も
+      ``accepted=False / reason=BACKEND_UNAVAILABLE`` を返す。
+    """
 
     async def append(self, event: ActivityEventRecord) -> ActivityAppendResult:
         """Activity eventをjournalへ追加する。"""
@@ -44,7 +59,13 @@ class ActivityJournal(Protocol):
         source: str,
         provider_event_id: str,
     ) -> bool:
-        """Provider eventがbounded dedupe window内にあるか返す。"""
+        """``(source, provider_event_id)`` の dedupe 記録が実装内部にあるか返す。
+
+        実装は bounded window (例: ``InMemoryActivityJournal``) または
+        永続 audit log (例: ``SQLiteActivityJournal``) のいずれでもよく、
+        呼び出し側は戻り値を「同一視 (source, provider_event_id) を
+        append が拒否するかどうか」の判定に用いてよい。
+        """
         ...
 
 
@@ -71,6 +92,12 @@ class InMemoryActivityJournal(ActivityJournal):
         Returns:
             append結果。重複provider eventはaccepted=False。
         """
+        if event.activity_id in self._events_by_id:
+            return ActivityAppendResult(
+                accepted=False,
+                event=None,
+                reason=ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID,
+            )
         provider_key = self._provider_key(event)
         if provider_key is not None and provider_key in self._provider_events:
             return ActivityAppendResult(
