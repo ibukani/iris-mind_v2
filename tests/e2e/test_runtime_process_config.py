@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import subprocess  # noqa: S404 -- E2E test handles a fixed local runtime subprocess.
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -16,6 +16,8 @@ from tests.e2e.helpers import (
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from tests.e2e.runtime_process import RuntimeProcess
 
 
 @pytest.mark.e2e
@@ -50,19 +52,18 @@ def test_runtime_process_fails_with_missing_explicit_config(
         runtime_home=tmp_path,
         config_path=tmp_path / "missing.toml",
     )
-    stdout, stderr = _communicate_or_kill(runtime.process)
-    runtime.stdout = stdout
-    runtime.stderr = stderr
+    stdout, stderr = _communicate_or_kill(runtime)
     output = f"{stdout}\n{stderr}".lower()
 
-    assert runtime.process.returncode is not None
-    assert runtime.process.returncode != 0
+    assert runtime.returncode is not None
+    assert runtime.returncode != 0
     assert any(token in output for token in ("configerror", "config", "not found", "missing"))
 
 
-def _communicate_or_kill(process: subprocess.Popen[str]) -> tuple[str, str]:
-    try:
-        return process.communicate(timeout=5.0)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        return process.communicate()
+def _communicate_or_kill(runtime: RuntimeProcess) -> tuple[str, str]:
+    """Stop a runtime subprocess and return captured output.
+
+    Returns:
+        Captured ``stdout`` and ``stderr``.
+    """
+    return asyncio.run(runtime.stop())
