@@ -35,7 +35,8 @@ def test_availability_snapshot_accepts_valid_confidence() -> None:
         computed_at=datetime(2026, 6, 13, tzinfo=UTC),
         confidence=0.5,
     )
-    assert snapshot.confidence == 0.5  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_confidence = 0.5
+    assert snapshot.confidence == expected_confidence
 
 
 def test_availability_snapshot_rejects_confidence_below_zero() -> None:

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 import contextlib
 from dataclasses import dataclass
 import os
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, TypeGuard
 
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
@@ -94,10 +94,11 @@ class OpenAILLMClient:
         if config.api_key is None:
             raise OpenAIAdapterError(_ERR_API_KEY_REQUIRED)
 
-        self._client = cast(
-            "OpenAIResponsesClient",
-            _openai.AsyncOpenAI(api_key=config.api_key, timeout=config.timeout_seconds),
+        openai_client: OpenAIResponsesClient = _openai.AsyncOpenAI(
+            api_key=config.api_key,
+            timeout=config.timeout_seconds,
         )
+        self._client = openai_client
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """リクエストからLLM応答を生成する。
@@ -153,17 +154,15 @@ def _extract_output_text(response: object) -> str:
 
 def _iter_response_output(response: object) -> tuple[object, ...]:
     output = _get_value(response, "output")
-    if isinstance(output, list | tuple):
-        items: Iterable[object] = cast("Iterable[object]", output)
-        return tuple(items)
+    if _is_object_sequence(output):
+        return tuple(output)
     return ()
 
 
 def _iter_content(output_item: object) -> tuple[object, ...]:
     content = _get_value(output_item, "content")
-    if isinstance(content, list | tuple):
-        items: Iterable[object] = cast("Iterable[object]", content)
-        return tuple(items)
+    if _is_object_sequence(content):
+        return tuple(content)
     return ()
 
 
@@ -174,10 +173,37 @@ def _get_text(content_item: object) -> str | None:
     return None
 
 
+def _is_object_sequence(value: object) -> TypeGuard[tuple[object, ...] | list[object]]:
+    """Narrow sequence types for iteration.
+
+    Runtime check uses isinstance against the base sequence types. Type
+    parameters cannot be verified at runtime, so the narrowed type assumes
+    ``object`` element type which is the widest compatible type.
+
+    Returns:
+        True if value is a list or tuple, narrowing to the widened type.
+    """
+    return isinstance(value, list | tuple)
+
+
+def _is_object_mapping(value: object) -> TypeGuard[Mapping[object, object]]:
+    """Narrow mapping types for item iteration.
+
+    Runtime check uses isinstance against Mapping; type parameters are erased
+    at runtime so the narrowed type uses the widest compatible parameter types.
+
+    Returns:
+        True if value is a Mapping, narrowing to the widened type.
+    """
+    return isinstance(value, Mapping)
+
+
 def _get_value(item: object, name: str) -> object:
-    if isinstance(item, Mapping):
-        mapping: Mapping[str, object] = cast("Mapping[str, object]", item)
-        return mapping.get(name, None)
+    if _is_object_mapping(item):
+        for key, value in item.items():
+            if key == name:
+                return value
+        return None
     return getattr(item, name, None)
 
 

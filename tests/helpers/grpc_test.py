@@ -1,8 +1,8 @@
 """gRPC stub 呼び出し用ヘルパー。
 
-grpc の生成 stub が同期型として型付けされているため、
-await する際に ``type: ignore[misc]`` が必要になる。
-ヘルパー関数内に閉じ込めることで、呼び出し側のサプレションを不要にする。
+grpc の生成 stub（非同期）が Awaitable[ProtobufResponse] を返すが、
+呼び出し側で protobuf 固有型に依存せず await したい場合に使う。
+呼び出し側は結果を ``cast`` で適切な型に復元する。
 """
 
 from __future__ import annotations
@@ -13,19 +13,21 @@ from iris.contracts.actions import PresentedOutput
 from iris.runtime.service import IrisRuntimeService, RuntimeResponse
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from iris.runtime.service import ObservationEnvelope
 
 
-async def grpc_call(coro: object) -> object:
-    """Grpc stub 呼び出しの coroutine を await して結果を返す。
+async def grpc_call(coro: Awaitable[object]) -> object:
+    """Grpc stub 呼び出しの awaitable を await して結果を返す。
 
     Args:
-        coro: grpc stub メソッドの戻り値（実際には awaitable）。
+        coro: grpc 非同期 stub メソッドの戻り値。
 
     Returns:
         object: gRPC レスポンスオブジェクト。
     """
-    return await coro  # type: ignore[misc]  # grpc generated stub is typed as sync
+    return await coro
 
 
 class RecordingRuntimeService(IrisRuntimeService):

@@ -124,7 +124,8 @@ def test_online_with_recent_activity_is_available(
     )
 
     assert snapshot.status is AvailabilityStatus.AVAILABLE
-    assert snapshot.confidence == 0.9  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_confidence = 0.9
+    assert snapshot.confidence == expected_confidence
     assert "recent activity" in snapshot.reason
 
 
@@ -143,7 +144,8 @@ def test_online_without_recent_activity_is_interruptible(
     )
 
     assert snapshot.status is AvailabilityStatus.INTERRUPTIBLE
-    assert snapshot.confidence == 0.7  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_confidence = 0.7
+    assert snapshot.confidence == expected_confidence
 
 
 def test_offline_is_unavailable(
@@ -161,7 +163,8 @@ def test_offline_is_unavailable(
     )
 
     assert snapshot.status is AvailabilityStatus.UNAVAILABLE
-    assert snapshot.confidence == 1.0  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_confidence = 1.0
+    assert snapshot.confidence == expected_confidence
 
 
 def test_do_not_disturb_is_busy(
@@ -179,7 +182,8 @@ def test_do_not_disturb_is_busy(
     )
 
     assert snapshot.status is AvailabilityStatus.BUSY
-    assert snapshot.confidence == 1.0  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_confidence = 1.0
+    assert snapshot.confidence == expected_confidence
 
 
 @pytest.mark.parametrize(
@@ -206,7 +210,8 @@ def test_away_and_idle_are_passive(
     )
 
     assert snapshot.status is expected
-    assert snapshot.confidence == 0.8  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_confidence = 0.8
+    assert snapshot.confidence == expected_confidence
 
 
 def test_invisible_is_unknown(
@@ -224,7 +229,8 @@ def test_invisible_is_unknown(
     )
 
     assert snapshot.status is AvailabilityStatus.UNKNOWN
-    assert snapshot.confidence == 0.5  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_confidence = 0.5
+    assert snapshot.confidence == expected_confidence
 
 
 def test_no_presence_with_recent_activity_is_interruptible(
@@ -242,7 +248,8 @@ def test_no_presence_with_recent_activity_is_interruptible(
     )
 
     assert snapshot.status is AvailabilityStatus.INTERRUPTIBLE
-    assert snapshot.confidence == 0.6  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_confidence = 0.6
+    assert snapshot.confidence == expected_confidence
 
 
 def test_no_presence_and_no_activity_is_unknown(
@@ -260,7 +267,8 @@ def test_no_presence_and_no_activity_is_unknown(
     )
 
     assert snapshot.status is AvailabilityStatus.UNKNOWN
-    assert snapshot.confidence == 0.3  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_confidence = 0.3
+    assert snapshot.confidence == expected_confidence
 
 
 def test_observed_at_comes_from_presence(

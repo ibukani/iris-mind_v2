@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
-
-import pytest
 
 from iris.contracts.activity import ActivityKind
 from iris.contracts.observations import (
@@ -16,9 +13,7 @@ from iris.contracts.observations import (
 )
 from iris.contracts.presence import PresenceStatus
 from iris.core.ids import AccountId, ObservationId, SessionId
-
-if TYPE_CHECKING:
-    from collections.abc import MutableMapping
+from tests.helpers.mapping import assert_mapping_rejects_item_assignment
 
 
 def test_observation_context_metadata_is_defensively_copied() -> None:
@@ -32,8 +27,7 @@ def test_observation_context_metadata_is_defensively_copied() -> None:
     metadata["mood"] = "sad"
 
     assert context.metadata["mood"] == "happy"
-    with pytest.raises(TypeError):
-        cast("MutableMapping[str, str]", context.metadata)["new"] = "value"
+    assert_mapping_rejects_item_assignment(context.metadata)
 
 
 def test_observation_kind_exposes_only_typed_ingress_kinds() -> None:
@@ -67,8 +61,7 @@ def test_activity_event_observation_carries_typed_fields_and_frozen_metadata() -
     assert observation.provider_event_id == "event-1"
     assert observation.provider_sequence == 42
     assert observation.metadata == {"gateway_shard_id": "2"}
-    with pytest.raises(TypeError):
-        cast("MutableMapping[str, str]", observation.metadata)["new"] = "value"
+    assert_mapping_rejects_item_assignment(observation.metadata)
 
 
 def test_presence_signal_observation_carries_expiry_and_frozen_metadata() -> None:
@@ -91,5 +84,4 @@ def test_presence_signal_observation_carries_expiry_and_frozen_metadata() -> Non
     assert observation.status is PresenceStatus.AWAY
     assert observation.expires_at == expires_at
     assert observation.metadata == {"client_name": "desktop"}
-    with pytest.raises(TypeError):
-        cast("MutableMapping[str, str]", observation.metadata)["new"] = "value"
+    assert_mapping_rejects_item_assignment(observation.metadata)

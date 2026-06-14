@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import tomllib
-from typing import cast
+from typing import TypeGuard
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -51,8 +51,8 @@ def _as_dict(value: object) -> dict[str, object]:
     Returns:
         dict[str, object]: The value when it is a mapping, otherwise an empty dict.
     """
-    if isinstance(value, dict):
-        return cast("dict[str, object]", value)
+    if _is_dict(value):
+        return {str(key): item for key, item in value.items()}
     return _EMPTY_DICT
 
 
@@ -68,9 +68,30 @@ def _as_list(value: object) -> list[object]:
     Returns:
         list[object]: The value when it is a list, otherwise an empty list.
     """
-    if isinstance(value, list):
-        return cast("list[object]", value)
+    if _is_list(value):
+        return list(value)
     return _EMPTY_LIST
+
+
+def _is_dict(value: object) -> TypeGuard[dict[object, object]]:
+    """Narrow object to dict[object, object] for item iteration.
+
+    Runtime check uses isinstance(dict) which erases type parameters, so the
+    narrowed type uses the widest compatible parameter types.
+
+    Returns:
+        True if value is a dict, narrowing to the widened type.
+    """
+    return isinstance(value, dict)
+
+
+def _is_list(value: object) -> TypeGuard[list[object]]:
+    """Narrow object to list[object] for item iteration.
+
+    Returns:
+        True if value is a list, narrowing to the widened type.
+    """
+    return isinstance(value, list)
 
 
 def _tool_config(name: str) -> dict[str, object]:
@@ -83,8 +104,10 @@ def _tool_config(name: str) -> dict[str, object]:
         dict[str, object]: Mapping for the requested tool section, empty if absent.
     """
     project = _pyproject()
-    tool = _as_dict(project.get("tool", {}))
-    return _as_dict(tool.get(name, _EMPTY_DICT))
+    tool_raw: object = project.get("tool", _EMPTY_DICT)
+    tool = _as_dict(tool_raw)
+    nested_raw: object = tool.get(name, _EMPTY_DICT)
+    return _as_dict(nested_raw)
 
 
 def _tool_get(name: str, key: str) -> dict[str, object]:
@@ -97,13 +120,16 @@ def _tool_get(name: str, key: str) -> dict[str, object]:
     Returns:
         dict[str, object]: Nested mapping, empty if absent.
     """
-    return _as_dict(_tool_config(name).get(key, {}))
+    config = _tool_config(name)
+    nested: object = config.get(key, _EMPTY_DICT)
+    return _as_dict(nested)
 
 
 def test_ruff_all_rules_remain_selected() -> None:
     """Ruff must remain an ALL-rule strict gate."""
     ruff = _tool_config("ruff")
-    lint = _as_dict(ruff.get("lint", {}))
+    lint_raw: object = ruff.get("lint", _EMPTY_DICT)
+    lint = _as_dict(lint_raw)
     assert lint.get("select") == ["ALL"]
 
 
@@ -115,11 +141,13 @@ def test_mypy_strict_and_protected_any_policy_remain_enabled() -> None:
     assert mypy.get("disallow_untyped_defs") is True
     assert mypy.get("warn_unused_ignores") is True
 
-    overrides = _as_list(mypy.get("overrides", []))
+    overrides_raw: object = mypy.get("overrides", _EMPTY_LIST)
+    overrides = _as_list(overrides_raw)
     protected_override: dict[str, object] | None = None
     for override in overrides:
         override_dict = _as_dict(override)
-        modules = _as_list(override_dict.get("module", []))
+        modules_raw: object = override_dict.get("module", _EMPTY_LIST)
+        modules = _as_list(modules_raw)
         module_names = frozenset(modules)
         if PROTECTED_MYPY_MODULES.issubset(module_names):
             protected_override = override_dict

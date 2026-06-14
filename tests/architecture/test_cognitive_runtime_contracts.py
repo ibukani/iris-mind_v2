@@ -379,7 +379,31 @@ def test_step_results_inherit_from_base(result_class: str, expected_parent: str)
 # ── 5. PipelineStep frame immutability ─────────────────────────
 
 
-def test_pipeline_step_does_not_mutate_frame() -> None:  # noqa: C901 -- intentionally enumerates per-mutation-kind branches for exhaustive AST coverage
+def _collect_file_frame_mutation_violations(filepath: Path) -> list[str]:
+    """Collect WorkspaceFrame direct mutation violations from a single cognitive file.
+
+    Returns:
+        Violation message list for this file.
+    """
+    violations: list[str] = []
+    try:
+        tree = ast.parse(filepath.read_text(encoding="utf-8"))
+    except SyntaxError:
+        return violations
+    rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            violations.extend(
+                f"  {rel}:{node.lineno} mutates frame.{target.attr} directly"
+                for target in node.targets
+                if isinstance(target, ast.Attribute)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "frame"
+            )
+    return violations
+
+
+def test_pipeline_step_does_not_mutate_frame() -> None:
     """PipelineStep.run()の実装はフレームをその場で変更してはならない。
 
     'frame'パラメータの属性をターゲットとするAssignノードをスキャンする。
@@ -396,22 +420,7 @@ def test_pipeline_step_does_not_mutate_frame() -> None:  # noqa: C901 -- intenti
             or "cycle/models.py" in str(filepath)
         ):
             continue
-        try:
-            tree = ast.parse(filepath.read_text(encoding="utf-8"))
-        except SyntaxError:
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if (
-                        isinstance(target, ast.Attribute)
-                        and isinstance(target.value, ast.Name)
-                        and target.value.id == "frame"
-                    ):
-                        rel = filepath.relative_to(PROJECT_ROOT).as_posix()
-                        violations.append(
-                            f"  {rel}:{node.lineno} mutates frame.{target.attr} directly"
-                        )
+        violations.extend(_collect_file_frame_mutation_violations(filepath))
 
     assert not violations, (
         "PipelineSteps must not mutate WorkspaceFrame directly — use FrameBuilder:\n"

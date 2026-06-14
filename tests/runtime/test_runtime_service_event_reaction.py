@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.cognitive.cycle.models import ActionSelectionResult, PipelineStepResult, StepStatus
+from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.activity import ActivityKind
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
@@ -44,9 +45,6 @@ from iris.safety.action_gate import GateDecision, SafetyDecision
 if TYPE_CHECKING:
     from iris.contracts.actions import PresentedOutput
 
-if TYPE_CHECKING:
-    from iris.cognitive.workspace.frame import WorkspaceFrame
-
 
 _OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
 _RECEIVED_AT = _OCCURRED_AT + timedelta(seconds=1)
@@ -59,7 +57,7 @@ class _CaptureFrameStep:
     """WorkspaceFrameをキャプチャし、空のaction selection結果を返すtest step。"""
 
     name: str = "capture"
-    frames: list[WorkspaceFrame] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType] -- list factory type not inferred with annotations future
+    frames: list[WorkspaceFrame] = field(default_factory=list[WorkspaceFrame])
 
     async def run(self, frame: WorkspaceFrame) -> PipelineStepResult:
         self.frames.append(frame)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 import inspect
 from pathlib import Path
+from typing import Any
 
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
@@ -15,7 +16,7 @@ from iris.runtime.config.state import RuntimeStateConfig
 from iris.runtime.server import build_runtime_components
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
-from tests.helpers.private_access import get_private_attr, get_private_attr_path
+from tests.helpers.private_access import get_private_attr_as, get_private_attr_path_as
 
 _MODULE_PATH = Path("iris/runtime/wiring/app.py")
 
@@ -45,14 +46,13 @@ def test_build_runtime_components_uses_fts5_retrieval_for_sqlite(
     assert isinstance(components.stores.memory_store, SQLiteMemoryStore)
     assert isinstance(components.space_resolver, EphemeralSpaceResolver)
     assert not hasattr(components.stores, "space_binding_store")
-    cycle = get_private_attr_path(components.runtime_service, "_app", "_cycle")
-    retrieval_steps = [
-        step for step in get_private_attr(cycle, "_steps") if isinstance(step, MemoryRetrievalStep)
-    ]
+    cycle = get_private_attr_path_as(components.runtime_service, ("_app", "_cycle"), object)
+    steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])
+    retrieval_steps = [step for step in steps if isinstance(step, MemoryRetrievalStep)]
     assert len(retrieval_steps) == 1
-    retriever = get_private_attr(retrieval_steps[0], "_retriever")
+    retriever = get_private_attr_as(retrieval_steps[0], "_retriever", object)
     assert isinstance(retriever, SQLiteFTS5MemoryRetriever)
-    assert get_private_attr(retriever, "_store") is components.stores.memory_store
+    assert get_private_attr_as(retriever, "_store", object) is components.stores.memory_store
 
 
 def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> None:
@@ -64,12 +64,14 @@ def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> 
     assert isinstance(components.stores.memory_store, InMemoryMemoryStore)
     assert isinstance(components.space_resolver, EphemeralSpaceResolver)
     assert not hasattr(components.stores, "space_binding_store")
-    cycle = get_private_attr_path(components.runtime_service, "_app", "_cycle")
-    retrieval_steps = [
-        step for step in get_private_attr(cycle, "_steps") if isinstance(step, MemoryRetrievalStep)
-    ]
+    cycle = get_private_attr_path_as(components.runtime_service, ("_app", "_cycle"), object)
+    steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])
+    retrieval_steps = [step for step in steps if isinstance(step, MemoryRetrievalStep)]
     assert len(retrieval_steps) == 1
-    assert get_private_attr(retrieval_steps[0], "_retriever") is components.stores.memory_store
+    assert (
+        get_private_attr_as(retrieval_steps[0], "_retriever", object)
+        is components.stores.memory_store
+    )
 
 
 def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
@@ -85,7 +87,7 @@ def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
 
     components = build_runtime_components(config)
 
-    assert get_private_attr(components.identity_resolver, "_account_store") is (
+    assert get_private_attr_as(components.identity_resolver, "_account_store", object) is (
         components.stores.account_store
     )
 

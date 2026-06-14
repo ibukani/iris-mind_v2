@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
-
 import pytest
 
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.state import RuntimeStateConfig, apply_state_env, apply_state_toml
-
-if TYPE_CHECKING:
-    from iris.runtime.config.parsing import TomlTable
+from tests.helpers.toml import toml_table
 
 
 def test_state_config_defaults() -> None:
@@ -23,8 +19,8 @@ def test_state_config_defaults() -> None:
 def test_apply_state_toml_valid() -> None:
     """Test apply_state_toml with valid backend."""
     config = RuntimeStateConfig()
-    table = {"backend": "sqlite", "sqlite_path": "test.db"}
-    new_config = apply_state_toml(config, cast("TomlTable", table))
+    table = toml_table(backend="sqlite", sqlite_path="test.db")
+    new_config = apply_state_toml(config, table)
     assert new_config.backend == "sqlite"
     assert new_config.sqlite_path == "test.db"
 
@@ -32,17 +28,17 @@ def test_apply_state_toml_valid() -> None:
 def test_apply_state_toml_invalid_backend() -> None:
     """Test apply_state_toml rejects invalid backend."""
     config = RuntimeStateConfig()
-    table = {"backend": "postgres"}
+    table = toml_table(backend="postgres")
     with pytest.raises(ConfigError, match=r"Invalid state\.backend"):
-        apply_state_toml(config, cast("TomlTable", table))
+        apply_state_toml(config, table)
 
 
 def test_apply_state_toml_empty_sqlite_path() -> None:
     """Test apply_state_toml rejects empty sqlite path."""
     config = RuntimeStateConfig()
-    table = {"backend": "sqlite", "sqlite_path": ""}
+    table = toml_table(backend="sqlite", sqlite_path="")
     with pytest.raises(ConfigError, match="must be non-empty"):
-        apply_state_toml(config, cast("TomlTable", table))
+        apply_state_toml(config, table)
 
 
 def test_apply_state_env_valid() -> None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any
 
 import pytest
 
@@ -19,7 +19,12 @@ from iris.runtime.wiring.llm import (
     wire_openai_llm_client,
     wire_response_generator,
 )
-from tests.helpers.private_access import get_private_attr, get_private_attr_path, import_private
+from tests.helpers.private_access import (
+    get_private_attr_as,
+    get_private_attr_path_as,
+    import_private_matching,
+    is_callable,
+)
 
 
 def test_wire_fake_llm_client_returns_fake() -> None:
@@ -31,28 +36,30 @@ def test_wire_fake_llm_client_returns_fake() -> None:
 def test_wire_fake_llm_client_with_responses() -> None:
     """wire_fake_llm_client passes responses through."""
     client = wire_fake_llm_client(responses=("a", "b"))
-    assert get_private_attr(client, "_responses") == ("a", "b")
+    assert get_private_attr_as(client, "_responses", tuple[object, ...]) == ("a", "b")
 
 
 def test_wire_openai_llm_client_returns_client() -> None:
     """wire_openai_llm_client returns an OpenAILLMClient."""
     config = OpenAIConfig(model="gpt-test", api_key="test-key")
-    client = cast("OpenAILLMClient", wire_openai_llm_client(config))
-    assert get_private_attr_path(client, "_config", "model") == "gpt-test"
+    client = wire_openai_llm_client(config)
+    assert isinstance(client, OpenAILLMClient)
+    assert get_private_attr_path_as(client, ("_config", "model"), str) == "gpt-test"
 
 
 def test_wire_ollama_llm_client_returns_client() -> None:
     """wire_ollama_llm_client returns an OllamaLLMClient."""
     config = OllamaConfig(model="qwen3:8b")
-    client = cast("OllamaLLMClient", wire_ollama_llm_client(config))
-    assert get_private_attr_path(client, "_config", "model") == "qwen3:8b"
+    client = wire_ollama_llm_client(config)
+    assert isinstance(client, OllamaLLMClient)
+    assert get_private_attr_path_as(client, ("_config", "model"), str) == "qwen3:8b"
 
 
 def test_wire_response_generator_uses_fake_when_client_none() -> None:
     """wire_response_generator creates a fake client when client is None."""
     gen = wire_response_generator(client=None)
     assert isinstance(gen, LLMResponseGenerator)
-    assert isinstance(get_private_attr(gen, "_client"), FakeLLMClient)
+    assert isinstance(get_private_attr_as(gen, "_client", FakeLLMClient), FakeLLMClient)
 
 
 def _model_config_with_unknown_provider() -> RuntimeModelConfig:
@@ -65,7 +72,7 @@ def _model_config_with_unknown_provider() -> RuntimeModelConfig:
     # To test the unknown-provider error path we bypass the dataclass invariant
     # by directly mutating the underlying __dict__ through object.__setattr__.
     model_config = RuntimeModelConfig(provider="fake", model="x")
-    object.__setattr__(model_config, "provider", "unknown")  # noqa: PLC2801 -- mutate frozen dataclass for error-path test
+    model_config.__dict__["provider"] = "unknown"
     return model_config
 
 
@@ -89,7 +96,9 @@ def test_ollama_adapter_config_replaces_fake_llm_model() -> None:
     """_ollama_adapter_config replaces fake-llm with the Ollama default model."""
     config = default_runtime_config()
     model_config = RuntimeModelConfig(provider="ollama", model="fake-llm")
-    ollama_adapter_config = import_private("iris.runtime.wiring.llm", "_ollama_adapter_config")
+    ollama_adapter_config: Any = import_private_matching(
+        "iris.runtime.wiring.llm", "_ollama_adapter_config", is_callable
+    )
     result = ollama_adapter_config(model_config, config)
     assert result.model == OllamaConfig().model
 
@@ -98,7 +107,9 @@ def test_openai_adapter_config_replaces_fake_llm_model() -> None:
     """_openai_adapter_config replaces fake-llm with the OpenAI default model."""
     config = default_runtime_config()
     model_config = RuntimeModelConfig(provider="openai", model="fake-llm")
-    openai_adapter_config = import_private("iris.runtime.wiring.llm", "_openai_adapter_config")
+    openai_adapter_config: Any = import_private_matching(
+        "iris.runtime.wiring.llm", "_openai_adapter_config", is_callable
+    )
     result = openai_adapter_config(model_config, config)
     assert result.model == "gpt-5-mini"
 
@@ -107,14 +118,18 @@ def test_openai_adapter_config_uses_runtime_max_tokens() -> None:
     """_openai_adapter_config uses runtime max_output_tokens when model config has None."""
     config = default_runtime_config()
     model_config = RuntimeModelConfig(provider="openai", model="gpt-test")
-    openai_adapter_config = import_private("iris.runtime.wiring.llm", "_openai_adapter_config")
+    openai_adapter_config: Any = import_private_matching(
+        "iris.runtime.wiring.llm", "_openai_adapter_config", is_callable
+    )
     result = openai_adapter_config(model_config, config)
     assert result.max_output_tokens == config.openai.max_output_tokens
 
 
 def test_build_user_content_with_no_sections() -> None:
     """_build_user_content returns actor_text when no optional sections are present."""
-    build_user_content = import_private("iris.runtime.wiring.llm", "_build_user_content")
+    build_user_content: Any = import_private_matching(
+        "iris.runtime.wiring.llm", "_build_user_content", is_callable
+    )
     prompt = ResponsePrompt(
         system_instruction="sys",
         actor_text="hello",

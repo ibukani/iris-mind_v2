@@ -268,7 +268,49 @@ def test_no_deleted_imports_in_source_code() -> None:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _check_layer_imports(  # noqa: C901 -- branches per (layer, allowed-import, exception) tuple for exhaustive boundary check
+def _is_import_allowed_by_exceptions(
+    rel_path: str,
+    imp: str,
+    layer_dir: str,
+    exceptions: list[tuple[str, str, str, str]],
+) -> bool:
+    """Check if a forbidden import is explicitly allowed by a layer exception rule.
+
+    Returns:
+        True if the import is covered by an exception for this layer.
+    """
+    for exc_layer, exc_file, exc_prefix, _ in exceptions:
+        if exc_layer == layer_dir and exc_file == rel_path and imp.startswith(exc_prefix):
+            return True
+    return False
+
+
+def _check_file_layer_imports(
+    tree: ast.Module,
+    rel_path: str,
+    layer_dir: str,
+    forbidden: set[str],
+    exceptions: list[tuple[str, str, str, str]],
+) -> list[str]:
+    """Check all imports in a single file against forbidden layer prefixes.
+
+    Returns:
+        Violation message list for this file.
+    """
+    violations: list[str] = []
+    for imp in _all_imports(tree):
+        if not imp.startswith("iris."):
+            continue
+        for forbidden_prefix in forbidden:
+            if not imp.startswith(forbidden_prefix):
+                continue
+            if _is_import_allowed_by_exceptions(rel_path, imp, layer_dir, exceptions):
+                continue
+            violations.append(f"  {rel_path}: imports '{imp}' (forbidden for {layer_dir})")
+    return violations
+
+
+def _check_layer_imports(
     layer_dir: str,
     forbidden: set[str],
     exceptions: list[tuple[str, str, str, str]],
@@ -283,23 +325,9 @@ def _check_layer_imports(  # noqa: C901 -- branches per (layer, allowed-import, 
             tree = ast.parse(filepath.read_text(encoding="utf-8"))
         except SyntaxError:
             continue
-        for imp in _all_imports(tree):
-            if not imp.startswith("iris."):
-                continue
-            for forbidden_prefix in forbidden:
-                if not imp.startswith(forbidden_prefix):
-                    continue
-                allowed = False
-                for exc_layer, exc_file, exc_prefix, _ in exceptions:
-                    if (
-                        exc_layer == layer_dir
-                        and exc_file == rel_path
-                        and imp.startswith(exc_prefix)
-                    ):
-                        allowed = True
-                        break
-                if not allowed:
-                    violations.append(f"  {rel_path}: imports '{imp}' (forbidden for {layer_dir})")
+        violations.extend(
+            _check_file_layer_imports(tree, rel_path, layer_dir, forbidden, exceptions)
+        )
     return violations
 
 
@@ -339,29 +367,40 @@ def test_main_py_delegates_to_target_runtime() -> None:
     assert "iris.runtime" in text, "main.py must import from iris.runtime"
 
 
-def test_wiring_uses_constructor_injection() -> None:  # noqa: C901 -- branches per forbidden service-locator call pattern for exhaustive wiring check
+def _collect_file_service_locator_calls(fp: Path, rel: str) -> list[str]:
+    """Collect service locator call violations from a single file.
+
+    Returns:
+        Violation message list for this file.
+    """
+    violations: list[str] = []
+    try:
+        tree = ast.parse(fp.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return violations
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name_parts: list[str] = []
+            cur = func
+            while isinstance(cur, ast.Attribute):
+                name_parts.insert(0, cur.attr)
+                cur = cur.value
+            if isinstance(cur, ast.Name):
+                name_parts.insert(0, cur.id)
+            if any(fn in name_parts for fn in ("resolve", "get_service", "locate")):
+                violations.append(f"  {rel}:{node.lineno} calls '{'.'.join(name_parts)}'")
+    return violations
+
+
+def test_wiring_uses_constructor_injection() -> None:
     """配線関数はresolve()、get_service()、locate()を呼び出してはならない。"""
     violations: list[str] = []
     for rel in WIRING_FILES:
         fp = PROJECT_ROOT / rel
         if not fp.is_file():
             continue
-        try:
-            tree = ast.parse(fp.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError, UnicodeDecodeError):
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                func = node.func
-                name_parts: list[str] = []
-                cur = func
-                while isinstance(cur, ast.Attribute):
-                    name_parts.insert(0, cur.attr)
-                    cur = cur.value
-                if isinstance(cur, ast.Name):
-                    name_parts.insert(0, cur.id)
-                if any(fn in name_parts for fn in ("resolve", "get_service", "locate")):
-                    violations.append(f"  {rel}:{node.lineno} calls '{'.'.join(name_parts)}'")
+        violations.extend(_collect_file_service_locator_calls(fp, rel))
     assert not violations, (
         "Wiring must use constructor injection, not service locator:\n" + "\n".join(violations)
     )
@@ -444,33 +483,44 @@ def test_no_service_locator_patterns(target_dir: str) -> None:
     )
 
 
-def test_no_global_mutable_registries() -> None:  # noqa: C901 -- branches per detected registry pattern for exhaustive global-state audit
+def _collect_file_registry_violations(filepath: Path) -> list[str]:
+    """Collect global mutable registry violations from a single file.
+
+    Returns:
+        Violation message list for this file.
+    """
+    violations: list[str] = []
+    try:
+        tree = ast.parse(filepath.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, UnicodeDecodeError):
+        return violations
+    rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.Assign):
+            violations.extend(
+                f"  {rel}: global mutable '{target.id}'"
+                for target in node.targets
+                if isinstance(target, ast.Name)
+                and target.id.isupper()
+                and isinstance(node.value, (ast.Dict, ast.List, ast.Set))
+            )
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            func = node.value.func
+            name = ""
+            if isinstance(func, ast.Attribute):
+                name = ast.unparse(func)
+            elif isinstance(func, ast.Name):
+                name = func.id
+            if name in {"register", "subscribe", "add_hook"}:
+                violations.append(f"  {rel}: module-level call '{name}()'")
+    return violations
+
+
+def test_no_global_mutable_registries() -> None:
     """ターゲットモジュールにモジュールレベルの可変レジストリがあってはならない。"""
     violations: list[str] = []
     for filepath in _iter_source_files():
-        try:
-            tree = ast.parse(filepath.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError, UnicodeDecodeError):
-            continue
-        rel = filepath.relative_to(PROJECT_ROOT).as_posix()
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.Assign):
-                violations.extend(
-                    f"  {rel}: global mutable '{target.id}'"
-                    for target in node.targets
-                    if isinstance(target, ast.Name)
-                    and target.id.isupper()
-                    and isinstance(node.value, (ast.Dict, ast.List, ast.Set))
-                )
-            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-                func = node.value.func
-                name = ""
-                if isinstance(func, ast.Attribute):
-                    name = ast.unparse(func)
-                elif isinstance(func, ast.Name):
-                    name = func.id
-                if name in {"register", "subscribe", "add_hook"}:
-                    violations.append(f"  {rel}: module-level call '{name}()'")
+        violations.extend(_collect_file_registry_violations(filepath))
     assert not violations, "Global mutable registries found:\n" + "\n".join(violations)
 
 

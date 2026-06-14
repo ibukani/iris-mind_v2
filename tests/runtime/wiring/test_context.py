@@ -12,13 +12,15 @@ def test_wire_availability_resolver_returns_default_resolver() -> None:
     """wire_availability_resolver はデフォルトの resolver を返す。"""
     resolver = wire_availability_resolver()
     assert isinstance(resolver, AvailabilityResolver)
-    assert resolver.recent_activity_window_seconds == 300.0  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_window = 300.0
+    assert resolver.recent_activity_window_seconds == expected_window
 
 
 def test_wire_availability_resolver_uses_custom_window() -> None:
     """wire_availability_resolver は window 秒数を反映する。"""
     resolver = wire_availability_resolver(recent_activity_window_seconds=60.0)
-    assert resolver.recent_activity_window_seconds == 60.0  # noqa: RUF069 -- exact float literal comparison in tests
+    expected_window = 60.0
+    assert resolver.recent_activity_window_seconds == expected_window
 
 
 def test_wire_workspace_context_assembler_defaults() -> None:

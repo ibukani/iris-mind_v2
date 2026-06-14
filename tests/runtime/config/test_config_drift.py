@@ -6,7 +6,10 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 import tomllib
-from typing import TypedDict, cast
+from typing import TYPE_CHECKING, TypedDict, TypeGuard
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from iris.runtime.config import default_runtime_config, load_runtime_config, runtime_config_specs
 
@@ -47,16 +50,10 @@ def test_runtime_defaults_match_config_spec() -> None:
 def test_full_example_values_are_applied_by_runtime_parser() -> None:
     """Canonical exampleの全keyがruntime configへ反映される。"""
     config_values = _flatten_mapping(
-        cast(
-            "dict[str, object]",
-            asdict(load_runtime_config(_full_example_path(), env={})),
-        )
+        asdict(load_runtime_config(_full_example_path(), env={})),
     )
     example_values = _flatten_mapping(
-        cast(
-            "dict[str, object]",
-            tomllib.loads(_full_example_path().read_text(encoding="utf-8")),
-        )
+        tomllib.loads(_full_example_path().read_text(encoding="utf-8")),
     )
 
     assert {path: config_values[path] for path in example_values} == example_values
@@ -109,18 +106,19 @@ def test_all_partial_example_configs_load_successfully() -> None:
 
 
 def _runtime_defaults() -> dict[str, str | int | float | bool | None]:
-    return _flatten_mapping(cast("dict[str, object]", asdict(default_runtime_config())))
+    return _flatten_mapping(asdict(default_runtime_config()))
 
 
 def _flatten_mapping(
-    table: dict[str, object],
+    table: Mapping[str, object],
     prefix: str = "",
 ) -> dict[str, str | int | float | bool | None]:
     values: dict[str, str | int | float | bool | None] = {}
     for key, value in table.items():
         path = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, dict):
-            values.update(_flatten_mapping(cast("dict[str, object]", value), path))
+        if _is_dict(value):
+            assert all(isinstance(k, str) for k in value)
+            values.update(_flatten_mapping(value, path))
         elif isinstance(value, (str, int, float, bool)) or value is None:
             values[path] = value
         else:
@@ -130,24 +128,104 @@ def _flatten_mapping(
 
 
 def _toml_leaf_paths(path: Path) -> set[str]:
-    document = tomllib.loads(path.read_text(encoding="utf-8"))
-    return _mapping_leaf_paths(cast("dict[str, object]", document), "")
+    document_raw: object = tomllib.loads(path.read_text(encoding="utf-8"))
+    document = _as_mapping(document_raw)
+    return _mapping_leaf_paths(document, "")
 
 
-def _mapping_leaf_paths(table: dict[str, object], prefix: str) -> set[str]:
+def _as_mapping(value: object) -> Mapping[str, object]:
+    if _is_dict(value):
+        return value
+    return {}
+
+
+def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
+    """Narrow object to dict[str, object] for item iteration.
+
+    Runtime check uses isinstance(dict) which erases type parameters, so the
+    narrowed type uses the widest compatible parameter types.
+
+    Returns:
+        True if value is a dict, narrowing to the widened type.
+    """
+    return isinstance(value, dict)
+
+
+def _is_list(value: object) -> TypeGuard[list[object]]:
+    """Narrow object to list[object] for item iteration.
+
+    Returns:
+        True if value is a list, narrowing to the widened type.
+    """
+    return isinstance(value, list)
+
+
+def _mapping_leaf_paths(table: Mapping[str, object], prefix: str) -> set[str]:
     paths: set[str] = set()
     for key, value in table.items():
         path = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, dict):
-            paths.update(_mapping_leaf_paths(cast("dict[str, object]", value), path))
+        if _is_dict(value):
+            assert all(isinstance(k, str) for k in value)
+            paths.update(_mapping_leaf_paths(value, path))
         else:
             paths.add(path)
     return paths
 
 
+_MANIFEST_FIELD_REQUIRED_KEYS = ("default", "env")
+
+_MANIFEST_FIELD_TYPES = (
+    ("path", str),
+    ("type", str),
+    ("allowedValues", list),
+    ("secret", bool),
+    ("editable", bool),
+    ("description", str),
+)
+
+
+def _is_manifest(obj: object) -> TypeGuard[_Manifest]:
+    """Validate that obj matches the _Manifest TypedDict shape.
+
+    Returns:
+        True if obj is a valid _Manifest.
+    """
+    if not _is_dict(obj):
+        return False
+    version: object = obj.get("version")
+    if not isinstance(version, int):
+        return False
+    fields_raw: object = obj.get("fields")
+    if not _is_list(fields_raw):
+        return False
+    return all(_is_manifest_field(f) for f in fields_raw)
+
+
+def _is_manifest_field(obj: object) -> TypeGuard[_ManifestField]:
+    """Validate that obj matches the _ManifestField TypedDict shape.
+
+    Returns:
+        True if obj is a valid _ManifestField.
+    """
+    if not _is_dict(obj):
+        return False
+    for key in _MANIFEST_FIELD_REQUIRED_KEYS:
+        if key not in obj:
+            return False
+    for key, expected_type in _MANIFEST_FIELD_TYPES:
+        value: object = obj.get(key)
+        if not isinstance(value, expected_type):
+            return False
+    return True
+
+
 def _load_manifest() -> _Manifest:
     text = _repo_path(".iris/control-plane/runtime-config.schema.json").read_text(encoding="utf-8")
-    return cast("_Manifest", json.loads(text))
+    data = json.loads(text)
+    if not _is_manifest(data):
+        msg = "Invalid manifest structure"
+        raise AssertionError(msg)
+    return data
 
 
 def _full_example_path() -> Path:

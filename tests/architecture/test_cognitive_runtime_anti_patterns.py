@@ -134,26 +134,31 @@ def _has_action_str_dispatch(tree: ast.Module) -> list[str]:
     return findings
 
 
-def _check_if_for_string_dispatch(node: ast.If, findings: list[str]) -> None:  # noqa: C901 -- AST-walking helper must branch on each comparison / pattern kind
-    """if-elifチェーンを再帰的にチェックして文字列比較ディスパッチを検出する。"""
+def _get_compare_str(comparison: ast.Compare | None) -> str | None:
+    """AST Compareノードからディスパッチ対象の文字列値を抽出する。
 
-    def _get_compare_str(comparison: ast.Compare | None) -> str | None:
-        if comparison is None:
-            return None
-        if isinstance(comparison.left, ast.Name) and comparison.left.id in {
-            "action",
-            "action_type",
-            "command",
-        }:
-            for op, right in zip(comparison.ops, comparison.comparators, strict=False):
-                if (
-                    isinstance(op, (ast.Eq, ast.Is))
-                    and isinstance(right, ast.Constant)
-                    and isinstance(right.value, str)
-                ):
-                    return str(right.value)
+    Returns:
+        ディスパッチ対象の文字列値。該当しない場合はNone。
+    """
+    if comparison is None:
         return None
+    if isinstance(comparison.left, ast.Name) and comparison.left.id in {
+        "action",
+        "action_type",
+        "command",
+    }:
+        for op, right in zip(comparison.ops, comparison.comparators, strict=False):
+            if (
+                isinstance(op, (ast.Eq, ast.Is))
+                and isinstance(right, ast.Constant)
+                and isinstance(right.value, str)
+            ):
+                return str(right.value)
+    return None
 
+
+def _check_if_for_string_dispatch(node: ast.If, findings: list[str]) -> None:
+    """if-elifチェーンを再帰的にチェックして文字列比較ディスパッチを検出する。"""
     if isinstance(node.test, ast.Compare):
         val = _get_compare_str(node.test)
         if val:
@@ -529,7 +534,60 @@ FORBIDDEN_DICT_PATTERNS: set[str] = {
 }
 
 
-def test_internal_layers_no_untyped_dict() -> None:  # noqa: C901, PLR0912 -- branches per (layer, forbidden dict pattern) pair for exhaustive type-boundary audit
+def _collect_func_param_dict_violations(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    rel: str,
+) -> list[str]:
+    """関数パラメータの型注釈から禁止dictパターンを収集する。
+
+    Returns:
+        違反メッセージのリスト。
+    """
+    violations: list[str] = []
+    for arg in node.args.args:
+        if arg.annotation is not None:
+            ann_str = ast.unparse(arg.annotation)
+            violations.extend(
+                f"  {rel}:{node.lineno} parameter '{arg.arg}: {ann_str}'"
+                for f in FORBIDDEN_DICT_PATTERNS
+                if f in ann_str
+            )
+    return violations
+
+
+def _collect_file_dict_violations(filepath: Path) -> list[str]:
+    """単一ファイルから未型付けdict違反を収集する。
+
+    Returns:
+        違反メッセージのリスト。
+    """
+    violations: list[str] = []
+    rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+    try:
+        tree = ast.parse(filepath.read_text(encoding="utf-8"))
+    except SyntaxError:
+        return violations
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.stmt):
+            continue
+        node_line: int = node.lineno
+
+        if isinstance(node, ast.AnnAssign):
+            ann_str = ast.unparse(node.annotation)
+            for f in FORBIDDEN_DICT_PATTERNS:
+                if f in ann_str:
+                    lines = filepath.read_text(encoding="utf-8").splitlines()
+                    line_text: str = lines[node_line - 1].strip()
+                    violations.append(f"  {rel}:{node_line} {line_text}")
+                    break
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            violations.extend(_collect_func_param_dict_violations(node, rel))
+
+    return violations
+
+
+def test_internal_layers_no_untyped_dict() -> None:
     """すべての内部層は型付き境界内で未型付けのdict/mappingを避けなければならない。
 
     dataclassフィールド注釈と関数シグネチャの
@@ -542,40 +600,7 @@ def test_internal_layers_no_untyped_dict() -> None:  # noqa: C901, PLR0912 -- br
         if not base.is_dir():
             continue
         for filepath in _get_python_files(base):
-            rel = filepath.relative_to(PROJECT_ROOT).as_posix()
-            try:
-                tree = ast.parse(filepath.read_text(encoding="utf-8"))
-            except SyntaxError:
-                continue
-
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.stmt):
-                    continue
-                node_line: int = node.lineno
-                annotation: ast.expr | None = None
-
-                if isinstance(node, ast.AnnAssign):
-                    annotation = node.annotation
-                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    for arg in node.args.args:
-                        if arg.annotation is not None:
-                            ann_str = ast.unparse(arg.annotation)
-                            violations.extend(
-                                f"  {rel}:{node_line} parameter '{arg.arg}: {ann_str}'"
-                                for f in FORBIDDEN_DICT_PATTERNS
-                                if f in ann_str
-                            )
-
-                if annotation is None:
-                    continue
-
-                ann_str = ast.unparse(annotation)
-                for f in FORBIDDEN_DICT_PATTERNS:
-                    if f in ann_str:
-                        lines = filepath.read_text(encoding="utf-8").splitlines()
-                        line_text: str = lines[node_line - 1].strip()
-                        violations.append(f"  {rel}:{node_line} {line_text}")
-                        break
+            violations.extend(_collect_file_dict_violations(filepath))
 
     assert not violations, (
         "Internal layers must not use dict[str, Any]/dict[str, object]/MutableMapping:\n"

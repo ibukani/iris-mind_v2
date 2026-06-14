@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 import tomllib
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, TypeGuard, override
 
 import pytest
 
@@ -664,6 +664,18 @@ def _example_config_paths() -> tuple[Path, ...]:
     return tuple(sorted(_repo_path("examples/config").glob("*.toml")))
 
 
+def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
+    """Narrow object to dict[str, object] for item iteration.
+
+    Runtime check uses isinstance(dict) which erases type parameters, so the
+    narrowed type uses the widest compatible parameter types.
+
+    Returns:
+        True if value is a dict, narrowing to the widened type.
+    """
+    return isinstance(value, dict)
+
+
 def test_examples_directory_exists() -> None:
     """A committed examples/config directory must exist."""
     assert _repo_path("examples/config").is_dir()
@@ -698,9 +710,12 @@ def test_example_config_contains_no_secret_like_keys(config_path: Path) -> None:
     )
 
     def _walk(value: object, path: str) -> tuple[str, ...]:
-        if not isinstance(value, dict):
+        if not _is_dict(value):
             return ()
-        table = cast("dict[str, object]", value)
+        table: dict[str, object] = {}
+        for k, v in value.items():
+            assert isinstance(k, str)
+            table[k] = v
         violations: list[str] = []
         for key, child in table.items():
             child_path = f"{path}.{key}" if path else key
@@ -710,6 +725,9 @@ def test_example_config_contains_no_secret_like_keys(config_path: Path) -> None:
         return tuple(violations)
 
     violations = _walk(document, "")
+    assert not violations, (
+        f"{config_path.name} contains forbidden secret-like keys: {', '.join(violations)}"
+    )
     assert not violations, (
         f"{config_path.name} contains forbidden secret-like keys: {', '.join(violations)}"
     )

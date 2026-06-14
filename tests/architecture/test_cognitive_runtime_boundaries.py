@@ -45,7 +45,42 @@ def _get_imports(filepath: Path) -> list[str]:
 # ── 1. Runtime wiring rules ────────────────────────────────────
 
 
-def test_runtime_wiring_no_cognitive_policy() -> None:  # noqa: C901 -- architecture scan intentionally checks several AST node shapes
+def _collect_file_wiring_policy_violations(filepath: Path) -> list[str]:
+    """Collect cognitive policy violations from a single wiring file.
+
+    Returns:
+        Violation message list for this file.
+    """
+    violations: list[str] = []
+    try:
+        text = filepath.read_text(encoding="utf-8")
+    except OSError:
+        return violations
+    tree = ast.parse(text)
+    rel = filepath.relative_to(PROJECT_ROOT).as_posix()
+    for node in ast.walk(tree):
+        if isinstance(
+            node, (ast.ClassDef, ast.AsyncFunctionDef, ast.FunctionDef)
+        ) and node.name in {
+            "CognitiveCycle",
+            "PipelineStep",
+            "CognitiveStep",
+        }:
+            violations.append(
+                f"  {rel}: defines '{node.name}' — wiring should not define domain classes"
+            )
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("wire_"):
+            violations.extend(
+                f"  {rel}: '{child.func.attr}' — service locator forbidden"
+                for child in ast.walk(node)
+                if isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Attribute)
+                and child.func.attr in {"resolve", "get_service", "locate"}
+            )
+    return violations
+
+
+def test_runtime_wiring_no_cognitive_policy() -> None:
     """runtime/wiringにコグニティブポリシーロジックやビジネスロジックを含めてはならない。
 
     runtime/wiring/内の各ファイルはコンストラクタインジェクションを介してのみ依存関係を構成すべきである。
@@ -57,34 +92,7 @@ def test_runtime_wiring_no_cognitive_policy() -> None:  # noqa: C901 -- architec
     violations: list[str] = []
 
     for filepath in _get_python_files(wiring_dir):
-        try:
-            text = filepath.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        tree = ast.parse(text)
-        for node in ast.walk(tree):
-            if isinstance(
-                node, (ast.ClassDef, ast.AsyncFunctionDef, ast.FunctionDef)
-            ) and node.name in {
-                "CognitiveCycle",
-                "PipelineStep",
-                "CognitiveStep",
-            }:
-                rel = filepath.relative_to(PROJECT_ROOT).as_posix()
-                violations.append(
-                    f"  {rel}: defines '{node.name}' — wiring should not define domain classes"
-                )
-            if isinstance(node, ast.FunctionDef) and node.name.startswith("wire_"):
-                for child in ast.walk(node):
-                    if (
-                        isinstance(child, ast.Call)
-                        and isinstance(child.func, ast.Attribute)
-                        and child.func.attr in {"resolve", "get_service", "locate"}
-                    ):
-                        rel = filepath.relative_to(PROJECT_ROOT).as_posix()
-                        violations.append(
-                            f"  {rel}: '{child.func.attr}' — service locator forbidden"
-                        )
+        violations.extend(_collect_file_wiring_policy_violations(filepath))
 
     assert not violations, "runtime/wiring violations found:\n" + "\n".join(violations)
 

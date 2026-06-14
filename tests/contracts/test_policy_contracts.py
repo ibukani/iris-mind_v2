@@ -32,4 +32,4 @@ def test_policy_contracts_are_immutable_and_typed() -> None:
     assert result.action_preferences == (preference,)
 
     assert_frozen_field(constraint, "name", "other")
-    assert_frozen_field(result, "response_allowed", False)  # noqa: FBT003 -- bool literal probes frozen-field rejection
+    assert_frozen_field(result, "response_allowed", value=False)

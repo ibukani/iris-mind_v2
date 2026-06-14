@@ -6,7 +6,7 @@ import ast
 import json
 from pathlib import Path
 import re
-from typing import cast
+from typing import TypeGuard
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -83,6 +83,34 @@ def _verify_check_names() -> set[str]:
     return names
 
 
+def _as_dict(value: object) -> dict[str, object]:
+    """Return a string-keyed dict copy for parsed JSON objects."""
+    if not _is_dict(value):
+        return {}
+    return {str(key): item for key, item in value.items()}
+
+
+def _is_dict(value: object) -> TypeGuard[dict[object, object]]:
+    """Narrow object to dict[object, object] for item iteration.
+
+    Runtime check uses isinstance(dict) which erases type parameters, so the
+    narrowed type uses the widest compatible parameter types.
+
+    Returns:
+        True if value is a dict, narrowing to the widened type.
+    """
+    return isinstance(value, dict)
+
+
+def _is_list(value: object) -> TypeGuard[list[object]]:
+    """Narrow object to list[object] for item iteration.
+
+    Returns:
+        True if value is a list, narrowing to the widened type.
+    """
+    return isinstance(value, list)
+
+
 def test_required_ai_harness_paths_exist() -> None:
     """All mandatory AI harness paths referenced by entrypoint docs must exist."""
     missing = [
@@ -93,36 +121,32 @@ def test_required_ai_harness_paths_exist() -> None:
 
 def test_opencode_instructions_reference_existing_files() -> None:
     """OpenCode instruction paths must stay valid."""
-    config: dict[str, object] = cast(
-        "dict[str, object]",
-        json.loads((PROJECT_ROOT / "opencode.json").read_text(encoding="utf-8")),
-    )
-    instructions_raw = config.get("instructions", [])
-    assert isinstance(instructions_raw, list), "opencode.json instructions must be a list"
-    instructions = cast("list[object]", instructions_raw)
+    config = _as_dict(json.loads((PROJECT_ROOT / "opencode.json").read_text(encoding="utf-8")))
+    instructions_raw: object = config.get("instructions", ())
+    if not _is_list(instructions_raw):
+        instructions_raw = []
+    instructions = list(instructions_raw)
     missing = [str(path) for path in instructions if not (PROJECT_ROOT / str(path)).is_file()]
     assert not missing, "opencode instructions reference missing files:\n" + "\n".join(missing)
 
 
 def test_opencode_commands_match_make_targets() -> None:
     """OpenCode commands must call existing Makefile AI harness targets."""
-    config: dict[str, object] = cast(
-        "dict[str, object]",
-        json.loads((PROJECT_ROOT / "opencode.json").read_text(encoding="utf-8")),
-    )
-    commands_raw = config.get("command", {})
-    assert isinstance(commands_raw, dict), "opencode.json command must be an object"
-    commands: dict[str, object] = cast("dict[str, object]", commands_raw)
+    config = _as_dict(json.loads((PROJECT_ROOT / "opencode.json").read_text(encoding="utf-8")))
+    commands_raw: object = config.get("command", ())
+    if not _is_dict(commands_raw):
+        commands_raw = {}
+    commands = _as_dict(commands_raw)
     make_targets = _target_names_from_makefile()
     violations: list[str] = []
 
     for command_name, expected_template_text in OPENCODE_COMMAND_TARGETS.items():
-        command_config = commands.get(command_name)
-        if not isinstance(command_config, dict):
+        command_config: object = commands.get(command_name)
+        if not _is_dict(command_config):
             violations.append(f"missing command {command_name}")
             continue
-        command_dict: dict[str, object] = cast("dict[str, object]", command_config)
-        template = command_dict.get("template", "")
+        command_dict = _as_dict(command_config)
+        template: object = command_dict.get("template", "")
         if not isinstance(template, str) or expected_template_text not in template:
             violations.append(f"{command_name}: template must mention {expected_template_text}")
         make_target = command_name

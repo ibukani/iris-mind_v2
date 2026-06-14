@@ -1,0 +1,88 @@
+# Human-approved suppression debt registry.
+#
+# このファイルは人的承認を受けた抑制債務のレジストリです。
+# 通常の実装タスクでコーディングエージェントがエントリを追加してはいけません。
+# エントリは一時的な債務であり、通常の許可ではありません。
+# 新規エントリには明示的な人的承認が必要です。
+#
+# エントリ形式:
+#   [[debt]]
+#   path = "iris/adapters/grpc/server.py"
+#   line = 103
+#   kind = "noqa"           # "noqa" | "type: ignore" | "pyright: ignore" | "typing.cast" | "object.__setattr__"
+#   rule_or_error_code = "BLE001"
+#   reason = "..."
+#   alternative_attempted = "..."
+#   expires = "2025-12-31"  # YYYY-MM-DD, この日を過ぎるとテストは失敗する
+#   owner = "team"
+#
+# kind 値は以下のいずれか:
+#   "noqa"             - # noqa コメント
+#   "type: ignore"     - # type: ignore コメント
+#   "pyright: ignore"  - # pyright: ignore コメント
+#   "typing.cast"      - typing.cast() 呼び出し
+#   "object.__setattr__" - object.__setattr__() 呼び出し
+
+# ---------------------------------------------------------------------------
+# iris/adapters — 外部ライブラリ境界でのやむを得ない抑制
+# ---------------------------------------------------------------------------
+
+[[debt]]
+path = "iris/adapters/grpc/server.py"
+line = 103
+kind = "noqa"
+rule_or_error_code = "BLE001"
+reason = "gRPC service entry での global fallback。型付きエラーハンドリングへの移行は framework 制約で困難"
+alternative_attempted = "型付きエラーチャネル、gRPC フレームワークが service entry での catch-all を要求"
+expires = "2026-06-30"
+owner = "team"
+
+# ---------------------------------------------------------------------------
+# scripts — harness 操作用の抑制
+# ---------------------------------------------------------------------------
+
+[[debt]]
+path = "scripts/_subprocess_runner.py"
+line = 9
+kind = "noqa"
+rule_or_error_code = "S404"
+reason = "subprocess は固定コマンドタプルのみを実行する audited process runner 境界内"
+alternative_attempted = "型付きプロセスラッパー導入"
+expires = "2026-06-30"
+owner = "team"
+
+# ---------------------------------------------------------------------------
+# tests — テストインフラ・境界パターンでのやむを得ない抑制
+# ---------------------------------------------------------------------------
+
+# -- tests/e2e --
+
+[[debt]]
+path = "tests/e2e/helpers.py"
+line = 11
+kind = "noqa"
+rule_or_error_code = "S404"
+reason = "E2E helpers が固定ローカル runtime subprocess を管理。限定されたコマンドタプルのみ"
+alternative_attempted = "process manager ラッパー"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/helpers.py"
+line = 90
+kind = "noqa"
+rule_or_error_code = "S603"
+reason = "E2E が固定 uv コマンドタプルを実行。ユーザー入力は介在しない"
+alternative_attempted = "typed command builder"
+expires = "2026-06-30"
+owner = "team"
+
+[[debt]]
+path = "tests/e2e/test_runtime_process_config.py"
+line = 5
+kind = "noqa"
+rule_or_error_code = "S404"
+reason = "E2E test が固定ローカル runtime subprocess を管理"
+alternative_attempted = "process manager ラッパー"
+expires = "2026-06-30"
+owner = "team"

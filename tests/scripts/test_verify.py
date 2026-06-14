@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from scripts.verify import (
@@ -14,9 +15,11 @@ from scripts.verify import (
     selected_checks,
 )
 
-from tests.helpers.private_access import import_private
+from tests.helpers.private_access import import_private_matching, is_callable
 
-_first_failing_location = import_private("scripts.verify", "_first_failing_location")
+_first_failing_location: Any = import_private_matching(
+    "scripts.verify", "_first_failing_location", is_callable
+)
 
 
 class TestFirstFailingLocation:
@@ -76,6 +79,7 @@ class TestCheckDefinitions:
             "format",
             "type",
             "pyright",
+            "debt-registry",
             "architecture",
             "tests+coverage",
         }
@@ -188,4 +192,12 @@ class TestSelectedChecks:
         """Full モードでは全チェックが含まれる。"""
         checks = selected_checks(quick=False)
         names = {check.name for check in checks}
-        assert names == {"lint", "format", "type", "pyright", "architecture", "tests+coverage"}
+        assert names == {
+            "lint",
+            "format",
+            "type",
+            "pyright",
+            "debt-registry",
+            "architecture",
+            "tests+coverage",
+        }

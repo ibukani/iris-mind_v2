@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from inspect import signature
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
 
-@dataclass(frozen=True)
+@dataclass
 class StubDocument:
     """LangChainドキュメントファクトリと互換性のあるスタブドキュメント。"""
 
@@ -74,7 +74,8 @@ def document_factory() -> langchain.DocumentFactory:
     Returns:
         DocumentFactory: make_documentと互換のドキュメントファクトリ。
     """
-    return cast("langchain.DocumentFactory", make_document)
+    assert callable(make_document)
+    return make_document
 
 
 def test_langchain_memory_store_uses_iris_contracts_only() -> None:

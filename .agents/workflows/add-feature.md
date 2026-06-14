@@ -37,6 +37,9 @@ A feature must not:
 - register itself globally
 - call external apps directly
 - bypass safety or presentation
+- add `# noqa`, `# type: ignore`, `# pyright: ignore`, `typing.cast`, or `object.__setattr__`
+- edit `.agents/approved-suppression-debt.toml` or its `.snap` companion. The merge-base guard `scripts/check_suppression_debt_changes.py` (wired into `make static-arch`, `make quick`, `make check`, and the `make ai-*` family) blocks silent registry changes unless the human-only `IRIS_APPROVE_SUPPRESSION_DEBT_UPDATE=1` signal is set. Coding agents must not export that variable.
+- weaken `pyproject.toml`, architecture guards, Ruff, mypy, pyright, or pytest settings
 
 ## Wiring
 

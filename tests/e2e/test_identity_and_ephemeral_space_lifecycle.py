@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -12,6 +12,7 @@ from iris.adapters.app_gateway.stable_ids import stable_actor_id, stable_space_i
 from iris.contracts.external_refs import ExternalSpaceRef
 from iris.contracts.spaces import SpaceKind
 from iris.core.ids import AccountId, ExternalRef
+from iris.generated.iris.runtime.v1 import runtime_pb2
 from tests.e2e.helpers import (
     build_cli_submit_observation_request,
     create_runtime_channel,
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
+    from iris.generated.iris.runtime.v1 import runtime_pb2_grpc
 
 
 @pytest.mark.e2e
@@ -98,7 +99,9 @@ async def test_display_name_change_updates_account_without_creating_new_account(
 
     second_rows = _account_rows(db_path)
     assert len(second_rows) == 1
-    second_account_id = AccountId(cast("str", second_rows[0]["account_id"]))
+    second_raw = second_rows[0]["account_id"]
+    assert isinstance(second_raw, str)
+    second_account_id = AccountId(second_raw)
     assert second_account_id == first_account_id
     assert second_rows[0]["display_name"] == "Renamed User"
     assert second_rows[0]["linked_actor_id"] is None
@@ -130,7 +133,9 @@ async def test_different_provider_creates_different_account(
     rows = _account_rows(db_path)
     assert len(rows) == 2
     account_ids = {row["account_id"] for row in rows}
-    actor_ids = {stable_actor_id(AccountId(cast("str", account_id))) for account_id in account_ids}
+    str_account_ids = [aid for aid in account_ids if isinstance(aid, str)]
+    assert len(str_account_ids) == len(account_ids)
+    actor_ids = {stable_actor_id(AccountId(aid)) for aid in str_account_ids}
     assert len(account_ids) == 2
     assert len(actor_ids) == 2
 
@@ -201,7 +206,7 @@ async def _submit_cli_messages(
 
 async def _submit_identity_message(
     *,
-    stub: runtime_pb2_grpc.IrisRuntimeServiceStub,
+    stub: runtime_pb2_grpc.IrisRuntimeServiceAsyncStub,
     provider: str,
     display_name: str,
     message_id: str,
@@ -220,8 +225,8 @@ async def _submit_identity_message(
     request.observation.context.space_ref.provider = provider
     request.observation.context.space_ref.provider_space_ref = "space-1"
     response = await grpc_call(stub.SubmitObservation(request))
-    typed_response = cast("runtime_pb2.SubmitObservationResponse", response)
-    assert typed_response.output.text.strip()
+    assert isinstance(response, runtime_pb2.SubmitObservationResponse)
+    assert response.output.text.strip()
 
 
 def _account_rows(db_path: Path) -> list[sqlite3.Row]:
@@ -237,4 +242,6 @@ def _account_rows(db_path: Path) -> list[sqlite3.Row]:
 def _single_account_id(db_path: Path) -> AccountId:
     rows = _account_rows(db_path)
     assert len(rows) == 1
-    return AccountId(cast("str", rows[0]["account_id"]))
+    raw_id = rows[0]["account_id"]
+    assert isinstance(raw_id, str)
+    return AccountId(raw_id)
