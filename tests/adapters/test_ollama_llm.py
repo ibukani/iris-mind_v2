@@ -10,9 +10,12 @@ import httpx
 import pytest
 
 from iris.adapters.llm.diagnostics import (
+    LLMProviderAuthenticationError,
     LLMProviderConnectionError,
     LLMProviderError,
     LLMProviderInvalidResponseError,
+    LLMProviderModelUnavailableError,
+    LLMProviderRateLimitError,
     LLMProviderTimeoutError,
 )
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
@@ -282,8 +285,6 @@ async def test_ollama_client_translates_404_to_model_unavailable() -> None:
     with pytest.raises(LLMProviderError) as excinfo:
         await client.generate(LLMRequest(model="qwen3:8b", messages=()))
 
-    from iris.adapters.llm.diagnostics import LLMProviderModelUnavailableError
-
     assert isinstance(excinfo.value, LLMProviderModelUnavailableError)
 
 
@@ -294,8 +295,6 @@ async def test_ollama_client_translates_401_to_authentication() -> None:
         lambda request: httpx.Response(401, json={"error": "unauthorized"}, request=request)
     )
     client = OllamaLLMClient(transport=transport)
-
-    from iris.adapters.llm.diagnostics import LLMProviderAuthenticationError
 
     with pytest.raises(LLMProviderAuthenticationError):
         await client.generate(LLMRequest(model="qwen3:8b", messages=()))
@@ -308,8 +307,6 @@ async def test_ollama_client_translates_429_to_rate_limit() -> None:
         lambda request: httpx.Response(429, json={"error": "rate"}, request=request)
     )
     client = OllamaLLMClient(transport=transport)
-
-    from iris.adapters.llm.diagnostics import LLMProviderRateLimitError
 
     with pytest.raises(LLMProviderRateLimitError):
         await client.generate(LLMRequest(model="qwen3:8b", messages=()))

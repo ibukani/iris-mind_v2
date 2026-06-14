@@ -2,8 +2,10 @@
 
 Implements :class:`LLMProviderDiagnostics` for the local Ollama adapter.
 Probes the Ollama REST API to verify that the daemon is reachable, the
-configured model is installed, and optionally warms the model up by
-issuing a minimal generation request with the configured ``keep_alive``.
+configured model is installed, and (optionally) whether the model is
+currently loaded into memory. Supports a minimal warmup action that
+issues a load-oriented ``/api/chat`` request and verifies whether
+the model becomes loaded via a follow-up ``/api/ps`` probe.
 """
 
 from __future__ import annotations
@@ -72,11 +74,12 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
     async def check_readiness(self, model: str) -> ProviderReadinessResult:
         """Probe Ollama and the configured model for readiness.
 
-        Performs up to three lightweight probes:
+        Performs up to four lightweight probes:
 
         1. ``GET /`` to confirm the daemon responds.
         2. ``GET /api/tags`` to confirm the model is installed.
         3. ``POST /api/show`` to confirm model metadata is readable.
+        4. ``GET /api/ps`` to confirm the model is currently loaded.
 
         Args:
             model: Model name to probe.
@@ -86,7 +89,11 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
         """
         started = _now()
         issues: list[ProviderDiagnosticIssue] = []
-        metadata: dict[str, str] = {"base_url": self._config.base_url}
+        metadata: dict[str, str] = {
+            "base_url": self._config.base_url,
+            "model_installed": "false",
+            "model_loaded": "false",
+        }
 
         if not await self._probe_daemon():
             return _build_result(
@@ -125,12 +132,37 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
                         remediation=f"Pull the model with: ollama pull {model}",
                     ),
                 )
-            elif not await self._probe_model_metadata(model):
+            else:
+                metadata["model_installed"] = "true"
+                if not await self._probe_model_metadata(model):
+                    issues.append(
+                        ProviderDiagnosticIssue(
+                            code="model_metadata_unavailable",
+                            message=f"Ollama could not read metadata for model '{model}'",
+                            severity=ReadinessStatus.WARN,
+                        ),
+                    )
+
+        loaded_models = await self._list_loaded_models()
+        if loaded_models is None:
+            issues.append(
+                ProviderDiagnosticIssue(
+                    code="ps_endpoint_unavailable",
+                    message="Ollama /api/ps did not return a loaded model list",
+                    severity=ReadinessStatus.WARN,
+                ),
+            )
+        else:
+            metadata["loaded_models"] = ",".join(sorted(loaded_models))
+            if model in loaded_models:
+                metadata["model_loaded"] = "true"
+            elif metadata["model_installed"] == "true":
                 issues.append(
                     ProviderDiagnosticIssue(
-                        code="model_metadata_unavailable",
-                        message=f"Ollama could not read metadata for model '{model}'",
+                        code="model_not_loaded",
+                        message=f"Model '{model}' is installed but not currently loaded",
                         severity=ReadinessStatus.WARN,
+                        remediation="Run the warmup step (diagnostics.warmup_models=true)",
                     ),
                 )
 
@@ -142,13 +174,16 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
         )
 
     @override
-    async def warmup(self, model: str) -> ProviderReadinessResult:
-        """Warm the model by issuing a minimal generation request.
+    async def warmup(self, model: str) -> ProviderReadinessResult:  # noqa: PLR0911
+        """Warm the model by issuing a load-oriented ``/api/chat`` request.
 
         Sends a single ``/api/chat`` request with the configured
-        ``keep_alive`` so Ollama loads the model into memory. The
-        response content is discarded; the goal is to surface any
-        provider errors with the new diagnostics error taxonomy.
+        ``keep_alive`` so Ollama loads the model into memory. After
+        the request, ``/api/ps`` is queried again to confirm whether
+        the model became loaded. ``/api/ps`` connection failures do
+        not hide the warmup outcome: the warmup is treated as
+        successful when ``/api/chat`` returned 2xx, even if ``/api/ps``
+        could not be read.
 
         Args:
             model: Model name to warm up.
@@ -157,23 +192,87 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
             Warmup outcome; ``SKIPPED`` if the model is not installed.
         """
         started = _now()
+        metadata: dict[str, str] = {
+            "base_url": self._config.base_url,
+            "model_loaded": "false",
+        }
+
+        installed_models = await self._list_models()
+        if installed_models is not None and model not in installed_models:
+            return _build_result(
+                model=model,
+                issues=(
+                    ProviderDiagnosticIssue(
+                        code="warmup_skipped_model_missing",
+                        message=(
+                            f"Ollama could not find model '{model}' for warmup"
+                        ),
+                        severity=ReadinessStatus.SKIPPED,
+                        remediation=f"Pull the model with: ollama pull {model}",
+                    ),
+                ),
+                started=started,
+                metadata=metadata,
+            )
+
         payload = _build_warmup_payload(model=model, config=self._config)
         try:
             response = await self._client.post("/api/chat", json=payload)
             response.raise_for_status()
-        except httpx.HTTPError as exc:
-            issue = _translate_warmup_error(exc)
+        except httpx.HTTPStatusError as exc:
             return _build_result(
                 model=model,
-                issues=(issue,),
+                issues=(_warmup_status_issue(exc.response.status_code, exc),),
                 started=started,
-                metadata={"base_url": self._config.base_url},
+                metadata=metadata,
+            )
+        except httpx.HTTPError as exc:
+            return _build_result(
+                model=model,
+                issues=(_translate_warmup_error(exc),),
+                started=started,
+                metadata=metadata,
+            )
+
+        loaded_models = await self._list_loaded_models()
+        if loaded_models is None:
+            return _build_result(
+                model=model,
+                issues=(
+                    ProviderDiagnosticIssue(
+                        code="ps_probe_failed_after_warmup",
+                        message=(
+                            "Ollama /api/ps could not be read after warmup; "
+                            "warmup is treated as successful because /api/chat returned 2xx"
+                        ),
+                        severity=ReadinessStatus.WARN,
+                    ),
+                ),
+                started=started,
+                metadata=metadata,
+            )
+        metadata["loaded_models"] = ",".join(sorted(loaded_models))
+        if model in loaded_models:
+            metadata["model_loaded"] = "true"
+            return _build_result(
+                model=model,
+                issues=(),
+                started=started,
+                metadata=metadata,
             )
         return _build_result(
             model=model,
-            issues=(),
+            issues=(
+                ProviderDiagnosticIssue(
+                    code="model_still_not_loaded",
+                    message=(
+                        f"Ollama /api/chat succeeded but '{model}' is not loaded"
+                    ),
+                    severity=ReadinessStatus.WARN,
+                ),
+            ),
             started=started,
-            metadata={"base_url": self._config.base_url},
+            metadata=metadata,
         )
 
     async def _probe_daemon(self) -> bool:
@@ -191,6 +290,17 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
             return None
         try:
             return _extract_model_names(_safe_json(response))
+        except LLMProviderInvalidResponseError:
+            return None
+
+    async def _list_loaded_models(self) -> frozenset[str] | None:
+        try:
+            response = await self._client.get("/api/ps")
+            response.raise_for_status()
+        except httpx.HTTPError:
+            return None
+        try:
+            return _extract_loaded_model_names(_safe_json(response))
         except LLMProviderInvalidResponseError:
             return None
 
@@ -212,11 +322,13 @@ def _now() -> float:
 
 
 def _build_warmup_payload(*, model: str, config: OllamaConfig) -> _JsonObject:
-    """Build a minimal ``/api/chat`` payload for warmup.
+    """Build a load-oriented ``/api/chat`` payload for warmup.
 
-    Mirrors :class:`OllamaLLMClient` request shape so the warmup
-    path keeps the same options (``temperature`` and ``num_predict``)
-    and ``keep_alive`` semantics.
+    Uses ``messages=[]`` so Ollama treats the request as a load
+    operation rather than a generation. Mirrors
+    :class:`OllamaLLMClient` request shape so the warmup path keeps
+    the same options (``temperature`` and ``num_predict``) and
+    ``keep_alive`` semantics.
 
     Args:
         model: Target model name.
@@ -230,7 +342,7 @@ def _build_warmup_payload(*, model: str, config: OllamaConfig) -> _JsonObject:
         options["num_predict"] = config.max_output_tokens
     payload: _JsonObject = {
         "model": model,
-        "messages": [{"role": "user", "content": "ping"}],
+        "messages": [],
         "stream": False,
         "options": options,
     }
@@ -339,6 +451,19 @@ def _extract_model_names(body: _JsonObject) -> frozenset[str] | None:
             name_value: object = entry_value.get("name")
             if isinstance(name_value, str):
                 names.add(name_value)
-    if not names:
+    return frozenset(names)
+
+
+def _extract_loaded_model_names(body: _JsonObject) -> frozenset[str] | None:
+    models_value: object = body.get("models")
+    if not isinstance(models_value, list):
         return None
+    names: set[str] = set()
+    for entry_value in models_value:
+        if isinstance(entry_value, dict):
+            name_value: object = entry_value.get("name")
+            if isinstance(name_value, str):
+                names.add(name_value)
+    if not names:
+        return frozenset()
     return frozenset(names)

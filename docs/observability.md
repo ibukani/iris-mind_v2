@@ -151,3 +151,54 @@ gRPC 層が `DEADLINE_EXCEEDED` を返す。`[ollama].timeout_seconds`
 `OpenAILLMClient.generate()` が `LLMProviderRateLimitError` を
 送出し、gRPC 層が `RESOURCE_EXHAUSTED` を返す。リクエスト頻度を
 下げるか、プランをアップグレードする。
+
+## 環境変数チューニング
+
+WSL / Docker / 別ホスト境界で Ollama を動かしている場合は、
+`IRIS_OLLAMA_HOST` でエンドポイントを切り替えるか、
+`IRIS_OLLAMA_TIMEOUT_SECONDS` で probe タイムアウトを調整する。
+Diagnostics 自体も環境変数で制御可能。
+
+```bash
+# Ollama endpoint
+export IRIS_OLLAMA_HOST=http://localhost:11434
+export IRIS_OLLAMA_TIMEOUT_SECONDS=300
+
+# Startup diagnostics
+export IRIS_DIAGNOSTICS_ENABLED=true
+export IRIS_DIAGNOSTICS_WARMUP_MODELS=true
+export IRIS_DIAGNOSTICS_FAIL_FAST=false
+export IRIS_DIAGNOSTICS_LOG_ISSUES_AS_WARNINGS=true
+export IRIS_DIAGNOSTICS_TIMEOUT_SECONDS=5.0
+```
+
+`IRIS_OLLAMA_HOST` を変更したら Iris-Mind を再起動し、
+起動ログに `startup.diagnostics.readiness` イベントが流れることを
+確認する。
+
+## Ollama diagnostics の内部動作
+
+- `OllamaDiagnostics.check_readiness()` は次の 4 つの軽量 probe を
+  順に実行する:
+  1. `GET /` で daemon 疎通を確認
+  2. `GET /api/tags` でモデルがインストール済みか確認
+  3. `POST /api/show` でモデルメタデータが読めるか確認
+  4. `GET /api/ps` でモデルがメモリにロード済みか確認
+- ロード済み判定は `model_loaded_check` capability に基づき、
+  結果は `result.metadata["model_loaded"]` として露出する。
+- インストール済みだが未ロードの場合は `WARN` を返し、
+  warmup がモデルロードの引き継ぎを担う。
+
+## Warmup の動作
+
+- `OllamaDiagnostics.warmup()` は `messages=[]` の `POST /api/chat`
+  を送信し、続けて `GET /api/ps` でロード状態を確認する。
+- モデルがメモリにロードされれば `OK` を返す。
+- `messages=[]` を使うのは Ollama 側を load 動作として扱うためで、
+  prompt を生成しない。
+- `/api/chat` が 2xx を返したが `/api/ps` でモデルが見つからない
+  場合は `WARN` (`model_still_not_loaded`)。
+- モデルがインストールされていない場合は `SKIPPED`
+  (`warmup_skipped_model_missing`)。
+- OpenAI プロバイダは warmup を行わず `SKIPPED` を返す
+  (`warmup_not_supported`)。
