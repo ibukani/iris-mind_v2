@@ -131,6 +131,7 @@ async def test_submit_observation_actor_message_returns_presented_output(
     finally:
         await stop_runtime_process(runtime)
 
+    assert response.HasField("output")
     assert isinstance(response.output, outputs_pb2.PresentedOutput)
     assert response.output.text is not None
     assert response.output.text.strip()

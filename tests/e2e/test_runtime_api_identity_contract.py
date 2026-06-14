@@ -44,7 +44,11 @@ async def test_account_ref_persists_across_runtime_restart(
 ) -> None:
     """A stable account_ref produces a single account_id across runtime restarts."""
     db_path = tmp_path / "state.sqlite3"
-    config_path = write_runtime_config(path=tmp_path / "runtime.toml", sqlite_path=db_path)
+    config_path = write_runtime_config(
+        path=tmp_path / "runtime.toml",
+        backend="sqlite",
+        sqlite_path=db_path,
+    )
 
     first = start_runtime_process(
         port=find_free_port(),
@@ -84,7 +88,11 @@ async def test_display_name_change_does_not_create_new_account(
 ) -> None:
     """Changing display_name updates the same account rather than creating a new one."""
     db_path = tmp_path / "state.sqlite3"
-    config_path = write_runtime_config(path=tmp_path / "runtime.toml", sqlite_path=db_path)
+    config_path = write_runtime_config(
+        path=tmp_path / "runtime.toml",
+        backend="sqlite",
+        sqlite_path=db_path,
+    )
     runtime = start_runtime_process(
         port=find_free_port(),
         repo_root=repo_root,
@@ -123,7 +131,11 @@ async def test_same_provider_subject_under_different_providers_creates_distinct_
 ) -> None:
     """Same provider_subject under different providers maps to different accounts."""
     db_path = tmp_path / "state.sqlite3"
-    config_path = write_runtime_config(path=tmp_path / "runtime.toml", sqlite_path=db_path)
+    config_path = write_runtime_config(
+        path=tmp_path / "runtime.toml",
+        backend="sqlite",
+        sqlite_path=db_path,
+    )
     runtime = start_runtime_process(
         port=find_free_port(),
         repo_root=repo_root,

@@ -213,29 +213,32 @@ def build_cli_submit_observation_request(
 def write_runtime_config(
     *,
     path: Path,
-    backend: str | None = None,
+    backend: str,
     sqlite_path: Path | None = None,
     models: Mapping[str, str] | None = None,
 ) -> Path:
     """Write a runtime TOML config for E2E process tests.
 
-    If ``sqlite_path`` is given and ``backend`` is not, ``backend`` defaults
-    to ``"sqlite"``. Otherwise the backend defaults to ``"memory"``.
+    ``backend`` and ``sqlite_path`` must be consistent. Callers must pass
+    ``backend`` explicitly so the resulting config is never ambiguous.
 
     Returns:
         Path to the written TOML config file.
 
     Raises:
-        ValueError: ``backend='sqlite'`` is requested without ``sqlite_path``.
+        ValueError: ``backend='sqlite'`` is set without ``sqlite_path``, or
+            ``sqlite_path`` is set with a non-sqlite backend.
     """
-    if backend is None:
-        backend = "sqlite" if sqlite_path is not None else "memory"
-    state_section = f'[state]\nbackend = "{backend}"\n'
     if backend == "sqlite":
         if sqlite_path is None:
             message = "sqlite_path is required when backend='sqlite'"
             raise ValueError(message)
         state_section = f'[state]\nbackend = "sqlite"\nsqlite_path = "{sqlite_path}"\n'
+    else:
+        if sqlite_path is not None:
+            message = f"sqlite_path is only valid when backend='sqlite', got backend={backend!r}"
+            raise ValueError(message)
+        state_section = f'[state]\nbackend = "{backend}"\n'
     model_lines: list[str] = []
     for slot, provider in (models or {"default_chat": "fake"}).items():
         model_lines.append(f'[models.{slot}]\nprovider = "{provider}"\nmodel = "fake-llm"\n')
@@ -470,7 +473,14 @@ async def _poll_runtime_ready(
 
         await asyncio.sleep(0.1)
 
-    message = f"runtime server did not become ready; last_error={last_error!r}"
+    # Best-effort: collect any captured output to help debug slow startups.
+    if runtime.process.poll() is not None:
+        await _collect_runtime_output(runtime)
+    message = (
+        f"runtime server did not become ready; last_error={last_error!r}; "
+        f"returncode={runtime.process.returncode}; "
+        f"stdout={runtime.stdout!r}; stderr={runtime.stderr!r}"
+    )
     raise AssertionError(message)
 
 
