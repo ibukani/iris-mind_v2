@@ -71,6 +71,17 @@ object.__setattr__(instance, "field", replacement_value)  # noqa: PLC2801
 
 Do not weaken architecture tests to make implementation tasks pass.
 
+## Weak-agent escape hatches
+
+Do not use these shortcuts to make gates pass:
+
+- Do not skip or xfail tests instead of fixing tests or implementation.
+- Do not swallow broad exceptions with default returns.
+- Do not branch on pytest or test environment markers in production code.
+- Do not create fire-and-forget async tasks.
+- Do not expand architecture scanner exclusions.
+- Do not add fake, dummy, mock, stub, or placeholder production shortcuts.
+
 ### Registry changes are a human task
 
 Tests may not edit `.agents/approved-suppression-debt.toml` or its snapshot.
