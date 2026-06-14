@@ -100,7 +100,10 @@ imports:
 semgrep:
 	uv run semgrep scan --config semgrep.yml --error
 
-static-arch: imports semgrep arch
+debt-registry:
+	uv run python scripts/check_suppression_debt_changes.py
+
+static-arch: imports semgrep debt-registry arch
 
 test:
 	uv run pytest $(DEFAULT_TEST_TARGETS)

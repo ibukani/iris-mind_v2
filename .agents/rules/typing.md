@@ -253,6 +253,38 @@ every exception-zone suppression has a matching entry.
 Entries are temporary debt, not normal permission. New entries require explicit
 human approval.
 
+### Approval flow for registry changes
+
+Normal implementation tasks must not modify the registry or its snapshot.
+`scripts/check_suppression_debt_changes.py` is a git merge-base guard that
+fails `make static-arch`, `make quick`, `make check`, and the `make ai-*`
+family when either registry file changes without the approval signal.
+
+The approval signal is intentionally hard to trigger by accident:
+
+```bash
+export IRIS_APPROVE_SUPPRESSION_DEBT_UPDATE=1
+make check
+```
+
+Only a human reviewer exports this variable. Coding agents must not set it
+under any circumstance. The guard does not look at commit messages, branch
+names, or in-tree markers.
+
+When a checker failure seems impossible to fix without suppression, stop
+and report:
+
+- exact diagnostic
+- file and line
+- attempted design fixes
+- proposed typed alternative
+- proposed suppression-debt entry for human review only
+
+Do not apply the suppression. Do not apply the registry entry.
+
+Per-entry cleanup ownership and the test that must pass after removal live
+in `.agents/suppression-debt-remediation.md`.
+
 ## Cast policy
 
 Do not use `typing.cast` in protected architecture layers.

@@ -79,6 +79,7 @@ class TestCheckDefinitions:
             "format",
             "type",
             "pyright",
+            "debt-registry",
             "architecture",
             "tests+coverage",
         }
@@ -191,4 +192,12 @@ class TestSelectedChecks:
         """Full モードでは全チェックが含まれる。"""
         checks = selected_checks(quick=False)
         names = {check.name for check in checks}
-        assert names == {"lint", "format", "type", "pyright", "architecture", "tests+coverage"}
+        assert names == {
+            "lint",
+            "format",
+            "type",
+            "pyright",
+            "debt-registry",
+            "architecture",
+            "tests+coverage",
+        }

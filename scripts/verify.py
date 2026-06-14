@@ -55,6 +55,10 @@ RECOMMENDATIONS: dict[str, str] = {
     "architecture": "make static-arch OR make arch OR uv run pytest tests/architecture -q",
     "tests+coverage": ("make ai-test-target TARGET=<failing_test>  OR  make coverage"),
     "environment": "Check uv environment and tool versions with make doctor",
+    "debt-registry": (
+        "Revert accidental registry changes; for an approved update, set "
+        "IRIS_APPROVE_SUPPRESSION_DEBT_UPDATE=1 and rerun."
+    ),
 }
 
 
@@ -80,6 +84,16 @@ CHECKS: tuple[Check, ...] = (
         "pyright",
         ("uv", "run", "pyright", "."),
         failure_class="pyright",
+    ),
+    Check(
+        "debt-registry",
+        (
+            "uv",
+            "run",
+            "python",
+            "scripts/check_suppression_debt_changes.py",
+        ),
+        failure_class="architecture",
     ),
     Check(
         "architecture",

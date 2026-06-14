@@ -280,11 +280,46 @@ hatches when registered in `.agents/approved-suppression-debt.toml`.
 Bare `# noqa`, bare `# type: ignore`, and bare `# pyright: ignore` are always
 forbidden.
 
+### Registry update approval
+
+The registry files (`.agents/approved-suppression-debt.toml` and its
+`.agents/approved-suppression-debt.toml.snap`) are normally read-only for
+coding agents. Adding or extending entries is a human-approved task.
+
+The merge-base guard `scripts/check_suppression_debt_changes.py` blocks
+silent registry changes. The guard is wired into `make static-arch`,
+`make quick`, `make check`, and the `make ai-*` family. It computes the
+diff against `origin/main` (or `main`) and fails if either registry file
+appears in the change set without the approval signal.
+
+The approval signal is a single environment variable:
+
+```bash
+export IRIS_APPROVE_SUPPRESSION_DEBT_UPDATE=1
+make check
+```
+
+Only a human reviewer exports this variable. Coding agents must not set
+it under any circumstance. The guard intentionally ignores commit
+messages, branch names, and file-level markers to keep the signal
+impossible to trigger by accident.
+
+When the guard fails, revert accidental registry changes or escalate to
+the human reviewer for approval. See
+`.agents/suppression-debt-remediation.md` for the per-entry cleanup plan
+and `.agents/rules/typing.md` for the suppression policy.
+
 Architecture guards mechanically enforce this policy:
-- `test_suppression_debt_registry.py`
-- `test_suppression_debt_registry_is_frozen.py`
-- `test_no_unapproved_suppressions.py`
-- `test_no_cast_in_protected_layers.py`
+- `test_suppression_debt_registry.py` — validates entry shape, expiry, and
+  exact line references inside the registry.
+- `test_suppression_debt_registry_is_frozen.py` — guards the registry
+  snapshot hash from silent regeneration.
+- `test_no_unapproved_suppressions.py` — prevents escape hatches in
+  exception zones that are not registered.
+- `test_no_cast_in_protected_layers.py` — prevents `typing.cast` and
+  `object.__setattr__` from leaking into protected layers.
+- `scripts/check_suppression_debt_changes.py` — git merge-base guard
+  that blocks silent registry growth.
 
 ## Verification
 

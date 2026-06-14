@@ -48,9 +48,9 @@ Prefer the closest test level:
 ### Suppression escape hatches
 
 - Do not add `# noqa`, `# type: ignore`, `# pyright: ignore`, `typing.cast`, or `object.__setattr__`.
-- Do not edit `.agents/approved-suppression-debt.toml` during normal implementation tasks.
+- Do not edit `.agents/approved-suppression-debt.toml` or its `.snap` companion during normal implementation tasks. The merge-base guard `scripts/check_suppression_debt_changes.py` (wired into `make static-arch`, `make quick`, `make check`, and the `make ai-*` family) blocks silent registry changes unless the human-only `IRIS_APPROVE_SUPPRESSION_DEBT_UPDATE=1` signal is set.
 - Do not weaken `pyproject.toml`, architecture guards, Ruff, mypy, pyright, or pytest settings.
-- If suppression seems necessary, stop and report the diagnostic and proposed debt entry. Do not apply it.
+- If suppression seems necessary, stop and report the diagnostic and proposed debt entry. Do not apply it. Do not export the approval env var.
 
 ## 4.1. Reject local patches that preserve bad structure
 

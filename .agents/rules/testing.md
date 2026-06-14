@@ -71,6 +71,16 @@ object.__setattr__(instance, "field", replacement_value)  # noqa: PLC2801
 
 Do not weaken architecture tests to make implementation tasks pass.
 
+### Registry changes are a human task
+
+Tests may not edit `.agents/approved-suppression-debt.toml` or its snapshot.
+`scripts/check_suppression_debt_changes.py` blocks those changes in the
+normal verification path. The guard only accepts them when
+`IRIS_APPROVE_SUPPRESSION_DEBT_UPDATE=1` is set, which is a human-only
+action. See `.agents/rules/typing.md` and
+`.agents/suppression-debt-remediation.md` for the full policy and cleanup
+plan.
+
 ## Architecture tests are mandatory
 
 Architecture tests verify design boundaries. They are not cosmetic.
