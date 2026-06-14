@@ -17,10 +17,14 @@ true かつ provider の :class:`ProviderCapability` が ``warmup=True`` の
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
 
 from iris.adapters.llm.diagnostics import (
     ProviderCapability,
@@ -131,6 +135,7 @@ async def run_startup_diagnostics(
     outcomes = await _probe_all_slots(
         runtime_config,
         warmup_models=diagnostics_config.warmup_models,
+        timeout_seconds=diagnostics_config.timeout_seconds,
     )
     report = StartupDiagnosticsReport(outcomes=tuple(outcomes), enabled=True)
     failure_count = sum(1 for outcome in report.outcomes if _outcome_has_failure(outcome))
@@ -140,9 +145,7 @@ async def run_startup_diagnostics(
         mode=diagnostics_config.mode,
     ).info("startup.diagnostics.complete")
     if report.has_failures and diagnostics_config.mode == "strict":
-        logger.bind(failure_count=failure_count).error(
-            "startup.diagnostics.strict_fail"
-        )
+        logger.bind(failure_count=failure_count).error("startup.diagnostics.strict_fail")
         raise ConfigError(_build_strict_fail_message(report))
     return report
 
@@ -151,6 +154,7 @@ async def _probe_all_slots(
     runtime_config: IrisRuntimeConfig,
     *,
     warmup_models: bool,
+    timeout_seconds: float,
 ) -> list[DiagnosticsCheckOutcome]:
     """Probe every configured model slot and collect outcomes.
 
@@ -158,6 +162,7 @@ async def _probe_all_slots(
         runtime_config: The runtime configuration to probe.
         warmup_models: Whether warmup should run when the provider
             capability allows it.
+        timeout_seconds: Per-probe timeout in seconds.
 
     Returns:
         List of outcomes, one per probed slot (skipped fake slots are omitted).
@@ -168,6 +173,7 @@ async def _probe_all_slots(
             runtime_config,
             slot,
             warmup_models=warmup_models,
+            timeout_seconds=timeout_seconds,
         )
         if outcome is not None:
             outcomes.append(outcome)
@@ -179,6 +185,7 @@ async def _probe_slot(
     slot: ModelSlotName,
     *,
     warmup_models: bool,
+    timeout_seconds: float,
 ) -> DiagnosticsCheckOutcome | None:
     """Probe a single slot and return the outcome (or None for fake slots).
 
@@ -187,6 +194,11 @@ async def _probe_slot(
         slot: Slot name to probe.
         warmup_models: Whether warmup should run when the provider
             capability allows it.
+        timeout_seconds: Per-probe timeout in seconds. Each of
+            ``check_readiness`` and ``warmup`` is wrapped in
+            :func:`asyncio.timeout`; a timeout is converted to a
+            :class:`ProviderReadinessResult` with status ``FAIL`` and a
+            dedicated ``readiness_timeout`` / ``warmup_timeout`` issue.
 
     Returns:
         The outcome for the slot, or ``None`` when the slot is skipped
@@ -202,7 +214,12 @@ async def _probe_slot(
         return failure
     if provider_diag is None:
         return None
-    readiness = await provider_diag.check_readiness(model_config.model)
+    readiness = await _run_with_timeout(
+        provider_diag.check_readiness(model_config.model),
+        timeout_seconds=timeout_seconds,
+        model_config=model_config,
+        stage="readiness",
+    )
     logger.bind(
         slot=slot,
         provider=model_config.provider,
@@ -213,7 +230,12 @@ async def _probe_slot(
     _log_issues(readiness, slot, model_config)
     warmup: ProviderReadinessResult | None = None
     if warmup_models and provider_diag.capabilities.warmup:
-        warmup = await provider_diag.warmup(model_config.model)
+        warmup = await _run_with_timeout(
+            provider_diag.warmup(model_config.model),
+            timeout_seconds=timeout_seconds,
+            model_config=model_config,
+            stage="warmup",
+        )
         logger.bind(
             slot=slot,
             provider=model_config.provider,
@@ -229,6 +251,64 @@ async def _probe_slot(
         readiness=readiness,
         warmup=warmup,
     )
+
+
+async def _run_with_timeout(
+    awaitable: Awaitable[ProviderReadinessResult],
+    *,
+    timeout_seconds: float,
+    model_config: RuntimeModelConfig,
+    stage: str,
+) -> ProviderReadinessResult:
+    """Await ``awaitable`` and convert :class:`TimeoutError` into a FAIL outcome.
+
+    Args:
+        awaitable: A coroutine returned by ``provider_diag.check_readiness``
+            or ``provider_diag.warmup``.
+        timeout_seconds: Per-call timeout in seconds.
+        model_config: The model config being probed (used for metadata
+            on the synthetic FAIL result).
+        stage: ``"readiness"`` or ``"warmup"`` (used for the issue code
+            and remediation hint).
+
+    Returns:
+        The original :class:`ProviderReadinessResult` when the probe
+        completes, or a synthetic FAIL result with a
+        ``readiness_timeout`` / ``warmup_timeout`` issue when the
+        probe exceeds the configured timeout.
+    """
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            return await awaitable
+    except TimeoutError:
+        issue_code = f"{stage}_timeout"
+        message = (
+            f"{stage.capitalize()} probe exceeded diagnostics.timeout_seconds"
+            f"={timeout_seconds}s for model '{model_config.model}'"
+        )
+        logger.bind(
+            provider=model_config.provider,
+            model=model_config.model,
+            stage=stage,
+            timeout_seconds=timeout_seconds,
+        ).warning("startup.diagnostics.timeout")
+        return ProviderReadinessResult(
+            provider=model_config.provider,
+            model=model_config.model,
+            status=ReadinessStatus.FAIL,
+            capabilities=ProviderCapability(),
+            issues=(
+                ProviderDiagnosticIssue(
+                    code=issue_code,
+                    message=message,
+                    severity=ReadinessStatus.FAIL,
+                    remediation=(
+                        "Increase diagnostics.timeout_seconds in the runtime"
+                        " config or fix the slow provider endpoint"
+                    ),
+                ),
+            ),
+        )
 
 
 def _log_issues(

@@ -273,25 +273,46 @@ def _extract_finish_reason(response: object) -> str:
     return "stop"
 
 
+class _UnreachableSentinel(BaseException):
+    """Sentinel exception used to make ``except`` clauses valid but inert.
+
+    The class is intentionally a :class:`BaseException` subclass so it
+    is structurally compatible with the exception-type tuples the
+    ``except`` clauses expect. It is **never raised by the SDK nor the
+    adapter**, so empty SDK-error buckets still produce a working
+    ``except`` clause that simply never matches real exceptions.
+
+    Using this sentinel instead of ``Exception`` prevents a missing
+    SDK exception from silently widening the catch to all exceptions,
+    which would misclassify unrelated provider errors.
+    """
+
+
+_SDK_ERROR_TYPE_NAMES: tuple[str, ...] = (
+    "APITimeoutError",
+    "Timeout",
+    "APIConnectionError",
+    "APIError",
+    "AuthenticationError",
+    "PermissionDeniedError",
+    "RateLimitError",
+    "NotFoundError",
+    "BadRequestError",
+)
+
+
 def _resolve_sdk_error_types() -> tuple[type[BaseException], ...]:
     """Resolve the SDK-specific exception classes the adapter should translate.
 
     Returns:
         A tuple of exception classes the adapter translates into
         :class:`LLMProviderError` subclasses. When the openai SDK is
-        not installed, the returned tuple is empty and the caller falls
-        back to ``Exception``.
+        not installed, the returned tuple is empty.
     """
     if _openai is None:
         return ()
     candidates: list[type[BaseException]] = []
-    for name in (
-        "APITimeoutError",
-        "Timeout",
-        "AuthenticationError",
-        "PermissionDeniedError",
-        "RateLimitError",
-    ):
+    for name in _SDK_ERROR_TYPE_NAMES:
         cls = getattr(_openai, name, None)
         if isinstance(cls, type) and issubclass(cls, BaseException):
             candidates.append(cls)
@@ -300,9 +321,7 @@ def _resolve_sdk_error_types() -> tuple[type[BaseException], ...]:
 
 _SDK_ERROR_TYPES: tuple[type[BaseException], ...] = _resolve_sdk_error_types()
 _TIMEOUT_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
-    cls
-    for cls in _SDK_ERROR_TYPES
-    if cls.__name__ in {"APITimeoutError", "Timeout"}
+    cls for cls in _SDK_ERROR_TYPES if cls.__name__ in {"APITimeoutError", "Timeout"}
 )
 _AUTH_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
     cls
@@ -312,8 +331,11 @@ _AUTH_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
 _RATE_LIMIT_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
     cls for cls in _SDK_ERROR_TYPES if cls.__name__ == "RateLimitError"
 )
+# ``APIConnectionError`` only — ``APIError`` is the base of all status
+# errors and would otherwise over-catch rate-limit / auth / not-found
+# and misclassify them as connection failures.
 _CONNECTION_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
-    cls for cls in _SDK_ERROR_TYPES if cls.__name__ in {"APIConnectionError", "APIError"}
+    cls for cls in _SDK_ERROR_TYPES if cls.__name__ == "APIConnectionError"
 )
 _NOT_FOUND_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
     cls for cls in _SDK_ERROR_TYPES if cls.__name__ == "NotFoundError"
@@ -321,16 +343,43 @@ _NOT_FOUND_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
 _BAD_REQUEST_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
     cls for cls in _SDK_ERROR_TYPES if cls.__name__ == "BadRequestError"
 )
+# Quota / billing errors are not part of the openai SDK's exception
+# hierarchy; keep the bucket defined so future SDK versions can wire
+# it up without changing the call site.
 _QUOTA_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
     cls
     for cls in _SDK_ERROR_TYPES
     if cls.__name__ in {"QuotaExceededError", "InsufficientQuotaError"}
 )
-# Fallback aliases keep the except clauses valid when the SDK is missing.
-_TimeoutErrorTypes: tuple[type[BaseException], ...] = _TIMEOUT_ERROR_TYPES or (Exception,)
-_AuthenticationErrorTypes: tuple[type[BaseException], ...] = _AUTH_ERROR_TYPES or (Exception,)
-_RateLimitErrorTypes: tuple[type[BaseException], ...] = _RATE_LIMIT_ERROR_TYPES or (Exception,)
-_ConnectionErrorTypes: tuple[type[BaseException], ...] = _CONNECTION_ERROR_TYPES or (Exception,)
-_NotFoundErrorTypes: tuple[type[BaseException], ...] = _NOT_FOUND_ERROR_TYPES or (Exception,)
-_BadRequestErrorTypes: tuple[type[BaseException], ...] = _BAD_REQUEST_ERROR_TYPES or (Exception,)
-_QuotaErrorTypes: tuple[type[BaseException], ...] = _QUOTA_ERROR_TYPES or (Exception,)
+
+
+def _sentinel_bucket(
+    classes: tuple[type[BaseException], ...],
+) -> tuple[type[BaseException], ...]:
+    """Return ``classes`` if non-empty, otherwise a single-element tuple of the sentinel.
+
+    Args:
+        classes: The resolved SDK exception classes for the bucket.
+
+    Returns:
+        ``classes`` when at least one SDK class is available, otherwise
+        a single-element tuple containing :class:`_UnreachableSentinel`
+        so the resulting ``except`` clause is valid but never matches a
+        real exception.
+    """
+    if classes:
+        return classes
+    return (_UnreachableSentinel,)
+
+
+# Fallback aliases keep the except clauses syntactically valid when the
+# SDK is missing. They use ``_UnreachableSentinel`` instead of
+# ``Exception`` so the catch is structurally a no-op rather than a
+# broad over-catch.
+_TimeoutErrorTypes: tuple[type[BaseException], ...] = _sentinel_bucket(_TIMEOUT_ERROR_TYPES)
+_AuthenticationErrorTypes: tuple[type[BaseException], ...] = _sentinel_bucket(_AUTH_ERROR_TYPES)
+_RateLimitErrorTypes: tuple[type[BaseException], ...] = _sentinel_bucket(_RATE_LIMIT_ERROR_TYPES)
+_ConnectionErrorTypes: tuple[type[BaseException], ...] = _sentinel_bucket(_CONNECTION_ERROR_TYPES)
+_NotFoundErrorTypes: tuple[type[BaseException], ...] = _sentinel_bucket(_NOT_FOUND_ERROR_TYPES)
+_BadRequestErrorTypes: tuple[type[BaseException], ...] = _sentinel_bucket(_BAD_REQUEST_ERROR_TYPES)
+_QuotaErrorTypes: tuple[type[BaseException], ...] = _sentinel_bucket(_QUOTA_ERROR_TYPES)

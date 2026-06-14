@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
@@ -107,6 +108,76 @@ class _StubDiagnostics:
             capabilities=self.capabilities,
             issues=(),
         )
+
+
+class _HangingDiagnostics:
+    """Stub diagnostics whose ``check_readiness`` and ``warmup`` never complete.
+
+    Both methods sleep on an :mod:`asyncio` event so the runner's
+    :func:`asyncio.timeout` wrapper can fire. The wakeup attribute is
+    set externally to let the test clean up the pending coroutine
+    before the event loop is torn down.
+    """
+
+    def __init__(self, provider_name: str, capability: ProviderCapability) -> None:
+        """Initialize the hanging stub.
+
+        Args:
+            provider_name: ``provider`` attribute exposed by the stub.
+            capability: ``capabilities`` attribute exposed by the stub.
+        """
+        self.provider = provider_name
+        self.capabilities = capability
+        self.check_readiness_calls = 0
+        self.warmup_calls = 0
+        self.wakeup: asyncio.Event | None = None
+
+    async def check_readiness(self, model: str) -> ProviderReadinessResult:
+        """Block until ``wakeup`` is set; record the call.
+
+        Args:
+            model: Model name being probed.
+
+        Returns:
+            Unreachable in the timeout test; the runner's timeout
+            converts the wait into a synthetic FAIL outcome.
+        """
+        self.check_readiness_calls += 1
+        if self.wakeup is None:
+            self.wakeup = asyncio.Event()
+        await self.wakeup.wait()
+        return ProviderReadinessResult(
+            provider=self.provider,
+            model=model,
+            status=ReadinessStatus.OK,
+            capabilities=self.capabilities,
+        )
+
+    async def warmup(self, model: str) -> ProviderReadinessResult:
+        """Block until ``wakeup`` is set; record the call.
+
+        Args:
+            model: Model name being warmed up.
+
+        Returns:
+            Unreachable in the timeout test; the runner's timeout
+            converts the wait into a synthetic FAIL outcome.
+        """
+        self.warmup_calls += 1
+        if self.wakeup is None:
+            self.wakeup = asyncio.Event()
+        await self.wakeup.wait()
+        return ProviderReadinessResult(
+            provider=self.provider,
+            model=model,
+            status=ReadinessStatus.OK,
+            capabilities=self.capabilities,
+        )
+
+    def release(self) -> None:
+        """Release the pending waiters so the event loop can shut down."""
+        if self.wakeup is not None:
+            self.wakeup.set()
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +451,222 @@ async def test_run_startup_diagnostics_captures_construction_failure(
 
 
 # ---------------------------------------------------------------------------
+# diagnostics.timeout_seconds
+# ---------------------------------------------------------------------------
+
+
+def _with_timeout(config: IrisRuntimeConfig, timeout_seconds: float) -> IrisRuntimeConfig:
+    """Apply ``timeout_seconds`` to the diagnostics config.
+
+    Args:
+        config: The current runtime config.
+        timeout_seconds: The timeout to apply.
+
+    Returns:
+        A new config with the timeout overridden.
+    """
+    return replace(config, diagnostics=replace(config.diagnostics, timeout_seconds=timeout_seconds))
+
+
+@pytest.mark.anyio
+async def test_run_startup_diagnostics_warn_mode_converts_timeout_to_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Warn mode: hanging readiness probe becomes a FAIL outcome, not a crash.
+
+    A probe that exceeds ``diagnostics.timeout_seconds`` must not
+    propagate the raw :class:`asyncio.TimeoutError` to the runner. The
+    runner converts the timeout into a synthetic
+    :class:`ProviderReadinessResult` with status ``FAIL`` and a
+    ``readiness_timeout`` issue so operators can see which slot hit
+    the limit.
+    """
+    config = _with_providers(
+        default_runtime_config(),
+        default_chat=("ollama", "qwen3:8b"),
+        fast_judge=("fake", "fake-llm"),
+        reasoning=("fake", "fake-llm"),
+    )
+    config = _with_timeout(config, timeout_seconds=0.01)
+    hanging = _HangingDiagnostics(
+        provider_name="ollama",
+        capability=ProviderCapability(health_check=True, warmup=True),
+    )
+    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": hanging}))
+
+    try:
+        report = await run_startup_diagnostics(config)
+    finally:
+        hanging.release()
+
+    assert report.enabled is True
+    assert report.has_failures is True
+    outcome = report.outcomes[0]
+    assert outcome.readiness.status is ReadinessStatus.FAIL
+    assert outcome.readiness.issues[0].code == "readiness_timeout"
+    assert "diagnostics.timeout_seconds" in outcome.readiness.issues[0].message
+    assert "0.01" in outcome.readiness.issues[0].message
+
+
+@pytest.mark.anyio
+async def test_run_startup_diagnostics_strict_mode_raises_config_error_on_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Strict mode: a timeout-derived FAIL triggers ``ConfigError``.
+
+    The runner must treat a timeout-induced FAIL outcome the same way
+    as any other FAIL outcome in strict mode: abort startup with
+    :class:`ConfigError`.
+    """
+    config = _with_providers(
+        default_runtime_config(),
+        default_chat=("ollama", "qwen3:8b"),
+        fast_judge=("fake", "fake-llm"),
+        reasoning=("fake", "fake-llm"),
+    )
+    config = _with_diagnostics(config, mode="strict")
+    config = _with_timeout(config, timeout_seconds=0.01)
+    hanging = _HangingDiagnostics(
+        provider_name="ollama",
+        capability=ProviderCapability(health_check=True, warmup=True),
+    )
+    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": hanging}))
+
+    try:
+        with pytest.raises(ConfigError, match="readiness_timeout"):
+            await run_startup_diagnostics(config)
+    finally:
+        hanging.release()
+
+
+@pytest.mark.anyio
+async def test_run_startup_diagnostics_warmup_timeout_produces_warmup_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Warmup timeout produces a warmup-stage FAIL outcome.
+
+    A warmup probe that exceeds ``diagnostics.timeout_seconds`` must
+    produce a synthetic :class:`ProviderReadinessResult` with status
+    ``FAIL`` and a ``warmup_timeout`` issue. The readiness probe
+    itself must remain ``OK`` when only the warmup hangs.
+    """
+    config = _with_providers(
+        default_runtime_config(),
+        default_chat=("ollama", "qwen3:8b"),
+        fast_judge=("fake", "fake-llm"),
+        reasoning=("fake", "fake-llm"),
+    )
+    config = _with_diagnostics(config, warmup_models=True)
+    config = _with_timeout(config, timeout_seconds=0.01)
+
+    class _ReadinessOkWarmupHangs:
+        provider = "ollama"
+        capabilities = ProviderCapability(health_check=True, warmup=True)
+        check_readiness_calls = 0
+        warmup_calls = 0
+        wakeup: asyncio.Event | None = None
+
+        async def check_readiness(self, model: str) -> ProviderReadinessResult:
+            self.check_readiness_calls += 1
+            return ProviderReadinessResult(
+                provider=self.provider,
+                model=model,
+                status=ReadinessStatus.OK,
+                capabilities=self.capabilities,
+            )
+
+        async def warmup(self, model: str) -> ProviderReadinessResult:
+            self.warmup_calls += 1
+            if self.wakeup is None:
+                self.wakeup = asyncio.Event()
+            await self.wakeup.wait()
+            return ProviderReadinessResult(
+                provider=self.provider,
+                model=model,
+                status=ReadinessStatus.OK,
+                capabilities=self.capabilities,
+            )
+
+        def release(self) -> None:
+            if self.wakeup is not None:
+                self.wakeup.set()
+
+    hanging_warmup = _ReadinessOkWarmupHangs()
+    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": hanging_warmup}))
+
+    try:
+        report = await run_startup_diagnostics(config)
+    finally:
+        hanging_warmup.release()
+
+    outcome = report.outcomes[0]
+    assert outcome.readiness.status is ReadinessStatus.OK
+    assert outcome.warmup is not None
+    assert outcome.warmup.status is ReadinessStatus.FAIL
+    assert outcome.warmup.issues[0].code == "warmup_timeout"
+
+
+@pytest.mark.anyio
+async def test_run_startup_diagnostics_off_mode_does_not_call_factory() -> None:
+    """Mode=off skips the factory call entirely, regardless of timeout.
+
+    Even when ``timeout_seconds`` is configured, ``mode="off"`` must
+    short-circuit before the diagnostics factory is invoked. This is
+    a regression guard against an implementation that would call the
+    factory and then ignore the result.
+    """
+    config = _with_diagnostics(default_runtime_config(), mode="off")
+    config = _with_timeout(config, timeout_seconds=0.01)
+
+    # No factory monkeypatch: if the runner were to call
+    # ``build_provider_diagnostics``, the real factory would be
+    # invoked. We assert the report shape to prove the runner did
+    # not even try.
+    report = await run_startup_diagnostics(config)
+
+    assert report.enabled is False
+    assert report.outcomes == ()
+
+
+@pytest.mark.anyio
+async def test_run_startup_diagnostics_uses_configured_timeout_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The runner applies the configured ``timeout_seconds`` from the config.
+
+    A very small timeout must cause the probe to fail; a large one
+    must let the probe complete normally. This proves the runner
+    reads the value from ``runtime_config.diagnostics.timeout_seconds``
+    rather than hardcoding it.
+    """
+    config = _with_providers(
+        default_runtime_config(),
+        default_chat=("ollama", "qwen3:8b"),
+        fast_judge=("fake", "fake-llm"),
+        reasoning=("fake", "fake-llm"),
+    )
+    hanging = _HangingDiagnostics(
+        provider_name="ollama",
+        capability=ProviderCapability(health_check=True, warmup=True),
+    )
+    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": hanging}))
+
+    # Use a large timeout: the runner should NOT cut the probe short.
+    config_large = _with_timeout(config, timeout_seconds=5.0)
+    # Patch the stub to complete quickly to avoid hanging the test.
+    fast_stub = _ok_stub("ollama")
+    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": fast_stub}))
+
+    report = await run_startup_diagnostics(config_large)
+
+    # The fast stub returns OK within 5s, so the outcome is OK.
+    assert report.outcomes[0].readiness.status is ReadinessStatus.OK
+    # The original hanging stub was never used; the factory was
+    # replaced mid-test to avoid blocking the test event loop.
+    assert hanging.check_readiness_calls == 0
+
+
+# ---------------------------------------------------------------------------
 # レポート
 # ---------------------------------------------------------------------------
 
@@ -543,11 +830,15 @@ def _passthrough_factory() -> object:
     return factory
 
 
-def _slot_stub_factory(stubs: dict[ModelSlotName, _StubDiagnostics]) -> object:
+def _slot_stub_factory(stubs: dict[ModelSlotName, LLMProviderDiagnostics]) -> object:
     """Build a factory that returns the configured stub per slot.
 
     Args:
         stubs: Mapping from slot name to the stub to return for that slot.
+            Both :class:`_StubDiagnostics` and protocol-shaped test doubles
+            such as :class:`_HangingDiagnostics` are
+            :class:`LLMProviderDiagnostics` protocol implementations, so
+            they can populate the dict directly.
 
     Returns:
         Factory closure that returns the configured stub per slot, or

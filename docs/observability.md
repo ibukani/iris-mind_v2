@@ -89,7 +89,15 @@ export IRIS_DIAGNOSTICS_WARMUP_MODELS=true
 ## リクエスト可観測性 (Request Observability)
 
 `LLMClientFactory` が構築する LLM クライアントは、生成呼び出し
-ごとに以下を loguru レコードとして出力する:
+ごとに以下を stdlib `logging` のレコードとして出力する。 レコードは
+`iris.adapters.llm.observability` ロガー配下に送出され、 `extra`
+フィールドに構造化ペイロードが紐付く。
+
+> **Note**: 起動時診断 (`iris.runtime.observability.diagnostics`) は
+> loguru レコードを使う。 リクエスト可観測性のみが stdlib
+> `logging` を採用している。 それぞれ出力先が異なるため、運用側で
+> ログストリームを分けて集約する場合は logger name / loguru sink で
+> 振り分けること。
 
 | イベント | レベル | 説明 |
 |----------|--------|------|
@@ -98,7 +106,7 @@ export IRIS_DIAGNOSTICS_WARMUP_MODELS=true
 | `llm.request.error` | WARNING | 失敗時に発火、error_type / error_message を含む |
 
 `ObservableLLMClient` ラッパが各呼び出しに以下の追加属性を
-bind する:
+`extra` 経由で付与する:
 
 - `model` - 呼び出し対象モデル名
 - `latency_ms` - 経過時間 (ミリ秒、`time.perf_counter` 計測)
