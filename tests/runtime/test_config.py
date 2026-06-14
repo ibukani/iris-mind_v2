@@ -637,6 +637,9 @@ def test_config_package_exposes_stable_public_api() -> None:
         "runtime_config_specs",
         "runtime_config_specs_for_version",
         "RuntimeSafetyConfig",
+        "RuntimeDiagnosticsConfig",
+        "apply_diagnostics_env",
+        "apply_diagnostics_toml",
         "all_model_slots_are_fake",
     }
     assert set(config_pkg.__all__) == expected

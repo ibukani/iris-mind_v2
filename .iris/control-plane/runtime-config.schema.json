@@ -32,6 +32,11 @@
     {"path":"logging.rotation","type":"str","default":"10 MB","allowedValues":[],"env":null,"secret":false,"editable":true,"description":"ログファイルrotation指定。"},
     {"path":"logging.retention","type":"str","default":"7 days","allowedValues":[],"env":null,"secret":false,"editable":true,"description":"ログファイルretention指定。"},
     {"path":"safety.mode","type":"enum","default":"development","allowedValues":["development","basic"],"env":"IRIS_SAFETY_MODE","secret":false,"editable":true,"description":"出力safety gateの動作モード。"},
-    {"path":"safety.max_output_chars","type":"int","default":4000,"allowedValues":[],"env":"IRIS_SAFETY_MAX_OUTPUT_CHARS","secret":false,"editable":true,"description":"出力可能な最大文字数。"}
+    {"path":"safety.max_output_chars","type":"int","default":4000,"allowedValues":[],"env":"IRIS_SAFETY_MAX_OUTPUT_CHARS","secret":false,"editable":true,"description":"出力可能な最大文字数。"},
+    {"path":"diagnostics.enabled","type":"bool","default":true,"allowedValues":[],"env":"IRIS_DIAGNOSTICS_ENABLED","secret":false,"editable":true,"description":"起動時 LLM プロバイダ診断を有効化する。"},
+    {"path":"diagnostics.timeout_seconds","type":"float","default":5.0,"allowedValues":[],"env":"IRIS_DIAGNOSTICS_TIMEOUT_SECONDS","secret":false,"editable":true,"description":"診断チェック 1 件あたりのタイムアウト秒数。"},
+    {"path":"diagnostics.fail_fast","type":"bool","default":false,"allowedValues":[],"env":"IRIS_DIAGNOSTICS_FAIL_FAST","secret":false,"editable":true,"description":"致命的診断失敗でサーバー起動を停止する。"},
+    {"path":"diagnostics.warmup_models","type":"bool","default":false,"allowedValues":[],"env":"IRIS_DIAGNOSTICS_WARMUP_MODELS","secret":false,"editable":true,"description":"診断後にモデルを warmup する。"},
+    {"path":"diagnostics.log_issues_as_warnings","type":"bool","default":true,"allowedValues":[],"env":"IRIS_DIAGNOSTICS_LOG_ISSUES_AS_WARNINGS","secret":false,"editable":true,"description":"診断で検出された問題を警告ログとして出力する。"}
   ]
 }

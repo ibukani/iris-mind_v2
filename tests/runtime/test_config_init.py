@@ -61,6 +61,7 @@ def test_committed_init_template_is_complete_and_loadable(tmp_path: Path) -> Non
         "openai",
         "logging",
         "safety",
+        "diagnostics",
     }
     assert config.config.version == 1
 
@@ -85,6 +86,7 @@ def test_runtime_config_template_returns_packaged_full_template() -> None:
         "openai",
         "logging",
         "safety",
+        "diagnostics",
     }
 
 

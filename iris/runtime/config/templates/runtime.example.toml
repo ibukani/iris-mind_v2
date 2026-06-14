@@ -56,3 +56,10 @@ retention = "7 days"
 [safety]
 mode = "development"
 max_output_chars = 4000
+
+[diagnostics]
+enabled = true
+timeout_seconds = 5.0
+fail_fast = false
+warmup_models = false
+log_issues_as_warnings = true

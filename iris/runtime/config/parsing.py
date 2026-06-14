@@ -252,6 +252,49 @@ def parse_optional_float(value: TomlValue, path: str) -> float | None:
     return parse_float(value, path)
 
 
+def parse_bool(value: TomlValue, path: str) -> bool:
+    """必須の真偽値 TOML 値をパースする。
+
+    Args:
+        value: 検証する TOML 値。
+        path: エラーメッセージに使う設定パス。
+
+    Returns:
+        検証済み真偽値。
+
+    Raises:
+        ConfigError: 値が真偽値ではない場合。
+    """
+    if isinstance(value, bool):
+        return value
+    raise ConfigError(_type_error_message(path, "a boolean"))
+
+
+def env_bool(env: Mapping[str, str], key: str, *, default: bool) -> bool:
+    """必須の真偽値環境変数を読む。
+
+    Args:
+        env: 環境変数マッピング。
+        key: 変数名。
+        default: 変数が無い場合に返すデフォルト値。
+
+    Returns:
+        パース済み真偽値、またはデフォルト。
+
+    Raises:
+        ConfigError: 値を真偽値として解釈できない場合。
+    """
+    value = env.get(key)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ConfigError(_env_type_error_message(key, "a boolean (true/false, 1/0, yes/no, on/off)"))
+
+
 def _env_parse[T, D](
     env: Mapping[str, str],
     key: str,
