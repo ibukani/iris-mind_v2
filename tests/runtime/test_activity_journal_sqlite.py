@@ -210,10 +210,38 @@ async def test_sqlite_activity_journal_activity_id_race_returns_activity_id(tmp_
     SELECT とINSERT が並列化された場合に備えてIntegrityError フォールバックでも
     正確に DUPLICATE_ACTIVITY_ID へ変換されることを検証する。
     """
+    db_path = str(tmp_path / "activity_journal.db")
+    journal = SQLiteActivityJournal(db_path)
+    expected = _build_event()
+
+    # 別 connection から同一 activity_id を直接挿入して PK 違反を誘発する。
+    pre_insert = sqlite3.connect(db_path)
+    pre_insert.execute(
+        """
+        INSERT INTO activity_events (
+            activity_id, source, provider_event_id, actor_id, space_id,
+            activity_kind, occurred_at, received_at, payload_json
+        ) VALUES (?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)
+        """,
+        (
+            str(expected.activity_id),
+            expected.kind.value,
+            expected.occurred_at.isoformat(),
+            expected.received_at.isoformat(),
+            "{}",
+        ),
+    )
+    pre_insert.commit()
+    pre_insert.close()
+
+    result = await journal.append(expected)
+
+    assert result.accepted is False
+    assert result.event is None
+    assert result.reason is ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
 
 
-@pytest.mark.anyio
-async def test_sqlite_activity_journal_immediate_transaction_no_rollback_on_begin_failure(
+def test_sqlite_activity_journal_immediate_transaction_no_rollback_on_begin_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -260,36 +288,6 @@ async def test_sqlite_activity_journal_immediate_transaction_no_rollback_on_begi
     assert isinstance(raised, sqlite3.OperationalError)
     assert "database is locked" in str(raised)
     assert not any(action == "ROLLBACK" for action in fake.actions)
-
-    db_path = str(tmp_path / "activity_journal.db")
-    journal = SQLiteActivityJournal(db_path)
-    expected = _build_event()
-
-    # 別 connection から同一 activity_id を直接挿入して PK 違反を誘発する。
-    pre_insert = sqlite3.connect(db_path)
-    pre_insert.execute(
-        """
-        INSERT INTO activity_events (
-            activity_id, source, provider_event_id, actor_id, space_id,
-            activity_kind, occurred_at, received_at, payload_json
-        ) VALUES (?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)
-        """,
-        (
-            str(expected.activity_id),
-            expected.kind.value,
-            expected.occurred_at.isoformat(),
-            expected.received_at.isoformat(),
-            "{}",
-        ),
-    )
-    pre_insert.commit()
-    pre_insert.close()
-
-    result = await journal.append(expected)
-
-    assert result.accepted is False
-    assert result.event is None
-    assert result.reason is ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
 
 
 @pytest.mark.anyio
