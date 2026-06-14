@@ -144,6 +144,33 @@ from iris.runtime.config import (
 
 サブモジュール `iris.runtime.config.errors`、`iris.runtime.config.parsing`、`iris.runtime.config.llm`、`iris.runtime.config.sources`、`iris.runtime.config.root` は private 実装詳細である。呼び出し側は `iris.runtime.config` からのみ import する (パッケージ自体を拡張する場合に限り public サブモジュールから import 可)。`iris.runtime.config` の外で `os.environ` を直接読むことは architecture guard test で禁止されている。現時点で唯一の例外は `iris.adapters.llm.openai` であり、typed config への移行完了までは `OPENAI_API_KEY` を直接読む。
 
+## ランタイムstateの永続化ポリシー
+
+`state.backend` は **永続化する companion state と audit history** を制御する。
+全runtime cacheを永続化する設定ではない。
+
+`state.backend = "memory"` (デフォルト) では全runtime stateが process-local。
+
+`state.backend = "sqlite"` で永続化される対象:
+
+- account bindings / actor identity links
+- long-term memory records
+- activity journal (append-only audit log)
+
+`state.backend = "sqlite"` でも process-local のまま (ephemeral):
+
+- activity projections
+- presence
+- space occupancy
+- ephemeral space bindings
+
+Activity journalは investigation、debugging、provider event dedupe、future replay、
+future projection rebuildのための append-only audit log である。Normal runtime
+contextのhot query pathではない。関係性 baseline と affect / mood baseline は
+将来の永続化対象だが、専用 store が用意されるまで deferred。
+
+詳細は `docs/adr/0002-runtime-state-persistence-policy.md` を参照。
+
 ## ターゲットアーキテクチャ
 
 ```text
