@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.generated.iris.api.v1 import observations_pb2
-from iris.generated.iris.runtime.v1 import runtime_pb2
 from tests.e2e.helpers import (
     build_cli_activity_event_request,
     build_cli_presence_signal_request,
@@ -58,7 +57,7 @@ async def test_presence_signal_returns_no_send_response(
     finally:
         await stop_runtime_process(runtime)
 
-    assert isinstance(response, runtime_pb2.SubmitObservationResponse)
+    assert response.HasField("output")
     assert not response.output.text
 
 
@@ -133,7 +132,7 @@ async def test_presence_signal_keeps_runtime_healthy_without_live_provider(
         await stop_runtime_process(runtime)
 
     assert response.correlation_id == "nosend-presence-goodbye"
-    assert response.output.text is not None
+    assert response.HasField("output")
     assert response.output.text.strip()
 
 
@@ -163,7 +162,7 @@ async def test_activity_event_without_reaction_returns_valid_empty_output(
     finally:
         await stop_runtime_process(runtime)
 
-    assert isinstance(response, runtime_pb2.SubmitObservationResponse)
     assert response.correlation_id == "nosend-activity-corr-1"
     # Activity events without a reaction may return empty output text.
-    assert response.output is not None
+    assert response.HasField("output")
+    assert not response.output.text

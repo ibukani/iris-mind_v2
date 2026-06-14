@@ -56,7 +56,7 @@ async def test_runtime_process_accepts_multiple_observations_in_same_session(
         "e2e-corr-state-3",
     ]
     for response in responses:
-        assert response.output.text is not None
+        assert response.HasField("output")
         assert response.output.text.strip()
 
 

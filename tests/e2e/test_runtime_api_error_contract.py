@@ -146,7 +146,7 @@ async def test_runtime_recovers_after_invalid_request(
         await stop_runtime_process(runtime)
 
     assert response.correlation_id == "recover-good-1"
-    assert response.output.text is not None
+    assert response.HasField("output")
     assert response.output.text.strip()
 
 

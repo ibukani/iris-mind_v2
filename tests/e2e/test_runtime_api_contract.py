@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.generated.iris.api.v1 import outputs_pb2
 from tests.e2e.helpers import (
     build_cli_submit_observation_request,
     find_free_port,
@@ -130,8 +129,6 @@ async def test_submit_observation_actor_message_returns_presented_output(
         await stop_runtime_process(runtime)
 
     assert response.HasField("output")
-    assert isinstance(response.output, outputs_pb2.PresentedOutput)
-    assert response.output.text is not None
     assert response.output.text.strip()
 
 
@@ -162,7 +159,7 @@ async def test_submit_observation_multiple_requests_keep_server_alive(
         "api-contract-multi-3",
     ]
     for response in responses:
-        assert response.output.text is not None
+        assert response.HasField("output")
         assert response.output.text.strip()
 
 

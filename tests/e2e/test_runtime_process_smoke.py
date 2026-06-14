@@ -61,7 +61,7 @@ async def test_runtime_process_accepts_cli_like_submit_observation(
         await stop_runtime_process(runtime)
 
     assert response.correlation_id == "e2e-corr-1"
-    assert response.output.text is not None
+    assert response.HasField("output")
     assert response.output.text.strip()
 
 
