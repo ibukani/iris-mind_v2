@@ -79,7 +79,7 @@ class SQLiteActivityJournal(ActivityJournal):
             space_id TEXT,
             activity_kind TEXT NOT NULL,
             occurred_at TEXT NOT NULL,
-            recorded_at TEXT NOT NULL,
+            received_at TEXT NOT NULL,
             payload_json TEXT NOT NULL
         );
         """
@@ -168,17 +168,6 @@ class SQLiteActivityJournal(ActivityJournal):
 
     def _append_sync(self, event: ActivityEventRecord) -> ActivityAppendResult:
         provider_key = _provider_key(event)
-        if provider_key is not None and self._has_seen_provider_event_sync(
-            source=provider_key[0],
-            provider_event_id=provider_key[1],
-        ):
-            return ActivityAppendResult(
-                accepted=False,
-                event=None,
-                reason=ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT,
-            )
-
-        payload = _serialize_event(event)
         with self._transaction() as conn:
             cursor = conn.execute(
                 "SELECT activity_id FROM activity_events WHERE activity_id = ?",
@@ -187,8 +176,9 @@ class SQLiteActivityJournal(ActivityJournal):
             existing: sqlite3.Row | None = cursor.fetchone()
             if existing is not None:
                 return ActivityAppendResult(
-                    accepted=True,
-                    event=event,
+                    accepted=False,
+                    event=None,
+                    reason=ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID,
                 )
             if provider_key is not None:
                 cursor = conn.execute(
@@ -205,11 +195,27 @@ class SQLiteActivityJournal(ActivityJournal):
                         event=None,
                         reason=ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT,
                     )
+        try:
+            self._insert_event_sync(event)
+        except sqlite3.IntegrityError:
+            # unique partial index 競合(in-transaction SELECTで取りこぼし得る)を
+            # Protocol契約に従い DUPLICATE_PROVIDER_EVENT へ変換する。
+            return ActivityAppendResult(
+                accepted=False,
+                event=None,
+                reason=ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT,
+            )
+        return ActivityAppendResult(accepted=True, event=event)
+
+    def _insert_event_sync(self, event: ActivityEventRecord) -> None:
+        """activity_events へ1件INSERTする。unique partial index 違反は呼び出し側で処理する。"""
+        payload = _serialize_event(event)
+        with self._transaction() as conn:
             conn.execute(
                 """
                 INSERT INTO activity_events (
                     activity_id, source, provider_event_id, actor_id, space_id,
-                    activity_kind, occurred_at, recorded_at, payload_json
+                    activity_kind, occurred_at, received_at, payload_json
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -224,7 +230,6 @@ class SQLiteActivityJournal(ActivityJournal):
                     json.dumps(_payload_to_json_dict(payload)),
                 ),
             )
-        return ActivityAppendResult(accepted=True, event=event)
 
     def _get_by_id_sync(self, activity_id: ActivityId) -> ActivityEventRecord | None:
         with self._transaction() as conn:

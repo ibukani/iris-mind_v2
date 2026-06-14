@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -10,7 +11,10 @@ import pytest
 
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
 from iris.core.ids import ActivityId, ActorId, ObservationId, SpaceId
-from iris.runtime.activity.journal import ActivityAppendSkipReason
+from iris.runtime.activity.journal import (
+    ActivityAppendResult,
+    ActivityAppendSkipReason,
+)
 from iris.runtime.activity.sqlite_journal import SQLiteActivityJournal
 
 if TYPE_CHECKING:
@@ -182,23 +186,54 @@ async def test_sqlite_activity_journal_has_seen_provider_event_returns_false_whe
 
 
 @pytest.mark.anyio
-async def test_sqlite_activity_journal_concurrent_instances_dedupe(tmp_path: Path) -> None:
-    """Parallel SQLiteActivityJournal instances share persistent dedupe state."""
+async def test_sqlite_activity_journal_rejects_duplicate_activity_id(tmp_path: Path) -> None:
+    """Reusing the same activity_id is rejected with DUPLICATE_ACTIVITY_ID."""
     db_path = str(tmp_path / "activity_journal.db")
-    writer = SQLiteActivityJournal(db_path)
+    journal = SQLiteActivityJournal(db_path)
     event = _build_event()
-    await writer.append(event)
-    reader_a = SQLiteActivityJournal(db_path)
-    reader_b = SQLiteActivityJournal(db_path)
+    first = await journal.append(event)
+    second = await journal.append(event)
 
-    seen_a = await reader_a.has_seen_provider_event(
-        source=event.source or "internal",
-        provider_event_id=event.provider_event_id or "event-1",
-    )
-    seen_b = await reader_b.has_seen_provider_event(
-        source=event.source or "internal",
-        provider_event_id=event.provider_event_id or "event-1",
-    )
+    assert first.accepted is True
+    assert second.accepted is False
+    assert second.event is None
+    assert second.reason is ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
+    assert await journal.get_by_id(event.activity_id) == event
 
-    assert seen_a is True
-    assert seen_b is True
+
+@pytest.mark.anyio
+async def test_sqlite_activity_journal_concurrent_append_dedupe(tmp_path: Path) -> None:
+    """Concurrent append() calls for the same provider_event_id dedupe cleanly.
+
+    IntegrityError を取りこぼさず、accepted=True は1件だけ、残りは
+    DUPLICATE_PROVIDER_EVENT へ変換されることを検証する。
+    """
+    db_path = str(tmp_path / "activity_journal.db")
+    base = _build_event()
+    total = 20
+    events = [replace(base, activity_id=ActivityId(f"activity:race-{i}")) for i in range(total)]
+
+    async def _attempt(e: ActivityEventRecord) -> ActivityAppendResult:
+        # 各 append は独立したjournalインスタンスを用いて、共有DBに対する
+        # 異なる connection 競合状態を再現する。
+        journal = SQLiteActivityJournal(db_path)
+        return await journal.append(e)
+
+    results = await asyncio.gather(*(_attempt(e) for e in events))
+
+    accepted = [r for r in results if r.accepted]
+    duplicates = [
+        r for r in results if r.reason is ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT
+    ]
+    assert len(accepted) == 1
+    assert len(duplicates) == total - 1
+
+    # 受理された row は1件だけ、provider_event_id で1件だけ存在。
+    journal = SQLiteActivityJournal(db_path)
+    assert (
+        await journal.has_seen_provider_event(
+            source=base.source or "internal",
+            provider_event_id=base.provider_event_id or "event-1",
+        )
+        is True
+    )
