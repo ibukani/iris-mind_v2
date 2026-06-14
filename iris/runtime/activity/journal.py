@@ -56,7 +56,13 @@ class ActivityJournal(Protocol):
         source: str,
         provider_event_id: str,
     ) -> bool:
-        """Provider eventがbounded dedupe window内にあるか返す。"""
+        """``(source, provider_event_id)`` の dedupe 記録が実装内部にあるか返す。
+
+        実装は bounded window (例: ``InMemoryActivityJournal``) または
+        永続 audit log (例: ``SQLiteActivityJournal``) のいずれでもよく、
+        呼び出し側は戻り値を「同一視 (source, provider_event_id) を
+        append が拒否するかどうか」の判定に用いてよい。
+        """
         ...
 
 

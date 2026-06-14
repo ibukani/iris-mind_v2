@@ -120,6 +120,29 @@ class SQLiteActivityJournal(ActivityJournal):
         with contextlib.closing(self._connect()) as conn, conn:
             yield conn
 
+    @contextlib.contextmanager
+    def _immediate_transaction(self) -> Generator[sqlite3.Connection]:
+        """書き込み直列化用の ``BEGIN IMMEDIATE`` transaction context manager。
+
+        SQLiteの既定 ``BEGIN DEFERRED`` は最初の書き込みまでwriter同士が
+        共有ロックを取らず、SELECT通過直後に他writerがINSERTする
+        TOCTOU窓が開く。``IMMEDIATE`` で開始時にRESERVEDロックを獲得し、
+        SELECTとINSERTを単一writerに直列化することで窓を潰す。
+
+        Yields:
+            sqlite3.Connection: ``BEGIN IMMEDIATE`` を開始した管理対象connection。
+        """
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            conn.close()
+
     @override
     async def append(self, event: ActivityEventRecord) -> ActivityAppendResult:
         """eventをjournalへ追加する。既存IDは更新せず、provider event重複は拒否する。
@@ -168,49 +191,56 @@ class SQLiteActivityJournal(ActivityJournal):
 
     def _append_sync(self, event: ActivityEventRecord) -> ActivityAppendResult:
         provider_key = _provider_key(event)
-        with self._transaction() as conn:
-            cursor = conn.execute(
-                "SELECT activity_id FROM activity_events WHERE activity_id = ?",
+        payload = _serialize_event(event)
+        try:
+            self._insert_immediate_sync(event, payload, provider_key)
+        except sqlite3.IntegrityError as exc:
+            # BEGIN IMMEDIATE で他writerを直列化しているため通常は上の
+            # in-transaction SELECTで弾けるが、稀な競合への最終フォールバック。
+            # PK違反(activity_id) と unique partial index 違反(provider_event_id)
+            # をエラーメッセージで判別し、Protocol契約に従い ActivityAppendResult
+            # へ変換する(例外を漏らさない)。
+            reason = _classify_integrity_error(exc)
+            return ActivityAppendResult(accepted=False, event=None, reason=reason)
+        return ActivityAppendResult(accepted=True, event=event)
+
+    def _insert_immediate_sync(
+        self,
+        event: ActivityEventRecord,
+        payload: _EventPayload,
+        provider_key: tuple[str, str] | None,
+    ) -> None:
+        """``BEGIN IMMEDIATE`` 内で dedupe 検査とINSERTを原子的に実行する。
+
+        activity_id PK と ``(source, provider_event_id)`` unique partial index の
+        両方をin-transaction SELECTで先に確認し、問題なければ1件のINSERTを行う。
+        競合制約違反時は ``sqlite3.IntegrityError`` をそのまま呼び出し側へ
+        送出する(分類は呼び出し側 ``_append_sync`` で行う)。
+
+        Raises:
+            sqlite3.IntegrityError: activity_id または provider_event_id 重複時。
+        """
+        with self._immediate_transaction() as conn:
+            existing_cursor: sqlite3.Cursor = conn.execute(
+                "SELECT 1 FROM activity_events WHERE activity_id = ?",
                 (str(event.activity_id),),
             )
-            existing: sqlite3.Row | None = cursor.fetchone()
-            if existing is not None:
-                return ActivityAppendResult(
-                    accepted=False,
-                    event=None,
-                    reason=ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID,
-                )
+            existing_row: sqlite3.Row | None = existing_cursor.fetchone()
+            if existing_row is not None:
+                message = "duplicate activity_id"
+                raise sqlite3.IntegrityError(message)
             if provider_key is not None:
-                cursor = conn.execute(
+                duplicate_cursor: sqlite3.Cursor = conn.execute(
                     """
-                    SELECT activity_id FROM activity_events
+                    SELECT 1 FROM activity_events
                     WHERE source = ? AND provider_event_id = ?
                     """,
                     (provider_key[0], provider_key[1]),
                 )
-                duplicate: sqlite3.Row | None = cursor.fetchone()
-                if duplicate is not None:
-                    return ActivityAppendResult(
-                        accepted=False,
-                        event=None,
-                        reason=ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT,
-                    )
-        try:
-            self._insert_event_sync(event)
-        except sqlite3.IntegrityError:
-            # unique partial index 競合(in-transaction SELECTで取りこぼし得る)を
-            # Protocol契約に従い DUPLICATE_PROVIDER_EVENT へ変換する。
-            return ActivityAppendResult(
-                accepted=False,
-                event=None,
-                reason=ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT,
-            )
-        return ActivityAppendResult(accepted=True, event=event)
-
-    def _insert_event_sync(self, event: ActivityEventRecord) -> None:
-        """activity_events へ1件INSERTする。unique partial index 違反は呼び出し側で処理する。"""
-        payload = _serialize_event(event)
-        with self._transaction() as conn:
+                duplicate_row: sqlite3.Row | None = duplicate_cursor.fetchone()
+                if duplicate_row is not None:
+                    message = "duplicate provider_event_id"
+                    raise sqlite3.IntegrityError(message)
             conn.execute(
                 """
                 INSERT INTO activity_events (
@@ -272,6 +302,33 @@ def _provider_key(event: ActivityEventRecord) -> tuple[str, str] | None:
     if event.source is None or event.provider_event_id is None:
         return None
     return (event.source, event.provider_event_id)
+
+
+def _classify_integrity_error(exc: sqlite3.IntegrityError) -> ActivityAppendSkipReason:
+    """``sqlite3.IntegrityError`` をProtocol契約上の skip reason へ分類する。
+
+    メッセージに ``provider_event_id`` が含まれていれば unique partial index 違反
+    (DUPLICATE_PROVIDER_EVENT) 、 ``activity_id`` のみなら PK 違反
+    (DUPLICATE_ACTIVITY_ID) とみなす。判別不能時は保守側として
+    DUPLICATE_PROVIDER_EVENT を返す。
+
+    Args:
+        exc: SQLite から送出された IntegrityError。
+
+    Returns:
+        ActivityAppendSkipReason: 該当 skip reason。
+    """
+    message = str(exc)
+    if "activity_id" in message and "provider_event_id" not in message:
+        return ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
+    if "provider_event_id" in message and "activity_id" not in message:
+        return ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT
+    # 判別不能時は raw error メッセージで PK違反と unique partial index 違反の
+    # どちらかに識別する。SQLite の標準メッセージには対象列名が含まれる。
+    lowered = message.lower()
+    if "activity_events.activity_id" in lowered:
+        return ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
+    return ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT
 
 
 def _serialize_event(event: ActivityEventRecord) -> _EventPayload:

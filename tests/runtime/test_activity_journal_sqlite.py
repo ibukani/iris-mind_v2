@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+import sqlite3
 from typing import TYPE_CHECKING
 
 import pytest
@@ -199,6 +200,45 @@ async def test_sqlite_activity_journal_rejects_duplicate_activity_id(tmp_path: P
     assert second.event is None
     assert second.reason is ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
     assert await journal.get_by_id(event.activity_id) == event
+
+
+@pytest.mark.anyio
+async def test_sqlite_activity_journal_activity_id_race_returns_activity_id(tmp_path: Path) -> None:
+    """activity_id の PK 違反 IntegrityError は DUPLICATE_ACTIVITY_ID へ分類される。
+
+    別connectionから先に同一 activity_id 行を挿入し、journal の in-transaction
+    SELECT とINSERT が並列化された場合に備えてIntegrityError フォールバックでも
+    正確に DUPLICATE_ACTIVITY_ID へ変換されることを検証する。
+    """
+    db_path = str(tmp_path / "activity_journal.db")
+    journal = SQLiteActivityJournal(db_path)
+    expected = _build_event()
+
+    # 別 connection から同一 activity_id を直接挿入して PK 違反を誘発する。
+    pre_insert = sqlite3.connect(db_path)
+    pre_insert.execute(
+        """
+        INSERT INTO activity_events (
+            activity_id, source, provider_event_id, actor_id, space_id,
+            activity_kind, occurred_at, received_at, payload_json
+        ) VALUES (?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)
+        """,
+        (
+            str(expected.activity_id),
+            expected.kind.value,
+            expected.occurred_at.isoformat(),
+            expected.received_at.isoformat(),
+            "{}",
+        ),
+    )
+    pre_insert.commit()
+    pre_insert.close()
+
+    result = await journal.append(expected)
+
+    assert result.accepted is False
+    assert result.event is None
+    assert result.reason is ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
 
 
 @pytest.mark.anyio
