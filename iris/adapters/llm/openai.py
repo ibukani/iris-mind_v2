@@ -8,6 +8,15 @@ from dataclasses import dataclass
 import os
 from typing import Any, Protocol, TypeGuard
 
+from iris.adapters.llm.diagnostics import (
+    LLMProviderAuthenticationError,
+    LLMProviderConnectionError,
+    LLMProviderError,
+    LLMProviderModelUnavailableError,
+    LLMProviderQuotaError,
+    LLMProviderRateLimitError,
+    LLMProviderTimeoutError,
+)
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
 _openai: Any = None
@@ -53,8 +62,14 @@ class OpenAIConfig:
         )
 
 
-class OpenAIAdapterError(RuntimeError):
-    """OpenAIアダプタ障害時に送出されるエラー。"""
+class OpenAIAdapterError(LLMProviderError):
+    """OpenAIアダプタ障害時に送出されるエラー。
+
+    :class:`iris.adapters.llm.diagnostics.LLMProviderError` 階層の
+    一員として、 gRPC ingress の ``map_exception_to_grpc`` から直接
+    ハンドリングできる。 サブクラスでより細かい分類
+    (認証 / レート制限 / タイムアウト) を表現する。
+    """
 
 
 class OpenAIResponsesClient(Protocol):
@@ -112,8 +127,38 @@ class OpenAILLMClient:
 
         Returns:
             LLMResponse: 生成された応答テキストとメタデータ。
+
+        Raises:
+            LLMProviderAuthenticationError: API キーが無効 / 権限不足の場合。
+            LLMProviderRateLimitError: OpenAI 側でレート制限がかかった場合。
+            LLMProviderTimeoutError: SDK がタイムアウト例外を送出した場合。
+            LLMProviderConnectionError: 接続失敗 / API エラー時。
+            LLMProviderQuotaError: クォータ / 請求上限到達時。
+            LLMProviderModelUnavailableError: モデル未発見 / 不正リクエスト時。
         """
-        response = await self._client.responses.create(**self._to_provider_request(request))
+        try:
+            response = await self._client.responses.create(**self._to_provider_request(request))
+        except _TimeoutErrorTypes as exc:
+            message = f"OpenAI request timed out: {exc}"
+            raise LLMProviderTimeoutError(message) from exc
+        except _ConnectionErrorTypes as exc:
+            message = f"OpenAI connection failed: {exc}"
+            raise LLMProviderConnectionError(message) from exc
+        except _AuthenticationErrorTypes as exc:
+            message = f"OpenAI authentication failed: {exc}"
+            raise LLMProviderAuthenticationError(message) from exc
+        except _RateLimitErrorTypes as exc:
+            message = f"OpenAI rate limit reached: {exc}"
+            raise LLMProviderRateLimitError(message) from exc
+        except _QuotaErrorTypes as exc:
+            message = f"OpenAI quota exceeded: {exc}"
+            raise LLMProviderQuotaError(message) from exc
+        except _NotFoundErrorTypes as exc:
+            message = f"OpenAI model not found: {exc}"
+            raise LLMProviderModelUnavailableError(message) from exc
+        except _BadRequestErrorTypes as exc:
+            message = f"OpenAI rejected the request: {exc}"
+            raise LLMProviderModelUnavailableError(message) from exc
         return LLMResponse(
             text=_extract_output_text(response),
             model=_extract_response_model(response, request.model),
@@ -226,3 +271,66 @@ def _extract_finish_reason(response: object) -> str:
     if isinstance(status, str):
         return status
     return "stop"
+
+
+def _resolve_sdk_error_types() -> tuple[type[BaseException], ...]:
+    """Resolve the SDK-specific exception classes the adapter should translate.
+
+    Returns:
+        A tuple of exception classes the adapter translates into
+        :class:`LLMProviderError` subclasses. When the openai SDK is
+        not installed, the returned tuple is empty and the caller falls
+        back to ``Exception``.
+    """
+    if _openai is None:
+        return ()
+    candidates: list[type[BaseException]] = []
+    for name in (
+        "APITimeoutError",
+        "Timeout",
+        "AuthenticationError",
+        "PermissionDeniedError",
+        "RateLimitError",
+    ):
+        cls = getattr(_openai, name, None)
+        if isinstance(cls, type) and issubclass(cls, BaseException):
+            candidates.append(cls)
+    return tuple(candidates)
+
+
+_SDK_ERROR_TYPES: tuple[type[BaseException], ...] = _resolve_sdk_error_types()
+_TIMEOUT_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
+    cls
+    for cls in _SDK_ERROR_TYPES
+    if cls.__name__ in {"APITimeoutError", "Timeout"}
+)
+_AUTH_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
+    cls
+    for cls in _SDK_ERROR_TYPES
+    if cls.__name__ in {"AuthenticationError", "PermissionDeniedError"}
+)
+_RATE_LIMIT_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
+    cls for cls in _SDK_ERROR_TYPES if cls.__name__ == "RateLimitError"
+)
+_CONNECTION_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
+    cls for cls in _SDK_ERROR_TYPES if cls.__name__ in {"APIConnectionError", "APIError"}
+)
+_NOT_FOUND_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
+    cls for cls in _SDK_ERROR_TYPES if cls.__name__ == "NotFoundError"
+)
+_BAD_REQUEST_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
+    cls for cls in _SDK_ERROR_TYPES if cls.__name__ == "BadRequestError"
+)
+_QUOTA_ERROR_TYPES: tuple[type[BaseException], ...] = tuple(
+    cls
+    for cls in _SDK_ERROR_TYPES
+    if cls.__name__ in {"QuotaExceededError", "InsufficientQuotaError"}
+)
+# Fallback aliases keep the except clauses valid when the SDK is missing.
+_TimeoutErrorTypes: tuple[type[BaseException], ...] = _TIMEOUT_ERROR_TYPES or (Exception,)
+_AuthenticationErrorTypes: tuple[type[BaseException], ...] = _AUTH_ERROR_TYPES or (Exception,)
+_RateLimitErrorTypes: tuple[type[BaseException], ...] = _RATE_LIMIT_ERROR_TYPES or (Exception,)
+_ConnectionErrorTypes: tuple[type[BaseException], ...] = _CONNECTION_ERROR_TYPES or (Exception,)
+_NotFoundErrorTypes: tuple[type[BaseException], ...] = _NOT_FOUND_ERROR_TYPES or (Exception,)
+_BadRequestErrorTypes: tuple[type[BaseException], ...] = _BAD_REQUEST_ERROR_TYPES or (Exception,)
+_QuotaErrorTypes: tuple[type[BaseException], ...] = _QUOTA_ERROR_TYPES or (Exception,)

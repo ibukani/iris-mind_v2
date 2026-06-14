@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock
 
+from google.protobuf.timestamp_pb2 import Timestamp
 import grpc
+from grpc import aio as grpc_aio
 import pytest
 
 from iris.adapters.grpc.mappers import (
+    GrpcRuntimeMapper,
     map_exception_to_grpc,
     map_provider_error_to_status,
 )
@@ -24,6 +29,10 @@ from iris.adapters.llm.diagnostics import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
+from iris.generated.iris.api.v1 import observations_pb2
+from iris.generated.iris.runtime.v1 import runtime_pb2
 
 
 def test_connection_error_maps_to_unavailable() -> None:
@@ -137,3 +146,142 @@ def test_each_provider_error_subclass_has_a_stable_status(
     """Provider error サブクラスごとに安定 status コードが返る。"""
     exc = error_factory()
     assert map_provider_error_to_status(exc) is expected_status
+
+
+# ---------------------------------------------------------------------------
+# gRPC servicer-level tests: provider errors propagate to expected status codes
+# ---------------------------------------------------------------------------
+
+
+def _build_servicer(handle: AsyncMock) -> tuple[IrisRuntimeGrpcServicer, AsyncMock]:
+    """Construct a servicer with a mocked runtime service and a fake context.
+
+    Args:
+        handle: Async mock that replaces ``runtime_service.handle_observation``.
+
+    Returns:
+        Tuple of (servicer, context mock).
+    """
+    runtime_service = AsyncMock()
+    runtime_service.handle_observation = handle
+    servicer = IrisRuntimeGrpcServicer(
+        runtime_service=runtime_service,
+        mapper=GrpcRuntimeMapper(),
+    )
+    context = AsyncMock()
+    context.abort.side_effect = lambda *_args, **_kwargs: _raise_abort()
+    return servicer, context
+
+
+def _raise_abort() -> None:
+    """Raise an RpcError to mirror grpc.aio.ServicerContext.abort semantics."""  # noqa: DOC501
+    raise _abort_error()
+
+
+def _abort_error() -> grpc.RpcError:
+    """Build an RpcError suitable for raising from a mocked ServicerContext.
+
+    Returns:
+        A ``grpc.RpcError`` with the expected status code metadata.
+    """
+    return grpc_aio.AioRpcError(
+        grpc.StatusCode.UNKNOWN,
+        trailing_metadata=None,  # type: ignore[arg-type]
+        details=None,
+        debug_error_string=None,
+        initial_metadata=None,  # type: ignore[arg-type]
+    )
+
+
+def _build_request() -> object:
+    """Build a minimal SubmitObservation request proto.
+
+    Returns:
+        The request proto with a single observation.
+    """
+    timestamp = Timestamp()
+    timestamp.FromDatetime(datetime.now(UTC))
+    request = runtime_pb2.SubmitObservationRequest()
+    request.observation.observation_id = "obs-1"
+    request.observation.session_id = "sess-1"
+    request.observation.kind = observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE
+    request.observation.occurred_at.CopyFrom(timestamp)
+    request.observation.context.source = "test"
+    request.observation.actor_message.text = "hello"
+    return request
+
+
+@pytest.mark.anyio
+async def test_servicer_maps_provider_timeout_to_deadline_exceeded() -> None:
+    """IrisRuntimeGrpcServicer aborts with DEADLINE_EXCEEDED on provider timeout."""
+    servicer, context = _build_servicer(
+        AsyncMock(side_effect=LLMProviderTimeoutError("timed out"))
+    )
+
+    with pytest.raises(grpc.RpcError):
+        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+
+    assert context.abort.await_args.args[0] is grpc.StatusCode.DEADLINE_EXCEEDED
+
+
+@pytest.mark.anyio
+async def test_servicer_maps_provider_connection_error_to_unavailable() -> None:
+    """IrisRuntimeGrpcServicer aborts with UNAVAILABLE on provider connection failure."""
+    servicer, context = _build_servicer(
+        AsyncMock(side_effect=LLMProviderConnectionError("conn refused"))
+    )
+
+    with pytest.raises(grpc.RpcError):
+        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+
+    assert context.abort.await_args.args[0] is grpc.StatusCode.UNAVAILABLE
+
+
+@pytest.mark.anyio
+async def test_servicer_maps_provider_model_unavailable_to_failed_precondition() -> None:
+    """IrisRuntimeGrpcServicer aborts with FAILED_PRECONDITION on model unavailability."""
+    servicer, context = _build_servicer(
+        AsyncMock(side_effect=LLMProviderModelUnavailableError("no such model"))
+    )
+
+    with pytest.raises(grpc.RpcError):
+        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+
+    assert context.abort.await_args.args[0] is grpc.StatusCode.FAILED_PRECONDITION
+
+
+@pytest.mark.anyio
+async def test_servicer_maps_provider_rate_limit_to_resource_exhausted() -> None:
+    """IrisRuntimeGrpcServicer aborts with RESOURCE_EXHAUSTED on rate limiting."""
+    servicer, context = _build_servicer(
+        AsyncMock(side_effect=LLMProviderRateLimitError("rate limited"))
+    )
+
+    with pytest.raises(grpc.RpcError):
+        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+
+    assert context.abort.await_args.args[0] is grpc.StatusCode.RESOURCE_EXHAUSTED
+
+
+@pytest.mark.anyio
+async def test_servicer_maps_provider_authentication_to_unauthenticated() -> None:
+    """IrisRuntimeGrpcServicer aborts with UNAUTHENTICATED on auth failure."""
+    servicer, context = _build_servicer(
+        AsyncMock(side_effect=LLMProviderAuthenticationError("bad key"))
+    )
+
+    with pytest.raises(grpc.RpcError):
+        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+
+    assert context.abort.await_args.args[0] is grpc.StatusCode.UNAUTHENTICATED
+
+
+@pytest.mark.anyio
+async def test_servicer_maps_unknown_exceptions_to_internal() -> None:
+    """Unknown exceptions fall back to INTERNAL."""
+    servicer, context = _build_servicer(AsyncMock(side_effect=RuntimeError("boom")))
+
+    with pytest.raises(grpc.RpcError):
+        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+
+    assert context.abort.await_args.args[0] is grpc.StatusCode.INTERNAL

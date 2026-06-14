@@ -9,7 +9,13 @@ from typing import TypeGuard
 import httpx
 import pytest
 
-from iris.adapters.llm.ollama import OllamaAdapterError, OllamaConfig, OllamaLLMClient
+from iris.adapters.llm.diagnostics import (
+    LLMProviderConnectionError,
+    LLMProviderError,
+    LLMProviderInvalidResponseError,
+    LLMProviderTimeoutError,
+)
+from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
 type _JsonPrimitive = str | int | float | bool | None
@@ -156,7 +162,7 @@ async def test_ollama_client_raises_on_non_2xx_response() -> None:
     )
     client = OllamaLLMClient(transport=transport)
 
-    with pytest.raises(OllamaAdapterError):
+    with pytest.raises(LLMProviderError):
         await client.generate(LLMRequest(model="qwen3:8b", messages=()))
 
 
@@ -168,7 +174,7 @@ async def test_ollama_client_raises_on_invalid_json() -> None:
     )
     client = OllamaLLMClient(transport=transport)
 
-    with pytest.raises(OllamaAdapterError):
+    with pytest.raises(LLMProviderInvalidResponseError):
         await client.generate(LLMRequest(model="qwen3:8b", messages=()))
 
 
@@ -190,7 +196,7 @@ async def test_ollama_client_raises_on_invalid_response_shape(
     )
     client = OllamaLLMClient(transport=transport)
 
-    with pytest.raises(OllamaAdapterError):
+    with pytest.raises(LLMProviderInvalidResponseError):
         await client.generate(LLMRequest(model="qwen3:8b", messages=()))
 
 
@@ -204,7 +210,7 @@ async def test_ollama_client_raises_on_http_exception() -> None:
 
     client = OllamaLLMClient(transport=httpx.MockTransport(_handler))
 
-    with pytest.raises(OllamaAdapterError):
+    with pytest.raises(LLMProviderConnectionError):
         await client.generate(LLMRequest(model="qwen3:8b", messages=()))
 
 
@@ -230,3 +236,135 @@ def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
         True if value is a dict, narrowing to the widened type.
     """
     return isinstance(value, dict)
+
+
+# ---------------------------------------------------------------------------
+# LLMProviderError translation tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_ollama_client_translates_timeout_to_provider_timeout() -> None:
+    """httpx.TimeoutException maps to LLMProviderTimeoutError."""
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        message = "read timeout"
+        raise httpx.ReadTimeout(message, request=request)
+
+    client = OllamaLLMClient(transport=httpx.MockTransport(_handler))
+
+    with pytest.raises(LLMProviderTimeoutError):
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+
+@pytest.mark.anyio
+async def test_ollama_client_translates_connect_error_to_provider_connection() -> None:
+    """httpx.ConnectError maps to LLMProviderConnectionError."""
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        message = "connection refused"
+        raise httpx.ConnectError(message, request=request)
+
+    client = OllamaLLMClient(transport=httpx.MockTransport(_handler))
+
+    with pytest.raises(LLMProviderConnectionError):
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+
+@pytest.mark.anyio
+async def test_ollama_client_translates_404_to_model_unavailable() -> None:
+    """HTTP 404 maps to LLMProviderModelUnavailableError."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(404, json={"error": "missing"}, request=request)
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    with pytest.raises(LLMProviderError) as excinfo:
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+    from iris.adapters.llm.diagnostics import LLMProviderModelUnavailableError
+
+    assert isinstance(excinfo.value, LLMProviderModelUnavailableError)
+
+
+@pytest.mark.anyio
+async def test_ollama_client_translates_401_to_authentication() -> None:
+    """HTTP 401 maps to LLMProviderAuthenticationError."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(401, json={"error": "unauthorized"}, request=request)
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    from iris.adapters.llm.diagnostics import LLMProviderAuthenticationError
+
+    with pytest.raises(LLMProviderAuthenticationError):
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+
+@pytest.mark.anyio
+async def test_ollama_client_translates_429_to_rate_limit() -> None:
+    """HTTP 429 maps to LLMProviderRateLimitError."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(429, json={"error": "rate"}, request=request)
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    from iris.adapters.llm.diagnostics import LLMProviderRateLimitError
+
+    with pytest.raises(LLMProviderRateLimitError):
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+
+@pytest.mark.anyio
+async def test_ollama_client_translates_invalid_json_to_invalid_response() -> None:
+    """Malformed JSON maps to LLMProviderInvalidResponseError."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=b"{not json", request=request)
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    with pytest.raises(LLMProviderInvalidResponseError):
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+
+@pytest.mark.anyio
+async def test_ollama_client_translates_missing_message_to_invalid_response() -> None:
+    """Missing ``message`` key maps to LLMProviderInvalidResponseError."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, json={}, request=request)
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    with pytest.raises(LLMProviderInvalidResponseError):
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+
+@pytest.mark.anyio
+async def test_ollama_client_translates_missing_content_to_invalid_response() -> None:
+    """Missing ``message.content`` maps to LLMProviderInvalidResponseError."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, json={"message": {}}, request=request)
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    with pytest.raises(LLMProviderInvalidResponseError):
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+
+@pytest.mark.anyio
+async def test_ollama_client_successful_response_unchanged() -> None:
+    """A well-formed response still returns an LLMResponse with the expected text."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={"message": {"content": "hi"}, "model": "qwen3:8b", "done_reason": "stop"},
+            request=request,
+        )
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    response = await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+    assert response.text == "hi"
+    assert response.model == "qwen3:8b"
+    assert response.finish_reason == "stop"
