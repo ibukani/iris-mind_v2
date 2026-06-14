@@ -14,6 +14,13 @@ _openai: Any = None
 with contextlib.suppress(ImportError):
     import openai as _openai
 
+# Public re-export of the openai SDK module for cross-module use.
+# Resolves to ``None`` if the openai SDK is not installed. Sibling
+# modules (notably ``openai_diagnostics``) use this public name to
+# avoid the ``reportPrivateUsage`` warning that pyright raises on
+# underscore-prefixed module attributes.
+openai_sdk: Any = _openai
+
 
 @dataclass(frozen=True)
 class OpenAIConfig:
