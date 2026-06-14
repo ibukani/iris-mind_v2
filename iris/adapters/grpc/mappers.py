@@ -6,7 +6,18 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NoReturn, assert_never
 
 from google.protobuf.timestamp_pb2 import Timestamp
+import grpc
 
+from iris.adapters.llm.diagnostics import (
+    LLMProviderAuthenticationError,
+    LLMProviderConnectionError,
+    LLMProviderError,
+    LLMProviderInvalidResponseError,
+    LLMProviderModelUnavailableError,
+    LLMProviderQuotaError,
+    LLMProviderRateLimitError,
+    LLMProviderTimeoutError,
+)
 from iris.contracts.activity import ActivityKind
 from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 from iris.contracts.identity import ActorKind, Identity
@@ -592,3 +603,48 @@ def _raise_mapping_error(message: str, *, cause: BaseException | None = None) ->
     if cause is None:
         raise GrpcMappingError(message)
     raise GrpcMappingError(message) from cause
+
+
+_ProviderErrorToStatus: tuple[tuple[type[LLMProviderError], grpc.StatusCode], ...] = (
+    (LLMProviderAuthenticationError, grpc.StatusCode.UNAUTHENTICATED),
+    (LLMProviderConnectionError, grpc.StatusCode.UNAVAILABLE),
+    (LLMProviderTimeoutError, grpc.StatusCode.DEADLINE_EXCEEDED),
+    (LLMProviderRateLimitError, grpc.StatusCode.RESOURCE_EXHAUSTED),
+    (LLMProviderQuotaError, grpc.StatusCode.RESOURCE_EXHAUSTED),
+    (LLMProviderModelUnavailableError, grpc.StatusCode.FAILED_PRECONDITION),
+    (LLMProviderInvalidResponseError, grpc.StatusCode.INTERNAL),
+)
+
+
+def map_provider_error_to_status(exc: LLMProviderError) -> grpc.StatusCode:
+    """Map a concrete :class:`LLMProviderError` subclass to a gRPC status code.
+
+    Args:
+        exc: The provider error to translate.
+
+    Returns:
+        The most specific gRPC status code for the error category.
+    """
+    for error_type, status in _ProviderErrorToStatus:
+        if isinstance(exc, error_type):
+            return status
+    return grpc.StatusCode.UNKNOWN
+
+
+def map_exception_to_grpc(exc: BaseException) -> tuple[grpc.StatusCode, str]:
+    """Map any exception to a gRPC status code and a client-facing message.
+
+    The mapping first checks the :class:`LLMProviderError` hierarchy
+    so that specific provider failure modes produce actionable status
+    codes. Any other exception falls back to ``INTERNAL``.
+
+    Args:
+        exc: The exception to translate.
+
+    Returns:
+        A tuple of (gRPC status code, human-readable message).
+    """
+    if isinstance(exc, LLMProviderError):
+        status = map_provider_error_to_status(exc)
+        return status, f"provider error: {exc}"
+    return grpc.StatusCode.INTERNAL, "runtime service failed"

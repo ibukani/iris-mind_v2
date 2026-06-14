@@ -11,6 +11,7 @@ from loguru import logger
 from iris.adapters.grpc.mappers import (
     GrpcMappingError,
     GrpcRuntimeMapper,
+    map_exception_to_grpc,
     runtime_response_to_proto,
 )
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
@@ -95,11 +96,12 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
                 has_space_ref=request.observation.context.HasField("space_ref"),
                 latency_ms=round(latency_ms, 2),
             ).info("SubmitObservation: completed")
-
             return runtime_response_to_proto(response)
         except GrpcMappingError as exc:
             logger.warning("SubmitObservation: invalid_argument - {}", exc)
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         except Exception as exc:  # noqa: BLE001 -- global fallback for the runtime ingress boundary
-            logger.exception("SubmitObservation: internal_error - {}", exc)
-            await context.abort(grpc.StatusCode.INTERNAL, "runtime service failed")
+            status, message = map_exception_to_grpc(exc)
+            log = logger.exception if status is grpc.StatusCode.INTERNAL else logger.warning
+            log("SubmitObservation: {} - {}", status.name, exc)
+            await context.abort(status, message)
