@@ -226,6 +226,7 @@ async def _submit_identity_message(
     request.observation.context.space_ref.provider_space_ref = "space-1"
     response = await grpc_call(stub.SubmitObservation(request))
     assert isinstance(response, runtime_pb2.SubmitObservationResponse)
+    assert response.HasField("output")
     assert response.output.text.strip()
 
 

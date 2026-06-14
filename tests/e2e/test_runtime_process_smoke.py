@@ -61,7 +61,7 @@ async def test_runtime_process_accepts_cli_like_submit_observation(
         await stop_runtime_process(runtime)
 
     assert response.correlation_id == "e2e-corr-1"
-    assert response.output.text is not None
+    assert response.HasField("output")
     assert response.output.text.strip()
 
 
@@ -82,7 +82,7 @@ async def test_runtime_process_shutdown_does_not_leave_child_process(
     finally:
         await stop_runtime_process(runtime)
 
-    assert runtime.process.poll() is not None
+    assert not runtime.is_alive()
 
 
 def _assert_runtime_info(response: runtime_pb2.GetRuntimeInfoResponse) -> None:
