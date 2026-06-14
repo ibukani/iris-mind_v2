@@ -9,25 +9,23 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import grpc
 import pytest
 
-from iris.generated.iris.api.v1 import observations_pb2, outputs_pb2
-from iris.generated.iris.runtime.v1 import runtime_pb2
+from iris.generated.iris.api.v1 import outputs_pb2
 from tests.e2e.helpers import (
     build_cli_submit_observation_request,
-    create_runtime_channel,
-    create_runtime_stub,
     find_free_port,
+    get_runtime_info,
     start_runtime_process,
     stop_runtime_process,
     submit_observation,
     wait_for_runtime_ready,
 )
-from tests.helpers.grpc_test import grpc_call
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from iris.generated.iris.runtime.v1 import runtime_pb2
 
 
 @pytest.mark.e2e
@@ -69,8 +67,8 @@ async def test_get_runtime_info_repeated_call_keeps_runtime_healthy(
     )
     try:
         first = await wait_for_runtime_ready(runtime)
-        second = await _get_runtime_info(runtime.port)
-        third = await _get_runtime_info(runtime.port)
+        second = await get_runtime_info(runtime.port)
+        third = await get_runtime_info(runtime.port)
         assert runtime.process.poll() is None
     finally:
         await stop_runtime_process(runtime)
@@ -153,7 +151,7 @@ async def test_submit_observation_multiple_requests_keep_server_alive(
         await wait_for_runtime_ready(runtime)
         responses = await _submit_multi_requests(runtime.port)
         assert runtime.process.poll() is None
-        metadata = await _get_runtime_info(runtime.port)
+        metadata = await get_runtime_info(runtime.port)
         assert metadata.runtime_name == "iris-mind"
     finally:
         await stop_runtime_process(runtime)
@@ -190,23 +188,3 @@ async def _submit_multi_requests(
         )
         responses.append(response)
     return responses
-
-
-async def _get_runtime_info(port: int) -> runtime_pb2.GetRuntimeInfoResponse:
-    """Open a channel, call GetRuntimeInfo once, and close the channel.
-
-    Returns:
-        GetRuntimeInfo response from the runtime.
-    """
-    channel = create_runtime_channel(port)
-    try:
-        stub = create_runtime_stub(channel)
-        response = await grpc_call(stub.GetRuntimeInfo(runtime_pb2.GetRuntimeInfoRequest()))
-    finally:
-        await channel.close()
-    assert isinstance(response, runtime_pb2.GetRuntimeInfoResponse)
-    return response
-
-
-# Silence unused-import warnings for type-checkers.
-_ = (grpc.StatusCode, observations_pb2)

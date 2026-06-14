@@ -10,23 +10,21 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-import grpc
 import pytest
 
 from iris.adapters.grpc.mappers import timestamp_from_datetime
 from iris.generated.iris.api.v1 import observations_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
 from tests.e2e.helpers import (
+    assert_invalid_request,
     build_cli_submit_observation_request,
-    create_runtime_channel,
-    create_runtime_stub,
     find_free_port,
+    get_runtime_info,
     start_runtime_process,
     stop_runtime_process,
     submit_observation,
     wait_for_runtime_ready,
 )
-from tests.helpers.grpc_test import grpc_call
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -49,11 +47,11 @@ async def test_missing_observation_returns_invalid_argument_and_keeps_server_ali
     )
     try:
         await wait_for_runtime_ready(runtime)
-        await _assert_invalid_request(
+        await assert_invalid_request(
             runtime.port,
             runtime_pb2.SubmitObservationRequest(correlation_id="missing-obs-1"),
         )
-        response = await _get_runtime_info(runtime.port)
+        response = await get_runtime_info(runtime.port)
         assert response.runtime_name == "iris-mind"
         assert runtime.process.poll() is None
     finally:
@@ -83,7 +81,7 @@ async def test_unspecified_observation_kind_returns_invalid_argument(
                 occurred_at=timestamp_from_datetime(_OCCURRED_AT),
             ),
         )
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
 
@@ -115,7 +113,7 @@ async def test_kind_payload_mismatch_returns_invalid_argument(
                 ),
             ),
         )
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
 
@@ -134,7 +132,7 @@ async def test_runtime_recovers_after_invalid_request(
     )
     try:
         await wait_for_runtime_ready(runtime)
-        await _assert_invalid_request(
+        await assert_invalid_request(
             runtime.port,
             runtime_pb2.SubmitObservationRequest(correlation_id="recover-1"),
         )
@@ -177,7 +175,7 @@ async def test_missing_occurred_at_returns_invalid_argument(
                 ),
             ),
         )
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
 
@@ -200,7 +198,7 @@ async def test_missing_account_ref_provider_returns_invalid_argument(
             correlation_id="missing-account-provider-1",
         )
         request.observation.context.account_ref.provider = ""
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
 
@@ -223,7 +221,7 @@ async def test_missing_account_ref_provider_subject_returns_invalid_argument(
             correlation_id="missing-account-subject-1",
         )
         request.observation.context.account_ref.provider_subject = ""
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
 
@@ -246,7 +244,7 @@ async def test_missing_account_ref_display_name_returns_invalid_argument(
             correlation_id="missing-account-display-1",
         )
         request.observation.context.account_ref.display_name = ""
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
 
@@ -269,7 +267,7 @@ async def test_missing_space_ref_provider_returns_invalid_argument(
             correlation_id="missing-space-provider-1",
         )
         request.observation.context.space_ref.provider = ""
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
 
@@ -292,7 +290,7 @@ async def test_missing_space_ref_provider_space_ref_returns_invalid_argument(
             correlation_id="missing-space-ref-1",
         )
         request.observation.context.space_ref.provider_space_ref = ""
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
 
@@ -315,37 +313,6 @@ async def test_missing_space_ref_display_name_returns_invalid_argument(
             correlation_id="missing-space-display-1",
         )
         request.observation.context.space_ref.display_name = ""
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
-
-
-async def _assert_invalid_request(
-    port: int,
-    request: runtime_pb2.SubmitObservationRequest,
-) -> None:
-    """Assert that a request fails with INVALID_ARGUMENT."""
-    channel = create_runtime_channel(port)
-    try:
-        stub = create_runtime_stub(channel)
-        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await grpc_call(stub.SubmitObservation(request))
-    finally:
-        await channel.close()
-    assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
-
-
-async def _get_runtime_info(port: int) -> runtime_pb2.GetRuntimeInfoResponse:
-    """Open a channel, call GetRuntimeInfo once, and close the channel.
-
-    Returns:
-        GetRuntimeInfo response.
-    """
-    channel = create_runtime_channel(port)
-    try:
-        stub = create_runtime_stub(channel)
-        response = await grpc_call(stub.GetRuntimeInfo(runtime_pb2.GetRuntimeInfoRequest()))
-    finally:
-        await channel.close()
-    assert isinstance(response, runtime_pb2.GetRuntimeInfoResponse)
-    return response

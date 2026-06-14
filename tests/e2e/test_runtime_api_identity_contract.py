@@ -10,16 +10,13 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING
 
-import grpc
 import pytest
 
 from iris.adapters.app_gateway.stable_ids import stable_actor_id
 from iris.core.ids import AccountId
-from iris.generated.iris.api.v1 import identity_pb2
 from tests.e2e.helpers import (
+    assert_invalid_request,
     build_cli_submit_observation_request,
-    create_runtime_channel,
-    create_runtime_stub,
     find_free_port,
     start_runtime_process,
     stop_runtime_process,
@@ -27,7 +24,6 @@ from tests.e2e.helpers import (
     wait_for_runtime_ready,
     write_runtime_config,
 )
-from tests.helpers.grpc_test import grpc_call
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -179,7 +175,7 @@ async def test_account_ref_with_account_id_is_invalid_argument(
     )
     try:
         await wait_for_runtime_ready(runtime)
-        await _assert_invalid_request(
+        await assert_invalid_request(
             runtime.port,
             _request_with_account_ref_and_account_id(),
         )
@@ -220,21 +216,6 @@ def _request_with_account_ref_and_account_id() -> runtime_pb2.SubmitObservationR
     return request
 
 
-async def _assert_invalid_request(
-    port: int,
-    request: runtime_pb2.SubmitObservationRequest,
-) -> None:
-    """Assert that a request fails with INVALID_ARGUMENT."""
-    channel = create_runtime_channel(port)
-    try:
-        stub = create_runtime_stub(channel)
-        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await grpc_call(stub.SubmitObservation(request))
-    finally:
-        await channel.close()
-    assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
-
-
 def _account_rows(db_path: Path) -> list[sqlite3.Row]:
     """Read all rows from the accounts table ordered by provider and subject.
 
@@ -261,7 +242,3 @@ def _single_account_id(db_path: Path) -> AccountId:
     raw_id = rows[0]["account_id"]
     assert isinstance(raw_id, str)
     return AccountId(raw_id)
-
-
-# Silence unused-import warnings for type-checkers.
-_ = identity_pb2

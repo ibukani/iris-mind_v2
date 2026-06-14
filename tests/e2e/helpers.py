@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from google.protobuf.timestamp_pb2 import Timestamp
 import grpc
+import pytest
 
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
@@ -164,6 +165,37 @@ async def stop_runtime_process(
     return stdout, stderr
 
 
+async def get_runtime_info(port: int) -> runtime_pb2.GetRuntimeInfoResponse:
+    """Open a channel, call GetRuntimeInfo once, and close the channel.
+
+    Returns:
+        GetRuntimeInfo response from the runtime.
+    """
+    channel = create_runtime_channel(port)
+    try:
+        stub = create_runtime_stub(channel)
+        response = await grpc_call(stub.GetRuntimeInfo(runtime_pb2.GetRuntimeInfoRequest()))
+    finally:
+        await channel.close()
+    assert isinstance(response, runtime_pb2.GetRuntimeInfoResponse)
+    return response
+
+
+async def assert_invalid_request(
+    port: int,
+    request: runtime_pb2.SubmitObservationRequest,
+) -> None:
+    """Assert that a SubmitObservation request fails with INVALID_ARGUMENT."""
+    channel = create_runtime_channel(port)
+    try:
+        stub = create_runtime_stub(channel)
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await grpc_call(stub.SubmitObservation(request))
+    finally:
+        await channel.close()
+    assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
+
+
 def build_cli_submit_observation_request(
     *,
     correlation_id: str = "e2e-corr-1",
@@ -298,32 +330,6 @@ def build_cli_activity_event_request(
             activity_kind=activity_kind,
             provider_event_id="evt-1",
             provider_sequence=1,
-        ),
-    )
-
-
-def build_cli_idle_tick_request(
-    *,
-    correlation_id: str,
-    observation_id: str,
-    session_id: str,
-    reason: str,
-    idle_seconds: float,
-) -> runtime_pb2.SubmitObservationRequest:
-    """Build a CLI-like idle_tick SubmitObservation request.
-
-    Returns:
-        SubmitObservation request with idle_tick payload and CLI context.
-    """
-    return _build_cli_request(
-        correlation_id=correlation_id,
-        observation_id=observation_id,
-        session_id=session_id,
-        kind=observations_pb2.OBSERVATION_KIND_IDLE_TICK,
-        payload_field="idle_tick",
-        payload_message=observations_pb2.IdleTickPayload(
-            reason=reason,
-            idle_seconds=idle_seconds,
         ),
     )
 

@@ -7,9 +7,9 @@ without depending on internal state.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
-import grpc
 import pytest
 
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
@@ -19,21 +19,18 @@ from iris.contracts.spaces import SpaceKind
 from iris.core.ids import ExternalRef
 from iris.generated.iris.api.v1 import spaces_pb2
 from tests.e2e.helpers import (
+    assert_invalid_request,
     build_cli_submit_observation_request,
-    create_runtime_channel,
-    create_runtime_stub,
     find_free_port,
     start_runtime_process,
     stop_runtime_process,
     submit_observation,
     wait_for_runtime_ready,
+    write_runtime_config,
 )
-from tests.helpers.grpc_test import grpc_call
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from iris.generated.iris.runtime.v1 import runtime_pb2
 
 
 @pytest.mark.e2e
@@ -84,12 +81,16 @@ async def test_default_runtime_does_not_persist_space_bindings(
     tmp_path: Path,
     repo_root: Path,
 ) -> None:
-    """A default backend=memory runtime does not create or store SpaceBinding rows."""
-    db_path = tmp_path / "state.sqlite3"
+    """A backend=memory runtime does not create any sqlite database file under tmp_path."""
+    config_path = write_runtime_config(
+        path=tmp_path / "runtime.toml",
+        backend="memory",
+    )
     runtime = start_runtime_process(
         port=find_free_port(),
         repo_root=repo_root,
         runtime_home=tmp_path,
+        config_path=config_path,
     )
     try:
         await wait_for_runtime_ready(runtime)
@@ -97,7 +98,11 @@ async def test_default_runtime_does_not_persist_space_bindings(
     finally:
         await stop_runtime_process(runtime)
 
-    assert not db_path.exists(), "default in-memory runtime must not create a sqlite database file"
+    sqlite_files = await asyncio.to_thread(_collect_sqlite_files, tmp_path)
+    assert sqlite_files == [], (
+        "backend=memory runtime must not create any sqlite file under runtime_home; "
+        f"found: {[str(path) for path in sqlite_files]}"
+    )
 
 
 @pytest.mark.e2e
@@ -116,7 +121,7 @@ async def test_space_ref_with_space_id_is_invalid_argument(
         await wait_for_runtime_ready(runtime)
         request = build_cli_submit_observation_request(correlation_id="bad-space-corr-1")
         request.observation.context.space_id = "should-not-be-set"
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
 
@@ -137,9 +142,18 @@ async def test_space_ref_with_unspecified_space_kind_is_invalid_argument(
         await wait_for_runtime_ready(runtime)
         request = build_cli_submit_observation_request(correlation_id="bad-space-kind-corr")
         request.observation.context.space_ref.space_kind = spaces_pb2.SPACE_KIND_UNSPECIFIED
-        await _assert_invalid_request(runtime.port, request)
+        await assert_invalid_request(runtime.port, request)
     finally:
         await stop_runtime_process(runtime)
+
+
+def _collect_sqlite_files(root: Path) -> list[Path]:
+    """Collect sqlite files under ``root`` synchronously.
+
+    Returns:
+        Sorted list of sqlite file paths.
+    """
+    return sorted(root.rglob("*.sqlite*"))
 
 
 async def _submit_space_observations(
@@ -158,18 +172,3 @@ async def _submit_space_observations(
                 text=f"space {index}",
             ),
         )
-
-
-async def _assert_invalid_request(
-    port: int,
-    request: runtime_pb2.SubmitObservationRequest,
-) -> None:
-    """Assert that a request fails with INVALID_ARGUMENT."""
-    channel = create_runtime_channel(port)
-    try:
-        stub = create_runtime_stub(channel)
-        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await grpc_call(stub.SubmitObservation(request))
-    finally:
-        await channel.close()
-    assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT

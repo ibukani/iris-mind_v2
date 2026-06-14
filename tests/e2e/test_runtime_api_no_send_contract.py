@@ -23,7 +23,10 @@ from tests.e2e.helpers import (
     stop_runtime_process,
     submit_observation,
     wait_for_runtime_ready,
+    write_runtime_config,
 )
+
+NO_LIVE_PROVIDER = "fake"
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -94,11 +97,17 @@ async def test_presence_signal_keeps_runtime_healthy_without_live_provider(
     tmp_path: Path,
     repo_root: Path,
 ) -> None:
-    """Repeated no-send presence observations do not crash the runtime."""
+    """Repeated no-send presence observations stay healthy with the no-network provider."""
+    config_path = write_runtime_config(
+        path=tmp_path / "runtime.toml",
+        backend="memory",
+        models=dict.fromkeys(("default_chat", "fast_judge", "reasoning"), NO_LIVE_PROVIDER),
+    )
     runtime = start_runtime_process(
         port=find_free_port(),
         repo_root=repo_root,
         runtime_home=tmp_path,
+        config_path=config_path,
     )
     try:
         await wait_for_runtime_ready(runtime)
