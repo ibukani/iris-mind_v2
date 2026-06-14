@@ -192,8 +192,10 @@ class SQLiteActivityJournal(ActivityJournal):
                 )
             if provider_key is not None:
                 cursor = conn.execute(
-                    "SELECT activity_id FROM activity_events "
-                    "WHERE source = ? AND provider_event_id = ?",
+                    """
+                    SELECT activity_id FROM activity_events
+                    WHERE source = ? AND provider_event_id = ?
+                    """,
                     (provider_key[0], provider_key[1]),
                 )
                 duplicate: sqlite3.Row | None = cursor.fetchone()
@@ -243,8 +245,10 @@ class SQLiteActivityJournal(ActivityJournal):
     ) -> bool:
         with self._transaction() as conn:
             cursor = conn.execute(
-                "SELECT activity_id FROM activity_events "
-                "WHERE source = ? AND provider_event_id = ?",
+                """
+                SELECT activity_id FROM activity_events
+                WHERE source = ? AND provider_event_id = ?
+                """,
                 (source, provider_event_id),
             )
             row: sqlite3.Row | None = cursor.fetchone()
@@ -347,6 +351,38 @@ def _json_dict_to_payload(data: JsonStorageMapping) -> _EventPayload:
     )
 
 
+def _load_json_string_dict(value: str) -> dict[str, str]:
+    """JSON文字列を ``dict[str, str]`` として読み出すadapter。
+
+    キーと値を ``str`` 化してtyped dictへ変換する。value が ``None`` の場合は
+    空文字列を格納する。JSON構文エラーは ``json.JSONDecodeError``
+    (``ValueError``) としてそのまま伝搬する。
+
+    Args:
+        value: JSON object をエンコードした文字列。
+
+    Returns:
+        dict[str, str]: キー・値を ``str`` 化したJSON object。
+    """
+    parsed: dict[str, str] = json.loads(value, object_pairs_hook=_json_pairs_to_str_str)
+    return parsed
+
+
+def _json_pairs_to_str_str(pairs: list[tuple[object, object]]) -> dict[str, str]:
+    """``object_pairs_hook`` として dict を ``dict[str, str]`` へ変換する。
+
+    Args:
+        pairs: ``json.loads`` が渡す ``(key, value)`` ペア列。
+
+    Returns:
+        dict[str, str]: キーと値を ``str`` 化したdict。
+    """
+    result: dict[str, str] = {}
+    for raw_key, raw_value in pairs:
+        result[str(raw_key)] = "" if raw_value is None else str(raw_value)
+    return result
+
+
 def _loads_metadata_mapping(value: str) -> MetadataMapping:
     """Activity payload内のmetadata JSON文字列を ``Mapping[str, str]`` として読み出す。
 
@@ -355,22 +391,8 @@ def _loads_metadata_mapping(value: str) -> MetadataMapping:
 
     Returns:
         MetadataMapping: 読み出した ``Mapping[str, str]``。
-
-    Raises:
-        TypeError: valueがJSON objectとして解釈できない場合。
     """
-    parsed: object = json.loads(value)
-    if not isinstance(parsed, dict):
-        message = "expected JSON object for activity payload metadata"
-        raise TypeError(message)
-    result: MetadataMapping = {}
-    for raw_key, raw_value in parsed.items():
-        key = str(raw_key)
-        if raw_value is None:
-            result[key] = ""
-        else:
-            result[key] = str(raw_value)
-    return result
+    return _load_json_string_dict(value)
 
 
 def _row_to_event(row: sqlite3.Row) -> ActivityEventRecord:
@@ -420,22 +442,8 @@ def _loads_json_storage_mapping(value: str) -> JsonStorageMapping:
 
     Returns:
         JsonStorageMapping: 読み出した ``Mapping[str, str]``。
-
-    Raises:
-        TypeError: valueがJSON objectとして解釈できない場合。
     """
-    parsed: object = json.loads(value)
-    if not isinstance(parsed, dict):
-        message = "expected JSON object for activity payload"
-        raise TypeError(message)
-    result: JsonStorageMapping = {}
-    for raw_key, raw_value in parsed.items():
-        key = str(raw_key)
-        if raw_value is None:
-            result[key] = ""
-        else:
-            result[key] = str(raw_value)
-    return result
+    return _load_json_string_dict(value)
 
 
 def _parse_iso(value: str) -> datetime:
