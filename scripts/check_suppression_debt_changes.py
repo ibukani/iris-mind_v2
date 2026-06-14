@@ -103,6 +103,34 @@ def _git(*args: str) -> str:
     return completed.stdout or ""
 
 
+def _git_probe(*args: str) -> tuple[bool, str]:
+    """Run a git command without raising on non-zero exit.
+
+    Use this only for ref-existence / merge-base probing where a missing
+    ref is a legitimate outcome that must fall through to the next
+    candidate. Real command failures elsewhere must keep using ``_git``,
+    which raises on non-zero exit.
+
+    Args:
+        *args: Arguments appended to ``git`` in the subprocess call.
+
+    Returns:
+        Tuple of ``(found, stdout)``. ``found`` is True only when the
+        command exited successfully and produced a non-empty stdout.
+        ``stdout`` is the captured standard output (empty string when
+        the command failed or produced no output).
+    """
+    completed = _run_command(
+        ("git", *args),
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    stdout = (completed.stdout or "").strip()
+    return completed.returncode == 0 and bool(stdout), stdout
+
+
 def _resolve_merge_base() -> str | None:
     """Return the merge-base commit hash, or None if no candidate branch exists.
 
@@ -111,13 +139,15 @@ def _resolve_merge_base() -> str | None:
         branch (``origin/main``, ``main``) resolves locally.
     """
     for candidate in BASE_BRANCH_CANDIDATES:
-        completed = _git("rev-parse", "--verify", "--quiet", candidate)
-        # ``rev-parse --quiet`` returns empty stdout for unknown refs
-        # instead of raising. We treat any empty result as missing.
-        if completed.strip():
-            merge_base = _git("merge-base", "HEAD", candidate).strip()
-            if merge_base:
-                return merge_base
+        found, _ = _git_probe("rev-parse", "--verify", "--quiet", candidate)
+        if not found:
+            # Ref does not resolve locally; try the next candidate.
+            # ``rev-parse --quiet`` exits non-zero for unknown refs, so
+            # a missing ref is a normal outcome, not a real error.
+            continue
+        merge_base_found, merge_base = _git_probe("merge-base", "HEAD", candidate)
+        if merge_base_found and merge_base:
+            return merge_base
     return None
 
 
