@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.llm.fake import FakeLLMClient
+from iris.adapters.llm.observability import LoggingRequestObserver, ObservableLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
@@ -160,10 +161,14 @@ class LLMClientFactory:
             message = f"Unknown LLM provider: {model_config.provider}"
             raise ConfigError(message)
         if model_config.provider == "fake":
-            return FakeLLMClient(model=model_config.model)
+            return _wrap_with_observer(FakeLLMClient(model=model_config.model))
         if model_config.provider == "ollama":
-            return OllamaLLMClient(ollama_adapter_config(model_config, runtime_config))
-        return OpenAILLMClient(openai_adapter_config(model_config, runtime_config))
+            return _wrap_with_observer(
+                OllamaLLMClient(ollama_adapter_config(model_config, runtime_config)),
+            )
+        return _wrap_with_observer(
+            OpenAILLMClient(openai_adapter_config(model_config, runtime_config)),
+        )
 
     def resolve_model(
         self,
@@ -279,6 +284,25 @@ def openai_adapter_config(
         timeout_seconds=runtime_config.openai.timeout_seconds,
         max_output_tokens=max_output_tokens,
     )
+
+
+def _wrap_with_observer(client: LLMClient) -> LLMClient:
+    """Wrap an LLM client with the default request-lifecycle observer.
+
+    The runtime's LLM client factory always emits structured request
+    telemetry so operators can correlate cognitive-cycle logs with
+    provider latency and error rates. The wrapper preserves the
+    client type's call signature (request, response, exception
+    propagation) so existing call sites are unaffected.
+
+    Args:
+        client: The bare LLM client returned by a provider constructor.
+
+    Returns:
+        The same client wrapped in :class:`ObservableLLMClient` with
+        a :class:`LoggingRequestObserver`.
+    """
+    return ObservableLLMClient(client, LoggingRequestObserver())
 
 
 def _build_user_content(prompt: ResponsePrompt) -> str:
