@@ -318,3 +318,39 @@ async def test_servicer_does_not_swallow_cancellation() -> None:
         await servicer.SubmitObservation(_build_request(), context)
 
     context.abort.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_servicer_maps_value_error_to_internal() -> None:
+    """Non-mapping ``ValueError`` falls into the ingress-runtime-error branch."""
+    servicer, context = _build_servicer(AsyncMock(side_effect=ValueError("bad shape")))
+
+    with pytest.raises(grpc.RpcError):
+        await servicer.SubmitObservation(_build_request(), context)
+
+    assert context.abort.await_args.args[0] is grpc.StatusCode.INTERNAL
+    assert context.abort.await_args.args[1] == "runtime service failed"
+
+
+@pytest.mark.anyio
+async def test_servicer_maps_key_error_to_internal() -> None:
+    """``KeyError`` falls into the ingress-runtime-error branch."""
+    servicer, context = _build_servicer(AsyncMock(side_effect=KeyError("missing")))
+
+    with pytest.raises(grpc.RpcError):
+        await servicer.SubmitObservation(_build_request(), context)
+
+    assert context.abort.await_args.args[0] is grpc.StatusCode.INTERNAL
+    assert context.abort.await_args.args[1] == "runtime service failed"
+
+
+@pytest.mark.anyio
+async def test_servicer_maps_attribute_error_to_internal() -> None:
+    """``AttributeError`` falls into the ingress-runtime-error branch."""
+    servicer, context = _build_servicer(AsyncMock(side_effect=AttributeError("oops")))
+
+    with pytest.raises(grpc.RpcError):
+        await servicer.SubmitObservation(_build_request(), context)
+
+    assert context.abort.await_args.args[0] is grpc.StatusCode.INTERNAL
+    assert context.abort.await_args.args[1] == "runtime service failed"

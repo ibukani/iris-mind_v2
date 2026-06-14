@@ -27,16 +27,6 @@
 # iris/adapters — 外部ライブラリ境界でのやむを得ない抑制
 # ---------------------------------------------------------------------------
 
-[[debt]]
-path = "iris/adapters/grpc/server.py"
-line = 103
-kind = "noqa"
-rule_or_error_code = "BLE001"
-reason = "gRPC service entry での global fallback。型付きエラーハンドリングへの移行は framework 制約で困難"
-alternative_attempted = "型付きエラーチャネル、gRPC フレームワークが service entry での catch-all を要求"
-expires = "2026-06-30"
-owner = "team"
-
 # ---------------------------------------------------------------------------
 # scripts — harness 操作用の抑制
 # ---------------------------------------------------------------------------

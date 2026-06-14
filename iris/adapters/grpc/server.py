@@ -15,6 +15,7 @@ from iris.adapters.grpc.mappers import (
     map_exception_to_grpc,
     runtime_response_to_proto,
 )
+from iris.adapters.llm.diagnostics import LLMProviderError
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 
 if TYPE_CHECKING:
@@ -107,8 +108,11 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         except asyncio.CancelledError:
             logger.warning("SubmitObservation: cancelled by client")
             raise
-        except Exception as exc:  # noqa: BLE001 -- global fallback for the runtime ingress boundary
+        except LLMProviderError as exc:
             status, message = map_exception_to_grpc(exc)
             log = logger.exception if status is grpc.StatusCode.INTERNAL else logger.warning
             log("SubmitObservation: {} - {}", status.name, exc)
             await context.abort(status, message)
+        except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
+            logger.exception("SubmitObservation: ingress_runtime_error - {}", exc)
+            await context.abort(grpc.StatusCode.INTERNAL, "runtime service failed")

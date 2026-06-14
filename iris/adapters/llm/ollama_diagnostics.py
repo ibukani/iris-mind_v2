@@ -174,7 +174,7 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
         )
 
     @override
-    async def warmup(self, model: str) -> ProviderReadinessResult:  # noqa: PLR0911
+    async def warmup(self, model: str) -> ProviderReadinessResult:
         """Warm the model by issuing a load-oriented ``/api/chat`` request.
 
         Sends a single ``/api/chat`` request with the configured
@@ -201,20 +201,38 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
         if installed_models is not None and model not in installed_models:
             return _build_result(
                 model=model,
-                issues=(
-                    ProviderDiagnosticIssue(
-                        code="warmup_skipped_model_missing",
-                        message=(
-                            f"Ollama could not find model '{model}' for warmup"
-                        ),
-                        severity=ReadinessStatus.SKIPPED,
-                        remediation=f"Pull the model with: ollama pull {model}",
-                    ),
-                ),
+                issues=(_warmup_model_missing_issue(model),),
                 started=started,
                 metadata=metadata,
             )
 
+        chat_outcome = await self._issue_warmup_chat(
+            model=model, started=started, metadata=metadata
+        )
+        if chat_outcome is not None:
+            return chat_outcome
+
+        return await self._finalize_warmup_state(model=model, started=started, metadata=metadata)
+
+    async def _issue_warmup_chat(
+        self,
+        *,
+        model: str,
+        started: float,
+        metadata: dict[str, str],
+    ) -> ProviderReadinessResult | None:
+        """POST the warmup ``/api/chat`` request and translate transport errors.
+
+        Args:
+            model: Model name being warmed up.
+            started: Monotonic timestamp recorded before the probe started.
+            metadata: Mutable metadata map shared with the caller.
+
+        Returns:
+            A typed result if the chat request failed; ``None`` when the chat
+            request succeeded and the caller should continue with the loaded
+            models probe.
+        """
         payload = _build_warmup_payload(model=model, config=self._config)
         try:
             response = await self._client.post("/api/chat", json=payload)
@@ -233,21 +251,30 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
                 started=started,
                 metadata=metadata,
             )
+        return None
 
+    async def _finalize_warmup_state(
+        self,
+        *,
+        model: str,
+        started: float,
+        metadata: dict[str, str],
+    ) -> ProviderReadinessResult:
+        """Read ``/api/ps`` after the warmup chat and report the loaded state.
+
+        Args:
+            model: Model name being warmed up.
+            started: Monotonic timestamp recorded before the probe started.
+            metadata: Mutable metadata map shared with the caller.
+
+        Returns:
+            The warmup result describing whether the model is now loaded.
+        """
         loaded_models = await self._list_loaded_models()
         if loaded_models is None:
             return _build_result(
                 model=model,
-                issues=(
-                    ProviderDiagnosticIssue(
-                        code="ps_probe_failed_after_warmup",
-                        message=(
-                            "Ollama /api/ps could not be read after warmup; "
-                            "warmup is treated as successful because /api/chat returned 2xx"
-                        ),
-                        severity=ReadinessStatus.WARN,
-                    ),
-                ),
+                issues=(_ps_probe_failed_issue(),),
                 started=started,
                 metadata=metadata,
             )
@@ -262,15 +289,7 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
             )
         return _build_result(
             model=model,
-            issues=(
-                ProviderDiagnosticIssue(
-                    code="model_still_not_loaded",
-                    message=(
-                        f"Ollama /api/chat succeeded but '{model}' is not loaded"
-                    ),
-                    severity=ReadinessStatus.WARN,
-                ),
-            ),
+            issues=(_model_still_not_loaded_issue(model),),
             started=started,
             metadata=metadata,
         )
@@ -398,6 +417,56 @@ def _warmup_status_issue(status: int, exc: httpx.HTTPStatusError) -> ProviderDia
         code="warmup_failed",
         message=f"Ollama warmup failed with HTTP {status}: {exc}",
         severity=ReadinessStatus.FAIL,
+    )
+
+
+def _warmup_model_missing_issue(model: str) -> ProviderDiagnosticIssue:
+    """Build a ``SKIPPED`` issue for warmup when the model is not installed.
+
+    Args:
+        model: The model name that was requested for warmup.
+
+    Returns:
+        A diagnostic issue explaining why the warmup was skipped.
+    """
+    return ProviderDiagnosticIssue(
+        code="warmup_skipped_model_missing",
+        message=f"Ollama could not find model '{model}' for warmup",
+        severity=ReadinessStatus.SKIPPED,
+        remediation=f"Pull the model with: ollama pull {model}",
+    )
+
+
+def _ps_probe_failed_issue() -> ProviderDiagnosticIssue:
+    """Build a ``WARN`` issue for ``/api/ps`` probe failures after warmup.
+
+    Returns:
+        A diagnostic issue describing the ``/api/ps`` probe failure and the
+        warmup-outcome policy applied when the probe cannot be read.
+    """
+    return ProviderDiagnosticIssue(
+        code="ps_probe_failed_after_warmup",
+        message=(
+            "Ollama /api/ps could not be read after warmup; "
+            "warmup is treated as successful because /api/chat returned 2xx"
+        ),
+        severity=ReadinessStatus.WARN,
+    )
+
+
+def _model_still_not_loaded_issue(model: str) -> ProviderDiagnosticIssue:
+    """Build a ``WARN`` issue when ``/api/chat`` succeeded but the model is unloaded.
+
+    Args:
+        model: The model name that was requested for warmup.
+
+    Returns:
+        A diagnostic issue describing the inconsistent post-warmup state.
+    """
+    return ProviderDiagnosticIssue(
+        code="model_still_not_loaded",
+        message=f"Ollama /api/chat succeeded but '{model}' is not loaded",
+        severity=ReadinessStatus.WARN,
     )
 
 

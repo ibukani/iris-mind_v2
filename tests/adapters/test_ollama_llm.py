@@ -313,6 +313,34 @@ async def test_ollama_client_translates_429_to_rate_limit() -> None:
 
 
 @pytest.mark.anyio
+async def test_rate_limit_error_message_includes_model() -> None:
+    """Rate limit error message includes the requested model name for diagnosis."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(429, json={"error": "rate"}, request=request)
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    with pytest.raises(LLMProviderRateLimitError) as excinfo:
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+    assert "qwen3:8b" in str(excinfo.value)
+
+
+@pytest.mark.anyio
+async def test_server_error_message_includes_model() -> None:
+    """Server error message includes the requested model name for diagnosis."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(500, json={"error": "boom"}, request=request)
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    with pytest.raises(LLMProviderError) as excinfo:
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+    assert "qwen3:8b" in str(excinfo.value)
+
+
+@pytest.mark.anyio
 async def test_ollama_client_translates_invalid_json_to_invalid_response() -> None:
     """Malformed JSON maps to LLMProviderInvalidResponseError."""
     transport = httpx.MockTransport(
