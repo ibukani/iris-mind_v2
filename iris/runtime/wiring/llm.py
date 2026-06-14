@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
-from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
+from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
+from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
+from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest
 from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
+
+if TYPE_CHECKING:
+    from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
+    from iris.runtime.config.llm import LLMProvider
 
 
 class LLMResponseGenerator(ResponseGenerator):
@@ -123,12 +129,15 @@ def wire_ollama_llm_client(config: OllamaConfig) -> LLMClient:
     return OllamaLLMClient(config)
 
 
+_LLM_KNOWN_PROVIDERS: tuple[LLMProvider, ...] = ("fake", "ollama", "openai")
+
+
 class LLMClientFactory:
     """プロバイダ固有の LLM クライアントを組み立てる明示的なランタイムファクトリ。"""
 
     def __init__(self) -> None:
         """明示的な LLM クライアントファクトリを作成する。"""
-        self._known_providers = ("fake", "ollama", "openai")
+        self._known_providers = _LLM_KNOWN_PROVIDERS
 
     def create_client(
         self,
@@ -153,8 +162,8 @@ class LLMClientFactory:
         if model_config.provider == "fake":
             return FakeLLMClient(model=model_config.model)
         if model_config.provider == "ollama":
-            return OllamaLLMClient(_ollama_adapter_config(model_config, runtime_config))
-        return OpenAILLMClient(_openai_adapter_config(model_config, runtime_config))
+            return OllamaLLMClient(ollama_adapter_config(model_config, runtime_config))
+        return OpenAILLMClient(openai_adapter_config(model_config, runtime_config))
 
     def resolve_model(
         self,
@@ -177,16 +186,61 @@ class LLMClientFactory:
             message = f"Unknown LLM provider: {model_config.provider}"
             raise ConfigError(message)
         if model_config.provider == "ollama":
-            return _ollama_adapter_config(model_config, runtime_config).model
+            return ollama_adapter_config(model_config, runtime_config).model
         if model_config.provider == "openai":
-            return _openai_adapter_config(model_config, runtime_config).model
+            return openai_adapter_config(model_config, runtime_config).model
         return model_config.model
 
 
-def _ollama_adapter_config(
+def build_provider_diagnostics(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> LLMProviderDiagnostics | None:
+    """モデルスロット設定からプロバイダ診断を組み立てる。
+
+    ``provider == "fake"`` の場合は ``None`` を返し、診断対象外であることを示す。
+    openai プロバイダは SDK 不在 / API key 不在時に ``OpenAIAdapterError`` を
+    送出し、この関数では ``ConfigError`` に翻訳して再送出する。
+    呼び出し側は ``ConfigError`` のみ catch すればよく、 concrete adapter
+    シンボルへの依存なしで構築失敗を扱える。
+
+    Args:
+        model_config: モデルスロット設定。
+        runtime_config: ランタイム設定全体。
+
+    Returns:
+        組み立てた診断インスタンス。 fake プロバイダなら ``None``。
+
+    Raises:
+        ConfigError: 未知のプロバイダ名、もしくは adapter 構築失敗時。
+    """
+    if model_config.provider not in _LLM_KNOWN_PROVIDERS:
+        message = f"Unknown LLM provider for diagnostics: {model_config.provider}"
+        raise ConfigError(message)
+    if model_config.provider == "fake":
+        return None
+    try:
+        if model_config.provider == "ollama":
+            return OllamaDiagnostics(ollama_adapter_config(model_config, runtime_config))
+        return OpenAIDiagnostics(openai_adapter_config(model_config, runtime_config))
+    except OpenAIAdapterError as exc:
+        message = f"Failed to build openai provider diagnostics: {exc}"
+        raise ConfigError(message) from exc
+
+
+def ollama_adapter_config(
     model_config: RuntimeModelConfig,
     runtime_config: IrisRuntimeConfig,
 ) -> OllamaConfig:
+    """RuntimeModelConfig + IrisRuntimeConfig を Ollama アダプタ用 OllamaConfig に変換する。
+
+    Args:
+        model_config: モデルスロット設定。
+        runtime_config: ランタイム設定全体。
+
+    Returns:
+        ``OllamaLLMClient`` / ``OllamaDiagnostics`` が受け取る ``OllamaConfig``。
+    """
     model = model_config.model
     if model == "fake-llm":
         model = OllamaConfig().model
@@ -200,10 +254,20 @@ def _ollama_adapter_config(
     )
 
 
-def _openai_adapter_config(
+def openai_adapter_config(
     model_config: RuntimeModelConfig,
     runtime_config: IrisRuntimeConfig,
 ) -> OpenAIConfig:
+    """RuntimeModelConfig + IrisRuntimeConfig を OpenAI アダプタ用 OpenAIConfig に変換する。
+
+    Args:
+        model_config: モデルスロット設定。
+        runtime_config: ランタイム設定全体。
+
+    Returns:
+        ``OpenAILLMClient`` / ``OpenAIDiagnostics`` が受け取る ``OpenAIConfig``。
+        API key は環境変数 ``OPENAI_API_KEY`` から解決される。
+    """
     model = model_config.model
     if model == "fake-llm":
         model = runtime_config.openai.model

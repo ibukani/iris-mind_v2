@@ -14,6 +14,8 @@ from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime
 from iris.runtime.wiring.llm import (
     LLMClientFactory,
     LLMResponseGenerator,
+    ollama_adapter_config,
+    openai_adapter_config,
     wire_fake_llm_client,
     wire_ollama_llm_client,
     wire_openai_llm_client,
@@ -93,34 +95,25 @@ def test_llm_client_factory_resolve_model_unknown_provider() -> None:
 
 
 def test_ollama_adapter_config_replaces_fake_llm_model() -> None:
-    """_ollama_adapter_config replaces fake-llm with the Ollama default model."""
+    """ollama_adapter_config replaces fake-llm with the Ollama default model."""
     config = default_runtime_config()
     model_config = RuntimeModelConfig(provider="ollama", model="fake-llm")
-    ollama_adapter_config: Any = import_private_matching(
-        "iris.runtime.wiring.llm", "_ollama_adapter_config", is_callable
-    )
     result = ollama_adapter_config(model_config, config)
     assert result.model == OllamaConfig().model
 
 
 def test_openai_adapter_config_replaces_fake_llm_model() -> None:
-    """_openai_adapter_config replaces fake-llm with the OpenAI default model."""
+    """openai_adapter_config replaces fake-llm with the OpenAI default model."""
     config = default_runtime_config()
     model_config = RuntimeModelConfig(provider="openai", model="fake-llm")
-    openai_adapter_config: Any = import_private_matching(
-        "iris.runtime.wiring.llm", "_openai_adapter_config", is_callable
-    )
     result = openai_adapter_config(model_config, config)
     assert result.model == "gpt-5-mini"
 
 
 def test_openai_adapter_config_uses_runtime_max_tokens() -> None:
-    """_openai_adapter_config uses runtime max_output_tokens when model config has None."""
+    """openai_adapter_config uses runtime max_output_tokens when model config has None."""
     config = default_runtime_config()
     model_config = RuntimeModelConfig(provider="openai", model="gpt-test")
-    openai_adapter_config: Any = import_private_matching(
-        "iris.runtime.wiring.llm", "_openai_adapter_config", is_callable
-    )
     result = openai_adapter_config(model_config, config)
     assert result.max_output_tokens == config.openai.max_output_tokens
 
