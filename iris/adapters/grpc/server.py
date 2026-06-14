@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING, override
 
@@ -78,6 +79,9 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
 
         Returns:
             runtime_pb2.SubmitObservationResponse: Proto runtime response.
+
+        Raises:
+            asyncio.CancelledError: Propagated when the client cancels the RPC.
         """
         logger.info("SubmitObservation: received")
         start_time = time.monotonic()
@@ -100,6 +104,9 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         except GrpcMappingError as exc:
             logger.warning("SubmitObservation: invalid_argument - {}", exc)
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        except asyncio.CancelledError:
+            logger.warning("SubmitObservation: cancelled by client")
+            raise
         except Exception as exc:  # noqa: BLE001 -- global fallback for the runtime ingress boundary
             status, message = map_exception_to_grpc(exc)
             log = logger.exception if status is grpc.StatusCode.INTERNAL else logger.warning

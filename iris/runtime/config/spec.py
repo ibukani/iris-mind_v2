@@ -229,11 +229,12 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             env="IRIS_SAFETY_MAX_OUTPUT_CHARS",
         ),
         ConfigFieldSpec(
-            path="diagnostics.enabled",
-            value_type="bool",
-            default=True,
-            description="起動時 LLM プロバイダ診断を有効化する。",
-            env="IRIS_DIAGNOSTICS_ENABLED",
+            "diagnostics.mode",
+            "enum",
+            "warn",
+            "起動時 LLM プロバイダ診断の動作モード。",
+            env="IRIS_DIAGNOSTICS_MODE",
+            allowed_values=("off", "warn", "strict"),
         ),
         ConfigFieldSpec(
             "diagnostics.timeout_seconds",
@@ -243,25 +244,11 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             env="IRIS_DIAGNOSTICS_TIMEOUT_SECONDS",
         ),
         ConfigFieldSpec(
-            path="diagnostics.fail_fast",
-            value_type="bool",
+            "diagnostics.warmup_models",
+            "bool",
             default=False,
-            description="致命的診断失敗でサーバー起動を停止する。",
-            env="IRIS_DIAGNOSTICS_FAIL_FAST",
-        ),
-        ConfigFieldSpec(
-            path="diagnostics.warmup_models",
-            value_type="bool",
-            default=False,
-            description="診断後にモデルを warmup する。",
+            description="診断後に provider 固有の warmup を実行する。",
             env="IRIS_DIAGNOSTICS_WARMUP_MODELS",
-        ),
-        ConfigFieldSpec(
-            path="diagnostics.log_issues_as_warnings",
-            value_type="bool",
-            default=True,
-            description="診断で検出された問題を警告ログとして出力する。",
-            env="IRIS_DIAGNOSTICS_LOG_ISSUES_AS_WARNINGS",
         ),
     )
 

@@ -23,11 +23,9 @@ def test_default_diagnostics_config() -> None:
     config = default_runtime_config()
 
     assert config.diagnostics == RuntimeDiagnosticsConfig()
-    assert config.diagnostics.enabled is True
+    assert config.diagnostics.mode == "warn"
     assert config.diagnostics.timeout_seconds == approx(5.0)
-    assert config.diagnostics.fail_fast is False
     assert config.diagnostics.warmup_models is False
-    assert config.diagnostics.log_issues_as_warnings is True
 
 
 def test_diagnostics_toml_is_applied(tmp_path: Path) -> None:
@@ -37,21 +35,17 @@ def test_diagnostics_toml_is_applied(tmp_path: Path) -> None:
             tmp_path,
             (
                 "[diagnostics]\n"
-                "enabled = false\n"
+                'mode = "strict"\n'
                 "timeout_seconds = 2.5\n"
-                "fail_fast = true\n"
                 "warmup_models = true\n"
-                "log_issues_as_warnings = false\n"
             ),
         ),
         env={},
     )
 
-    assert config.diagnostics.enabled is False
+    assert config.diagnostics.mode == "strict"
     assert config.diagnostics.timeout_seconds == approx(2.5)
-    assert config.diagnostics.fail_fast is True
     assert config.diagnostics.warmup_models is True
-    assert config.diagnostics.log_issues_as_warnings is False
 
 
 def test_diagnostics_toml_partial_override_preserves_defaults(
@@ -64,10 +58,8 @@ def test_diagnostics_toml_partial_override_preserves_defaults(
     )
 
     assert config.diagnostics.timeout_seconds == approx(10.0)
-    assert config.diagnostics.enabled is True
-    assert config.diagnostics.fail_fast is False
+    assert config.diagnostics.mode == "warn"
     assert config.diagnostics.warmup_models is False
-    assert config.diagnostics.log_issues_as_warnings is True
 
 
 def test_diagnostics_env_overrides_toml(tmp_path: Path) -> None:
@@ -75,18 +67,27 @@ def test_diagnostics_env_overrides_toml(tmp_path: Path) -> None:
     config = load_runtime_config(
         _write(
             tmp_path,
-            ("[diagnostics]\nenabled = true\ntimeout_seconds = 5.0\nfail_fast = false\n"),
+            ('[diagnostics]\nmode = "warn"\ntimeout_seconds = 5.0\n'),
         ),
         env={
-            "IRIS_DIAGNOSTICS_ENABLED": "false",
+            "IRIS_DIAGNOSTICS_MODE": "strict",
             "IRIS_DIAGNOSTICS_TIMEOUT_SECONDS": "12.5",
-            "IRIS_DIAGNOSTICS_FAIL_FAST": "true",
+            "IRIS_DIAGNOSTICS_WARMUP_MODELS": "true",
         },
     )
 
-    assert config.diagnostics.enabled is False
+    assert config.diagnostics.mode == "strict"
     assert config.diagnostics.timeout_seconds == approx(12.5)
-    assert config.diagnostics.fail_fast is True
+    assert config.diagnostics.warmup_models is True
+
+
+def test_diagnostics_mode_off_via_env() -> None:
+    """Diagnostics環境変数でmode=offを指定できる。"""
+    config = load_runtime_config(
+        None,
+        env={"IRIS_DIAGNOSTICS_MODE": "off"},
+    )
+    assert config.diagnostics.mode == "off"
 
 
 def test_diagnostics_env_accepts_common_bool_forms() -> None:
@@ -103,17 +104,17 @@ def test_diagnostics_env_accepts_common_bool_forms() -> None:
     ):
         config = load_runtime_config(
             None,
-            env={"IRIS_DIAGNOSTICS_ENABLED": raw},
+            env={"IRIS_DIAGNOSTICS_WARMUP_MODELS": raw},
         )
-        assert config.diagnostics.enabled is expected, raw
+        assert config.diagnostics.warmup_models is expected, raw
 
 
 def test_diagnostics_env_rejects_invalid_bool() -> None:
     """Diagnostics環境変数の真偽値として解釈できない値はConfigError。"""
-    with pytest.raises(ConfigError, match="IRIS_DIAGNOSTICS_ENABLED"):
+    with pytest.raises(ConfigError, match="IRIS_DIAGNOSTICS_WARMUP_MODELS"):
         load_runtime_config(
             None,
-            env={"IRIS_DIAGNOSTICS_ENABLED": "maybe"},
+            env={"IRIS_DIAGNOSTICS_WARMUP_MODELS": "maybe"},
         )
 
 
@@ -129,11 +130,20 @@ def test_diagnostics_timeout_must_be_positive(tmp_path: Path) -> None:
         )
 
 
-def test_diagnostics_enabled_must_be_bool(tmp_path: Path) -> None:
-    """Diagnostics enabledは真偽値でなければならない。"""
-    with pytest.raises(ConfigError, match=r"diagnostics\.enabled.*boolean"):
+def test_diagnostics_warmup_models_must_be_bool(tmp_path: Path) -> None:
+    """Diagnostics warmup_modelsは真偽値でなければならない。"""
+    with pytest.raises(ConfigError, match=r"diagnostics\.warmup_models.*boolean"):
         load_runtime_config(
-            _write(tmp_path, '[diagnostics]\nenabled = "yes"\n'),
+            _write(tmp_path, '[diagnostics]\nwarmup_models = "yes"\n'),
+            env={},
+        )
+
+
+def test_diagnostics_mode_must_be_valid(tmp_path: Path) -> None:
+    """Diagnostics modeは ``off``/``warn``/``strict`` のいずれかでなければならない。"""
+    with pytest.raises(ConfigError, match=r"diagnostics\.mode"):
+        load_runtime_config(
+            _write(tmp_path, '[diagnostics]\nmode = "invalid"\n'),
             env={},
         )
 

@@ -18,6 +18,8 @@ from iris.adapters.llm.diagnostics import (
     ReadinessStatus,
 )
 from iris.runtime.config import (
+    ConfigError,
+    DiagnosticsMode,
     IrisRuntimeConfig,
     RuntimeDiagnosticsConfig,
     RuntimeModelConfig,
@@ -42,28 +44,22 @@ if TYPE_CHECKING:
 def _with_diagnostics(
     config: IrisRuntimeConfig,
     *,
-    enabled: bool = True,
-    fail_fast: bool = False,
+    mode: DiagnosticsMode = "warn",
     warmup_models: bool = False,
-    log_issues_as_warnings: bool = True,
 ) -> IrisRuntimeConfig:
     """Return a copy of ``config`` with the given diagnostics config.
 
     Args:
         config: Base runtime config.
-        enabled: Whether diagnostics is enabled.
-        fail_fast: Whether diagnostics failures should abort startup.
+        mode: Diagnostics mode (``off``/``warn``/``strict``).
         warmup_models: Whether warmup should run.
-        log_issues_as_warnings: Whether per-issue warnings should be emitted.
 
     Returns:
         Updated runtime config.
     """
     new_diag = RuntimeDiagnosticsConfig(
-        enabled=enabled,
-        fail_fast=fail_fast,
+        mode=mode,
         warmup_models=warmup_models,
-        log_issues_as_warnings=log_issues_as_warnings,
     )
     return config.__class__(
         **{**config.__dict__, "diagnostics": new_diag},
@@ -223,7 +219,7 @@ def test_serve_invokes_run_startup_diagnostics_before_components(
 ) -> None:
     """serve() must call run_startup_diagnostics() before building components."""
     config = _with_ollama_slots(
-        _with_diagnostics(default_runtime_config(), fail_fast=False)
+        _with_diagnostics(default_runtime_config(), mode="warn")
     )
     call_order: list[str] = []
 
@@ -276,9 +272,9 @@ def test_serve_invokes_run_startup_diagnostics_before_components(
 async def test_run_startup_diagnostics_continues_when_fail_fast_false(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``fail_fast=False`` should not raise even if every outcome fails."""
+    """``mode="warn"`` should not raise even if every outcome fails."""
     config = _with_ollama_slots(
-        _with_diagnostics(default_runtime_config(), fail_fast=False)
+        _with_diagnostics(default_runtime_config(), mode="warn")
     )
     monkeypatch.setattr(
         "iris.runtime.observability.diagnostics.build_provider_diagnostics",
@@ -298,16 +294,16 @@ async def test_run_startup_diagnostics_continues_when_fail_fast_false(
 async def test_run_startup_diagnostics_aborts_when_fail_fast_true(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``fail_fast=True`` should raise ``RuntimeError`` on any FAIL outcome."""
+    """``mode="strict"`` should raise ``ConfigError`` on any FAIL outcome."""
     config = _with_ollama_slots(
-        _with_diagnostics(default_runtime_config(), fail_fast=True)
+        _with_diagnostics(default_runtime_config(), mode="strict")
     )
     monkeypatch.setattr(
         "iris.runtime.observability.diagnostics.build_provider_diagnostics",
         _stub_factory(status=ReadinessStatus.FAIL, issue_code="daemon_unreachable"),
     )
 
-    with pytest.raises(RuntimeError, match="startup diagnostics failed"):
+    with pytest.raises(ConfigError, match="startup diagnostics failed"):
         await run_startup_diagnostics(config)
 
 
@@ -336,16 +332,15 @@ def captured_logs() -> Iterator[list[str]]:
 
 
 @pytest.mark.anyio
-async def test_log_issues_as_warnings_true_emits_warnings(
+async def test_warn_mode_emits_issue_warnings(
     monkeypatch: pytest.MonkeyPatch,
     captured_logs: list[str],
 ) -> None:
-    """When True, runner emits one ``startup.diagnostics.issue`` warning per issue."""
+    """``mode="warn"`` emits one ``startup.diagnostics.issue`` warning per issue."""
     config = _with_ollama_slots(
         _with_diagnostics(
             default_runtime_config(),
-            fail_fast=False,
-            log_issues_as_warnings=True,
+            mode="warn",
         )
     )
     monkeypatch.setattr(
@@ -360,27 +355,21 @@ async def test_log_issues_as_warnings_true_emits_warnings(
 
 
 @pytest.mark.anyio
-async def test_log_issues_as_warnings_false_suppresses_issue_warnings(
+async def test_warn_mode_does_not_raise_on_failure(
     monkeypatch: pytest.MonkeyPatch,
-    captured_logs: list[str],
 ) -> None:
-    """When False, runner should not emit per-issue warning records."""
+    """``mode="warn"`` returns a report even when every outcome fails."""
     config = _with_ollama_slots(
-        _with_diagnostics(
-            default_runtime_config(),
-            fail_fast=False,
-            log_issues_as_warnings=False,
-        )
+        _with_diagnostics(default_runtime_config(), mode="warn")
     )
     monkeypatch.setattr(
         "iris.runtime.observability.diagnostics.build_provider_diagnostics",
         _stub_factory(status=ReadinessStatus.FAIL, issue_code="daemon_unreachable"),
     )
 
-    await run_startup_diagnostics(config)
+    report = await run_startup_diagnostics(config)
 
-    issue_records = [record for record in captured_logs if record == "startup.diagnostics.issue"]
-    assert issue_records == []
+    assert report.has_failures is True
 
 
 # ---------------------------------------------------------------------------
@@ -389,10 +378,10 @@ async def test_log_issues_as_warnings_false_suppresses_issue_warnings(
 
 
 @pytest.mark.anyio
-async def test_disabled_diagnostics_skips_external_checks() -> None:
-    """``enabled=False`` returns an empty report and does not call factory."""
+async def test_off_mode_skips_external_checks() -> None:
+    """``mode="off"`` returns an empty report and does not call factory."""
     config = _with_ollama_slots(
-        _with_diagnostics(default_runtime_config(), enabled=False)
+        _with_diagnostics(default_runtime_config(), mode="off")
     )
 
     report = await run_startup_diagnostics(config)

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import json
-from typing import TypeGuard
+from typing import TYPE_CHECKING, TypeGuard, override
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import httpx
 import pytest
@@ -204,9 +206,6 @@ def _not_found_response(request: httpx.Request) -> httpx.Response:
     return httpx.Response(404, request=request)
 
 
-type _RequestHandler = Callable[[httpx.Request], httpx.Response]
-
-
 class _OllamaHandler:
     def __init__(
         self,
@@ -222,7 +221,7 @@ class _OllamaHandler:
         self._ps_body = ps_body
         self._error_status = error_status
         self._warmup_status = warmup_status
-        self._dispatch: dict[str, _RequestHandler] = {
+        self._dispatch: dict[str, Callable[[httpx.Request], httpx.Response]] = {
             "/": self._root_response,
             "/api/tags": self._tags_response,
             "/api/show": self._show_response,
@@ -342,6 +341,7 @@ async def test_check_readiness_ps_endpoint_failure_does_not_hide_tags_result() -
         raise httpx.ConnectError(message, request=request)
 
     class _PartialHandler(_OllamaHandler):
+        @override
         def _ps_response(self, request: httpx.Request) -> httpx.Response:
             return _ps_failure(request)
 
@@ -403,6 +403,7 @@ async def test_warmup_sends_empty_messages_for_load() -> None:
         )
 
     class _CapturingHandler(_OllamaHandler):
+        @override
         def _chat_response(self, request: httpx.Request) -> httpx.Response:
             return _warmup_handler(request)
 
@@ -466,6 +467,7 @@ async def test_warmup_warns_when_ps_call_fails_after_successful_chat() -> None:
         raise httpx.ConnectError(message, request=request)
 
     class _PartialHandler(_OllamaHandler):
+        @override
         def _ps_response(self, request: httpx.Request) -> httpx.Response:
             return _ps_failure(request)
 

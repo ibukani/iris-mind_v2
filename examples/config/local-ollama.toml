@@ -34,8 +34,6 @@ timeout_seconds = 120.0
 keep_alive = "5m"
 
 [diagnostics]
-enabled = true
+mode = "warn"
 timeout_seconds = 5.0
-fail_fast = false
 warmup_models = false
-log_issues_as_warnings = true

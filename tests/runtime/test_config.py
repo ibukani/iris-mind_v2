@@ -639,6 +639,7 @@ def test_config_package_exposes_stable_public_api() -> None:
         "runtime_config_specs_for_version",
         "RuntimeSafetyConfig",
         "RuntimeDiagnosticsConfig",
+        "DiagnosticsMode",
         "apply_diagnostics_env",
         "apply_diagnostics_toml",
         "all_model_slots_are_fake",
@@ -777,11 +778,9 @@ def test_local_ollama_example_enables_diagnostics() -> None:
 
     config = load_runtime_config(local, env={})
 
-    assert config.diagnostics.enabled is True
+    assert config.diagnostics.mode == "warn"
     assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
-    assert config.diagnostics.fail_fast is False
     assert config.diagnostics.warmup_models is False
-    assert config.diagnostics.log_issues_as_warnings is True
 
 
 def test_openai_example_enables_diagnostics() -> None:
@@ -790,7 +789,7 @@ def test_openai_example_enables_diagnostics() -> None:
 
     config = load_runtime_config(openai, env={})
 
-    assert config.diagnostics.enabled is True
+    assert config.diagnostics.mode == "warn"
     assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
     assert config.diagnostics.warmup_models is False
 
@@ -801,7 +800,7 @@ def test_minimal_example_enables_diagnostics() -> None:
 
     config = load_runtime_config(minimal, env={})
 
-    assert config.diagnostics.enabled is True
+    assert config.diagnostics.mode == "warn"
     assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
 
 

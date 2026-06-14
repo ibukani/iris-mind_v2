@@ -10,9 +10,17 @@ from iris.adapters.llm import openai as openai_adapter
 from iris.adapters.llm.diagnostics import (
     LLMProviderAuthenticationError,
     LLMProviderConnectionError,
+    LLMProviderModelUnavailableError,
+    LLMProviderQuotaError,
+    LLMProviderRateLimitError,
     LLMProviderTimeoutError,
 )
-from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
+from iris.adapters.llm.openai import (
+    OpenAIAdapterError,
+    OpenAIConfig,
+    OpenAILLMClient,
+    OpenAIResponsesClient,
+)
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
 
@@ -170,7 +178,7 @@ def test_openai_client_requires_api_key_only_without_injected_client() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_failing_client(exc: BaseException) -> object:
+def _make_failing_client(exc: BaseException) -> OpenAIResponsesClient:
     """Build a minimal client stub whose ``responses.create`` raises ``exc``.
 
     Args:
@@ -223,7 +231,7 @@ async def test_openai_client_translates_timeout_to_provider_timeout(
     config = OpenAIConfig(model="gpt-test", api_key="test-key")
     client = OpenAILLMClient(
         config,
-        client=_make_failing_client(_FakeTimeout("timed out")),  # type: ignore[arg-type]
+        client=_make_failing_client(_FakeTimeout("timed out")),
     )
 
     with pytest.raises(LLMProviderTimeoutError):
@@ -244,7 +252,7 @@ async def test_openai_client_translates_connection_error_to_provider_connection(
     config = OpenAIConfig(model="gpt-test", api_key="test-key")
     client = OpenAILLMClient(
         config,
-        client=_make_failing_client(_FakeConnection("connection failed")),  # type: ignore[arg-type]
+        client=_make_failing_client(_FakeConnection("connection failed")),
     )
 
     with pytest.raises(LLMProviderConnectionError):
@@ -265,7 +273,7 @@ async def test_openai_client_translates_authentication_to_provider_auth(
     config = OpenAIConfig(model="gpt-test", api_key="test-key")
     client = OpenAILLMClient(
         config,
-        client=_make_failing_client(_FakeAuth("not allowed")),  # type: ignore[arg-type]
+        client=_make_failing_client(_FakeAuth("not allowed")),
     )
 
     with pytest.raises(LLMProviderAuthenticationError):
@@ -292,3 +300,74 @@ async def test_openai_client_successful_response_unchanged() -> None:
 
     assert response.text == "hello"
     assert response.model == "gpt-test"
+
+
+@pytest.mark.anyio
+async def test_openai_client_translates_not_found_to_provider_model_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registered NotFound classes map to LLMProviderModelUnavailableError."""
+
+    class _FakeNotFoundError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_NotFoundErrorTypes", (_FakeNotFoundError,))
+    monkeypatch.setattr(openai_adapter, "_ConnectionErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_QuotaErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_BadRequestErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_AuthenticationErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_RateLimitErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_TimeoutErrorTypes", ())
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeNotFoundError()),
+    )
+
+    with pytest.raises(LLMProviderModelUnavailableError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_openai_client_translates_rate_limit_to_provider_rate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registered RateLimit classes map to LLMProviderRateLimitError."""
+
+    class _FakeRateLimitError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_RateLimitErrorTypes", (_FakeRateLimitError,))
+    monkeypatch.setattr(openai_adapter, "_ConnectionErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_QuotaErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_BadRequestErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_TimeoutErrorTypes", ())
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeRateLimitError()),
+    )
+
+    with pytest.raises(LLMProviderRateLimitError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_openai_client_translates_quota_to_provider_quota(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registered Quota classes map to LLMProviderQuotaError."""
+
+    class _FakeQuotaError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_QuotaErrorTypes", (_FakeQuotaError,))
+    monkeypatch.setattr(openai_adapter, "_ConnectionErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_RateLimitErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_BadRequestErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_TimeoutErrorTypes", ())
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeQuotaError()),
+    )
+
+    with pytest.raises(LLMProviderQuotaError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))

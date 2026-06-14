@@ -3,35 +3,40 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from iris.runtime.config.errors import ConfigError
-from iris.runtime.config.parsing import (
-    env_bool,
-    env_float,
-    parse_bool,
-    parse_float,
-)
+from iris.runtime.config.parsing import env_bool, env_float, parse_bool, parse_float, parse_string
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from iris.runtime.config.parsing import TomlTable
 
+DiagnosticsMode = Literal["off", "warn", "strict"]
+"""LLM 起動時診断の動作モード。"""
+
+_VALID_DIAGNOSTICS_MODES: frozenset[str] = frozenset({"off", "warn", "strict"})
+
 
 @dataclass(frozen=True)
 class RuntimeDiagnosticsConfig:
     """LLM プロバイダ診断のランタイム設定。
 
-    サーバー起動時に各モデルスロットへ診断チェックを実行するかを制御する。
-    fake プロバイダのスロットは診断対象から自動的に除外される。
+    mode の値に応じて ``run_startup_diagnostics`` の挙動が決まる:
+
+    * ``off`` - 起動時診断を完全にスキップする。
+    * ``warn`` - 診断を実施し、失敗を警告ログに残して起動を続行する。
+    * ``strict`` - 診断を実施し、いずれかの readiness/warmup 結果が
+      ``FAIL`` だった場合は ``ConfigError`` を送出して起動を中断する。
+
+    ``warmup_models`` は provider 固有の warmup 動作を司る独立した
+    フラグで、 ``off`` 以外のすべての mode で意味を持つ。
     """
 
-    enabled: bool = True
+    mode: DiagnosticsMode = "warn"
     timeout_seconds: float = 5.0
-    fail_fast: bool = False
     warmup_models: bool = False
-    log_issues_as_warnings: bool = True
 
 
 def apply_diagnostics_toml(
@@ -47,9 +52,9 @@ def apply_diagnostics_toml(
     Returns:
         TOML 値を反映した diagnostics config。
     """
-    enabled = config.enabled
-    if "enabled" in table:
-        enabled = parse_bool(table["enabled"], "diagnostics.enabled")
+    mode = config.mode
+    if "mode" in table:
+        mode = _validate_mode(parse_string(table["mode"], "diagnostics.mode"))
 
     timeout_seconds = config.timeout_seconds
     if "timeout_seconds" in table:
@@ -58,10 +63,6 @@ def apply_diagnostics_toml(
             "diagnostics.timeout_seconds",
         )
 
-    fail_fast = config.fail_fast
-    if "fail_fast" in table:
-        fail_fast = parse_bool(table["fail_fast"], "diagnostics.fail_fast")
-
     warmup_models = config.warmup_models
     if "warmup_models" in table:
         warmup_models = parse_bool(
@@ -69,20 +70,11 @@ def apply_diagnostics_toml(
             "diagnostics.warmup_models",
         )
 
-    log_issues_as_warnings = config.log_issues_as_warnings
-    if "log_issues_as_warnings" in table:
-        log_issues_as_warnings = parse_bool(
-            table["log_issues_as_warnings"],
-            "diagnostics.log_issues_as_warnings",
-        )
-
     return _validate_config(
         RuntimeDiagnosticsConfig(
-            enabled=enabled,
+            mode=mode,
             timeout_seconds=timeout_seconds,
-            fail_fast=fail_fast,
             warmup_models=warmup_models,
-            log_issues_as_warnings=log_issues_as_warnings,
         )
     )
 
@@ -100,27 +92,43 @@ def apply_diagnostics_env(
     Returns:
         環境変数値を反映した diagnostics config。
     """
+    raw_mode = env.get("IRIS_DIAGNOSTICS_MODE")
+    mode = _validate_mode(raw_mode) if raw_mode is not None else config.mode
     return _validate_config(
         RuntimeDiagnosticsConfig(
-            enabled=env_bool(env, "IRIS_DIAGNOSTICS_ENABLED", default=config.enabled),
+            mode=mode,
             timeout_seconds=env_float(
                 env,
                 "IRIS_DIAGNOSTICS_TIMEOUT_SECONDS",
                 config.timeout_seconds,
             ),
-            fail_fast=env_bool(env, "IRIS_DIAGNOSTICS_FAIL_FAST", default=config.fail_fast),
             warmup_models=env_bool(
                 env,
                 "IRIS_DIAGNOSTICS_WARMUP_MODELS",
                 default=config.warmup_models,
             ),
-            log_issues_as_warnings=env_bool(
-                env,
-                "IRIS_DIAGNOSTICS_LOG_ISSUES_AS_WARNINGS",
-                default=config.log_issues_as_warnings,
-            ),
         )
     )
+
+
+def _validate_mode(value: str) -> DiagnosticsMode:
+    """Diagnostics mode の値を検証する。
+
+    Args:
+        value: TOML / 環境変数から渡された mode 文字列。
+
+    Returns:
+        検証済みの mode。
+
+    Raises:
+        ConfigError: mode が ``off`` / ``warn`` / ``strict`` のいずれでもない場合。
+    """
+    for candidate in ("off", "warn", "strict"):
+        if value == candidate:
+            return candidate
+    allowed = ", ".join(sorted(_VALID_DIAGNOSTICS_MODES))
+    message = f"Invalid diagnostics.mode: {value}. Allowed values: {allowed}"
+    raise ConfigError(message)
 
 
 def _validate_config(config: RuntimeDiagnosticsConfig) -> RuntimeDiagnosticsConfig:
@@ -133,7 +141,7 @@ def _validate_config(config: RuntimeDiagnosticsConfig) -> RuntimeDiagnosticsConf
         検証済みの設定。
 
     Raises:
-        ConfigError: タイムアウトが正の値でない場合。
+        ConfigError: タイムアウトが正の値でない場合、または mode が不正な場合。
     """
     if config.timeout_seconds <= 0:
         message = "diagnostics.timeout_seconds must be greater than zero"

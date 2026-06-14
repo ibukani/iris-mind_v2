@@ -8,6 +8,7 @@ implementation details and should not be imported directly by consumers.
 from __future__ import annotations
 
 from iris.runtime.config.diagnostics import (
+    DiagnosticsMode,
     RuntimeDiagnosticsConfig,
     apply_diagnostics_env,
     apply_diagnostics_toml,
@@ -47,6 +48,7 @@ from iris.runtime.config.state import RuntimeStateConfig
 __all__ = [
     "ConfigError",
     "ConfigFieldSpec",
+    "DiagnosticsMode",
     "IrisRuntimeConfig",
     "LLMProvider",
     "ModelSlotName",

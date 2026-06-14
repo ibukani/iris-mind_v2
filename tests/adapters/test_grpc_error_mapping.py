@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 from unittest.mock import AsyncMock
 
 from google.protobuf.timestamp_pb2 import Timestamp
 import grpc
-from grpc import aio as grpc_aio
 import pytest
 
 from iris.adapters.grpc.mappers import (
@@ -174,26 +174,46 @@ def _build_servicer(handle: AsyncMock) -> tuple[IrisRuntimeGrpcServicer, AsyncMo
 
 
 def _raise_abort() -> None:
-    """Raise an RpcError to mirror grpc.aio.ServicerContext.abort semantics."""  # noqa: DOC501
+    """Raise an RpcError to mirror grpc.aio.ServicerContext.abort semantics.
+
+    Raises:
+        _abort_error: An ``grpc.RpcError`` sentinel used by tests.
+    """
     raise _abort_error()
+
+
+class _AbortError(grpc.RpcError):
+    """A minimal ``grpc.RpcError`` raising helper.
+
+    gRPC's async ``AioRpcError`` enforces a non-None internal metadata type
+    in some versions and is awkward to construct in tests. ``_AbortError``
+    inherits the abstract ``grpc.RpcError`` and ``code()`` contract by
+    raising ``NotImplementedError`` because the tests only use the instance
+    as a sentinel value for ``pytest.raises(grpc.RpcError)`` and to
+    observe that ``context.abort`` was awaited with the correct code.
+    """
+
+    @override
+    def code(self) -> grpc.StatusCode:
+        """Return the gRPC status code (unused by tests)."""
+        raise NotImplementedError
+
+    @override
+    def details(self) -> str | None:
+        """Return the gRPC error details (unused by tests)."""
+        raise NotImplementedError
 
 
 def _abort_error() -> grpc.RpcError:
     """Build an RpcError suitable for raising from a mocked ServicerContext.
 
     Returns:
-        A ``grpc.RpcError`` with the expected status code metadata.
+        A ``grpc.RpcError`` instance used purely as a sentinel in tests.
     """
-    return grpc_aio.AioRpcError(
-        grpc.StatusCode.UNKNOWN,
-        trailing_metadata=None,  # type: ignore[arg-type]
-        details=None,
-        debug_error_string=None,
-        initial_metadata=None,  # type: ignore[arg-type]
-    )
+    return _AbortError()
 
 
-def _build_request() -> object:
+def _build_request() -> runtime_pb2.SubmitObservationRequest:
     """Build a minimal SubmitObservation request proto.
 
     Returns:
@@ -219,7 +239,7 @@ async def test_servicer_maps_provider_timeout_to_deadline_exceeded() -> None:
     )
 
     with pytest.raises(grpc.RpcError):
-        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+        await servicer.SubmitObservation(_build_request(), context)
 
     assert context.abort.await_args.args[0] is grpc.StatusCode.DEADLINE_EXCEEDED
 
@@ -232,7 +252,7 @@ async def test_servicer_maps_provider_connection_error_to_unavailable() -> None:
     )
 
     with pytest.raises(grpc.RpcError):
-        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+        await servicer.SubmitObservation(_build_request(), context)
 
     assert context.abort.await_args.args[0] is grpc.StatusCode.UNAVAILABLE
 
@@ -245,7 +265,7 @@ async def test_servicer_maps_provider_model_unavailable_to_failed_precondition()
     )
 
     with pytest.raises(grpc.RpcError):
-        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+        await servicer.SubmitObservation(_build_request(), context)
 
     assert context.abort.await_args.args[0] is grpc.StatusCode.FAILED_PRECONDITION
 
@@ -258,7 +278,7 @@ async def test_servicer_maps_provider_rate_limit_to_resource_exhausted() -> None
     )
 
     with pytest.raises(grpc.RpcError):
-        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+        await servicer.SubmitObservation(_build_request(), context)
 
     assert context.abort.await_args.args[0] is grpc.StatusCode.RESOURCE_EXHAUSTED
 
@@ -271,7 +291,7 @@ async def test_servicer_maps_provider_authentication_to_unauthenticated() -> Non
     )
 
     with pytest.raises(grpc.RpcError):
-        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+        await servicer.SubmitObservation(_build_request(), context)
 
     assert context.abort.await_args.args[0] is grpc.StatusCode.UNAUTHENTICATED
 
@@ -282,6 +302,19 @@ async def test_servicer_maps_unknown_exceptions_to_internal() -> None:
     servicer, context = _build_servicer(AsyncMock(side_effect=RuntimeError("boom")))
 
     with pytest.raises(grpc.RpcError):
-        await servicer.SubmitObservation(_build_request(), context)  # type: ignore[arg-type]
+        await servicer.SubmitObservation(_build_request(), context)
 
     assert context.abort.await_args.args[0] is grpc.StatusCode.INTERNAL
+
+
+@pytest.mark.anyio
+async def test_servicer_does_not_swallow_cancellation() -> None:
+    """``asyncio.CancelledError`` must propagate without ``abort()`` or INTERNAL mapping."""
+    servicer, context = _build_servicer(
+        AsyncMock(side_effect=asyncio.CancelledError())
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await servicer.SubmitObservation(_build_request(), context)
+
+    context.abort.assert_not_awaited()

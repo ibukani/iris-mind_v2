@@ -12,4 +12,6 @@ provider = "ollama"
 model = "qwen3:8b"
 
 [diagnostics]
-enabled = true
+mode = "warn"
+timeout_seconds = 5.0
+warmup_models = false

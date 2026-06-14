@@ -24,21 +24,24 @@ reasoning) に対して以下を実行する:
 
 | フィールド | 型 | 既定値 | 説明 |
 |------------|----|--------|------|
-| `enabled` | bool | `true` | 診断の有効 / 無効 |
-| `timeout_seconds` | float | `5.0` | 各 probe のタイムアウト |
-| `fail_fast` | bool | `false` | 1 件失敗で起動を中断するか |
+| `mode` | enum (`off` / `warn` / `strict`) | `warn` | 診断の動作モード |
+| `timeout_seconds` | float | `5.0` | 各 probe のタイムアウト (秒) |
 | `warmup_models` | bool | `false` | プローブ成功後に warmup を実行するか |
-| `log_issues_as_warnings` | bool | `true` | 失敗を WARNING ログに出力するか |
+
+`mode` の値による挙動:
+
+- `off` - 起動時診断を完全にスキップする
+- `warn` - 診断を実施し、失敗を警告ログに残して起動を続行する
+- `strict` - 診断を実施し、いずれかの readiness/warmup 結果が `FAIL`
+  だった場合は `ConfigError` を送出して起動を中断する
 
 例:
 
 ```toml
 [diagnostics]
-enabled = true
+mode = "warn"
 timeout_seconds = 5.0
-fail_fast = false
-warmup_models = false
-log_issues_as_warnings = true
+warmup_models = true
 ```
 
 ### 環境変数オーバーライド
@@ -47,11 +50,18 @@ log_issues_as_warnings = true
 
 | 環境変数 | 効果 |
 |----------|------|
-| `IRIS_DIAGNOSTICS_ENABLED` | `enabled` を上書き |
+| `IRIS_DIAGNOSTICS_MODE` | `mode` を上書き (`off` / `warn` / `strict`) |
 | `IRIS_DIAGNOSTICS_TIMEOUT_SECONDS` | `timeout_seconds` を上書き |
-| `IRIS_DIAGNOSTICS_FAIL_FAST` | `fail_fast` を上書き |
 | `IRIS_DIAGNOSTICS_WARMUP_MODELS` | `warmup_models` を上書き |
-| `IRIS_DIAGNOSTICS_LOG_ISSUES_AS_WARNINGS` | `log_issues_as_warnings` を上書き |
+
+```bash
+export IRIS_DIAGNOSTICS_MODE=warn
+export IRIS_DIAGNOSTICS_TIMEOUT_SECONDS=5
+export IRIS_DIAGNOSTICS_WARMUP_MODELS=true
+```
+
+不正な `mode` 値は `ConfigError` (`Invalid diagnostics.mode: ...`)
+を発生させ、起動時に拒否される。
 
 ### レポート
 
@@ -68,10 +78,11 @@ log_issues_as_warnings = true
 
 ### 失敗時の挙動
 
-- `fail_fast = false` (既定) - 失敗を記録しつつ起動は継続
-- `fail_fast = true` - 失敗した時点で起動中断
+- `mode = "warn"` (既定) - 失敗を警告ログに出力し、起動は継続
+- `mode = "strict"` - 失敗した時点で `ConfigError` を送出して起動中断
+- `mode = "off"` - 診断を完全にスキップ
 
-`fail_fast = true` は致命的: 未設定のプロバイダ認証情報、
+`mode = "strict"` は致命的: 未設定のプロバイダ認証情報、
 未インストールのモデル、ネットワーク到達不能などが起動を
 阻止する。
 
@@ -95,6 +106,9 @@ bind する:
 - `error_type` - 例外クラス名 (失敗時)
 - `error_message` - 例外メッセージ (失敗時)
 
+プロンプト / ユーザーテキスト / システムメッセージ / メモリ内容 /
+API キー / raw response body はログに含まれない。
+
 ## プロバイダ別の capability
 
 `LLMProviderDiagnostics.capabilities` フラグで各 provider が
@@ -106,12 +120,14 @@ bind する:
 | openai     | true         | true                   | false              | false  |
 
 OpenAI は warmup の概念がない (モデルが API 側で提供される) ため
-`warmup = false`。`LLMRequestObserver.warmup()` は SKIPPED を返す。
+`warmup = false`。`OpenAIDiagnostics.warmup()` は SKIPPED を返す。
 
 ## gRPC ステータスマッピング
 
 `gRPC` 入口層は `LLMProviderError` サブクラスを以下の
-gRPC ステータスコードに翻訳する。
+gRPC ステータスコードに翻訳する。`asyncio.CancelledError` は
+専用ハンドラで警告ログを出して再送出される (INTERNAL に翻訳
+されない)。
 
 | プロバイダ例外 | gRPC ステータス |
 |----------------|----------------|
@@ -132,7 +148,12 @@ gRPC ステータスコードに翻訳する。
 
 `OllamaDiagnostics.check_readiness()` が `model_not_installed`
 issue を報告する。`ollama pull <model>` でインストールし、
-再起動する。
+再起動する。コマンドラインで確認するには:
+
+```bash
+curl http://localhost:11434/api/tags
+curl http://localhost:11434/api/ps
+```
 
 ### OpenAI 認証エラー
 
@@ -142,8 +163,8 @@ issue を報告する。`OPENAI_API_KEY` 環境変数が正しく設定されて
 
 ### リクエストタイムアウト
 
-`OllamaLLMClient.generate()` が `OllamaAdapterError` を送出し、
-gRPC 層が `DEADLINE_EXCEEDED` を返す。`[ollama].timeout_seconds`
+`OllamaLLMClient.generate()` が `LLMProviderTimeoutError` を
+送出し、gRPC 層が `DEADLINE_EXCEEDED` を返す。`[ollama].timeout_seconds`
 を増加させるか、モデルサイズを小さくする。
 
 ### リクエストレート制限
@@ -165,21 +186,20 @@ export IRIS_OLLAMA_HOST=http://localhost:11434
 export IRIS_OLLAMA_TIMEOUT_SECONDS=300
 
 # Startup diagnostics
-export IRIS_DIAGNOSTICS_ENABLED=true
+export IRIS_DIAGNOSTICS_MODE=warn
+export IRIS_DIAGNOSTICS_TIMEOUT_SECONDS=5
 export IRIS_DIAGNOSTICS_WARMUP_MODELS=true
-export IRIS_DIAGNOSTICS_FAIL_FAST=false
-export IRIS_DIAGNOSTICS_LOG_ISSUES_AS_WARNINGS=true
-export IRIS_DIAGNOSTICS_TIMEOUT_SECONDS=5.0
 ```
 
 `IRIS_OLLAMA_HOST` を変更したら Iris-Mind を再起動し、
 起動ログに `startup.diagnostics.readiness` イベントが流れることを
-確認する。
+確認する。`mode = "strict"` の起動に失敗した場合は同じ
+`startup.diagnostics.readiness` イベントで `status = "fail"` が
+ログに残る。
 
 ## Ollama diagnostics の内部動作
 
-- `OllamaDiagnostics.check_readiness()` は次の 4 つの軽量 probe を
-  順に実行する:
+- `OllamaDiagnostics.check_readiness()` は次の軽量 probe を実行する:
   1. `GET /` で daemon 疎通を確認
   2. `GET /api/tags` でモデルがインストール済みか確認
   3. `POST /api/show` でモデルメタデータが読めるか確認

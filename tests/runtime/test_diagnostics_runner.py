@@ -17,6 +17,7 @@ from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
 from iris.runtime.config import (
     ConfigError,
+    DiagnosticsMode,
     IrisRuntimeConfig,
     RuntimeDiagnosticsConfig,
     RuntimeModelConfig,
@@ -181,8 +182,8 @@ def test_build_provider_diagnostics_openai_missing_api_key_raises(
 
 @pytest.mark.anyio
 async def test_run_startup_diagnostics_returns_empty_when_disabled() -> None:
-    """diagnostics.enabled=False のときは空レポートを返す。"""
-    config = _with_diagnostics(default_runtime_config(), enabled=False)
+    """diagnostics.mode="off" のときは空レポートを返す。"""
+    config = _with_diagnostics(default_runtime_config(), mode="off")
 
     report = await run_startup_diagnostics(config)
 
@@ -488,11 +489,11 @@ def _set_default_slot(
 def _with_diagnostics(
     config: IrisRuntimeConfig,
     *,
-    enabled: bool = True,
+    mode: DiagnosticsMode = "warn",
     warmup_models: bool = False,
 ) -> IrisRuntimeConfig:
     new_diag = RuntimeDiagnosticsConfig(
-        enabled=enabled,
+        mode=mode,
         warmup_models=warmup_models,
     )
     return replace(config, diagnostics=new_diag)
