@@ -17,6 +17,7 @@ class ActivityAppendSkipReason(StrEnum):
 
     DUPLICATE_ACTIVITY_ID = "duplicate_activity_id"
     DUPLICATE_PROVIDER_EVENT = "duplicate_provider_event"
+    BACKEND_UNAVAILABLE = "backend_unavailable"
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,8 @@ class ActivityJournal(Protocol):
       既存行は変更しない。
     - 競合によりDB制約違反がraiseされる場合、実装は ``ActivityAppendResult``
       へ変換して返さなければならない(例外を漏らさない)。
+    - バックエンドが lock 取得失敗等で一時的に利用できない場合も
+      ``accepted=False / reason=BACKEND_UNAVAILABLE`` を返す。
     """
 
     async def append(self, event: ActivityEventRecord) -> ActivityAppendResult:

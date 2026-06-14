@@ -210,6 +210,57 @@ async def test_sqlite_activity_journal_activity_id_race_returns_activity_id(tmp_
     SELECT とINSERT が並列化された場合に備えてIntegrityError フォールバックでも
     正確に DUPLICATE_ACTIVITY_ID へ変換されることを検証する。
     """
+
+
+@pytest.mark.anyio
+async def test_sqlite_activity_journal_immediate_transaction_no_rollback_on_begin_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BEGIN IMMEDIATE 失敗時に ROLLBACK が呼ばれず元例外が伝搬することを検証する。
+
+    _immediate_transaction はトランザクション未開始時の ROLLBACK で
+    ``cannot rollback - no transaction is active`` を投げないよう、
+    ``txn_active`` フラグで ROLLBACK の実行を制御する。
+    """
+    db_path = str(tmp_path / "activity_journal.db")
+    journal = SQLiteActivityJournal(db_path)
+
+    class _FakeConn:
+        def __init__(self) -> None:
+            self.actions: list[str] = []
+
+        def execute(self, sql: str, *_args: object) -> object:
+            self.actions.append(sql)
+            if sql == "BEGIN IMMEDIATE":
+                msg = "database is locked"
+                raise sqlite3.OperationalError(msg)
+            return self
+
+        def commit(self) -> None:
+            self.actions.append("COMMIT")
+
+        def close(self) -> None:
+            self.actions.append("CLOSE")
+
+    fake = _FakeConn()
+    monkeypatch.setattr(journal, "_connect", lambda: fake)
+
+    raised: BaseException | None = None
+    name = "_immediate_transaction"
+    try:
+        immediate_tx = getattr(journal, name)
+        with immediate_tx():
+            pass
+    except sqlite3.OperationalError as exc:
+        raised = exc
+
+    # 元の OperationalError(database is locked) がそのまま伝搬し、
+    # ROLLBACK は一度も実行されていないこと。
+    assert isinstance(raised, sqlite3.OperationalError)
+    assert "database is locked" in str(raised)
+    assert not any(action == "ROLLBACK" for action in fake.actions)
+
     db_path = str(tmp_path / "activity_journal.db")
     journal = SQLiteActivityJournal(db_path)
     expected = _build_event()

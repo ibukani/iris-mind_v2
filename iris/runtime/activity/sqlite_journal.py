@@ -129,16 +129,27 @@ class SQLiteActivityJournal(ActivityJournal):
         TOCTOU窓が開く。``IMMEDIATE`` で開始時にRESERVEDロックを獲得し、
         SELECTとINSERTを単一writerに直列化することで窓を潰す。
 
+        ``BEGIN IMMEDIATE`` 自体が ``OperationalError: database is locked``
+        等で失敗した場合、後続の ``ROLLBACK`` が
+        ``cannot rollback - no transaction is active`` で
+        元例外をマスクしないよう、トランザクション開始成功時のみ
+        ``ROLLBACK`` を試行する。``ROLLBACK`` 自体が失敗しても
+        元例外の伝搬を妨げてはならない。
+
         Yields:
             sqlite3.Connection: ``BEGIN IMMEDIATE`` を開始した管理対象connection。
         """
         conn = self._connect()
+        txn_active = False
         try:
             conn.execute("BEGIN IMMEDIATE")
+            txn_active = True
             yield conn
             conn.commit()
         except Exception:
-            conn.execute("ROLLBACK")
+            if txn_active:
+                with contextlib.suppress(sqlite3.OperationalError):
+                    conn.execute("ROLLBACK")
             raise
         finally:
             conn.close()
@@ -202,6 +213,15 @@ class SQLiteActivityJournal(ActivityJournal):
             # へ変換する(例外を漏らさない)。
             reason = _classify_integrity_error(exc)
             return ActivityAppendResult(accepted=False, event=None, reason=reason)
+        except sqlite3.OperationalError:
+            # BEGIN IMMEDIATE 失敗(database is locked 等)で
+            # busy_timeout を超過した場合など。Protocol契約上 append は
+            # 例外を漏らさないため BACKEND_UNAVAILABLE へ変換する。
+            return ActivityAppendResult(
+                accepted=False,
+                event=None,
+                reason=ActivityAppendSkipReason.BACKEND_UNAVAILABLE,
+            )
         return ActivityAppendResult(accepted=True, event=event)
 
     def _insert_immediate_sync(
