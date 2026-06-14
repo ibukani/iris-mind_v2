@@ -33,3 +33,10 @@ max_output_tokens = 2048
 model = "gpt-5-mini"
 timeout_seconds = 60.0
 max_output_tokens = 1024
+
+[diagnostics]
+enabled = true
+timeout_seconds = 5.0
+fail_fast = false
+warmup_models = false
+log_issues_as_warnings = true

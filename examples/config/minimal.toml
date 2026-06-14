@@ -10,3 +10,6 @@
 [models.default_chat]
 provider = "ollama"
 model = "qwen3:8b"
+
+[diagnostics]
+enabled = true

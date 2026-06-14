@@ -117,9 +117,7 @@ def captured_logs() -> Iterator[list[_CapturedLog]]:
     Yields:
         A list of :class:`_CapturedLog` records with rendered text.
     """
-    captured, handler_id = _make_capture_with_format(
-        "{message} | step={extra[step]}"
-    )
+    captured, handler_id = _make_capture_with_format("{message} | step={extra[step]}")
     try:
         yield captured
     finally:
