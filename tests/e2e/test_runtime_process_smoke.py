@@ -82,7 +82,7 @@ async def test_runtime_process_shutdown_does_not_leave_child_process(
     finally:
         await stop_runtime_process(runtime)
 
-    assert runtime.process.poll() is not None
+    assert not runtime.is_alive()
 
 
 def _assert_runtime_info(response: runtime_pb2.GetRuntimeInfoResponse) -> None:

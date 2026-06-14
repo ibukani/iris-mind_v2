@@ -3,12 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 from datetime import UTC, datetime
-import os
-import shutil
-import socket
-import subprocess  # noqa: S404 -- E2E helpers manage fixed local runtime subprocesses.
 from typing import TYPE_CHECKING
 
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -17,7 +12,32 @@ import pytest
 
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
+from tests.e2e.runtime_process import (
+    RUNTIME_HOST,
+    RuntimeProcess,
+    find_free_port,
+    start_runtime_process,
+    stop_runtime_process,
+)
 from tests.helpers.grpc_test import grpc_call
+
+__all__ = [
+    "RUNTIME_HOST",
+    "RuntimeProcess",
+    "assert_invalid_request",
+    "build_cli_activity_event_request",
+    "build_cli_presence_signal_request",
+    "build_cli_submit_observation_request",
+    "create_runtime_channel",
+    "create_runtime_stub",
+    "find_free_port",
+    "get_runtime_info",
+    "start_runtime_process",
+    "stop_runtime_process",
+    "submit_observation",
+    "wait_for_runtime_ready",
+    "write_runtime_config",
+]
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -25,78 +45,7 @@ if TYPE_CHECKING:
 
     from grpc import StatusCode
 
-_RUNTIME_HOST = "127.0.0.1"
 _DEFAULT_READY_TIMEOUT_SECONDS = 10.0
-_STOP_TIMEOUT_SECONDS = 5.0
-_UV_NOT_FOUND_MESSAGE = "uv executable not found"
-
-
-@dataclass
-class RuntimeProcess:
-    """Runtime subprocess state for E2E failure reporting."""
-
-    process: subprocess.Popen[str]
-    port: int
-    stdout: str | None = None
-    stderr: str | None = None
-
-
-def find_free_port() -> int:
-    """Return a free loopback TCP port.
-
-    Returns:
-        Free TCP port number.
-    """
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind((_RUNTIME_HOST, 0))
-        return int(sock.getsockname()[1])
-
-
-def start_runtime_process(
-    *,
-    port: int,
-    repo_root: Path,
-    runtime_home: Path,
-    config_path: Path | None = None,
-    extra_env: Mapping[str, str] | None = None,
-) -> RuntimeProcess:
-    """Start the runtime server as a real subprocess.
-
-    Returns:
-        Runtime subprocess wrapper.
-
-    Raises:
-        RuntimeError: ``uv`` is not available on ``PATH``.
-    """
-    uv_path = shutil.which("uv")
-    if uv_path is None:
-        raise RuntimeError(_UV_NOT_FOUND_MESSAGE)
-
-    command = [
-        uv_path,
-        "run",
-        "--project",
-        str(repo_root),
-        "python",
-        "-m",
-        "iris.runtime.server",
-        "--host",
-        _RUNTIME_HOST,
-        "--port",
-        str(port),
-    ]
-    if config_path is not None:
-        command.extend(("--config", str(config_path)))
-
-    process = subprocess.Popen(  # noqa: S603 -- E2E runs a fixed uv command tuple.
-        command,
-        cwd=runtime_home,
-        env=_runtime_env(runtime_home=runtime_home, extra_env=extra_env),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    return RuntimeProcess(process=process, port=port)
 
 
 def create_runtime_channel(port: int) -> grpc.aio.Channel:
@@ -105,7 +54,7 @@ def create_runtime_channel(port: int) -> grpc.aio.Channel:
     Returns:
         Async gRPC channel.
     """
-    return grpc.aio.insecure_channel(f"{_RUNTIME_HOST}:{port}")
+    return grpc.aio.insecure_channel(f"{RUNTIME_HOST}:{port}")
 
 
 def create_runtime_stub(channel: grpc.aio.Channel) -> runtime_pb2_grpc.IrisRuntimeServiceAsyncStub:
@@ -135,34 +84,6 @@ async def wait_for_runtime_ready(
         return await _poll_runtime_ready(runtime=runtime, stub=stub, deadline=deadline)
     finally:
         await channel.close()
-
-
-async def stop_runtime_process(
-    runtime: RuntimeProcess,
-    *,
-    timeout_seconds: float = _STOP_TIMEOUT_SECONDS,
-) -> tuple[str, str]:
-    """Terminate a runtime subprocess and return captured stdout and stderr.
-
-    Returns:
-        Captured ``stdout`` and ``stderr``.
-    """
-    if runtime.process.poll() is None:
-        runtime.process.terminate()
-        try:
-            stdout, stderr = await asyncio.wait_for(
-                asyncio.to_thread(runtime.process.communicate),
-                timeout=timeout_seconds,
-            )
-        except TimeoutError:
-            runtime.process.kill()
-            stdout, stderr = await asyncio.to_thread(runtime.process.communicate)
-    else:
-        stdout, stderr = await asyncio.to_thread(runtime.process.communicate)
-
-    runtime.stdout = stdout
-    runtime.stderr = stderr
-    return stdout, stderr
 
 
 async def get_runtime_info(port: int) -> runtime_pb2.GetRuntimeInfoResponse:
@@ -435,21 +356,8 @@ def _set_oneof_payload(
     observation.MergeFrom(partial)
 
 
-def _runtime_env(*, runtime_home: Path, extra_env: Mapping[str, str] | None) -> dict[str, str]:
-    env = os.environ.copy()
-    env.pop("IRIS_MIND_CONFIG", None)
-    env["XDG_CONFIG_HOME"] = str(runtime_home / "xdg-config")
-    env["HOME"] = str(runtime_home / "home")
-    env["UV_CACHE_DIR"] = str(runtime_home / "uv-cache")
-    if extra_env is not None:
-        env.update(extra_env)
-    return env
-
-
 async def _collect_runtime_output(runtime: RuntimeProcess) -> None:
-    stdout, stderr = await asyncio.to_thread(runtime.process.communicate)
-    runtime.stdout = stdout
-    runtime.stderr = stderr
+    await runtime.stop()
 
 
 async def _poll_runtime_ready(
@@ -460,7 +368,7 @@ async def _poll_runtime_ready(
 ) -> runtime_pb2.GetRuntimeInfoResponse:
     last_error: str | None = None
     while asyncio.get_running_loop().time() < deadline:
-        if runtime.process.poll() is not None:
+        if not runtime.is_alive():
             await _collect_runtime_output(runtime)
             _raise_process_exited_before_ready(runtime)
 
@@ -480,11 +388,11 @@ async def _poll_runtime_ready(
         await asyncio.sleep(0.1)
 
     # Best-effort: collect any captured output to help debug slow startups.
-    if runtime.process.poll() is not None:
+    if not runtime.is_alive():
         await _collect_runtime_output(runtime)
     message = (
         f"runtime server did not become ready; last_error={last_error!r}; "
-        f"returncode={runtime.process.returncode}; "
+        f"returncode={runtime.returncode}; "
         f"stdout={runtime.stdout!r}; stderr={runtime.stderr!r}"
     )
     raise AssertionError(message)
@@ -493,7 +401,7 @@ async def _poll_runtime_ready(
 def _raise_process_exited_before_ready(runtime: RuntimeProcess) -> None:
     message = (
         "runtime server exited before readiness; "
-        f"returncode={runtime.process.returncode}; "
+        f"returncode={runtime.returncode}; "
         f"stdout={runtime.stdout!r}; stderr={runtime.stderr!r}"
     )
     raise AssertionError(message)

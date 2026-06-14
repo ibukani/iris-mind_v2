@@ -46,7 +46,7 @@ async def test_runtime_process_accepts_multiple_observations_in_same_session(
             ),
         )
 
-        assert runtime.process.poll() is None
+        assert runtime.is_alive()
     finally:
         await stop_runtime_process(runtime)
 
@@ -78,7 +78,7 @@ async def test_runtime_process_rejects_invalid_observation_without_crashing(
         response = await wait_for_runtime_ready(runtime)
 
         assert response.runtime_name == "iris-mind"
-        assert runtime.process.poll() is None
+        assert runtime.is_alive()
     finally:
         await stop_runtime_process(runtime)
 

@@ -122,7 +122,7 @@ async def test_presence_signal_keeps_runtime_healthy_without_live_provider(
                 ),
             )
             assert not response.output.text
-        assert runtime.process.poll() is None
+        assert runtime.is_alive()
         response = await submit_observation(
             port=runtime.port,
             request=build_cli_submit_observation_request(

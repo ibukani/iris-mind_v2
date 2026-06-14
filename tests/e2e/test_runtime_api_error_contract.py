@@ -53,7 +53,7 @@ async def test_missing_observation_returns_invalid_argument_and_keeps_server_ali
         )
         response = await get_runtime_info(runtime.port)
         assert response.runtime_name == "iris-mind"
-        assert runtime.process.poll() is None
+        assert runtime.is_alive()
     finally:
         await stop_runtime_process(runtime)
 

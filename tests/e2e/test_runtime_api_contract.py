@@ -69,7 +69,7 @@ async def test_get_runtime_info_repeated_call_keeps_runtime_healthy(
         first = await wait_for_runtime_ready(runtime)
         second = await get_runtime_info(runtime.port)
         third = await get_runtime_info(runtime.port)
-        assert runtime.process.poll() is None
+        assert runtime.is_alive()
     finally:
         await stop_runtime_process(runtime)
 
@@ -150,7 +150,7 @@ async def test_submit_observation_multiple_requests_keep_server_alive(
     try:
         await wait_for_runtime_ready(runtime)
         responses = await _submit_multi_requests(runtime.port)
-        assert runtime.process.poll() is None
+        assert runtime.is_alive()
         metadata = await get_runtime_info(runtime.port)
         assert metadata.runtime_name == "iris-mind"
     finally:

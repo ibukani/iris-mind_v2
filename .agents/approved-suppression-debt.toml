@@ -56,33 +56,26 @@ owner = "team"
 # ---------------------------------------------------------------------------
 
 # -- tests/e2e --
+# 旧 helpers.py / test_runtime_process_config.py の suppression は
+# tests/e2e/runtime_process.py ポートに集約した。
+# port 内の ``subprocess`` 利用だけがやむを得ない抑制として残置。
 
 [[debt]]
-path = "tests/e2e/helpers.py"
-line = 11
+path = "tests/e2e/runtime_process.py"
+line = 18
 kind = "noqa"
 rule_or_error_code = "S404"
-reason = "E2E helpers が固定ローカル runtime subprocess を管理。限定されたコマンドタプルのみ"
-alternative_attempted = "process manager ラッパー"
+reason = "tests/e2e/runtime_process.py は E2E 用の監査済み subprocess ポート。E2E テスト群が使う subprocess 呼び出しはこのファイルに閉じ込められている"
+alternative_attempted = "os.posix_spawn 等の非 subprocess API への全面移行は実装コストが高く未着手"
 expires = "2026-06-30"
 owner = "team"
 
 [[debt]]
-path = "tests/e2e/helpers.py"
-line = 90
+path = "tests/e2e/runtime_process.py"
+line = 145
 kind = "noqa"
 rule_or_error_code = "S603"
-reason = "E2E が固定 uv コマンドタプルを実行。ユーザー入力は介在しない"
-alternative_attempted = "typed command builder"
-expires = "2026-06-30"
-owner = "team"
-
-[[debt]]
-path = "tests/e2e/test_runtime_process_config.py"
-line = 5
-kind = "noqa"
-rule_or_error_code = "S404"
-reason = "E2E test が固定ローカル runtime subprocess を管理"
-alternative_attempted = "process manager ラッパー"
+reason = "E2E 用 subprocess ポートが固定 uv コマンドタプルを実行。ユーザー入力は介在しない"
+alternative_attempted = "typed command builder 化は port 自体の責務範囲を超えるため未着手"
 expires = "2026-06-30"
 owner = "team"
