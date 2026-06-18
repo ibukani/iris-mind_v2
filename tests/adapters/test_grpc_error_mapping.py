@@ -169,7 +169,11 @@ def _build_servicer(handle: AsyncMock) -> tuple[IrisRuntimeGrpcServicer, AsyncMo
         mapper=GrpcRuntimeMapper(),
     )
     context = AsyncMock()
-    context.abort.side_effect = lambda *_args, **_kwargs: _raise_abort()
+
+    def abort_side_effect(*_args: object, **_kwargs: object) -> None:
+        _raise_abort()
+
+    context.abort.side_effect = abort_side_effect
     return servicer, context
 
 
@@ -234,9 +238,7 @@ def _build_request() -> runtime_pb2.SubmitObservationRequest:
 @pytest.mark.anyio
 async def test_servicer_maps_provider_timeout_to_deadline_exceeded() -> None:
     """IrisRuntimeGrpcServicer aborts with DEADLINE_EXCEEDED on provider timeout."""
-    servicer, context = _build_servicer(
-        AsyncMock(side_effect=LLMProviderTimeoutError("timed out"))
-    )
+    servicer, context = _build_servicer(AsyncMock(side_effect=LLMProviderTimeoutError("timed out")))
 
     with pytest.raises(grpc.RpcError):
         await servicer.SubmitObservation(_build_request(), context)
@@ -310,9 +312,7 @@ async def test_servicer_maps_unknown_exceptions_to_internal() -> None:
 @pytest.mark.anyio
 async def test_servicer_does_not_swallow_cancellation() -> None:
     """``asyncio.CancelledError`` must propagate without ``abort()`` or INTERNAL mapping."""
-    servicer, context = _build_servicer(
-        AsyncMock(side_effect=asyncio.CancelledError())
-    )
+    servicer, context = _build_servicer(AsyncMock(side_effect=asyncio.CancelledError()))
 
     with pytest.raises(asyncio.CancelledError):
         await servicer.SubmitObservation(_build_request(), context)

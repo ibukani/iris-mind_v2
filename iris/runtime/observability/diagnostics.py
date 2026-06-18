@@ -282,9 +282,11 @@ async def _run_with_timeout(
             return await awaitable
     except TimeoutError:
         issue_code = f"{stage}_timeout"
-        message = (
-            f"{stage.capitalize()} probe exceeded diagnostics.timeout_seconds"
-            f"={timeout_seconds}s for model '{model_config.model}'"
+        message = "".join(
+            (
+                f"{stage.capitalize()} probe exceeded diagnostics.timeout_seconds=",
+                f"{timeout_seconds}s for model '{model_config.model}'",
+            )
         )
         logger.bind(
             provider=model_config.provider,
@@ -302,10 +304,7 @@ async def _run_with_timeout(
                     code=issue_code,
                     message=message,
                     severity=ReadinessStatus.FAIL,
-                    remediation=(
-                        "Increase diagnostics.timeout_seconds in the runtime"
-                        " config or fix the slow provider endpoint"
-                    ),
+                    remediation="Raise diagnostics.timeout_seconds or fix provider endpoint",
                 ),
             ),
         )
@@ -377,9 +376,13 @@ def _build_strict_fail_message(report: StartupDiagnosticsReport) -> str:
         for stage, result in failed_results:
             codes = ", ".join(issue.code for issue in result.issues) or "unknown"
             lines.append(
-                f"  - slot={outcome.slot} provider={outcome.provider} "
-                f"model={outcome.model} stage={stage} "
-                f"status={result.status.value} codes=[{codes}]"
+                "".join(
+                    (
+                        f"  - slot={outcome.slot} provider={outcome.provider} ",
+                        f"model={outcome.model} stage={stage} ",
+                        f"status={result.status.value} codes=[{codes}]",
+                    )
+                )
             )
     return "\n".join(lines)
 

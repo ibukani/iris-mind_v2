@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 import inspect
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Protocol
@@ -61,9 +62,7 @@ def _with_diagnostics(
         mode=mode,
         warmup_models=warmup_models,
     )
-    return config.__class__(
-        **{**config.__dict__, "diagnostics": new_diag},
-    )
+    return replace(config, diagnostics=new_diag)
 
 
 def _with_ollama_slots(
@@ -85,7 +84,7 @@ def _with_ollama_slots(
         fast_judge=RuntimeModelConfig(provider="ollama", model=model),
         reasoning=RuntimeModelConfig(provider="ollama", model=model),
     )
-    return config.__class__(**{**config.__dict__, "models": new_models})
+    return replace(config, models=new_models)
 
 
 class _StubProviderDiagnostics:
@@ -218,9 +217,7 @@ def test_serve_invokes_run_startup_diagnostics_before_components(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """serve() must call run_startup_diagnostics() before building components."""
-    config = _with_ollama_slots(
-        _with_diagnostics(default_runtime_config(), mode="warn")
-    )
+    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="warn"))
     call_order: list[str] = []
 
     async def fake_runner(_: IrisRuntimeConfig) -> StartupDiagnosticsReport:
@@ -249,10 +246,35 @@ def test_serve_invokes_run_startup_diagnostics_before_components(
         server.stop = AsyncMock()
         return server
 
-    monkeypatch.setattr("iris.runtime.server.load_runtime_config", lambda *_a, **_k: config)
-    monkeypatch.setattr("iris.runtime.server.resolve_runtime_config_path", lambda *_a, **_k: None)
+    def fake_load_runtime_config(
+        _path: object | None = None,
+        *,
+        env: object | None = None,
+        overrides: object | None = None,
+        cwd: object | None = None,
+    ) -> IrisRuntimeConfig:
+        _ = (env, overrides, cwd)
+        return config
+
+    def fake_resolve_runtime_config_path(
+        _path: object | None = None,
+        *,
+        env: object | None = None,
+        cwd: object | None = None,
+    ) -> None:
+        _ = (_path, env, cwd)
+
+    def fake_configure_runtime_logging(_config: IrisRuntimeConfig) -> None:
+        _ = _config
+
+    monkeypatch.setattr("iris.runtime.server.load_runtime_config", fake_load_runtime_config)
     monkeypatch.setattr(
-        "iris.runtime.server.configure_runtime_logging", lambda *_a, **_k: None
+        "iris.runtime.server.resolve_runtime_config_path",
+        fake_resolve_runtime_config_path,
+    )
+    monkeypatch.setattr(
+        "iris.runtime.server.configure_runtime_logging",
+        fake_configure_runtime_logging,
     )
     monkeypatch.setattr("iris.runtime.server.run_startup_diagnostics", fake_runner)
     monkeypatch.setattr("iris.runtime.server.build_runtime_components", fake_build_components)
@@ -273,9 +295,7 @@ async def test_run_startup_diagnostics_continues_when_fail_fast_false(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``mode="warn"`` should not raise even if every outcome fails."""
-    config = _with_ollama_slots(
-        _with_diagnostics(default_runtime_config(), mode="warn")
-    )
+    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="warn"))
     monkeypatch.setattr(
         "iris.runtime.observability.diagnostics.build_provider_diagnostics",
         _stub_factory(status=ReadinessStatus.FAIL, issue_code="daemon_unreachable"),
@@ -284,10 +304,7 @@ async def test_run_startup_diagnostics_continues_when_fail_fast_false(
     report = await run_startup_diagnostics(config)
 
     assert report.has_failures is True
-    assert all(
-        outcome.readiness.status is ReadinessStatus.FAIL
-        for outcome in report.outcomes
-    )
+    assert all(outcome.readiness.status is ReadinessStatus.FAIL for outcome in report.outcomes)
 
 
 @pytest.mark.anyio
@@ -295,9 +312,7 @@ async def test_run_startup_diagnostics_aborts_when_fail_fast_true(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``mode="strict"`` should raise ``ConfigError`` on any FAIL outcome."""
-    config = _with_ollama_slots(
-        _with_diagnostics(default_runtime_config(), mode="strict")
-    )
+    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="strict"))
     monkeypatch.setattr(
         "iris.runtime.observability.diagnostics.build_provider_diagnostics",
         _stub_factory(status=ReadinessStatus.FAIL, issue_code="daemon_unreachable"),
@@ -359,9 +374,7 @@ async def test_warn_mode_does_not_raise_on_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``mode="warn"`` returns a report even when every outcome fails."""
-    config = _with_ollama_slots(
-        _with_diagnostics(default_runtime_config(), mode="warn")
-    )
+    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="warn"))
     monkeypatch.setattr(
         "iris.runtime.observability.diagnostics.build_provider_diagnostics",
         _stub_factory(status=ReadinessStatus.FAIL, issue_code="daemon_unreachable"),
@@ -380,9 +393,7 @@ async def test_warn_mode_does_not_raise_on_failure(
 @pytest.mark.anyio
 async def test_off_mode_skips_external_checks() -> None:
     """``mode="off"`` returns an empty report and does not call factory."""
-    config = _with_ollama_slots(
-        _with_diagnostics(default_runtime_config(), mode="off")
-    )
+    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="off"))
 
     report = await run_startup_diagnostics(config)
 

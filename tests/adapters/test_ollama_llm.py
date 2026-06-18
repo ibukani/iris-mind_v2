@@ -355,9 +355,7 @@ async def test_ollama_client_translates_invalid_json_to_invalid_response() -> No
 @pytest.mark.anyio
 async def test_ollama_client_translates_missing_message_to_invalid_response() -> None:
     """Missing ``message`` key maps to LLMProviderInvalidResponseError."""
-    transport = httpx.MockTransport(
-        lambda request: httpx.Response(200, json={}, request=request)
-    )
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={}, request=request))
     client = OllamaLLMClient(transport=transport)
 
     with pytest.raises(LLMProviderInvalidResponseError):

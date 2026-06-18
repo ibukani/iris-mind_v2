@@ -322,9 +322,7 @@ async def test_check_readiness_reports_model_not_loaded_as_warn() -> None:
 @pytest.mark.anyio
 async def test_check_readiness_reports_loaded_model_in_metadata() -> None:
     """Loaded model is reflected in result metadata with model_loaded=true."""
-    transport = httpx.MockTransport(
-        _build_handler(_TAGS_BODY, _SHOW_BODY, ps_body=_PS_BODY_LOADED)
-    )
+    transport = httpx.MockTransport(_build_handler(_TAGS_BODY, _SHOW_BODY, ps_body=_PS_BODY_LOADED))
 
     result = await OllamaDiagnostics(transport=transport).check_readiness("qwen3:8b")
 
@@ -336,6 +334,7 @@ async def test_check_readiness_reports_loaded_model_in_metadata() -> None:
 @pytest.mark.anyio
 async def test_check_readiness_ps_endpoint_failure_does_not_hide_tags_result() -> None:
     """/api/ps connection failure should not hide the /api/tags model availability result."""
+
     def _ps_failure(request: httpx.Request) -> httpx.Response:
         message = "ps connection failed"
         raise httpx.ConnectError(message, request=request)
@@ -462,6 +461,7 @@ async def test_warmup_warns_when_chat_succeeds_but_model_still_not_loaded() -> N
 @pytest.mark.anyio
 async def test_warmup_warns_when_ps_call_fails_after_successful_chat() -> None:
     """Warmup is treated as successful when /api/chat returns 2xx even if /api/ps fails."""
+
     def _ps_failure(request: httpx.Request) -> httpx.Response:
         message = "ps failure"
         raise httpx.ConnectError(message, request=request)

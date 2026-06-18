@@ -33,12 +33,7 @@ def test_diagnostics_toml_is_applied(tmp_path: Path) -> None:
     config = load_runtime_config(
         _write(
             tmp_path,
-            (
-                "[diagnostics]\n"
-                'mode = "strict"\n'
-                "timeout_seconds = 2.5\n"
-                "warmup_models = true\n"
-            ),
+            ('[diagnostics]\nmode = "strict"\ntimeout_seconds = 2.5\nwarmup_models = true\n'),
         ),
         env={},
     )
