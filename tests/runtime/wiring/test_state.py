@@ -11,6 +11,7 @@ from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.runtime.activity.journal import InMemoryActivityJournal
 from iris.runtime.activity.projections import InMemoryActivityProjectionStore
+from iris.runtime.activity.sqlite_journal import SQLiteActivityJournal
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateConfig
 from iris.runtime.presence.store import InMemoryPresenceStore
@@ -33,10 +34,15 @@ def test_wire_runtime_state_uses_in_memory_runtime_context_stores_by_default() -
     assert isinstance(stores.space_occupancy_store, InMemorySpaceOccupancyStore)
 
 
-def test_wire_runtime_state_keeps_runtime_context_stores_in_memory_for_sqlite(
+def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqlite(
     tmp_path: Path,
 ) -> None:
-    """SQLite バックエンドでも runtime context store は in-memory のままである。"""
+    """SQLite バックエンド選択時、activity journal は durable な SQLite 実装になる。
+
+    永続化policy: ``state.backend = "sqlite"`` 選択時、account、memory、activity
+    journalがSQLiteへ永続化される。Activity projection、presence、space occupancyは
+    process-localのin-memory実装のままとなる。
+    """
     db_path = tmp_path / "state.db"
     config = default_runtime_config()
     config = replace(
@@ -48,7 +54,8 @@ def test_wire_runtime_state_keeps_runtime_context_stores_in_memory_for_sqlite(
 
     assert isinstance(stores.account_store, SQLiteAccountStore)
     assert isinstance(stores.memory_store, SQLiteMemoryStore)
-    assert isinstance(stores.activity_journal, InMemoryActivityJournal)
+    assert isinstance(stores.activity_journal, SQLiteActivityJournal)
+    # projection、presence、space occupancyは依然として process-local。
     assert isinstance(stores.activity_projection_store, InMemoryActivityProjectionStore)
     assert isinstance(stores.presence_store, InMemoryPresenceStore)
     assert isinstance(stores.space_occupancy_store, InMemorySpaceOccupancyStore)

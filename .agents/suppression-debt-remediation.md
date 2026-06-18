@@ -44,27 +44,30 @@ guard `test_suppression_debt_registry.py` will accept the deletion.
 
 ## Group 3 — `tests/e2e/helpers.py` `S404` and `S603`
 
-- File: `tests/e2e/helpers.py:11` (S404), `:90` (S603)
-- Status: open
+- File: `tests/e2e/runtime_process.py:18` (S404), `:145` (S603)
+- Status: removed
 - Owner: e2e harness maintainer
-- What needs to be fixed: move subprocess invocation into a dedicated
-  `tests/e2e/runtime_process.py` port that exposes `start()` and
-  `stop()` methods. The e2e helpers should depend on the port, not on
-  `subprocess` directly. With the port in place, both the S404 import
-  noqa and the S603 call-site noqa disappear.
+- What was done: introduced `tests/e2e/runtime_process.py` as the
+  audited subprocess port. `RuntimeProcess` exposes `port`, `returncode`,
+  `is_alive()`, and `stop()`. The previous `tests/e2e/helpers.py`
+  ``subprocess`` import and `subprocess.Popen` call site were removed
+  and replaced with re-exports of the port. Suppression debt for
+  `tests/e2e/helpers.py` is retired; the port itself is the sole owner
+  of `subprocess` in the e2e suite.
 - Test that must pass after removal: `uv run pytest tests/e2e -m "e2e and not llm_live"`
-  and the architecture guard.
+  and the architecture guard (`make static-arch`).
 - Type: e2e subprocess.
 
 ## Group 4 — `tests/e2e/test_runtime_process_config.py` `S404`
 
-- File: `tests/e2e/test_runtime_process_config.py:5` (S404)
-- Status: open
+- File: `tests/e2e/runtime_process.py:18` (consolidated with Group 3)
+- Status: removed
 - Owner: e2e harness maintainer
-- What needs to be fixed: re-export the same `AuditedProcessRunner` port
-  (or the `tests/e2e/runtime_process.py` helper from Group 3) from the
-  test module. Remove the bare `import subprocess` after the import
-  becomes unneeded.
+- What was done: the `import subprocess` in
+  `tests/e2e/test_runtime_process_config.py` was removed. The
+  `_communicate_or_kill` helper now uses `RuntimeProcess.stop()` from
+  the port, so the test no longer touches `subprocess.TimeoutExpired`
+  directly.
 - Test that must pass after removal: same as Group 3.
 - Type: e2e subprocess.
 
