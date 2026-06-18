@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from iris.contracts.memory import MemoryQuery, MemorySearchResult
 
 from tests.helpers.approx import approx
+from tests.helpers.exact_eq import assert_exact_eq
 
 
 def test_default_config_uses_fake_default_chat() -> None:
@@ -637,6 +638,10 @@ def test_config_package_exposes_stable_public_api() -> None:
         "runtime_config_specs",
         "runtime_config_specs_for_version",
         "RuntimeSafetyConfig",
+        "RuntimeDiagnosticsConfig",
+        "DiagnosticsMode",
+        "apply_diagnostics_env",
+        "apply_diagnostics_toml",
         "all_model_slots_are_fake",
     }
     assert set(config_pkg.__all__) == expected
@@ -765,6 +770,38 @@ def test_openai_example_uses_openai_provider() -> None:
     assert config.models.default_chat.provider == "openai"
     assert config.models.fast_judge.provider == "openai"
     assert config.models.reasoning.provider == "openai"
+
+
+def test_local_ollama_example_enables_diagnostics() -> None:
+    """The local Ollama example enables diagnostics with the documented defaults."""
+    local = _repo_path("examples/config/local-ollama.toml")
+
+    config = load_runtime_config(local, env={})
+
+    assert config.diagnostics.mode == "warn"
+    assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
+    assert config.diagnostics.warmup_models is False
+
+
+def test_openai_example_enables_diagnostics() -> None:
+    """The OpenAI example enables diagnostics with the documented defaults."""
+    openai = _repo_path("examples/config/openai.toml")
+
+    config = load_runtime_config(openai, env={})
+
+    assert config.diagnostics.mode == "warn"
+    assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
+    assert config.diagnostics.warmup_models is False
+
+
+def test_minimal_example_enables_diagnostics() -> None:
+    """The minimal example enables diagnostics with the default timeout."""
+    minimal = _repo_path("examples/config/minimal.toml")
+
+    config = load_runtime_config(minimal, env={})
+
+    assert config.diagnostics.mode == "warn"
+    assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
 
 
 # ---------------------------------------------------------------------------

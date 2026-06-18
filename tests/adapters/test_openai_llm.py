@@ -3,11 +3,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib
 
 import pytest
 
 from iris.adapters.llm import openai as openai_adapter
-from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
+from iris.adapters.llm.diagnostics import (
+    LLMProviderAuthenticationError,
+    LLMProviderConnectionError,
+    LLMProviderModelUnavailableError,
+    LLMProviderQuotaError,
+    LLMProviderRateLimitError,
+    LLMProviderTimeoutError,
+)
+from iris.adapters.llm.openai import (
+    OpenAIAdapterError,
+    OpenAIConfig,
+    OpenAILLMClient,
+    OpenAIResponsesClient,
+)
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 
 
@@ -158,3 +172,430 @@ def test_openai_client_requires_api_key_only_without_injected_client() -> None:
 
     with pytest.raises(OpenAIAdapterError, match="API key is required"):
         OpenAILLMClient(OpenAIConfig(model="gpt-test"))
+
+
+# ---------------------------------------------------------------------------
+# LLMProviderError translation tests
+# ---------------------------------------------------------------------------
+
+
+def _make_failing_client(exc: BaseException) -> OpenAIResponsesClient:
+    """Build a minimal client stub whose ``responses.create`` raises ``exc``.
+
+    Args:
+        exc: The exception to raise on ``create``.
+
+    Returns:
+        A stub object exposing ``responses.create`` as an async coroutine.
+    """
+
+    class _FailingResource:
+        async def create(self, **_kwargs: object) -> object:
+            raise exc
+
+    class _FailingClient:
+        responses = _FailingResource()
+
+    return _FailingClient()
+
+
+def _install_exception_types(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    timeout: tuple[type[BaseException], ...] = (),
+    connection: tuple[type[BaseException], ...] = (),
+    auth: tuple[type[BaseException], ...] = (),
+) -> None:
+    """Patch the openai module's exception-type buckets to include custom classes.
+
+    Args:
+        monkeypatch: Pytest fixture used to revert attribute changes.
+        timeout: Classes to register as timeout errors.
+        connection: Classes to register as connection errors.
+        auth: Classes to register as authentication errors.
+    """
+    monkeypatch.setattr(openai_adapter, "_TimeoutErrorTypes", timeout)
+    monkeypatch.setattr(openai_adapter, "_ConnectionErrorTypes", connection)
+    monkeypatch.setattr(openai_adapter, "_AuthenticationErrorTypes", auth)
+
+
+@pytest.mark.anyio
+async def test_openai_client_translates_timeout_to_provider_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registered timeout classes map to LLMProviderTimeoutError."""
+
+    class _FakeTimeout(BaseException):
+        pass
+
+    _install_exception_types(monkeypatch, timeout=(_FakeTimeout,))
+
+    config = OpenAIConfig(model="gpt-test", api_key="test-key")
+    client = OpenAILLMClient(
+        config,
+        client=_make_failing_client(_FakeTimeout("timed out")),
+    )
+
+    with pytest.raises(LLMProviderTimeoutError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_openai_client_translates_connection_error_to_provider_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registered connection classes map to LLMProviderConnectionError."""
+
+    class _FakeConnection(BaseException):
+        pass
+
+    _install_exception_types(monkeypatch, connection=(_FakeConnection,))
+
+    config = OpenAIConfig(model="gpt-test", api_key="test-key")
+    client = OpenAILLMClient(
+        config,
+        client=_make_failing_client(_FakeConnection("connection failed")),
+    )
+
+    with pytest.raises(LLMProviderConnectionError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_openai_client_translates_authentication_to_provider_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registered authentication classes map to LLMProviderAuthenticationError."""
+
+    class _FakeAuth(BaseException):
+        pass
+
+    _install_exception_types(monkeypatch, auth=(_FakeAuth,))
+
+    config = OpenAIConfig(model="gpt-test", api_key="test-key")
+    client = OpenAILLMClient(
+        config,
+        client=_make_failing_client(_FakeAuth("not allowed")),
+    )
+
+    with pytest.raises(LLMProviderAuthenticationError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_openai_client_successful_response_unchanged() -> None:
+    """A well-formed OpenAI Responses API payload still returns an LLMResponse."""
+
+    class _AttrResponse:
+        def __init__(self, **kwargs: object) -> None:
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    payload = _AttrResponse(output_text="hello", model="gpt-test")
+    config = OpenAIConfig(model="gpt-test", api_key="test-key")
+    client = OpenAILLMClient(
+        config,
+        client=StubOpenAIClient(payload),
+    )
+
+    response = await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+    assert response.text == "hello"
+    assert response.model == "gpt-test"
+
+
+@pytest.mark.anyio
+async def test_openai_client_translates_not_found_to_provider_model_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registered NotFound classes map to LLMProviderModelUnavailableError."""
+
+    class _FakeNotFoundError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_NotFoundErrorTypes", (_FakeNotFoundError,))
+    monkeypatch.setattr(openai_adapter, "_ConnectionErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_QuotaErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_BadRequestErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_AuthenticationErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_RateLimitErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_TimeoutErrorTypes", ())
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeNotFoundError()),
+    )
+
+    with pytest.raises(LLMProviderModelUnavailableError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_openai_client_translates_rate_limit_to_provider_rate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registered RateLimit classes map to LLMProviderRateLimitError."""
+
+    class _FakeRateLimitError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_RateLimitErrorTypes", (_FakeRateLimitError,))
+    monkeypatch.setattr(openai_adapter, "_ConnectionErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_QuotaErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_BadRequestErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_TimeoutErrorTypes", ())
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeRateLimitError()),
+    )
+
+    with pytest.raises(LLMProviderRateLimitError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_openai_client_translates_quota_to_provider_quota(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Registered Quota classes map to LLMProviderQuotaError."""
+
+    class _FakeQuotaError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_QuotaErrorTypes", (_FakeQuotaError,))
+    monkeypatch.setattr(openai_adapter, "_ConnectionErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_RateLimitErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_BadRequestErrorTypes", ())
+    monkeypatch.setattr(openai_adapter, "_TimeoutErrorTypes", ())
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeQuotaError()),
+    )
+
+    with pytest.raises(LLMProviderQuotaError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+# ---------------------------------------------------------------------------
+# Regression: empty SDK exception buckets must not over-catch Exception
+# ---------------------------------------------------------------------------
+
+
+def test_unreachable_sentinel_is_not_an_exception_subclass() -> None:
+    """The sentinel used for empty SDK buckets is not a subclass of Exception.
+
+    A sentinel that extends Exception would still act as a broad catch
+    on real Exception subclasses raised by the SDK, re-introducing the
+    misclassification bug. The sentinel is a private BaseException
+    subclass to make except clauses syntactically valid without
+    widening the catch to Exception.
+    """
+    # Access the sentinel via importlib and module vars. The runtime
+    # value is a class; we use a local annotation to make the type
+    # explicit without an inline suppression comment.
+    sentinel_module = importlib.import_module("iris.adapters.llm.openai")
+    sentinel_cls: type[BaseException] = vars(sentinel_module)["_UnreachableSentinel"]
+    assert not issubclass(sentinel_cls, Exception)
+    assert issubclass(sentinel_cls, BaseException)
+
+
+def _sentinel_only_bucket() -> tuple[type[BaseException], ...]:
+    """Build a one-element tuple of the unreachable sentinel for except clauses.
+
+    Returns:
+        A tuple containing only the unreachable sentinel so the catch
+        chain matches no real exception.
+    """
+    sentinel_module = importlib.import_module("iris.adapters.llm.openai")
+    sentinel_cls: type[BaseException] = vars(sentinel_module)["_UnreachableSentinel"]
+    return (sentinel_cls,)
+
+
+def _reset_all_buckets_to_sentinel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[type[BaseException], ...]:
+    """Reset every OpenAI exception-type bucket to a sentinel-only tuple.
+
+    Args:
+        monkeypatch: Pytest fixture used to revert attribute changes.
+
+    Returns:
+        The sentinel-only tuple so the caller can re-assign it to one
+        bucket to test its specific catch semantics.
+    """
+    sentinel_tuple = _sentinel_only_bucket()
+    for bucket_name in (
+        "_TimeoutErrorTypes",
+        "_ConnectionErrorTypes",
+        "_AuthenticationErrorTypes",
+        "_RateLimitErrorTypes",
+        "_NotFoundErrorTypes",
+        "_BadRequestErrorTypes",
+        "_QuotaErrorTypes",
+    ):
+        monkeypatch.setattr(openai_adapter, bucket_name, sentinel_tuple)
+    return sentinel_tuple
+
+
+@pytest.mark.anyio
+async def test_arbitrary_exception_not_mapped_to_provider_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An exception not in any bucket is not translated to a provider error.
+
+    With the original broad fallback, an unmapped exception would be
+    caught by the ``(Exception,)`` bucket and translated to
+    :class:`LLMProviderConnectionError`. With the sentinel fix, the
+    catch chain ignores unmapped exceptions and lets them propagate.
+    """
+    _reset_all_buckets_to_sentinel(monkeypatch)
+
+    class _UnmappedError(Exception):
+        """Stand-in for an SDK exception that no bucket registers."""
+
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_UnmappedError("unmapped")),
+    )
+
+    with pytest.raises(_UnmappedError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_authentication_error_not_misclassified_as_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``AuthenticationError`` is not caught by the connection bucket.
+
+    Before the fix, the connection bucket contained ``(APIError,)``
+    which is the base class of all status errors. Any
+    ``AuthenticationError`` (a subclass of ``APIStatusError``) was
+    therefore misclassified as ``LLMProviderConnectionError``.
+    """
+    sentinel_tuple = _reset_all_buckets_to_sentinel(monkeypatch)
+
+    class _FakeAuthError(Exception):
+        """Stand-in for the SDK's AuthenticationError."""
+
+    monkeypatch.setattr(openai_adapter, "_AuthenticationErrorTypes", (_FakeAuthError,))
+    # The local ``sentinel_tuple`` is bound so ruff can prove it is
+    # used (it underpins the per-bucket reset above).
+    assert sentinel_tuple
+
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeAuthError("auth failed")),
+    )
+
+    with pytest.raises(LLMProviderAuthenticationError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_rate_limit_error_not_misclassified_as_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``RateLimitError`` is not caught by the connection bucket."""
+    sentinel_tuple = _reset_all_buckets_to_sentinel(monkeypatch)
+
+    class _FakeRateLimitError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_RateLimitErrorTypes", (_FakeRateLimitError,))
+    assert sentinel_tuple
+
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeRateLimitError("rate limited")),
+    )
+
+    with pytest.raises(LLMProviderRateLimitError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_not_found_error_maps_to_provider_model_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``NotFoundError`` maps to :class:`LLMProviderModelUnavailableError`."""
+    sentinel_tuple = _reset_all_buckets_to_sentinel(monkeypatch)
+
+    class _FakeNotFoundError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_NotFoundErrorTypes", (_FakeNotFoundError,))
+    assert sentinel_tuple
+
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeNotFoundError("model not found")),
+    )
+
+    with pytest.raises(LLMProviderModelUnavailableError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_bad_request_error_maps_to_provider_model_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``BadRequestError`` maps to :class:`LLMProviderModelUnavailableError`."""
+    sentinel_tuple = _reset_all_buckets_to_sentinel(monkeypatch)
+
+    class _FakeBadRequestError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_BadRequestErrorTypes", (_FakeBadRequestError,))
+    assert sentinel_tuple
+
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeBadRequestError("invalid model")),
+    )
+
+    with pytest.raises(LLMProviderModelUnavailableError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_connection_error_maps_to_provider_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``APIConnectionError``-shaped errors map to :class:`LLMProviderConnectionError`."""
+    sentinel_tuple = _reset_all_buckets_to_sentinel(monkeypatch)
+
+    class _FakeConnectionError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_ConnectionErrorTypes", (_FakeConnectionError,))
+    assert sentinel_tuple
+
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeConnectionError("conn refused")),
+    )
+
+    with pytest.raises(LLMProviderConnectionError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))
+
+
+@pytest.mark.anyio
+async def test_timeout_error_maps_to_provider_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``APITimeoutError``-shaped errors map to :class:`LLMProviderTimeoutError`."""
+    sentinel_tuple = _reset_all_buckets_to_sentinel(monkeypatch)
+
+    class _FakeTimeoutError(Exception):
+        pass
+
+    monkeypatch.setattr(openai_adapter, "_TimeoutErrorTypes", (_FakeTimeoutError,))
+    assert sentinel_tuple
+
+    client = OpenAILLMClient(
+        OpenAIConfig(model="gpt-test", api_key="test-key"),
+        client=_make_failing_client(_FakeTimeoutError("timed out")),
+    )
+
+    with pytest.raises(LLMProviderTimeoutError):
+        await client.generate(LLMRequest(model="gpt-test", messages=()))

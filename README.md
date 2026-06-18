@@ -68,6 +68,10 @@ OpenAIの認証情報などの秘密情報はTOMLには書かず、
 設定ファイル形式は`[config] version = 1`。version省略は後方互換としてv1扱い。
 未知version、未知section、未知key、未知model slotは`ConfigError`になる。
 
+LLM プロバイダの起動時診断モード (`off` / `warn` / `strict`)、warmup 設定、
+リクエスト可観測性、gRPC エラーマッピングの詳細については
+[docs/observability.md](docs/observability.md) を参照。
+
 ### 設定ソースの役割分担
 
 各設定ソースには明確な役割がある。変更したい値に応じて適切な手段を選ぶ。

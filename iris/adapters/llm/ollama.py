@@ -8,6 +8,15 @@ from typing import override
 
 import httpx
 
+from iris.adapters.llm.diagnostics import (
+    LLMProviderAuthenticationError,
+    LLMProviderConnectionError,
+    LLMProviderError,
+    LLMProviderInvalidResponseError,
+    LLMProviderModelUnavailableError,
+    LLMProviderRateLimitError,
+    LLMProviderTimeoutError,
+)
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
 
 type _JsonPrimitive = str | int | float | bool | None
@@ -27,8 +36,15 @@ class OllamaConfig:
     keep_alive: str | None = None
 
 
-class OllamaAdapterError(RuntimeError):
-    """Raised when the Ollama adapter cannot produce a valid LLM response."""
+class OllamaAdapterError(LLMProviderError):
+    """Raised when the Ollama adapter cannot produce a valid LLM response.
+
+    ``OllamaAdapterError`` は provider-neutral な
+    :class:`iris.adapters.llm.diagnostics.LLMProviderError` 階層の
+    一員として gRPC ingress の ``map_exception_to_grpc`` から直接
+    ハンドリングできる。 サブクラスでより細かい分類
+    (接続失敗 / タイムアウト / 不正レスポンス) を表現する。
+    """
 
 
 class OllamaLLMClient(LLMClient):
@@ -64,23 +80,15 @@ class OllamaLLMClient(LLMClient):
 
         Returns:
             Provider-neutral LLM response.
-
-        Raises:
-            OllamaAdapterError: If Ollama cannot return a valid text response.
         """
         model = self._request_model(request)
         payload = self._build_payload(request, model)
-        try:
-            response = await self._client.post("/api/chat", json=payload)
-            response.raise_for_status()
-            body = _decode_json_response(response)
-        except httpx.HTTPStatusError as exc:
-            message = f"Ollama returned HTTP {exc.response.status_code}"
-            raise OllamaAdapterError(message) from exc
-        except httpx.HTTPError as exc:
-            message = "Ollama request failed"
-            raise OllamaAdapterError(message) from exc
-
+        body = await perform_ollama_request(
+            client=self._client,
+            base_url=self._config.base_url,
+            payload=payload,
+            model=model,
+        )
         return _to_llm_response(body, fallback_model=model)
 
     def _request_model(self, request: LLMRequest) -> str:
@@ -110,12 +118,89 @@ class OllamaLLMClient(LLMClient):
         return payload
 
 
-def _decode_json_response(response: httpx.Response) -> _JsonObject:
+async def perform_ollama_request(
+    *,
+    client: httpx.AsyncClient,
+    base_url: str,
+    payload: _JsonObject,
+    model: str,
+) -> _JsonObject:
+    """POST the chat payload to Ollama and return the decoded JSON body.
+
+    Args:
+        client: The httpx client used to issue the request.
+        base_url: Base URL of the Ollama host, used in connection error messages.
+        payload: JSON body that will be sent to ``/api/chat``.
+        model: The model name that was requested (used for error messages).
+
+    Returns:
+        Decoded JSON body of the Ollama response.
+
+    Raises:
+        LLMProviderTimeoutError: If the Ollama request times out.
+        LLMProviderConnectionError: If the Ollama endpoint is unreachable.
+        LLMProviderError: For any other transport-level failure.
+    """
+    try:
+        response = await client.post("/api/chat", json=payload)
+    except httpx.TimeoutException as exc:
+        message = f"Ollama request timed out for model {model!r}"
+        raise LLMProviderTimeoutError(message) from exc
+    except httpx.ConnectError as exc:
+        message = f"Ollama is unreachable at {base_url}"
+        raise LLMProviderConnectionError(message) from exc
+    except httpx.HTTPError as exc:
+        message = f"Ollama request failed: {exc}"
+        raise LLMProviderError(message) from exc
+    return _decode_ollama_response(response, model=model)
+
+
+def _decode_ollama_response(response: httpx.Response, *, model: str) -> _JsonObject:
+    """Validate the response status and decode the JSON body.
+
+    Args:
+        response: The successful response from the Ollama ``/api/chat`` endpoint.
+        model: The model name that was requested (used for error messages).
+
+    Returns:
+        Decoded JSON body of the Ollama response.
+
+    Raises:
+        LLMProviderModelUnavailableError: If the configured model is unknown.
+        LLMProviderAuthenticationError: If the Ollama host rejects credentials.
+        LLMProviderRateLimitError: If the Ollama host rate-limits the request.
+        LLMProviderInvalidResponseError: If the response shape is invalid.
+        LLMProviderError: For any other non-success status code.
+    """
+    status = response.status_code
+    if status == _HTTP_NOT_FOUND:
+        message = f"Ollama model {model!r} is unavailable"
+        raise LLMProviderModelUnavailableError(message)
+    if status in _HTTP_UNAUTHORIZED:
+        message = f"Ollama rejected the request with HTTP {status}"
+        raise LLMProviderAuthenticationError(message)
+    if status == _HTTP_RATE_LIMITED:
+        message = f"Ollama rate-limited the request (HTTP {status}) for model {model!r}"
+        raise LLMProviderRateLimitError(message)
+    if status >= _HTTP_SERVER_ERROR_THRESHOLD:
+        message = f"Ollama server error HTTP {status} for model {model!r}"
+        raise LLMProviderError(message)
+    if status >= _HTTP_OK_THRESHOLD:
+        message = f"Ollama returned HTTP {status} for model {model!r}"
+        raise LLMProviderError(message)
+    try:
+        return _decode_json_body(response)
+    except LLMProviderInvalidResponseError as exc:
+        message = f"Ollama response was not valid JSON: {exc}"
+        raise LLMProviderInvalidResponseError(message) from exc
+
+
+def _decode_json_body(response: httpx.Response) -> _JsonObject:
     try:
         body: _JsonObject = response.json()
     except json.JSONDecodeError as exc:
         message = "Ollama returned invalid JSON"
-        raise OllamaAdapterError(message) from exc
+        raise LLMProviderInvalidResponseError(message) from exc
     return body
 
 
@@ -123,12 +208,12 @@ def _to_llm_response(body: _JsonObject, *, fallback_model: str) -> LLMResponse:
     message = body.get("message")
     if not isinstance(message, dict):
         error_message = "Ollama response is missing message"
-        raise OllamaAdapterError(error_message)
+        raise LLMProviderInvalidResponseError(error_message)
 
     content = message.get("content")
     if not isinstance(content, str):
         error_message = "Ollama response is missing message content"
-        raise OllamaAdapterError(error_message)
+        raise LLMProviderInvalidResponseError(error_message)
 
     provider_model = body.get("model")
     model = provider_model if isinstance(provider_model, str) else fallback_model
@@ -141,3 +226,10 @@ def _finish_reason(body: _JsonObject) -> str:
     if isinstance(done_reason, str):
         return done_reason
     return "stop"
+
+
+_HTTP_NOT_FOUND = 404
+_HTTP_OK_THRESHOLD = 400
+_HTTP_UNAUTHORIZED: frozenset[int] = frozenset({401, 403})
+_HTTP_RATE_LIMITED = 429
+_HTTP_SERVER_ERROR_THRESHOLD = 500

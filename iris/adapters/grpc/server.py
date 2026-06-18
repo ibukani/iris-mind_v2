@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING, override
 
@@ -11,8 +12,10 @@ from loguru import logger
 from iris.adapters.grpc.mappers import (
     GrpcMappingError,
     GrpcRuntimeMapper,
+    map_exception_to_grpc,
     runtime_response_to_proto,
 )
+from iris.adapters.llm.diagnostics import LLMProviderError
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 
 if TYPE_CHECKING:
@@ -77,6 +80,9 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
 
         Returns:
             runtime_pb2.SubmitObservationResponse: Proto runtime response.
+
+        Raises:
+            asyncio.CancelledError: Propagated when the client cancels the RPC.
         """
         logger.info("SubmitObservation: received")
         start_time = time.monotonic()
@@ -95,11 +101,18 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
                 has_space_ref=request.observation.context.HasField("space_ref"),
                 latency_ms=round(latency_ms, 2),
             ).info("SubmitObservation: completed")
-
             return runtime_response_to_proto(response)
         except GrpcMappingError as exc:
             logger.warning("SubmitObservation: invalid_argument - {}", exc)
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
-        except Exception as exc:  # noqa: BLE001 -- global fallback for the runtime ingress boundary
-            logger.exception("SubmitObservation: internal_error - {}", exc)
+        except asyncio.CancelledError:
+            logger.warning("SubmitObservation: cancelled by client")
+            raise
+        except LLMProviderError as exc:
+            status, message = map_exception_to_grpc(exc)
+            log = logger.exception if status is grpc.StatusCode.INTERNAL else logger.warning
+            log("SubmitObservation: {} - {}", status.name, exc)
+            await context.abort(status, message)
+        except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
+            logger.exception("SubmitObservation: ingress_runtime_error - {}", exc)
             await context.abort(grpc.StatusCode.INTERNAL, "runtime service failed")

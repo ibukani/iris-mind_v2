@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
+
+from loguru import logger
 
 from iris.cognitive.cycle.models import CycleResult, PipelineStepResult
 
@@ -57,7 +60,34 @@ class CognitiveCycle:
         )
 
         for step in self._steps:
-            result = await step.run(frame)
+            step_name = step.name
+            logger.bind(
+                step=step_name,
+                observation_id=str(observation.observation_id),
+                session_id=str(observation.session_id),
+            ).info("cognitive.step.start")
+            started = time.perf_counter()
+            try:
+                result = await step.run(frame)
+            except BaseException as exc:
+                latency_ms = (time.perf_counter() - started) * 1000.0
+                logger.bind(
+                    step=step_name,
+                    observation_id=str(observation.observation_id),
+                    session_id=str(observation.session_id),
+                    latency_ms=round(latency_ms, 2),
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
+                ).exception("cognitive.step.error")
+                raise
+            latency_ms = (time.perf_counter() - started) * 1000.0
+            logger.bind(
+                step=step_name,
+                observation_id=str(observation.observation_id),
+                session_id=str(observation.session_id),
+                latency_ms=round(latency_ms, 2),
+                status=result.status.value,
+            ).info("cognitive.step.complete")
             frame = self._frame_builder.apply(frame, result)
 
         selected = self._select_action_plan(frame)

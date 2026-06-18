@@ -19,6 +19,11 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from iris.runtime.config.diagnostics import (
+    RuntimeDiagnosticsConfig,
+    apply_diagnostics_env,
+    apply_diagnostics_toml,
+)
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.llm import (
     LLMProvider,
@@ -81,6 +86,7 @@ class IrisRuntimeConfig:
     openai: RuntimeOpenAIConfig
     logging: RuntimeLoggingConfig
     safety: RuntimeSafetyConfig
+    diagnostics: RuntimeDiagnosticsConfig
 
 
 @dataclass(frozen=True)
@@ -125,6 +131,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         openai=RuntimeOpenAIConfig(),
         logging=RuntimeLoggingConfig(),
         safety=RuntimeSafetyConfig(),
+        diagnostics=RuntimeDiagnosticsConfig(),
     )
 
 
@@ -344,6 +351,10 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     server = apply_server_toml(config.server, table_or_empty(table, "server"))
     state = apply_state_toml(config.state, table_or_empty(table, "state"))
     safety = apply_safety_toml(config.safety, table_or_empty(table, "safety"))
+    diagnostics = apply_diagnostics_toml(
+        config.diagnostics,
+        table_or_empty(table, "diagnostics"),
+    )
 
     models, ollama, openai, logging = apply_toml(
         config.models,
@@ -362,6 +373,7 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
         openai=openai,
         logging=logging,
         safety=safety,
+        diagnostics=diagnostics,
     )
 
 
@@ -386,6 +398,7 @@ def _apply_env(
     server = apply_server_env(config.server, env)
     state = apply_state_env(config.state, env)
     safety = apply_safety_env(config.safety, env)
+    diagnostics = apply_diagnostics_env(config.diagnostics, env)
 
     models, ollama, openai, logging = apply_env(
         config.models, config.ollama, config.openai, config.logging, env
@@ -399,4 +412,5 @@ def _apply_env(
         openai=openai,
         logging=logging,
         safety=safety,
+        diagnostics=diagnostics,
     )

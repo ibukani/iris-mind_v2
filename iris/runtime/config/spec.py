@@ -228,6 +228,28 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "出力可能な最大文字数。",
             env="IRIS_SAFETY_MAX_OUTPUT_CHARS",
         ),
+        ConfigFieldSpec(
+            "diagnostics.mode",
+            "enum",
+            "warn",
+            "起動時 LLM プロバイダ診断の動作モード。",
+            env="IRIS_DIAGNOSTICS_MODE",
+            allowed_values=("off", "warn", "strict"),
+        ),
+        ConfigFieldSpec(
+            "diagnostics.timeout_seconds",
+            "float",
+            5.0,
+            "診断チェック 1 件あたりのタイムアウト秒数。",
+            env="IRIS_DIAGNOSTICS_TIMEOUT_SECONDS",
+        ),
+        ConfigFieldSpec(
+            "diagnostics.warmup_models",
+            "bool",
+            default=False,
+            description="診断後に provider 固有の warmup を実行する。",
+            env="IRIS_DIAGNOSTICS_WARMUP_MODELS",
+        ),
     )
 
 

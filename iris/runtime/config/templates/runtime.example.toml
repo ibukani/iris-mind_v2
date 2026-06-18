@@ -56,3 +56,8 @@ retention = "7 days"
 [safety]
 mode = "development"
 max_output_chars = 4000
+
+[diagnostics]
+mode = "warn"
+timeout_seconds = 5.0
+warmup_models = false

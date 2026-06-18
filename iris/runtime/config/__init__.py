@@ -7,6 +7,12 @@ implementation details and should not be imported directly by consumers.
 
 from __future__ import annotations
 
+from iris.runtime.config.diagnostics import (
+    DiagnosticsMode,
+    RuntimeDiagnosticsConfig,
+    apply_diagnostics_env,
+    apply_diagnostics_toml,
+)
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.llm import (
     LLMProvider,
@@ -42,11 +48,13 @@ from iris.runtime.config.state import RuntimeStateConfig
 __all__ = [
     "ConfigError",
     "ConfigFieldSpec",
+    "DiagnosticsMode",
     "IrisRuntimeConfig",
     "LLMProvider",
     "ModelSlotName",
     "RuntimeConfigMetadata",
     "RuntimeConfigOverrides",
+    "RuntimeDiagnosticsConfig",
     "RuntimeLoggingConfig",
     "RuntimeModelConfig",
     "RuntimeModelsConfig",
@@ -56,6 +64,8 @@ __all__ = [
     "RuntimeServerConfig",
     "RuntimeStateConfig",
     "all_model_slots_are_fake",
+    "apply_diagnostics_env",
+    "apply_diagnostics_toml",
     "apply_runtime_overrides",
     "default_runtime_config",
     "discover_default_config_path",

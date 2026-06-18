@@ -10,3 +10,8 @@
 [models.default_chat]
 provider = "ollama"
 model = "qwen3:8b"
+
+[diagnostics]
+mode = "warn"
+timeout_seconds = 5.0
+warmup_models = false
