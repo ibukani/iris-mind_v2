@@ -27,7 +27,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         """Create an empty process-local outbox."""
         self._items: dict[DeliveryId, DeliveryEnvelope] = {}
         self._idempotency_index: dict[str, DeliveryId] = {}
-        self._completion_index: dict[DeliveryId, ActionResult] = {}
+        self._report_index: dict[DeliveryId, _ReportFingerprint] = {}
         self._lease_counter = 0
 
     @override
@@ -66,6 +66,8 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
 
         Returns:
             Leased envelopes in deterministic created-at order.
+            Items that reach FAILED_PERMANENT during leasing are stored
+            but not returned to the caller.
         """
         due: list[DeliveryEnvelope] = []
         for item in sorted(self._items.values(), key=_envelope_sort_key):
@@ -75,7 +77,8 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
                 continue
             leased = self._lease_item(item, now=now, lease_seconds=lease_seconds)
             self._items[leased.delivery_id] = leased
-            due.append(leased)
+            if leased.status is DeliveryStatus.LEASED:
+                due.append(leased)
         return tuple(due)
 
     @override
@@ -93,12 +96,17 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             The completed envelope, or the existing one for a repeated report.
 
         Raises:
-            DeliveryOutboxError: If the item is missing, already terminal, or lease mismatches.
+            DeliveryOutboxError: If the report conflicts, the item is already
+                terminal without a recorded report, or the lease mismatches.
         """
         item = self._get(delivery_id)
-        previous = self._completion_index.get(delivery_id)
-        if previous == result:
-            return item
+        current = _complete_fingerprint(delivery_id, lease_id, result)
+        previous = self._report_index.get(delivery_id)
+        if previous is not None:
+            if previous == current:
+                return item
+            msg = "delivery_report_conflict"
+            raise DeliveryOutboxError(msg)
         if item.status in TERMINAL_DELIVERY_STATUSES:
             msg = "delivery_already_terminal"
             raise DeliveryOutboxError(msg)
@@ -113,7 +121,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             last_error_reason=result.error_reason,
         )
         self._items[delivery_id] = completed
-        self._completion_index[delivery_id] = result
+        self._report_index[delivery_id] = current
         return completed
 
     @override
@@ -129,11 +137,25 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         """Release a leased item for retry, or make it permanent after max attempts.
 
         Returns:
-            The released envelope set to PENDING, or FAILED_PERMANENT past max attempts.
+            The released envelope set to PENDING, or FAILED_PERMANENT past max
+            attempts. A repeated identical failed report returns the existing
+            item idempotently.
+
+        Raises:
+            DeliveryOutboxError: If the report conflicts, the item is already
+                terminal without a recorded report, or the lease mismatches.
         """
         item = self._get(delivery_id)
+        current = _release_fingerprint(delivery_id, lease_id, reason)
+        previous = self._report_index.get(delivery_id)
+        if previous is not None:
+            if previous == current:
+                return item
+            msg = "delivery_report_conflict"
+            raise DeliveryOutboxError(msg)
         if item.status in TERMINAL_DELIVERY_STATUSES:
-            return item
+            msg = "delivery_already_terminal"
+            raise DeliveryOutboxError(msg)
         _require_matching_lease(item, lease_id)
         status = (
             DeliveryStatus.FAILED_PERMANENT
@@ -150,6 +172,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             last_error_reason=reason,
         )
         self._items[delivery_id] = released
+        self._report_index[delivery_id] = current
         return released
 
     @override
@@ -191,6 +214,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         Returns:
             A LEASED copy, or a FAILED_PERMANENT copy when max attempts is exceeded.
         """
+        self._report_index.pop(item.delivery_id, None)
         if item.attempts >= item.max_attempts:
             failed = replace(
                 item,
@@ -236,6 +260,35 @@ def _envelope_sort_key(item: DeliveryEnvelope) -> tuple[datetime, DeliveryId]:
         Tuple of created_at and delivery_id for stable ordering.
     """
     return (item.created_at, item.delivery_id)
+
+
+type _ReportFingerprint = tuple[DeliveryId, LeaseId | None, str, str | None]
+
+
+def _complete_fingerprint(
+    delivery_id: DeliveryId,
+    lease_id: LeaseId | None,
+    result: ActionResult,
+) -> _ReportFingerprint:
+    """Build a report fingerprint for a complete() call.
+
+    Returns:
+        Tuple of delivery_id, lease_id, status value, and error reason.
+    """
+    return (delivery_id, lease_id, result.status.value, result.error_reason)
+
+
+def _release_fingerprint(
+    delivery_id: DeliveryId,
+    lease_id: LeaseId | None,
+    reason: str,
+) -> _ReportFingerprint:
+    """Build a report fingerprint for a release() call.
+
+    Returns:
+        Tuple of delivery_id, lease_id, failed status value, and reason.
+    """
+    return (delivery_id, lease_id, ActionStatus.FAILED.value, reason)
 
 
 def _is_due(item: DeliveryEnvelope, now: datetime) -> bool:

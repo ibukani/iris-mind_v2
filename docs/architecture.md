@@ -876,7 +876,9 @@ RuntimeScheduler
 → learning/audit hooks
 ```
 
-`DeliveryOutbox` は sender ではない。外部 client が `PollAppActions` で lease し、platform send 後に `ReportActionResult` を返す。現実装は in-memory だが、`DeliveryEnvelope`、lease、idempotency key、`DeliveryStatus` state machine は durable 実装へ置換できる契約にする。
+`DeliveryOutbox` は sender ではない。外部 client が `PollAppActions` で lease し、platform send 後に `ReportActionResult` を返す。`PollAppActions` は `LEASED` 状態の item のみ返す。`ReportActionResult` は `SUCCEEDED` / `CANCELLED` / `BLOCKED` を terminal completion、`FAILED` のみ retry として扱う。同一報告の再送は全 status で idempotent、競合報告は `DeliveryOutboxError` を送出する。現実装は in-memory だが、`DeliveryEnvelope`、lease、idempotency key、`DeliveryStatus` state machine は durable 実装へ置換できる契約にする。
+
+`SchedulerRunner` は `DeliveryAvailabilityProvider` protocol を通じて `AvailabilitySnapshot` を取得し、`DeliverySafetyGate` へ渡す。BUSY / UNAVAILABLE は delivery enqueue を block する。`DeliverySafetyGate` の runtime-level rate limit は現 phase では未実装。プロアクティブ送信頻度は `IdleTickSource` が `min_interval_per_target_seconds` で制御する。
 
 `NoAction`、sendable ではない `PresentedOutput`、`DeliverySafetyGate` が block した output は delivery outbox に入れない。
 - external.md: 外部アプリとの責務分離

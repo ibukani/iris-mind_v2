@@ -9,7 +9,7 @@ import pytest
 
 from iris.contracts.actions import ActionResult, ActionStatus, NoAction, SendMessageAction
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTarget
-from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, SessionId
+from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, LeaseId, SessionId
 from iris.runtime.delivery.in_memory import DeliveryOutboxError, InMemoryDeliveryOutbox
 
 pytestmark = pytest.mark.anyio
@@ -170,3 +170,143 @@ async def test_no_action_is_not_accepted_for_delivery() -> None:
     )
     with pytest.raises(DeliveryOutboxError, match="no_action_not_deliverable"):
         await outbox.enqueue(no_action_envelope)
+
+
+async def test_lease_due_returns_only_leased_items() -> None:
+    """lease_due never returns terminal or non-leased items."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope("delivery-1", idempotency_key="k1"))
+    await outbox.enqueue(envelope("delivery-2", idempotency_key="k2"))
+    blocked = await outbox.mark_blocked(
+        delivery_id=DeliveryId("delivery-2"),
+        reason="safety",
+        blocked_at=now,
+    )
+    assert blocked.status is DeliveryStatus.BLOCKED
+    leased = await outbox.lease_due(provider="discord", now=now, max_items=10, lease_seconds=30)
+    assert len(leased) == 1
+    assert all(item.status is DeliveryStatus.LEASED for item in leased)
+
+
+async def test_expired_max_attempt_lease_becomes_permanent_and_is_not_returned() -> None:
+    """Item past max attempts is FAILED_PERMANENT during lease and not returned."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope(max_attempts=1))
+    first = await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30)
+    assert len(first) == 1
+    released = await outbox.release(
+        delivery_id=first[0].delivery_id,
+        lease_id=first[0].lease_id,
+        retry_after=now + timedelta(seconds=30),
+        reason="temporary",
+        released_at=now,
+    )
+    assert released.status is DeliveryStatus.FAILED_PERMANENT
+    after_expiry = await outbox.lease_due(
+        provider="discord",
+        now=now + timedelta(seconds=31),
+        max_items=10,
+        lease_seconds=30,
+    )
+    assert after_expiry == ()
+
+
+async def test_repeated_failed_report_is_idempotent() -> None:
+    """Repeated identical FAILED release is safe."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope(max_attempts=3))
+    leased = (await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30))[0]
+    first = await outbox.release(
+        delivery_id=leased.delivery_id,
+        lease_id=leased.lease_id,
+        retry_after=now + timedelta(seconds=30),
+        reason="timeout",
+        released_at=now,
+    )
+    assert first.status is DeliveryStatus.PENDING
+    second_lease = (
+        await outbox.lease_due(
+            provider="discord",
+            now=now + timedelta(seconds=31),
+            max_items=1,
+            lease_seconds=30,
+        )
+    )[0]
+    second = await outbox.release(
+        delivery_id=second_lease.delivery_id,
+        lease_id=second_lease.lease_id,
+        retry_after=now + timedelta(seconds=60),
+        reason="timeout",
+        released_at=now + timedelta(seconds=31),
+    )
+    assert second.status is DeliveryStatus.PENDING
+    repeated = await outbox.release(
+        delivery_id=second_lease.delivery_id,
+        lease_id=second_lease.lease_id,
+        retry_after=now + timedelta(seconds=60),
+        reason="timeout",
+        released_at=now + timedelta(seconds=31),
+    )
+    assert repeated.delivery_id == second.delivery_id
+
+
+async def test_conflicting_report_after_recorded_report_raises() -> None:
+    """Conflicting status after a recorded report raises DeliveryOutboxError."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope())
+    leased = (await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30))[0]
+    success_result = ActionResult(
+        action_id=leased.action.action_id,
+        correlation_id=leased.action.correlation_id,
+        status=ActionStatus.SUCCEEDED,
+        delivered_at=now,
+        external_message_id=ExternalRef("msg-1"),
+        error_reason=None,
+    )
+    await outbox.complete(
+        delivery_id=leased.delivery_id,
+        lease_id=leased.lease_id,
+        result=success_result,
+        completed_at=now,
+    )
+    conflicting_result = replace(success_result, status=ActionStatus.CANCELLED)
+    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+        await outbox.complete(
+            delivery_id=leased.delivery_id,
+            lease_id=leased.lease_id,
+            result=conflicting_result,
+            completed_at=now,
+        )
+
+
+async def test_conflicting_lease_id_raises() -> None:
+    """Different lease_id after a recorded report raises DeliveryOutboxError."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope())
+    leased = (await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30))[0]
+    success_result = ActionResult(
+        action_id=leased.action.action_id,
+        correlation_id=leased.action.correlation_id,
+        status=ActionStatus.SUCCEEDED,
+        delivered_at=now,
+        external_message_id=ExternalRef("msg-1"),
+        error_reason=None,
+    )
+    await outbox.complete(
+        delivery_id=leased.delivery_id,
+        lease_id=leased.lease_id,
+        result=success_result,
+        completed_at=now,
+    )
+    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+        await outbox.complete(
+            delivery_id=leased.delivery_id,
+            lease_id=LeaseId("different-lease"),
+            result=success_result,
+            completed_at=now,
+        )

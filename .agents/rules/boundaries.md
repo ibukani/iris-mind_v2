@@ -128,7 +128,9 @@ RuntimeScheduler
 
 Scheduler emits typed observations only. Proactive talk starts from `IdleTickObservation`.
 
-Delivery is an outbox boundary, not a sender. External clients poll actions and report `ActionResult`. `ReportActionResult` must be idempotent. `NoAction` is not delivered.
+Delivery is an outbox boundary, not a sender. External clients poll actions and report `ActionResult`. `PollAppActions` returns only `LEASED` items. `ReportActionResult` must be idempotent for all statuses (`SUCCEEDED` / `FAILED` / `CANCELLED` / `BLOCKED`). Only `FAILED` is retryable. `CANCELLED` and `BLOCKED` are terminal completions. Conflicting repeated reports raise `DeliveryOutboxError`. `NoAction` is not delivered.
+
+`SchedulerRunner` resolves availability through `DeliveryAvailabilityProvider` and passes `AvailabilitySnapshot` into `DeliverySafetyGate`. BUSY / UNAVAILABLE blocks enqueue. `DeliverySafetyGate` rate limit is not backed by runtime state in this phase; proactive frequency is controlled by `min_interval_per_target_seconds` in `IdleTickSource`.
 
 Forbidden:
 

@@ -58,8 +58,6 @@ class BasicDeliverySafetyGate:
     """決定論的な最小配送 safety gate。"""
 
     quiet_hours: QuietHoursPolicy = QuietHoursPolicy()
-    rate_limit_window_seconds: float = 1800.0
-    last_delivery_at: datetime | None = None
 
     async def check(
         self,
@@ -69,7 +67,7 @@ class BasicDeliverySafetyGate:
         availability: AvailabilitySnapshot | None,
         now: datetime,
     ) -> DeliverySafetyDecision:
-        """配送 target、availability、頻度から配送可否を返す。
+        """配送 target、availability、時刻から配送可否を返す。
 
         Returns:
             DeliverySafetyDecision: 配送可否と理由。blocked の場合は not_before を含む。
@@ -96,7 +94,6 @@ class BasicDeliverySafetyGate:
             self._target_reason(target),
             self._availability_reason(availability),
             self._quiet_hours_reason(now),
-            self._rate_limit_reason(now),
         ):
             if reason is not None:
                 return reason
@@ -155,17 +152,4 @@ class BasicDeliverySafetyGate:
         in_window = start <= current < end if start < end else current >= start or current < end
         if in_window:
             return "quiet_hours"
-        return None
-
-    def _rate_limit_reason(self, now: datetime) -> str | None:
-        """送信頻度制限内なら block 理由を返す。
-
-        Returns:
-            block 理由または None。
-        """
-        if self.last_delivery_at is None:
-            return None
-        elapsed = (now - self.last_delivery_at).total_seconds()
-        if elapsed < self.rate_limit_window_seconds:
-            return "rate_limited"
         return None

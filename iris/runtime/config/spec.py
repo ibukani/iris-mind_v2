@@ -38,6 +38,12 @@ class ConfigFieldSpec:
     deprecated: bool = False
 
 
+_RATE_LIMIT_RESERVED_DESC = (
+    "予約済み: 現在の DeliverySafetyGate では未使用。"
+    "プロアクティブ送信頻度は scheduler.min_interval_per_target_seconds で制御する。"
+)
+
+
 def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
     """全ユーザー向けランタイム設定フィールドの正規仕様を返す。
 
@@ -198,7 +204,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "delivery.rate_limit_window_seconds",
             "float",
             1800.0,
-            "DeliverySafetyGate の rate limit window 秒数。",
+            _RATE_LIMIT_RESERVED_DESC,
         ),
         ConfigFieldSpec(
             "delivery.quiet_hours.enabled",

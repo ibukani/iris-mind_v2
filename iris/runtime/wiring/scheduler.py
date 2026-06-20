@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.proactive.targets import ProactiveTargetStore
+    from iris.runtime.scheduler.ports import DeliveryAvailabilityProvider
     from iris.runtime.service import IrisRuntimeService
     from iris.safety.delivery_gate import DeliverySafetyGate
 
@@ -41,6 +42,7 @@ def wire_scheduler_runner(
     delivery_gate: DeliverySafetyGate,
     outbox: DeliveryOutbox,
     config: IrisRuntimeConfig,
+    availability_provider: DeliveryAvailabilityProvider | None = None,
 ) -> SchedulerRunner:
     """SchedulerRunner を constructor injection で組み立てる。
 
@@ -52,5 +54,6 @@ def wire_scheduler_runner(
         runtime_service=runtime_service,
         delivery_gate=delivery_gate,
         outbox=outbox,
+        availability_provider=availability_provider,
         max_attempts=config.delivery.max_attempts,
     )

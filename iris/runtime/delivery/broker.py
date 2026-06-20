@@ -13,6 +13,14 @@ if TYPE_CHECKING:
     from iris.contracts.delivery import DeliveryEnvelope, DeliveryReport
     from iris.runtime.delivery.outbox import DeliveryOutbox
 
+_TERMINAL_REPORT_STATUSES: frozenset[ActionStatus] = frozenset(
+    {
+        ActionStatus.SUCCEEDED,
+        ActionStatus.CANCELLED,
+        ActionStatus.BLOCKED,
+    },
+)
+
 
 @dataclass(frozen=True)
 class RuntimeAppActionBroker(AppActionBroker):
@@ -46,10 +54,13 @@ class RuntimeAppActionBroker(AppActionBroker):
     async def report_action_result(self, report: DeliveryReport) -> DeliveryEnvelope:
         """Apply an ActionResult to the leased delivery item.
 
+        SUCCEEDED, CANCELLED, and BLOCKED are terminal completions.
+        Only FAILED is released for retry or permanent failure.
+
         Returns:
             Updated delivery envelope after completion or release.
         """
-        if report.result.status is ActionStatus.SUCCEEDED:
+        if report.result.status in _TERMINAL_REPORT_STATUSES:
             return await self.outbox.complete(
                 delivery_id=report.delivery_id,
                 lease_id=report.lease_id,

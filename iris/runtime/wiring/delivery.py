@@ -41,5 +41,4 @@ def wire_delivery_safety_gate(config: RuntimeDeliveryConfig) -> BasicDeliverySaf
             end=quiet_time(config.quiet_hours.end, "delivery.quiet_hours.end"),
             timezone=config.quiet_hours.timezone,
         ),
-        rate_limit_window_seconds=config.rate_limit_window_seconds,
     )

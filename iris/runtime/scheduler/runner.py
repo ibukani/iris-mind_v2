@@ -14,9 +14,10 @@ from iris.runtime.service import ObservationEnvelope, ObservationRuntimeService,
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from iris.contracts.availability import AvailabilitySnapshot
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.scheduler.models import ScheduledObservation
-    from iris.runtime.scheduler.ports import RuntimeScheduler
+    from iris.runtime.scheduler.ports import DeliveryAvailabilityProvider, RuntimeScheduler
     from iris.safety.delivery_gate import DeliverySafetyDecision, DeliverySafetyGate
 
 
@@ -47,6 +48,7 @@ class SchedulerRunner:
     runtime_service: ObservationRuntimeService
     delivery_gate: DeliverySafetyGate
     outbox: DeliveryOutbox
+    availability_provider: DeliveryAvailabilityProvider | None = None
     max_attempts: int = 3
 
     async def run_once(self, now: datetime) -> SchedulerRunResult:
@@ -107,16 +109,31 @@ class SchedulerRunner:
         if target is None:
             await self.scheduler.mark_dispatched(observation_id, dispatched_at=now)
             return ScheduledObservationResult(observation_id, "blocked", "missing_delivery_target")
+        availability = await self._availability_for(target, now)
         decision = await self.delivery_gate.check(
             target=target,
             output=response.output,
-            availability=None,
+            availability=availability,
             now=now,
         )
         if not decision.allowed:
             await self.scheduler.mark_dispatched(observation_id, dispatched_at=now)
             return ScheduledObservationResult(observation_id, "blocked", decision.reason)
         return await self._enqueue_sendable(scheduled, response, decision, target, now)
+
+    async def _availability_for(
+        self,
+        target: DeliveryTarget,
+        now: datetime,
+    ) -> AvailabilitySnapshot | None:
+        """Resolve availability for a target through the injected provider.
+
+        Returns:
+            可用性スナップショット。provider がない場合は None。
+        """
+        if self.availability_provider is None:
+            return None
+        return await self.availability_provider.availability_for_target(target, now=now)
 
     async def _enqueue_sendable(
         self,

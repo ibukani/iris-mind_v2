@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, time
 
 import pytest
 
@@ -83,22 +83,6 @@ async def test_quiet_hours_block_delivery() -> None:
         now=datetime(2026, 1, 1, 23, tzinfo=UTC),
     )
     assert decision.reason == "quiet_hours"
-
-
-async def test_rate_limit_blocks_repeated_delivery() -> None:
-    """Rate limit blocks delivery before the window passes."""
-    now = datetime(2026, 1, 1, tzinfo=UTC)
-    gate = BasicDeliverySafetyGate(
-        rate_limit_window_seconds=60,
-        last_delivery_at=now - timedelta(seconds=10),
-    )
-    decision = await gate.check(
-        target=_target(),
-        output=PresentedOutput(text="hello"),
-        availability=None,
-        now=now,
-    )
-    assert decision.reason == "rate_limited"
 
 
 async def test_available_target_is_allowed() -> None:

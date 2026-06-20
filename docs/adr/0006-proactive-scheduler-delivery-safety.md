@@ -31,13 +31,17 @@ Scheduler
 
 Scheduler は typed observation だけを発行する。proactive talk は `IdleTickObservation` から開始する。Scheduler は LLM client、presenter、Discord/CLI/voice などの外部送信 client を呼ばない。
 
-Delivery は sender ではなく outbox boundary とする。`DeliveryEnvelope` は `DeliveryStatus` による明示状態を持つ。`PENDING` は lease 可能、`LEASED` は lease 一致時だけ完了可能、期限切れ lease は再 lease 可能、`SUCCEEDED` / `FAILED_PERMANENT` / `CANCELLED` / `BLOCKED` は terminal とする。`ReportActionResult` は同一結果の再報告を安全に扱う idempotent API とする。
+Delivery は sender ではなく outbox boundary とする。`DeliveryEnvelope` は `DeliveryStatus` による明示状態を持つ。`PENDING` は lease 可能、`LEASED` は lease 一致時だけ完了可能、期限切れ lease は再 lease 可能、`SUCCEEDED` / `FAILED_PERMANENT` / `CANCELLED` / `BLOCKED` は terminal とする。`ReportActionResult` は同一結果の再報告を安全に扱う idempotent API とする。`FAILED` のみ retry 可能とし、`CANCELLED` / `BLOCKED` は terminal completion として扱う。競合する再報告（異なる status や lease_id）は `DeliveryOutboxError` を送出する。`lease_due` / `PollAppActions` は `LEASED` 状態の item のみ返す。terminal item は返さない。
 
 Learning / audit hook は `ActionResult` 後にだけ実行する。`ActionPlan` が提案された時点、または delivery item が enqueue された時点では durable memory を更新しない。
 
 Scheduler lifecycle は default disabled とする。現 phase の outbox / target store は in-memory でよいが、contracts、state machine、lease、idempotency key は SQLite 等の durable 実装へ置換できる public model にする。
 
 `PollAppActions` / `ReportActionResult` はこの phase では信頼済み local/internal client 前提である。public network に unauthenticated で公開してはならない。provider-level authorization は out of scope。
+
+`SchedulerRunner` は `DeliveryAvailabilityProvider` protocol を通じて `DeliverySafetyGate` へ `AvailabilitySnapshot` を渡す。`IrisRuntimeService` に situation context を追加せず、availability safety を runtime scheduler path で有効にする。BUSY / UNAVAILABLE は enqueue を block する。
+
+`DeliverySafetyGate` の runtime-level rate limit は現 phase では未実装とする。プロアクティブ送信頻度は `IdleTickSource` が `min_interval_per_target_seconds` で制御する。`delivery.rate_limit_window_seconds` は予約済み config として残すが gate へ渡さない。
 
 ## Forbidden Paths
 

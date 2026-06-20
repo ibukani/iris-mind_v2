@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 
 from iris.contracts.actions import PresentedOutput, SendMessageAction
+from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.delivery import DeliveryStatus
 from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
@@ -19,6 +21,9 @@ from iris.runtime.scheduler.runner import SchedulerRunner
 from iris.runtime.service import ObservationEnvelope, RuntimeResponse
 from iris.safety.delivery_gate import BasicDeliverySafetyGate, DeliverySafetyDecision
 from tests.runtime.scheduler.test_idle_tick_source import make_target
+
+if TYPE_CHECKING:
+    from iris.runtime.scheduler.ports import DeliveryAvailabilityProvider
 
 pytestmark = pytest.mark.anyio
 
@@ -50,6 +55,8 @@ class _BlockingGate:
 
 async def _runner(
     output: PresentedOutput,
+    *,
+    availability_provider: DeliveryAvailabilityProvider | None = None,
 ) -> tuple[SchedulerRunner, _FakeRuntimeService, InMemoryDeliveryOutbox]:
     """Build a SchedulerRunner wired to a fake runtime and in-memory outbox.
 
@@ -68,6 +75,7 @@ async def _runner(
             runtime_service=runtime,
             delivery_gate=BasicDeliverySafetyGate(),
             outbox=outbox,
+            availability_provider=availability_provider,
         ),
         runtime,
         outbox,
@@ -208,3 +216,111 @@ class _SingleScheduler:
         self.failed = observation_id
         self.failed_at = failed_at
         self.failed_reason = reason
+
+
+@dataclass
+class _FakeAvailabilityProvider:
+    """DeliveryAvailabilityProvider fake for scheduler runner tests."""
+
+    snapshot: AvailabilitySnapshot | None
+    called_with_target: bool = False
+    call_count: int = 0
+
+    async def availability_for_target(
+        self,
+        target: object,
+        *,
+        now: datetime,
+    ) -> AvailabilitySnapshot | None:
+        """Record call and return configured snapshot.
+
+        Args:
+            target: 配信先。この実装では呼び出し記録のみに使用する。
+            now: 現在時刻。この実装では使用しない。
+
+        Returns:
+            設定済みの AvailabilitySnapshot または None。
+        """
+        _ = now
+        self.called_with_target = target is not None
+        self.call_count += 1
+        return self.snapshot
+
+
+def _availability_snapshot(status: AvailabilityStatus) -> AvailabilitySnapshot:
+    """Build an AvailabilitySnapshot with the given status.
+
+    Returns:
+        構成済みの AvailabilitySnapshot。
+    """
+    return AvailabilitySnapshot(
+        actor_id=None,
+        status=status,
+        reason="test",
+        observed_at=datetime(2026, 1, 1, tzinfo=UTC),
+        computed_at=datetime(2026, 1, 1, tzinfo=UTC),
+        confidence=1.0,
+    )
+
+
+async def test_busy_availability_blocks_enqueue() -> None:
+    """BUSY availability blocks scheduler delivery enqueue."""
+    provider = _FakeAvailabilityProvider(snapshot=_availability_snapshot(AvailabilityStatus.BUSY))
+    runner, _runtime, outbox = await _runner(
+        PresentedOutput(text="hello"),
+        availability_provider=provider,
+    )
+    result = await runner.run_once(datetime(2026, 1, 1, tzinfo=UTC))
+    assert result.results[0].status == "blocked"
+    assert "availability_busy" in result.results[0].reason
+    assert (
+        await outbox.lease_due(
+            provider="discord",
+            now=datetime(2026, 1, 1, tzinfo=UTC),
+            max_items=10,
+            lease_seconds=30,
+        )
+        == ()
+    )
+
+
+async def test_unavailable_availability_blocks_enqueue() -> None:
+    """UNAVAILABLE availability blocks scheduler delivery enqueue."""
+    provider = _FakeAvailabilityProvider(
+        snapshot=_availability_snapshot(AvailabilityStatus.UNAVAILABLE),
+    )
+    runner, _runtime, outbox = await _runner(
+        PresentedOutput(text="hello"),
+        availability_provider=provider,
+    )
+    result = await runner.run_once(datetime(2026, 1, 1, tzinfo=UTC))
+    assert result.results[0].status == "blocked"
+    assert "availability_unavailable" in result.results[0].reason
+    assert (
+        await outbox.lease_due(
+            provider="discord",
+            now=datetime(2026, 1, 1, tzinfo=UTC),
+            max_items=10,
+            lease_seconds=30,
+        )
+        == ()
+    )
+
+
+async def test_availability_provider_is_called_with_delivery_target() -> None:
+    """Availability provider is called and allows sendable output."""
+    provider = _FakeAvailabilityProvider(snapshot=None)
+    runner, _runtime, outbox = await _runner(
+        PresentedOutput(text="hello"),
+        availability_provider=provider,
+    )
+    await runner.run_once(datetime(2026, 1, 1, tzinfo=UTC))
+    assert provider.call_count == 1
+    assert provider.called_with_target is True
+    leased = await outbox.lease_due(
+        provider="discord",
+        now=datetime(2026, 1, 1, tzinfo=UTC),
+        max_items=10,
+        lease_seconds=30,
+    )
+    assert len(leased) == 1
