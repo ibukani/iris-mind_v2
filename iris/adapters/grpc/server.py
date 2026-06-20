@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 import time
 from typing import TYPE_CHECKING, override
 
@@ -12,6 +13,8 @@ from loguru import logger
 from iris.adapters.grpc.mappers import (
     GrpcMappingError,
     GrpcRuntimeMapper,
+    delivery_envelopes_to_poll_response,
+    delivery_report_from_proto,
     map_exception_to_grpc,
     runtime_response_to_proto,
 )
@@ -19,6 +22,7 @@ from iris.adapters.llm.diagnostics import LLMProviderError
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 
 if TYPE_CHECKING:
+    from iris.adapters.app_gateway.ports import AppActionBroker
     from iris.runtime.service import IrisRuntimeService
 
 
@@ -33,10 +37,12 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         self,
         runtime_service: IrisRuntimeService,
         *,
+        app_action_broker: AppActionBroker | None = None,
         mapper: GrpcRuntimeMapper | None = None,
     ) -> None:
-        """Create servicer with an explicit runtime service and optional mapper."""
+        """Create servicer with explicit runtime service mapper."""
         self._runtime_service = runtime_service
+        self._app_action_broker = app_action_broker
         self._mapper = mapper or GrpcRuntimeMapper()
 
     @override
@@ -116,3 +122,52 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
             logger.exception("SubmitObservation: ingress_runtime_error - {}", exc)
             await context.abort(grpc.StatusCode.INTERNAL, "runtime service failed")
+
+    @override
+    async def PollAppActions(
+        self,
+        request: runtime_pb2.PollAppActionsRequest,
+        context: grpc.aio.ServicerContext[
+            runtime_pb2.PollAppActionsRequest,
+            runtime_pb2.PollAppActionsResponse,
+        ],
+    ) -> runtime_pb2.PollAppActionsResponse:
+        """Lease due app actions for a trusted local/internal client.
+
+        Returns:
+            PollAppActionsResponse: lease 済み配送 DTO。
+        """
+        if self._app_action_broker is None:
+            await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "app action broker disabled")
+        if not request.provider:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "provider required")
+        max_items = request.max_items if request.max_items > 0 else 10
+        envelopes = await self._app_action_broker.poll_actions(
+            provider=request.provider,
+            now=datetime.now(UTC),
+            max_items=max_items,
+        )
+        return delivery_envelopes_to_poll_response(envelopes)
+
+    @override
+    async def ReportActionResult(
+        self,
+        request: runtime_pb2.ReportActionResultRequest,
+        context: grpc.aio.ServicerContext[
+            runtime_pb2.ReportActionResultRequest,
+            runtime_pb2.ReportActionResultResponse,
+        ],
+    ) -> runtime_pb2.ReportActionResultResponse:
+        """Apply an ActionResult report from a trusted local/internal client.
+
+        Returns:
+            ReportActionResultResponse: 空応答。
+        """
+        if self._app_action_broker is None:
+            await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "app action broker disabled")
+        try:
+            report = delivery_report_from_proto(request, datetime.now(UTC))
+            await self._app_action_broker.report_action_result(report)
+        except GrpcMappingError as exc:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+        return runtime_pb2.ReportActionResultResponse()

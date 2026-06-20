@@ -1,0 +1,56 @@
+"""Scheduler runtime wiring."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from iris.runtime.scheduler.idle_tick import IdleTickSchedulePolicy, IdleTickSource
+from iris.runtime.scheduler.runner import SchedulerRunner
+
+if TYPE_CHECKING:
+    from iris.runtime.config import IrisRuntimeConfig
+    from iris.runtime.delivery.outbox import DeliveryOutbox
+    from iris.runtime.proactive.targets import ProactiveTargetStore
+    from iris.runtime.service import IrisRuntimeService
+    from iris.safety.delivery_gate import DeliverySafetyGate
+
+
+def wire_runtime_scheduler(
+    target_store: ProactiveTargetStore,
+    config: IrisRuntimeConfig,
+) -> IdleTickSource:
+    """IdleTickObservation source を runtime config から組み立てる。
+
+    Returns:
+        構成済みの IdleTickSource。
+    """
+    return IdleTickSource(
+        target_store,
+        policy=IdleTickSchedulePolicy(
+            idle_threshold_seconds=config.scheduler.idle_threshold_seconds,
+            min_interval_per_target_seconds=config.scheduler.min_interval_per_target_seconds,
+            max_due_per_run=config.scheduler.max_due_per_run,
+        ),
+    )
+
+
+def wire_scheduler_runner(
+    *,
+    runtime_service: IrisRuntimeService,
+    scheduler: IdleTickSource,
+    delivery_gate: DeliverySafetyGate,
+    outbox: DeliveryOutbox,
+    config: IrisRuntimeConfig,
+) -> SchedulerRunner:
+    """SchedulerRunner を constructor injection で組み立てる。
+
+    Returns:
+        構成済みの SchedulerRunner。
+    """
+    return SchedulerRunner(
+        scheduler=scheduler,
+        runtime_service=runtime_service,
+        delivery_gate=delivery_gate,
+        outbox=outbox,
+        max_attempts=config.delivery.max_attempts,
+    )

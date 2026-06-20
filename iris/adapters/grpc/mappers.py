@@ -18,7 +18,14 @@ from iris.adapters.llm.diagnostics import (
     LLMProviderRateLimitError,
     LLMProviderTimeoutError,
 )
+from iris.contracts.actions import (
+    ActionResult,
+    ActionStatus,
+    PresentedOutput,
+    SendMessageAction,
+)
 from iris.contracts.activity import ActivityKind
+from iris.contracts.delivery import DeliveryEnvelope, DeliveryReport, DeliveryRouteHint
 from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
@@ -34,10 +41,13 @@ from iris.contracts.presence import PresenceStatus
 from iris.contracts.spaces import SpaceKind
 from iris.core.ids import (
     AccountId,
+    ActionId,
     ActorId,
     CorrelationId,
+    DeliveryId,
     DeviceId,
     ExternalRef,
+    LeaseId,
     ObservationId,
     SessionId,
     SpaceId,
@@ -66,6 +76,7 @@ _GRPC_OBSERVATION_CAPABILITIES = frozenset(
         ObservationCapability.UPDATE_SPACE_OCCUPANCY,
         ObservationCapability.REACT_TO_ACTIVITY,
         ObservationCapability.INTERNAL_EVENT,
+        ObservationCapability.REGISTER_DELIVERY_TARGET,
     }
 )
 
@@ -73,7 +84,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
-    from iris.contracts.actions import PresentedOutput
     from iris.contracts.spaces import InteractionSpace
     from iris.runtime.service import RuntimeResponse
 
@@ -124,12 +134,14 @@ class GrpcRuntimeMapper:
             _raise_mapping_error("observation is required")
         correlation_id = CorrelationId(request.correlation_id) if request.correlation_id else None
         observation = await self.observation_from_proto(request.observation)
+        delivery_route = delivery_route_hint_from_context(request.observation.context)
         return ObservationEnvelope.trusted_adapter(
             observation=observation,
             adapter_id=_GRPC_ADAPTER_ID,
             provider=_GRPC_ADAPTER_PROVIDER,
             capabilities=self._adapter_capabilities,
             correlation_id=correlation_id,
+            delivery_route=delivery_route,
         )
 
     async def observation_from_proto(
@@ -368,6 +380,51 @@ def external_space_ref_from_proto(
     )
 
 
+def delivery_route_hint_from_context(
+    context: observations_pb2.ObservationContext,
+) -> DeliveryRouteHint | None:
+    """Preserve provider routing fields outside ObservationContext.
+
+    Returns:
+        DeliveryRouteHint: provider routing hint。refs がない場合は None。
+    """
+    provider = _route_provider_from_context(context)
+    if provider is None:
+        return None
+    provider_subject = (
+        ExternalRef(context.account_ref.provider_subject)
+        if context.HasField("account_ref") and context.account_ref.provider_subject
+        else None
+    )
+    provider_space_ref = (
+        ExternalRef(context.space_ref.provider_space_ref)
+        if context.HasField("space_ref") and context.space_ref.provider_space_ref
+        else None
+    )
+    display_name = None
+    if context.HasField("account_ref") and context.account_ref.display_name:
+        display_name = context.account_ref.display_name
+    elif context.HasField("space_ref") and context.space_ref.display_name:
+        display_name = context.space_ref.display_name
+    return DeliveryRouteHint(
+        provider=provider,
+        provider_subject=provider_subject,
+        provider_space_ref=provider_space_ref,
+        display_name=display_name,
+    )
+
+
+def _route_provider_from_context(
+    context: observations_pb2.ObservationContext,
+) -> str | None:
+    """Return provider for a delivery route hint when refs are present."""
+    account_provider = context.account_ref.provider if context.HasField("account_ref") else ""
+    space_provider = context.space_ref.provider if context.HasField("space_ref") else ""
+    if account_provider and space_provider and account_provider != space_provider:
+        _raise_mapping_error("account_ref.provider space_ref.provider mismatch")
+    return account_provider or space_provider or None
+
+
 def identity_from_proto(identity: identity_pb2.Identity) -> Identity:
     """Map Identity proto to Iris Identity.
 
@@ -408,6 +465,87 @@ def runtime_response_to_proto(
         correlation_id=str(response.correlation_id or ""),
         output=presented_output_to_proto(response.output),
     )
+
+
+def delivery_envelope_to_proto(envelope: DeliveryEnvelope) -> runtime_pb2.AppActionEnvelope:
+    """Map a leased DeliveryEnvelope to the polling DTO.
+
+    Returns:
+        AppActionEnvelope: proto 配送 DTO。
+    """
+    action = envelope.action
+    if not isinstance(action, SendMessageAction):
+        _raise_mapping_error("unsupported delivery action")
+    return runtime_pb2.AppActionEnvelope(
+        delivery_id=str(envelope.delivery_id),
+        lease_id=str(envelope.lease_id or ""),
+        action_id=str(action.action_id),
+        correlation_id=str(action.correlation_id),
+        session_id=str(action.session_id),
+        provider=envelope.target.provider,
+        provider_subject=str(envelope.target.provider_subject or ""),
+        provider_space_ref=str(envelope.target.provider_space_ref or ""),
+        attempts=envelope.attempts,
+        send_message=runtime_pb2.SendMessageAction(text=action.text),
+    )
+
+
+def delivery_envelopes_to_poll_response(
+    envelopes: tuple[DeliveryEnvelope, ...],
+) -> runtime_pb2.PollAppActionsResponse:
+    """Map leased envelopes to PollAppActionsResponse.
+
+    Returns:
+        PollAppActionsResponse: proto 配送応答。
+    """
+    return runtime_pb2.PollAppActionsResponse(
+        actions=[delivery_envelope_to_proto(envelope) for envelope in envelopes]
+    )
+
+
+def delivery_report_from_proto(
+    request: runtime_pb2.ReportActionResultRequest,
+    reported_at: datetime,
+) -> DeliveryReport:
+    """Map ReportActionResultRequest to DeliveryReport.
+
+    Returns:
+        DeliveryReport: 配送結果報告。
+    """
+    status = _action_status_from_report_status(request.status)
+    if not request.delivery_id:
+        _raise_mapping_error("delivery_id required")
+    if not request.action_id:
+        _raise_mapping_error("action_id required")
+    if not request.correlation_id:
+        _raise_mapping_error("correlation_id required")
+    return DeliveryReport(
+        delivery_id=DeliveryId(request.delivery_id),
+        lease_id=LeaseId(request.lease_id) if request.lease_id else None,
+        result=ActionResult(
+            action_id=ActionId(request.action_id),
+            correlation_id=CorrelationId(request.correlation_id),
+            status=status,
+            delivered_at=reported_at if status is ActionStatus.SUCCEEDED else None,
+            external_message_id=(
+                ExternalRef(request.external_message_id) if request.external_message_id else None
+            ),
+            error_reason=request.error_reason or None,
+        ),
+        reported_at=reported_at,
+    )
+
+
+def _action_status_from_report_status(status: str) -> ActionStatus:
+    """Map report status string to ActionStatus.
+
+    Returns:
+        ActionStatus: 解析後の状態。
+    """
+    try:
+        return ActionStatus(status)
+    except ValueError as exc:
+        _raise_mapping_error(f"invalid action result status: {status}", cause=exc)
 
 
 def presented_output_to_proto(output: PresentedOutput) -> outputs_pb2.PresentedOutput:

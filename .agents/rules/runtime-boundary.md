@@ -32,3 +32,9 @@ Do not reuse an integration capability as a reaction, send, emit, or external-ef
 Planner, policy, and resolver modules must not construct presentation outputs such as `PresentedOutput` or `AppAction`. They should return decisions, candidates, snapshots, or plans.
 
 Event reaction code must not bypass output safety gates and must not hardcode user-facing response text inside routing or planning code.
+
+Scheduler runner may call `IrisRuntimeService.handle_observation(...)` and may enqueue a `DeliveryEnvelope` only after normal output safety and `DeliverySafetyGate`.
+
+`IrisRuntimeService` must not import scheduler or delivery modules, must not branch on scheduler/proactive delivery behavior, and must not enqueue delivery items directly.
+
+`runtime/server.py` may load config, build components, start gRPC, start optional scheduler lifecycle task when `scheduler.enabled`, and cancel tasks on shutdown. It must not contain delivery state transition logic, scheduler decision logic, delivery safety policy, or provider-specific send logic.

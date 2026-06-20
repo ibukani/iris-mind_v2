@@ -5,8 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from iris.contracts.accounts import AccountProfile
     from iris.contracts.actions import ActionResult, AppAction
+    from iris.contracts.delivery import DeliveryEnvelope, DeliveryReport
     from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
     from iris.contracts.identity import Identity
     from iris.contracts.observations import Observation
@@ -23,6 +26,27 @@ class AppGateway(Protocol):
 
     async def execute(self, action: AppAction) -> ActionResult:
         """アプリアクションを実行し、結果を返す。"""
+        ...
+
+
+class AppActionBroker(Protocol):
+    """配送 outbox を外部 client が poll/report する境界 port。"""
+
+    async def poll_actions(
+        self,
+        *,
+        provider: str,
+        now: datetime,
+        max_items: int,
+    ) -> tuple[DeliveryEnvelope, ...]:
+        """Provider に紐づく due action を lease して返す。"""
+        ...
+
+    async def report_action_result(
+        self,
+        report: DeliveryReport,
+    ) -> DeliveryEnvelope:
+        """ActionResult 報告を配送状態へ反映する。"""
         ...
 
 

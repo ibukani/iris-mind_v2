@@ -33,12 +33,16 @@ class IrisRuntimeServiceStub:
     def __new__(cls, channel: _aio.Channel) -> IrisRuntimeServiceAsyncStub: ...
     GetRuntimeInfo: _grpc.UnaryUnaryMultiCallable[_runtime_pb2.GetRuntimeInfoRequest, _runtime_pb2.GetRuntimeInfoResponse]
     SubmitObservation: _grpc.UnaryUnaryMultiCallable[_runtime_pb2.SubmitObservationRequest, _runtime_pb2.SubmitObservationResponse]
+    PollAppActions: _grpc.UnaryUnaryMultiCallable[_runtime_pb2.PollAppActionsRequest, _runtime_pb2.PollAppActionsResponse]
+    ReportActionResult: _grpc.UnaryUnaryMultiCallable[_runtime_pb2.ReportActionResultRequest, _runtime_pb2.ReportActionResultResponse]
 
 @_typing.type_check_only
 class IrisRuntimeServiceAsyncStub(IrisRuntimeServiceStub):
     def __init__(self, channel: _aio.Channel) -> None: ...
     GetRuntimeInfo: _aio.UnaryUnaryMultiCallable[_runtime_pb2.GetRuntimeInfoRequest, _runtime_pb2.GetRuntimeInfoResponse]  # type: ignore[assignment]
     SubmitObservation: _aio.UnaryUnaryMultiCallable[_runtime_pb2.SubmitObservationRequest, _runtime_pb2.SubmitObservationResponse]  # type: ignore[assignment]
+    PollAppActions: _aio.UnaryUnaryMultiCallable[_runtime_pb2.PollAppActionsRequest, _runtime_pb2.PollAppActionsResponse]  # type: ignore[assignment]
+    ReportActionResult: _aio.UnaryUnaryMultiCallable[_runtime_pb2.ReportActionResultRequest, _runtime_pb2.ReportActionResultResponse]  # type: ignore[assignment]
 
 class IrisRuntimeServiceServicer(metaclass=_abc_1.ABCMeta):
     @_abc_1.abstractmethod
@@ -54,5 +58,19 @@ class IrisRuntimeServiceServicer(metaclass=_abc_1.ABCMeta):
         request: _runtime_pb2.SubmitObservationRequest,
         context: _ServicerContext,
     ) -> _typing.Union[_runtime_pb2.SubmitObservationResponse, _abc.Awaitable[_runtime_pb2.SubmitObservationResponse]]: ...
+
+    @_abc_1.abstractmethod
+    def PollAppActions(
+        self,
+        request: _runtime_pb2.PollAppActionsRequest,
+        context: _ServicerContext,
+    ) -> _typing.Union[_runtime_pb2.PollAppActionsResponse, _abc.Awaitable[_runtime_pb2.PollAppActionsResponse]]: ...
+
+    @_abc_1.abstractmethod
+    def ReportActionResult(
+        self,
+        request: _runtime_pb2.ReportActionResultRequest,
+        context: _ServicerContext,
+    ) -> _typing.Union[_runtime_pb2.ReportActionResultResponse, _abc.Awaitable[_runtime_pb2.ReportActionResultResponse]]: ...
 
 def add_IrisRuntimeServiceServicer_to_server(servicer: IrisRuntimeServiceServicer, server: _typing.Union[_grpc.Server, _aio.Server]) -> None: ...

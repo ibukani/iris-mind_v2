@@ -150,3 +150,11 @@ Actor identity is the primary owner for memory and relationship semantics.
 - Discord thread: `provider = "discord"`、`provider_space_ref = "thread:<thread-id>"`
 
 `display_name`、metadata、`space_kind` は `space_id` のidentity keyではない。
+
+## Pull-based Delivery API
+
+`PollAppActions` と `ReportActionResult` は proactive delivery outbox 用の pull 型 API である。この phase では信頼済み local/internal client 前提であり、public network に unauthenticated で公開してはならない。provider-level authorization は out of scope。
+
+外部 client は `PollAppActions(provider, max_items)` で provider ごとの due action を lease する。Mind runtime は Discord / CLI / voice などの platform send を直接実行しない。現 phase の delivery polling API は `SendMessageAction` のみを返し、`NoAction` は配送されない。
+
+外部 client は platform send 後に `ReportActionResult` を呼ぶ。成功は delivery item を `SUCCEEDED` にし、失敗は retry 可能なら release し、最大試行後は permanent failure にする。同一 `ActionResult` の再報告は idempotent に扱う。

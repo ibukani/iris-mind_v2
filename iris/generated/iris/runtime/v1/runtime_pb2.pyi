@@ -116,3 +116,165 @@ class SubmitObservationResponse(_message.Message):
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___SubmitObservationResponse: _TypeAlias = SubmitObservationResponse  # noqa: Y015
+
+@_typing.final
+class PollAppActionsRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    PROVIDER_FIELD_NUMBER: _builtins.int
+    MAX_ITEMS_FIELD_NUMBER: _builtins.int
+    provider: _builtins.str
+    max_items: _builtins.int
+    def __init__(
+        self,
+        *,
+        provider: _builtins.str = ...,
+        max_items: _builtins.int = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["max_items", b"max_items", "provider", b"provider"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___PollAppActionsRequest: _TypeAlias = PollAppActionsRequest  # noqa: Y015
+
+@_typing.final
+class PollAppActionsResponse(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    ACTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def actions(self) -> _containers.RepeatedCompositeFieldContainer[Global___AppActionEnvelope]: ...
+    def __init__(
+        self,
+        *,
+        actions: _abc.Iterable[Global___AppActionEnvelope] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["actions", b"actions"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___PollAppActionsResponse: _TypeAlias = PollAppActionsResponse  # noqa: Y015
+
+@_typing.final
+class AppActionEnvelope(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    DELIVERY_ID_FIELD_NUMBER: _builtins.int
+    LEASE_ID_FIELD_NUMBER: _builtins.int
+    ACTION_ID_FIELD_NUMBER: _builtins.int
+    CORRELATION_ID_FIELD_NUMBER: _builtins.int
+    SESSION_ID_FIELD_NUMBER: _builtins.int
+    PROVIDER_FIELD_NUMBER: _builtins.int
+    PROVIDER_SUBJECT_FIELD_NUMBER: _builtins.int
+    PROVIDER_SPACE_REF_FIELD_NUMBER: _builtins.int
+    ATTEMPTS_FIELD_NUMBER: _builtins.int
+    SEND_MESSAGE_FIELD_NUMBER: _builtins.int
+    delivery_id: _builtins.str
+    lease_id: _builtins.str
+    action_id: _builtins.str
+    correlation_id: _builtins.str
+    session_id: _builtins.str
+    provider: _builtins.str
+    provider_subject: _builtins.str
+    provider_space_ref: _builtins.str
+    attempts: _builtins.int
+    @_builtins.property
+    def send_message(self) -> Global___SendMessageAction: ...
+    def __init__(
+        self,
+        *,
+        delivery_id: _builtins.str = ...,
+        lease_id: _builtins.str = ...,
+        action_id: _builtins.str = ...,
+        correlation_id: _builtins.str = ...,
+        session_id: _builtins.str = ...,
+        provider: _builtins.str = ...,
+        provider_subject: _builtins.str = ...,
+        provider_space_ref: _builtins.str = ...,
+        attempts: _builtins.int = ...,
+        send_message: Global___SendMessageAction | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["action", b"action", "send_message", b"send_message"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["action", b"action", "action_id", b"action_id", "attempts", b"attempts", "correlation_id", b"correlation_id", "delivery_id", b"delivery_id", "lease_id", b"lease_id", "provider", b"provider", "provider_space_ref", b"provider_space_ref", "provider_subject", b"provider_subject", "send_message", b"send_message", "session_id", b"session_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType_action: _TypeAlias = _typing.Literal["send_message"]  # noqa: Y015
+    _WhichOneofArgType_action: _TypeAlias = _typing.Literal["action", b"action"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_action) -> _WhichOneofReturnType_action | None: ...
+
+Global___AppActionEnvelope: _TypeAlias = AppActionEnvelope  # noqa: Y015
+
+@_typing.final
+class SendMessageAction(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    TEXT_FIELD_NUMBER: _builtins.int
+    text: _builtins.str
+    def __init__(
+        self,
+        *,
+        text: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["text", b"text"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___SendMessageAction: _TypeAlias = SendMessageAction  # noqa: Y015
+
+@_typing.final
+class ReportActionResultRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    DELIVERY_ID_FIELD_NUMBER: _builtins.int
+    LEASE_ID_FIELD_NUMBER: _builtins.int
+    ACTION_ID_FIELD_NUMBER: _builtins.int
+    CORRELATION_ID_FIELD_NUMBER: _builtins.int
+    STATUS_FIELD_NUMBER: _builtins.int
+    EXTERNAL_MESSAGE_ID_FIELD_NUMBER: _builtins.int
+    ERROR_REASON_FIELD_NUMBER: _builtins.int
+    delivery_id: _builtins.str
+    lease_id: _builtins.str
+    action_id: _builtins.str
+    correlation_id: _builtins.str
+    status: _builtins.str
+    external_message_id: _builtins.str
+    error_reason: _builtins.str
+    def __init__(
+        self,
+        *,
+        delivery_id: _builtins.str = ...,
+        lease_id: _builtins.str = ...,
+        action_id: _builtins.str = ...,
+        correlation_id: _builtins.str = ...,
+        status: _builtins.str = ...,
+        external_message_id: _builtins.str = ...,
+        error_reason: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["action_id", b"action_id", "correlation_id", b"correlation_id", "delivery_id", b"delivery_id", "error_reason", b"error_reason", "external_message_id", b"external_message_id", "lease_id", b"lease_id", "status", b"status"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___ReportActionResultRequest: _TypeAlias = ReportActionResultRequest  # noqa: Y015
+
+@_typing.final
+class ReportActionResultResponse(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    def __init__(
+        self,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___ReportActionResultResponse: _TypeAlias = ReportActionResultResponse  # noqa: Y015

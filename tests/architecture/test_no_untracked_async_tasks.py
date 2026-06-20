@@ -11,7 +11,7 @@ SCAN_ROOTS: tuple[str, ...] = ("iris", "tests", "scripts")
 EXCLUDED_ROOTS: frozenset[str] = frozenset({"iris/generated"})
 ALLOWED_EVENT_LOOP_CONTROLS: frozenset[tuple[str, int, str]] = frozenset(
     {
-        ("iris/runtime/server.py", 285, "asyncio.run"),
+        ("iris/runtime/server.py", 371, "asyncio.run"),
     }
 )
 

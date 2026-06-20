@@ -44,6 +44,16 @@ class IrisRuntimeServiceStub:
                 request_serializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.SubmitObservationRequest.SerializeToString,
                 response_deserializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.SubmitObservationResponse.FromString,
                 _registered_method=True)
+        self.PollAppActions = channel.unary_unary(
+                '/iris.runtime.v1.IrisRuntimeService/PollAppActions',
+                request_serializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.PollAppActionsRequest.SerializeToString,
+                response_deserializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.PollAppActionsResponse.FromString,
+                _registered_method=True)
+        self.ReportActionResult = channel.unary_unary(
+                '/iris.runtime.v1.IrisRuntimeService/ReportActionResult',
+                request_serializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.ReportActionResultRequest.SerializeToString,
+                response_deserializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.ReportActionResultResponse.FromString,
+                _registered_method=True)
 
 
 class IrisRuntimeServiceServicer:
@@ -61,6 +71,18 @@ class IrisRuntimeServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def PollAppActions(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReportActionResult(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_IrisRuntimeServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,6 +95,16 @@ def add_IrisRuntimeServiceServicer_to_server(servicer, server):
                     servicer.SubmitObservation,
                     request_deserializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.SubmitObservationRequest.FromString,
                     response_serializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.SubmitObservationResponse.SerializeToString,
+            ),
+            'PollAppActions': grpc.unary_unary_rpc_method_handler(
+                    servicer.PollAppActions,
+                    request_deserializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.PollAppActionsRequest.FromString,
+                    response_serializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.PollAppActionsResponse.SerializeToString,
+            ),
+            'ReportActionResult': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReportActionResult,
+                    request_deserializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.ReportActionResultRequest.FromString,
+                    response_serializer=iris_dot_runtime_dot_v1_dot_runtime__pb2.ReportActionResultResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -129,6 +161,60 @@ class IrisRuntimeService:
             '/iris.runtime.v1.IrisRuntimeService/SubmitObservation',
             iris_dot_runtime_dot_v1_dot_runtime__pb2.SubmitObservationRequest.SerializeToString,
             iris_dot_runtime_dot_v1_dot_runtime__pb2.SubmitObservationResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PollAppActions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/iris.runtime.v1.IrisRuntimeService/PollAppActions',
+            iris_dot_runtime_dot_v1_dot_runtime__pb2.PollAppActionsRequest.SerializeToString,
+            iris_dot_runtime_dot_v1_dot_runtime__pb2.PollAppActionsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReportActionResult(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/iris.runtime.v1.IrisRuntimeService/ReportActionResult',
+            iris_dot_runtime_dot_v1_dot_runtime__pb2.ReportActionResultRequest.SerializeToString,
+            iris_dot_runtime_dot_v1_dot_runtime__pb2.ReportActionResultResponse.FromString,
             options,
             channel_credentials,
             insecure,

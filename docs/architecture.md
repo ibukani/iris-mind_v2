@@ -854,6 +854,31 @@ CLI / main.py / iris.runtime.server
 - rules.md: AI コーディングルール、Do/Don't Examples
 - legacy.md: 削除済みアーキテクチャ情報
 - tests.md: アーキテクチャテスト受入基準
+
+## Proactive Scheduler / Delivery Foundation
+
+Proactive scheduler は default disabled である。Scheduler は `IdleTickObservation` などの typed internal `Observation` だけを発行し、LLM client、presenter、Discord/CLI/voice 送信 client を直接呼ばない。
+
+配送 path は次に固定する。
+
+```text
+RuntimeScheduler
+→ typed internal Observation
+→ IrisRuntimeService
+→ normal CognitiveCycle
+→ ActionSafetyGate
+→ Presenter
+→ OutputSafetyGate
+→ DeliverySafetyGate
+→ DeliveryOutbox
+→ external client polling
+→ ActionResult
+→ learning/audit hooks
+```
+
+`DeliveryOutbox` は sender ではない。外部 client が `PollAppActions` で lease し、platform send 後に `ReportActionResult` を返す。現実装は in-memory だが、`DeliveryEnvelope`、lease、idempotency key、`DeliveryStatus` state machine は durable 実装へ置換できる契約にする。
+
+`NoAction`、sendable ではない `PresentedOutput`、`DeliverySafetyGate` が block した output は delivery outbox に入れない。
 - external.md: 外部アプリとの責務分離
 ## Identity and Space Scoping
 

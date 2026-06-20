@@ -107,3 +107,33 @@ No-action means:
 - do not call presenter as if it were a real response
 - do not call external app execution
 - return or preserve `PresentedOutput(text=None)` at runtime boundary
+
+## Scheduler / delivery boundary
+
+Required path:
+
+```text
+RuntimeScheduler
+→ typed internal Observation
+→ IrisRuntimeService
+→ normal CognitiveCycle
+→ ActionSafetyGate
+→ Presenter
+→ OutputSafetyGate
+→ DeliverySafetyGate
+→ DeliveryOutbox
+→ external client polling
+→ ActionResult
+```
+
+Scheduler emits typed observations only. Proactive talk starts from `IdleTickObservation`.
+
+Delivery is an outbox boundary, not a sender. External clients poll actions and report `ActionResult`. `ReportActionResult` must be idempotent. `NoAction` is not delivered.
+
+Forbidden:
+
+```text
+Scheduler → direct LLM call → direct external send
+Scheduler → Discord / CLI / voice SDK
+features/proactive_talk → runtime.delivery / runtime.scheduler / safety
+```

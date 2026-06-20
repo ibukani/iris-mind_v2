@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from iris.cognitive.workspace.frame import SituationContextSnapshot
+    from iris.contracts.delivery import DeliveryRouteHint
     from iris.contracts.observations import ActivityEventObservation, Observation
     from iris.core.ids import CorrelationId
     from iris.runtime.app import IrisApp
@@ -63,6 +64,7 @@ class ObservationEnvelope:
         provider: str | None = None,
         capabilities: frozenset[ObservationCapability] | set[ObservationCapability],
         correlation_id: CorrelationId | None = None,
+        delivery_route: DeliveryRouteHint | None = None,
     ) -> ObservationEnvelope:
         """信頼済みadapter observation用のcapability付きenvelopeを作成する。
 
@@ -72,6 +74,7 @@ class ObservationEnvelope:
             provider: 任意的なprovider名。
             capabilities: 付与するcapability。呼び出し側が明示的に指定する必要がある。
             correlation_id: 任意的なcorrelation ID。
+            delivery_route: 任意的な配送 route hint。
 
         Returns:
             認証済みingressを持つObservationEnvelope。
@@ -82,6 +85,7 @@ class ObservationEnvelope:
                 adapter_id=adapter_id,
                 provider=provider,
                 capabilities=capabilities,
+                delivery_route=delivery_route,
             ),
             correlation_id=correlation_id,
         )
@@ -93,6 +97,22 @@ class RuntimeResponse:
 
     output: PresentedOutput
     correlation_id: CorrelationId | None = None
+
+
+class ObservationRuntimeService(Protocol):
+    """観測を処理して RuntimeResponse を返す runtime 境界 port。
+
+    SchedulerRunner など runtime orchestration はこの port に依存し、
+    具象 IrisRuntimeService に直接結合しない。
+    """
+
+    async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
+        """観測を処理し、出力と correlation id を返す。
+
+        Returns:
+            RuntimeResponse: PresentedOutput と保持された correlation ID。
+        """
+        ...
 
 
 class ObservationProcessingPipeline(Protocol):
