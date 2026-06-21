@@ -27,7 +27,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         """Create an empty process-local outbox."""
         self._items: dict[DeliveryId, DeliveryEnvelope] = {}
         self._idempotency_index: dict[str, DeliveryId] = {}
-        self._report_index: dict[DeliveryId, _ReportFingerprint] = {}
+        self._report_index: dict[DeliveryId, frozenset[_ReportFingerprint]] = {}
         self._lease_counter = 0
 
     @override
@@ -101,10 +101,11 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         """
         item = self._get(delivery_id)
         current = _complete_fingerprint(delivery_id, lease_id, result)
-        previous = self._report_index.get(delivery_id)
-        if previous is not None:
-            if previous == current:
-                return item
+        history = self._report_index.get(delivery_id, frozenset())
+        outcome = _classify_report(history, current)
+        if outcome is _ReportOutcome.IDEMPOTENT:
+            return item
+        if outcome is _ReportOutcome.CONFLICT:
             msg = "delivery_report_conflict"
             raise DeliveryOutboxError(msg)
         if item.status in TERMINAL_DELIVERY_STATUSES:
@@ -121,7 +122,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             last_error_reason=result.error_reason,
         )
         self._items[delivery_id] = completed
-        self._report_index[delivery_id] = current
+        self._report_index[delivery_id] = history | {current}
         return completed
 
     @override
@@ -147,10 +148,11 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         """
         item = self._get(delivery_id)
         current = _release_fingerprint(delivery_id, lease_id, reason)
-        previous = self._report_index.get(delivery_id)
-        if previous is not None:
-            if previous == current:
-                return item
+        history = self._report_index.get(delivery_id, frozenset())
+        outcome = _classify_report(history, current)
+        if outcome is _ReportOutcome.IDEMPOTENT:
+            return item
+        if outcome is _ReportOutcome.CONFLICT:
             msg = "delivery_report_conflict"
             raise DeliveryOutboxError(msg)
         if item.status in TERMINAL_DELIVERY_STATUSES:
@@ -172,7 +174,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             last_error_reason=reason,
         )
         self._items[delivery_id] = released
-        self._report_index[delivery_id] = current
+        self._report_index[delivery_id] = history | {current}
         return released
 
     @override
@@ -214,7 +216,6 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         Returns:
             A LEASED copy, or a FAILED_PERMANENT copy when max attempts is exceeded.
         """
-        self._report_index.pop(item.delivery_id, None)
         if item.attempts >= item.max_attempts:
             failed = replace(
                 item,
@@ -263,6 +264,34 @@ def _envelope_sort_key(item: DeliveryEnvelope) -> tuple[datetime, DeliveryId]:
 
 
 type _ReportFingerprint = tuple[DeliveryId, LeaseId | None, str, str | None]
+
+
+class _ReportOutcome:
+    """Report classification outcomes for history reconciliation."""
+
+    IDEMPOTENT = "idempotent"
+    CONFLICT = "conflict"
+    NEW = "new"
+
+
+def _classify_report(
+    history: frozenset[_ReportFingerprint],
+    current: _ReportFingerprint,
+) -> str:
+    """Classify a report against recorded history.
+
+    Returns:
+        _ReportOutcome.IDEMPOTENT if the exact fingerprint was recorded before,
+        _ReportOutcome.CONFLICT if the same lease_id has a different outcome,
+        _ReportOutcome.NEW otherwise.
+    """
+    if current in history:
+        return _ReportOutcome.IDEMPOTENT
+    current_lease_id = current[1]
+    for fingerprint in history:
+        if fingerprint[1] == current_lease_id:
+            return _ReportOutcome.CONFLICT
+    return _ReportOutcome.NEW
 
 
 def _complete_fingerprint(

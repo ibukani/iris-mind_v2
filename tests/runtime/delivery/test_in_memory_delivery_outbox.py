@@ -284,7 +284,7 @@ async def test_conflicting_report_after_recorded_report_raises() -> None:
 
 
 async def test_conflicting_lease_id_raises() -> None:
-    """Different lease_id after a recorded report raises DeliveryOutboxError."""
+    """Different lease_id after a recorded terminal report raises DeliveryOutboxError."""
     outbox = InMemoryDeliveryOutbox()
     now = datetime(2026, 1, 1, tzinfo=UTC)
     await outbox.enqueue(envelope())
@@ -303,10 +303,114 @@ async def test_conflicting_lease_id_raises() -> None:
         result=success_result,
         completed_at=now,
     )
-    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+    with pytest.raises(DeliveryOutboxError, match="delivery_already_terminal"):
         await outbox.complete(
             delivery_id=leased.delivery_id,
             lease_id=LeaseId("different-lease"),
             result=success_result,
             completed_at=now,
+        )
+
+
+async def test_delayed_duplicate_failed_report_after_re_lease_is_idempotent() -> None:
+    """Delayed duplicate FAILED report for an old lease is safe after re-lease."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope(max_attempts=3))
+    first_lease = (
+        await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30)
+    )[0]
+    first_release = await outbox.release(
+        delivery_id=first_lease.delivery_id,
+        lease_id=first_lease.lease_id,
+        retry_after=now + timedelta(seconds=30),
+        reason="timeout",
+        released_at=now,
+    )
+    assert first_release.status is DeliveryStatus.PENDING
+    second_lease = (
+        await outbox.lease_due(
+            provider="discord",
+            now=now + timedelta(seconds=31),
+            max_items=1,
+            lease_seconds=30,
+        )
+    )[0]
+    delayed_duplicate = await outbox.release(
+        delivery_id=first_lease.delivery_id,
+        lease_id=first_lease.lease_id,
+        retry_after=now + timedelta(seconds=30),
+        reason="timeout",
+        released_at=now,
+    )
+    assert delayed_duplicate.delivery_id == first_release.delivery_id
+    assert second_lease.lease_id != first_lease.lease_id
+
+
+async def test_stale_conflicting_report_after_re_lease_raises_conflict() -> None:
+    """Same lease_id with different outcome after re-lease raises conflict."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope(max_attempts=3))
+    first_lease = (
+        await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30)
+    )[0]
+    await outbox.release(
+        delivery_id=first_lease.delivery_id,
+        lease_id=first_lease.lease_id,
+        retry_after=now + timedelta(seconds=30),
+        reason="timeout",
+        released_at=now,
+    )
+    await outbox.lease_due(
+        provider="discord",
+        now=now + timedelta(seconds=31),
+        max_items=1,
+        lease_seconds=30,
+    )
+    stale_success = ActionResult(
+        action_id=first_lease.action.action_id,
+        correlation_id=first_lease.action.correlation_id,
+        status=ActionStatus.SUCCEEDED,
+        delivered_at=now,
+        external_message_id=ExternalRef("msg-1"),
+        error_reason=None,
+    )
+    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+        await outbox.complete(
+            delivery_id=first_lease.delivery_id,
+            lease_id=first_lease.lease_id,
+            result=stale_success,
+            completed_at=now,
+        )
+
+
+async def test_unknown_stale_report_after_re_lease_raises_lease_mismatch() -> None:
+    """Report with unknown lease_id for a leased item raises lease_mismatch."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope(max_attempts=3))
+    first_lease = (
+        await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30)
+    )[0]
+    await outbox.release(
+        delivery_id=first_lease.delivery_id,
+        lease_id=first_lease.lease_id,
+        retry_after=now + timedelta(seconds=30),
+        reason="timeout",
+        released_at=now,
+    )
+    await outbox.lease_due(
+        provider="discord",
+        now=now + timedelta(seconds=31),
+        max_items=1,
+        lease_seconds=30,
+    )
+    with pytest.raises(DeliveryOutboxError, match="lease_mismatch"):
+        await outbox.release(
+            delivery_id=first_lease.delivery_id,
+            lease_id=LeaseId("unknown-lease"),
+            retry_after=now + timedelta(seconds=60),
+            reason="timeout",
+            released_at=now + timedelta(seconds=31),
         )

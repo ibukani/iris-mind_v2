@@ -39,6 +39,7 @@ from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
 from iris.runtime.proactive.target_integrator import ProactiveTargetIntegrator
+from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
 from iris.runtime.service import IntegratingObservationPipeline, IrisRuntimeService
 from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.wiring.app import build_app_from_config
@@ -163,12 +164,19 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     app_action_broker = wire_app_action_broker(stores.delivery_outbox, config.delivery)
     delivery_gate = wire_delivery_safety_gate(config.delivery)
     scheduler = wire_runtime_scheduler(stores.proactive_target_store, config)
+    availability_resolver = wire_availability_resolver()
+    availability_provider = DeliveryAvailabilityResolverAdapter(
+        resolver=availability_resolver,
+        presence_store=stores.presence_store,
+        activity_projection_store=stores.activity_projection_store,
+    )
     scheduler_runner = wire_scheduler_runner(
         runtime_service=runtime_service,
         scheduler=scheduler,
         delivery_gate=delivery_gate,
         outbox=stores.delivery_outbox,
         config=config,
+        availability_provider=availability_provider,
     )
     return RuntimeComponents(
         stores=stores,
