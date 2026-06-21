@@ -56,6 +56,49 @@ def envelope(
     )
 
 
+def _failed_result(
+    leased: DeliveryEnvelope,
+    *,
+    error_reason: str = "temporary",
+    external_message_id: ExternalRef | None = None,
+) -> ActionResult:
+    """Build FAILED ActionResult for a leased envelope.
+
+    Returns:
+        FAILED ActionResult with leased action identity.
+    """
+    return ActionResult(
+        action_id=leased.action.action_id,
+        correlation_id=leased.action.correlation_id,
+        status=ActionStatus.FAILED,
+        delivered_at=None,
+        external_message_id=external_message_id,
+        error_reason=error_reason,
+    )
+
+
+def _success_result(
+    leased: DeliveryEnvelope,
+    *,
+    action_id: ActionId | None = None,
+    correlation_id: CorrelationId | None = None,
+    external_message_id: ExternalRef | None = None,
+) -> ActionResult:
+    """Build SUCCEEDED ActionResult for a leased envelope.
+
+    Returns:
+        SUCCEEDED ActionResult with leased action identity.
+    """
+    return ActionResult(
+        action_id=action_id or leased.action.action_id,
+        correlation_id=correlation_id or leased.action.correlation_id,
+        status=ActionStatus.SUCCEEDED,
+        delivered_at=datetime(2026, 1, 1, tzinfo=UTC),
+        external_message_id=external_message_id or ExternalRef("msg-1"),
+        error_reason=None,
+    )
+
+
 async def test_enqueue_then_lease_provider_scoped() -> None:
     """Enqueued pending item can be leased only for matching provider."""
     outbox = InMemoryDeliveryOutbox()
@@ -126,6 +169,75 @@ async def test_success_completion_is_idempotent_and_not_polled_again() -> None:
     assert await outbox.lease_due(provider="discord", now=now, max_items=10, lease_seconds=30) == ()
 
 
+async def test_same_lease_same_status_different_external_message_id_conflicts() -> None:
+    """Same lease/status with changed external message id conflicts."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope())
+    leased = (await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30))[0]
+
+    await outbox.complete(
+        delivery_id=leased.delivery_id,
+        lease_id=leased.lease_id,
+        result=_success_result(leased, external_message_id=ExternalRef("msg-1")),
+        completed_at=now,
+    )
+
+    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+        await outbox.complete(
+            delivery_id=leased.delivery_id,
+            lease_id=leased.lease_id,
+            result=_success_result(leased, external_message_id=ExternalRef("msg-2")),
+            completed_at=now,
+        )
+
+
+async def test_same_lease_same_status_different_action_id_conflicts() -> None:
+    """Same lease/status with changed action id conflicts."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope())
+    leased = (await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30))[0]
+
+    await outbox.complete(
+        delivery_id=leased.delivery_id,
+        lease_id=leased.lease_id,
+        result=_success_result(leased),
+        completed_at=now,
+    )
+
+    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+        await outbox.complete(
+            delivery_id=leased.delivery_id,
+            lease_id=leased.lease_id,
+            result=_success_result(leased, action_id=ActionId("action-2")),
+            completed_at=now,
+        )
+
+
+async def test_same_lease_same_status_different_correlation_id_conflicts() -> None:
+    """Same lease/status with changed correlation id conflicts."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope())
+    leased = (await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30))[0]
+
+    await outbox.complete(
+        delivery_id=leased.delivery_id,
+        lease_id=leased.lease_id,
+        result=_success_result(leased),
+        completed_at=now,
+    )
+
+    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+        await outbox.complete(
+            delivery_id=leased.delivery_id,
+            lease_id=leased.lease_id,
+            result=_success_result(leased, correlation_id=CorrelationId("corr-2")),
+            completed_at=now,
+        )
+
+
 async def test_failed_item_can_retry_then_max_attempts_permanent() -> None:
     """Release retries until max attempts then becomes permanent."""
     outbox = InMemoryDeliveryOutbox()
@@ -136,7 +248,7 @@ async def test_failed_item_can_retry_then_max_attempts_permanent() -> None:
         delivery_id=leased.delivery_id,
         lease_id=leased.lease_id,
         retry_after=now + timedelta(seconds=30),
-        reason="temporary",
+        result=_failed_result(leased, error_reason="temporary"),
         released_at=now,
     )
     assert released.status is DeliveryStatus.FAILED_PERMANENT
@@ -200,7 +312,7 @@ async def test_expired_max_attempt_lease_becomes_permanent_and_is_not_returned()
         delivery_id=first[0].delivery_id,
         lease_id=first[0].lease_id,
         retry_after=now + timedelta(seconds=30),
-        reason="temporary",
+        result=_failed_result(first[0], error_reason="temporary"),
         released_at=now,
     )
     assert released.status is DeliveryStatus.FAILED_PERMANENT
@@ -223,7 +335,7 @@ async def test_repeated_failed_report_is_idempotent() -> None:
         delivery_id=leased.delivery_id,
         lease_id=leased.lease_id,
         retry_after=now + timedelta(seconds=30),
-        reason="timeout",
+        result=_failed_result(leased, error_reason="timeout"),
         released_at=now,
     )
     assert first.status is DeliveryStatus.PENDING
@@ -239,7 +351,7 @@ async def test_repeated_failed_report_is_idempotent() -> None:
         delivery_id=second_lease.delivery_id,
         lease_id=second_lease.lease_id,
         retry_after=now + timedelta(seconds=60),
-        reason="timeout",
+        result=_failed_result(second_lease, error_reason="timeout"),
         released_at=now + timedelta(seconds=31),
     )
     assert second.status is DeliveryStatus.PENDING
@@ -247,7 +359,7 @@ async def test_repeated_failed_report_is_idempotent() -> None:
         delivery_id=second_lease.delivery_id,
         lease_id=second_lease.lease_id,
         retry_after=now + timedelta(seconds=60),
-        reason="timeout",
+        result=_failed_result(second_lease, error_reason="timeout"),
         released_at=now + timedelta(seconds=31),
     )
     assert repeated.delivery_id == second.delivery_id
@@ -324,7 +436,7 @@ async def test_delayed_duplicate_failed_report_after_re_lease_is_idempotent() ->
         delivery_id=first_lease.delivery_id,
         lease_id=first_lease.lease_id,
         retry_after=now + timedelta(seconds=30),
-        reason="timeout",
+        result=_failed_result(first_lease, error_reason="timeout"),
         released_at=now,
     )
     assert first_release.status is DeliveryStatus.PENDING
@@ -340,11 +452,30 @@ async def test_delayed_duplicate_failed_report_after_re_lease_is_idempotent() ->
         delivery_id=first_lease.delivery_id,
         lease_id=first_lease.lease_id,
         retry_after=now + timedelta(seconds=30),
-        reason="timeout",
+        result=_failed_result(first_lease, error_reason="timeout"),
         released_at=now,
     )
     assert delayed_duplicate.delivery_id == first_release.delivery_id
+    assert delayed_duplicate.status is DeliveryStatus.LEASED
+    assert delayed_duplicate.lease_id == second_lease.lease_id
+    assert delayed_duplicate.attempts == second_lease.attempts
     assert second_lease.lease_id != first_lease.lease_id
+    assert (
+        await outbox.lease_due(
+            provider="discord",
+            now=now + timedelta(seconds=31),
+            max_items=1,
+            lease_seconds=30,
+        )
+    ) == ()
+
+    completed = await outbox.complete(
+        delivery_id=second_lease.delivery_id,
+        lease_id=second_lease.lease_id,
+        result=_success_result(second_lease),
+        completed_at=now + timedelta(seconds=31),
+    )
+    assert completed.status is DeliveryStatus.SUCCEEDED
 
 
 async def test_stale_conflicting_report_after_re_lease_raises_conflict() -> None:
@@ -359,7 +490,7 @@ async def test_stale_conflicting_report_after_re_lease_raises_conflict() -> None
         delivery_id=first_lease.delivery_id,
         lease_id=first_lease.lease_id,
         retry_after=now + timedelta(seconds=30),
-        reason="timeout",
+        result=_failed_result(first_lease, error_reason="timeout"),
         released_at=now,
     )
     await outbox.lease_due(
@@ -397,7 +528,7 @@ async def test_unknown_stale_report_after_re_lease_raises_lease_mismatch() -> No
         delivery_id=first_lease.delivery_id,
         lease_id=first_lease.lease_id,
         retry_after=now + timedelta(seconds=30),
-        reason="timeout",
+        result=_failed_result(first_lease, error_reason="timeout"),
         released_at=now,
     )
     await outbox.lease_due(
@@ -411,6 +542,6 @@ async def test_unknown_stale_report_after_re_lease_raises_lease_mismatch() -> No
             delivery_id=first_lease.delivery_id,
             lease_id=LeaseId("unknown-lease"),
             retry_after=now + timedelta(seconds=60),
-            reason="timeout",
+            result=_failed_result(first_lease, error_reason="timeout"),
             released_at=now + timedelta(seconds=31),
         )

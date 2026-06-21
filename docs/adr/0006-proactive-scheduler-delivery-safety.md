@@ -31,7 +31,7 @@ Scheduler
 
 Scheduler は typed observation だけを発行する。proactive talk は `IdleTickObservation` から開始する。Scheduler は LLM client、presenter、Discord/CLI/voice などの外部送信 client を呼ばない。
 
-Delivery は sender ではなく outbox boundary とする。`DeliveryEnvelope` は `DeliveryStatus` による明示状態を持つ。`PENDING` は lease 可能、`LEASED` は lease 一致時だけ完了可能、期限切れ lease は再 lease 可能、`SUCCEEDED` / `FAILED_PERMANENT` / `CANCELLED` / `BLOCKED` は terminal とする。`ReportActionResult` は同一結果の再報告を安全に扱う idempotent API とする。`FAILED` のみ retry 可能とし、`CANCELLED` / `BLOCKED` は terminal completion として扱う。競合する再報告（異なる status や lease_id）は `DeliveryOutboxError` を送出する。`lease_due` / `PollAppActions` は `LEASED` 状態の item のみ返す。terminal item は返さない。
+Delivery は sender ではなく outbox boundary とする。`DeliveryEnvelope` は `DeliveryStatus` による明示状態を持つ。`PENDING` は lease 可能、`LEASED` は lease 一致時だけ完了可能、期限切れ lease は再 lease 可能、`SUCCEEDED` / `FAILED_PERMANENT` / `CANCELLED` / `BLOCKED` は terminal とする。`ReportActionResult` は同一結果の再報告を安全に扱う idempotent API とする。同一性は `delivery_id`、`lease_id`、`action_id`、`correlation_id`、`status`、`external_message_id`、`error_reason` で判定する。`FAILED` のみ retry 可能とし、`CANCELLED` / `BLOCKED` は terminal completion として扱う。競合する再報告は `DeliveryOutboxError` を送出する。`lease_due` / `PollAppActions` は `LEASED` 状態の item のみ返す。terminal item は返さない。
 
 Learning / audit hook は `ActionResult` 後にだけ実行する。`ActionPlan` が提案された時点、または delivery item が enqueue された時点では durable memory を更新しない。
 

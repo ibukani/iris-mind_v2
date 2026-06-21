@@ -47,7 +47,7 @@ class DeliveryOutbox(Protocol):
         delivery_id: DeliveryId,
         lease_id: LeaseId | None,
         retry_after: datetime,
-        reason: str,
+        result: ActionResult,
         released_at: datetime,
     ) -> DeliveryEnvelope:
         """Release a leased item for retry or permanent failure."""

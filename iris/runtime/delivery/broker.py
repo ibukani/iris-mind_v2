@@ -72,6 +72,6 @@ class RuntimeAppActionBroker(AppActionBroker):
             delivery_id=report.delivery_id,
             lease_id=report.lease_id,
             retry_after=retry_after,
-            reason=report.result.error_reason or report.result.status.value,
+            result=report.result,
             released_at=report.reported_at,
         )

@@ -12,7 +12,7 @@ from iris.contracts.delivery import (
     DeliveryEnvelope,
     DeliveryStatus,
 )
-from iris.core.ids import DeliveryId, LeaseId
+from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, LeaseId
 from iris.runtime.delivery.outbox import DeliveryOutbox
 
 
@@ -100,7 +100,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
                 terminal without a recorded report, or the lease mismatches.
         """
         item = self._get(delivery_id)
-        current = _complete_fingerprint(delivery_id, lease_id, result)
+        current = _result_fingerprint(delivery_id, lease_id, result)
         history = self._report_index.get(delivery_id, frozenset())
         outcome = _classify_report(history, current)
         if outcome is _ReportOutcome.IDEMPOTENT:
@@ -132,7 +132,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         delivery_id: DeliveryId,
         lease_id: LeaseId | None,
         retry_after: datetime,
-        reason: str,
+        result: ActionResult,
         released_at: datetime,
     ) -> DeliveryEnvelope:
         """Release a leased item for retry, or make it permanent after max attempts.
@@ -147,7 +147,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
                 terminal without a recorded report, or the lease mismatches.
         """
         item = self._get(delivery_id)
-        current = _release_fingerprint(delivery_id, lease_id, reason)
+        current = _result_fingerprint(delivery_id, lease_id, result)
         history = self._report_index.get(delivery_id, frozenset())
         outcome = _classify_report(history, current)
         if outcome is _ReportOutcome.IDEMPOTENT:
@@ -171,7 +171,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             not_before=retry_after if status is DeliveryStatus.PENDING else item.not_before,
             lease_id=None,
             lease_expires_at=None,
-            last_error_reason=reason,
+            last_error_reason=result.error_reason,
         )
         self._items[delivery_id] = released
         self._report_index[delivery_id] = history | {current}
@@ -263,7 +263,15 @@ def _envelope_sort_key(item: DeliveryEnvelope) -> tuple[datetime, DeliveryId]:
     return (item.created_at, item.delivery_id)
 
 
-type _ReportFingerprint = tuple[DeliveryId, LeaseId | None, str, str | None]
+type _ReportFingerprint = tuple[
+    DeliveryId,
+    LeaseId | None,
+    ActionId,
+    CorrelationId,
+    str,
+    ExternalRef | None,
+    str | None,
+]
 
 
 class _ReportOutcome:
@@ -294,30 +302,25 @@ def _classify_report(
     return _ReportOutcome.NEW
 
 
-def _complete_fingerprint(
+def _result_fingerprint(
     delivery_id: DeliveryId,
     lease_id: LeaseId | None,
     result: ActionResult,
 ) -> _ReportFingerprint:
-    """Build a report fingerprint for a complete() call.
+    """Build full report fingerprint from ActionResult.
 
     Returns:
-        Tuple of delivery_id, lease_id, status value, and error reason.
+        Tuple covering the meaningful ActionResult identity.
     """
-    return (delivery_id, lease_id, result.status.value, result.error_reason)
-
-
-def _release_fingerprint(
-    delivery_id: DeliveryId,
-    lease_id: LeaseId | None,
-    reason: str,
-) -> _ReportFingerprint:
-    """Build a report fingerprint for a release() call.
-
-    Returns:
-        Tuple of delivery_id, lease_id, failed status value, and reason.
-    """
-    return (delivery_id, lease_id, ActionStatus.FAILED.value, reason)
+    return (
+        delivery_id,
+        lease_id,
+        result.action_id,
+        result.correlation_id,
+        result.status.value,
+        result.external_message_id,
+        result.error_reason,
+    )
 
 
 def _is_due(item: DeliveryEnvelope, now: datetime) -> bool:

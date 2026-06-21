@@ -214,3 +214,45 @@ async def test_conflicting_repeated_report_raises_clear_error() -> None:
     )
     with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
         await broker.report_action_result(conflicting_report)
+
+
+async def test_same_status_different_external_message_id_conflicts() -> None:
+    """Broker preserves external message id in report conflict detection."""
+    outbox = InMemoryDeliveryOutbox()
+    broker = RuntimeAppActionBroker(outbox=outbox)
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    await outbox.enqueue(envelope())
+    leased = (await broker.poll_actions(provider="discord", now=now, max_items=1))[0]
+
+    await broker.report_action_result(
+        DeliveryReport(
+            delivery_id=leased.delivery_id,
+            lease_id=leased.lease_id,
+            result=ActionResult(
+                action_id=leased.action.action_id,
+                correlation_id=leased.action.correlation_id,
+                status=ActionStatus.SUCCEEDED,
+                delivered_at=now,
+                external_message_id=ExternalRef("msg-1"),
+                error_reason=None,
+            ),
+            reported_at=now,
+        )
+    )
+
+    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+        await broker.report_action_result(
+            DeliveryReport(
+                delivery_id=leased.delivery_id,
+                lease_id=leased.lease_id,
+                result=ActionResult(
+                    action_id=leased.action.action_id,
+                    correlation_id=leased.action.correlation_id,
+                    status=ActionStatus.SUCCEEDED,
+                    delivered_at=now,
+                    external_message_id=ExternalRef("msg-2"),
+                    error_reason=None,
+                ),
+                reported_at=now,
+            )
+        )
