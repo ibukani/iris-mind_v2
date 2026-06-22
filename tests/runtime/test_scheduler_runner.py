@@ -57,6 +57,7 @@ async def _runner(
     output: PresentedOutput,
     *,
     availability_provider: DeliveryAvailabilityProvider | None = None,
+    delivery_enabled: bool = True,
 ) -> tuple[SchedulerRunner, _FakeRuntimeService, InMemoryDeliveryOutbox]:
     """Build a SchedulerRunner wired to a fake runtime and in-memory outbox.
 
@@ -76,6 +77,7 @@ async def _runner(
             delivery_gate=BasicDeliverySafetyGate(),
             outbox=outbox,
             availability_provider=availability_provider,
+            delivery_enabled=delivery_enabled,
         ),
         runtime,
         outbox,
@@ -324,3 +326,25 @@ async def test_availability_provider_is_called_with_delivery_target() -> None:
         lease_seconds=30,
     )
     assert len(leased) == 1
+
+
+async def test_delivery_disabled_blocks_sendable_output_without_enqueue() -> None:
+    """delivery_enabled false blocks scheduler delivery enqueue."""
+    runner, _runtime, outbox = await _runner(
+        PresentedOutput(text="hello"),
+        delivery_enabled=False,
+    )
+
+    result = await runner.run_once(datetime(2026, 1, 1, tzinfo=UTC))
+
+    assert result.results[0].status == "blocked"
+    assert result.results[0].reason == "delivery_disabled"
+    assert (
+        await outbox.lease_due(
+            provider="discord",
+            now=datetime(2026, 1, 1, tzinfo=UTC),
+            max_items=10,
+            lease_seconds=30,
+        )
+        == ()
+    )

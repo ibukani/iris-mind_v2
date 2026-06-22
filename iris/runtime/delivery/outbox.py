@@ -12,6 +12,10 @@ if TYPE_CHECKING:
     from iris.core.ids import DeliveryId, LeaseId
 
 
+class DeliveryOutboxError(RuntimeError):
+    """Delivery outbox state transition failed."""
+
+
 class DeliveryOutbox(Protocol):
     """Durable-compatible port for pull-based external delivery."""
 

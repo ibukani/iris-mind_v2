@@ -65,6 +65,8 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         activity_projection_store=InMemoryActivityProjectionStore(),
         presence_store=InMemoryPresenceStore(),
         space_occupancy_store=InMemorySpaceOccupancyStore(),
-        delivery_outbox=InMemoryDeliveryOutbox(),
+        delivery_outbox=InMemoryDeliveryOutbox(
+            max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
+        ),
         proactive_target_store=InMemoryProactiveTargetStore(),
     )

@@ -13,18 +13,17 @@ from iris.contracts.delivery import (
     DeliveryStatus,
 )
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, LeaseId
-from iris.runtime.delivery.outbox import DeliveryOutbox
+from iris.runtime.delivery.outbox import DeliveryOutbox, DeliveryOutboxError
 
-
-class DeliveryOutboxError(RuntimeError):
-    """Delivery outbox state transition failed."""
+__all__ = ["DeliveryOutboxError", "InMemoryDeliveryOutbox"]
 
 
 class InMemoryDeliveryOutbox(DeliveryOutbox):
     """Deterministic in-memory outbox for tests and local runtime."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, max_depth_per_provider: int | None = None) -> None:
         """Create an empty process-local outbox."""
+        self._max_depth_per_provider = max_depth_per_provider
         self._items: dict[DeliveryId, DeliveryEnvelope] = {}
         self._idempotency_index: dict[str, DeliveryId] = {}
         self._report_index: dict[DeliveryId, frozenset[_ReportFingerprint]] = {}
@@ -49,9 +48,23 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         existing_id = self._idempotency_index.get(envelope.idempotency_key)
         if existing_id is not None:
             return self._items[existing_id]
+        if self._depth_exceeded(envelope.target.provider):
+            msg = "outbox_depth_exceeded"
+            raise DeliveryOutboxError(msg)
         self._items[envelope.delivery_id] = envelope
         self._idempotency_index[envelope.idempotency_key] = envelope.delivery_id
         return envelope
+
+    def _depth_exceeded(self, provider: str) -> bool:
+        """Return True when active provider depth is at configured limit."""
+        if self._max_depth_per_provider is None:
+            return False
+        active_count = sum(
+            1
+            for item in self._items.values()
+            if item.target.provider == provider and item.status not in TERMINAL_DELIVERY_STATUSES
+        )
+        return active_count >= self._max_depth_per_provider
 
     @override
     async def lease_due(

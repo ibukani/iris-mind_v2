@@ -6,11 +6,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from iris.adapters.app_gateway.ports import AppActionBrokerError
 from iris.contracts.actions import ActionResult, ActionStatus
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryReport, DeliveryStatus
 from iris.core.ids import ExternalRef
 from iris.runtime.delivery.broker import RuntimeAppActionBroker
-from iris.runtime.delivery.in_memory import DeliveryOutboxError, InMemoryDeliveryOutbox
+from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
 from tests.runtime.delivery.test_in_memory_delivery_outbox import envelope
 
 pytestmark = pytest.mark.anyio
@@ -179,7 +180,7 @@ async def test_blocked_report_completes_terminal() -> None:
 
 
 async def test_conflicting_repeated_report_raises_clear_error() -> None:
-    """Conflicting report after a recorded report raises DeliveryOutboxError."""
+    """Conflicting report after a recorded report raises AppActionBrokerError."""
     outbox = InMemoryDeliveryOutbox()
     broker = RuntimeAppActionBroker(outbox=outbox)
     now = datetime(2026, 1, 1, tzinfo=UTC)
@@ -212,7 +213,7 @@ async def test_conflicting_repeated_report_raises_clear_error() -> None:
         ),
         reported_at=now,
     )
-    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+    with pytest.raises(AppActionBrokerError, match="delivery_report_conflict"):
         await broker.report_action_result(conflicting_report)
 
 
@@ -240,7 +241,7 @@ async def test_same_status_different_external_message_id_conflicts() -> None:
         )
     )
 
-    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+    with pytest.raises(AppActionBrokerError, match="delivery_report_conflict"):
         await broker.report_action_result(
             DeliveryReport(
                 delivery_id=leased.delivery_id,

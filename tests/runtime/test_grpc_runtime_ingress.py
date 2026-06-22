@@ -275,6 +275,8 @@ async def test_get_runtime_info_returns_supported_features() -> None:
     assert "submit_observation" in response.supported_features
     assert "persistent_account" in response.supported_features
     assert "ephemeral_space" in response.supported_features
+    assert "poll_app_actions" in response.supported_features
+    assert "report_action_result" in response.supported_features
 
 
 @pytest.mark.anyio

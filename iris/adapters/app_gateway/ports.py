@@ -17,6 +17,15 @@ if TYPE_CHECKING:
     from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 
 
+class AppActionBrokerError(RuntimeError):
+    """AppActionBroker 境界で公開する安定した配送エラー。"""
+
+    def __init__(self, reason: str) -> None:
+        """Reason を保持して broker error を初期化する。"""
+        super().__init__(reason)
+        self.reason = reason
+
+
 class AppGateway(Protocol):
     """観測の受信とアプリアクション実行のためのプロトコル。"""
 

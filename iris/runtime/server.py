@@ -61,7 +61,7 @@ class RuntimeComponents:
     runtime_service: IrisRuntimeService
     identity_resolver: AccountBackedIdentityResolver
     space_resolver: EphemeralSpaceResolver
-    app_action_broker: AppActionBroker
+    app_action_broker: AppActionBroker | None
     scheduler_runner: SchedulerRunner
 
 
@@ -161,7 +161,11 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     runtime_service = build_runtime_service(app, stores)
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
     space_resolver = EphemeralSpaceResolver()
-    app_action_broker = wire_app_action_broker(stores.delivery_outbox, config.delivery)
+    app_action_broker = (
+        wire_app_action_broker(stores.delivery_outbox, config.delivery)
+        if config.delivery.enabled
+        else None
+    )
     delivery_gate = wire_delivery_safety_gate(config.delivery)
     scheduler = wire_runtime_scheduler(stores.proactive_target_store, config)
     availability_resolver = wire_availability_resolver()

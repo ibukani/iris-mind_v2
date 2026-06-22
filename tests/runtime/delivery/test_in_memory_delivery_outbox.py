@@ -284,6 +284,40 @@ async def test_no_action_is_not_accepted_for_delivery() -> None:
         await outbox.enqueue(no_action_envelope)
 
 
+async def test_outbox_depth_limit_is_enforced_per_provider() -> None:
+    """Active outbox depth limit rejects new item for same provider."""
+    outbox = InMemoryDeliveryOutbox(max_depth_per_provider=1)
+
+    await outbox.enqueue(envelope(provider="discord"))
+
+    with pytest.raises(DeliveryOutboxError, match="outbox_depth_exceeded"):
+        await outbox.enqueue(
+            envelope("delivery-2", provider="discord", idempotency_key="idem-2"),
+        )
+
+
+async def test_outbox_depth_limit_allows_same_idempotency_key() -> None:
+    """Repeated idempotency key returns existing envelope even at depth limit."""
+    outbox = InMemoryDeliveryOutbox(max_depth_per_provider=1)
+
+    first = await outbox.enqueue(envelope(provider="discord"))
+    repeated = await outbox.enqueue(envelope("delivery-2", provider="discord"))
+
+    assert repeated is first
+
+
+async def test_outbox_depth_limit_is_independent_per_provider() -> None:
+    """Different providers have independent active depth limits."""
+    outbox = InMemoryDeliveryOutbox(max_depth_per_provider=1)
+
+    await outbox.enqueue(envelope(provider="discord"))
+    slack = await outbox.enqueue(
+        envelope("delivery-2", provider="slack", idempotency_key="idem-2"),
+    )
+
+    assert slack.target.provider == "slack"
+
+
 async def test_lease_due_returns_only_leased_items() -> None:
     """lease_due never returns terminal or non-leased items."""
     outbox = InMemoryDeliveryOutbox()

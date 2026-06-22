@@ -55,5 +55,6 @@ def wire_scheduler_runner(
         delivery_gate=delivery_gate,
         outbox=outbox,
         availability_provider=availability_provider,
+        delivery_enabled=config.delivery.enabled,
         max_attempts=config.delivery.max_attempts,
     )

@@ -49,6 +49,7 @@ class SchedulerRunner:
     delivery_gate: DeliverySafetyGate
     outbox: DeliveryOutbox
     availability_provider: DeliveryAvailabilityProvider | None = None
+    delivery_enabled: bool = True
     max_attempts: int = 3
 
     async def run_once(self, now: datetime) -> SchedulerRunResult:
@@ -100,15 +101,25 @@ class SchedulerRunner:
 
         Returns:
             no_send / blocked / enqueued の何れかの結果。
+
+        Raises:
+            RuntimeError: delivery target precondition check is inconsistent.
         """
         observation_id = scheduled.observation.observation_id
         if not response.output.is_sendable:
             await self.scheduler.mark_dispatched(observation_id, dispatched_at=now)
             return ScheduledObservationResult(observation_id, "no_send", "output_not_sendable")
         target = scheduled.target
-        if target is None:
+        block_reason = _delivery_block_reason(
+            delivery_enabled=self.delivery_enabled,
+            has_target=target is not None,
+        )
+        if block_reason is not None:
             await self.scheduler.mark_dispatched(observation_id, dispatched_at=now)
-            return ScheduledObservationResult(observation_id, "blocked", "missing_delivery_target")
+            return ScheduledObservationResult(observation_id, "blocked", block_reason)
+        if target is None:
+            msg = "delivery target required after delivery block check"
+            raise RuntimeError(msg)
         availability = await self._availability_for(target, now)
         decision = await self.delivery_gate.check(
             target=target,
@@ -192,3 +203,16 @@ def _idempotency_key(observation_id: ObservationId, target: DeliveryTarget) -> s
         f"proactive:{observation_id}:{target.provider}:"
         f"{target.provider_subject}:{target.provider_space_ref}"
     )
+
+
+def _delivery_block_reason(*, delivery_enabled: bool, has_target: bool) -> str | None:
+    """Return delivery block reason before safety/enqueue.
+
+    Returns:
+        block reason, or None when delivery may proceed.
+    """
+    if not delivery_enabled:
+        return "delivery_disabled"
+    if not has_target:
+        return "missing_delivery_target"
+    return None
