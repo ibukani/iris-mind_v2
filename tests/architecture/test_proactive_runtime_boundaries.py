@@ -130,5 +130,5 @@ def test_no_action_not_enqueued_in_delivery_outbox() -> None:
 def test_runtime_server_contains_no_delivery_transition_logic() -> None:
     """runtime/server.py must not own delivery state transitions."""
     text = _source(PROJECT_ROOT / "iris/runtime/server.py")
-    forbidden = ("FAILED_RETRYABLE", "FAILED_PERMANENT", "lease_id", "idempotency_key")
+    forbidden = ("FAILED_PERMANENT", "lease_id", "idempotency_key")
     assert not {token for token in forbidden if token in text}

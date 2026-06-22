@@ -27,7 +27,6 @@ class DeliveryStatus(StrEnum):
     PENDING = "pending"
     LEASED = "leased"
     SUCCEEDED = "succeeded"
-    FAILED_RETRYABLE = "failed_retryable"
     FAILED_PERMANENT = "failed_permanent"
     CANCELLED = "cancelled"
     BLOCKED = "blocked"

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, override
 import grpc
 from loguru import logger
 
-from iris.adapters.app_gateway.ports import AppActionBrokerError
+from iris.adapters.app_gateway.ports import AppActionBrokerError, AppActionBrokerErrorReason
 from iris.adapters.grpc.mappers import (
     GrpcMappingError,
     GrpcRuntimeMapper,
@@ -61,17 +61,23 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
             runtime_pb2.GetRuntimeInfoResponse: Proto runtime info response.
         """
         logger.info("GetRuntimeInfo: received")
+        supported_features = [
+            "submit_observation",
+            "persistent_account",
+            "ephemeral_space",
+        ]
+        if self._app_action_broker is not None:
+            supported_features.extend(
+                [
+                    "poll_app_actions",
+                    "report_action_result",
+                ],
+            )
         response = runtime_pb2.GetRuntimeInfoResponse(
             runtime_name="iris-mind",
             runtime_version="0.1.0",
             api_version="iris.runtime.v1",
-            supported_features=[
-                "submit_observation",
-                "persistent_account",
-                "ephemeral_space",
-                "poll_app_actions",
-                "report_action_result",
-            ],
+            supported_features=supported_features,
         )
         logger.info("GetRuntimeInfo: completed")
         return response
@@ -152,7 +158,7 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
                 max_items=max_items,
             )
         except AppActionBrokerError as exc:
-            await context.abort(_broker_error_status(exc.reason), exc.reason)
+            await context.abort(_broker_error_status(exc.reason), str(exc.reason))
         return delivery_envelopes_to_poll_response(envelopes)
 
     @override
@@ -177,24 +183,26 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         except GrpcMappingError as exc:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         except AppActionBrokerError as exc:
-            await context.abort(_broker_error_status(exc.reason), exc.reason)
+            await context.abort(_broker_error_status(exc.reason), str(exc.reason))
         return runtime_pb2.ReportActionResultResponse()
 
 
-def _broker_error_status(reason: str) -> grpc.StatusCode:
+def _broker_error_status(reason: AppActionBrokerErrorReason | str) -> grpc.StatusCode:
     """Map stable AppActionBrokerError reason to gRPC status.
 
     Returns:
         grpc.StatusCode for the stable broker error reason.
     """
-    return _BROKER_ERROR_STATUS.get(reason, grpc.StatusCode.FAILED_PRECONDITION)
+    if isinstance(reason, AppActionBrokerErrorReason):
+        return _BROKER_ERROR_STATUS.get(reason, grpc.StatusCode.FAILED_PRECONDITION)
+    return grpc.StatusCode.FAILED_PRECONDITION
 
 
-_BROKER_ERROR_STATUS: dict[str, grpc.StatusCode] = {
-    "delivery_not_found": grpc.StatusCode.NOT_FOUND,
-    "lease_mismatch": grpc.StatusCode.FAILED_PRECONDITION,
-    "delivery_not_leased": grpc.StatusCode.FAILED_PRECONDITION,
-    "delivery_already_terminal": grpc.StatusCode.FAILED_PRECONDITION,
-    "delivery_report_conflict": grpc.StatusCode.ALREADY_EXISTS,
-    "outbox_depth_exceeded": grpc.StatusCode.RESOURCE_EXHAUSTED,
+_BROKER_ERROR_STATUS: dict[AppActionBrokerErrorReason, grpc.StatusCode] = {
+    AppActionBrokerErrorReason.DELIVERY_NOT_FOUND: grpc.StatusCode.NOT_FOUND,
+    AppActionBrokerErrorReason.LEASE_MISMATCH: grpc.StatusCode.FAILED_PRECONDITION,
+    AppActionBrokerErrorReason.DELIVERY_NOT_LEASED: grpc.StatusCode.FAILED_PRECONDITION,
+    AppActionBrokerErrorReason.DELIVERY_ALREADY_TERMINAL: grpc.StatusCode.FAILED_PRECONDITION,
+    AppActionBrokerErrorReason.DELIVERY_REPORT_CONFLICT: grpc.StatusCode.ALREADY_EXISTS,
+    AppActionBrokerErrorReason.OUTBOX_DEPTH_EXCEEDED: grpc.StatusCode.RESOURCE_EXHAUSTED,
 }

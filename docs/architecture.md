@@ -893,3 +893,5 @@ Do not store conversation history directly on `SpaceBinding`.
 Memory、relationship、persona semantics の主スコープは `actor_id`。`space_id` は外部interaction contextとしてのみ使う。
 
 Default runtime は `SpaceBinding` を永続化しない。Space に conversation history や persona state を紐づけない。
+
+Retry 可能な `FAILED` は `PENDING` へ戻して `not_before` に retry 時刻、`last_error_reason` に失敗理由を保持する。最大試行後のみ `FAILED_PERMANENT` へ遷移する。

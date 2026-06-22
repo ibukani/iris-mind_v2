@@ -59,3 +59,5 @@ features/proactive_talk → runtime.delivery / runtime.scheduler / safety
 Runtime は orchestration、lifecycle、dependency wiring を所有する。認知 business logic、proactive salience、delivery safety policy、provider-specific send logic は所有しない。
 
 gRPC adapter は DTO mapping と `AppActionBroker` protocol 呼び出しだけを行う。concrete runtime delivery implementation は import しない。
+
+Retry 可能な `FAILED` は `PENDING` へ戻して `not_before` に retry 時刻、`last_error_reason` に失敗理由を保持する。最大試行後のみ `FAILED_PERMANENT` へ遷移する。

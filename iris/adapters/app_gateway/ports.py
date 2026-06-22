@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
@@ -17,13 +18,43 @@ if TYPE_CHECKING:
     from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 
 
+class AppActionBrokerErrorReason(StrEnum):
+    """AppActionBroker 境界で公開する安定した配送エラー理由。"""
+
+    DELIVERY_NOT_FOUND = "delivery_not_found"
+    LEASE_MISMATCH = "lease_mismatch"
+    DELIVERY_NOT_LEASED = "delivery_not_leased"
+    DELIVERY_ALREADY_TERMINAL = "delivery_already_terminal"
+    DELIVERY_REPORT_CONFLICT = "delivery_report_conflict"
+    OUTBOX_DEPTH_EXCEEDED = "outbox_depth_exceeded"
+    NO_ACTION_NOT_DELIVERABLE = "no_action_not_deliverable"
+    IDEMPOTENCY_KEY_REQUIRED = "idempotency_key_required"
+
+
 class AppActionBrokerError(RuntimeError):
     """AppActionBroker 境界で公開する安定した配送エラー。"""
 
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: AppActionBrokerErrorReason | str) -> None:
         """Reason を保持して broker error を初期化する。"""
-        super().__init__(reason)
-        self.reason = reason
+        normalized = _normalize_broker_reason(reason)
+        super().__init__(str(normalized))
+        self.reason = normalized
+
+
+def _normalize_broker_reason(
+    reason: AppActionBrokerErrorReason | str,
+) -> AppActionBrokerErrorReason | str:
+    """Broker error reason を既知 enum へ正規化する。
+
+    Returns:
+        AppActionBrokerErrorReason または未知 reason 文字列。
+    """
+    if isinstance(reason, AppActionBrokerErrorReason):
+        return reason
+    try:
+        return AppActionBrokerErrorReason(reason)
+    except ValueError:
+        return reason
 
 
 class AppGateway(Protocol):

@@ -352,6 +352,17 @@ async def test_delivery_disabled_wiring_rejects_poll_and_report() -> None:
     assert report_exc.value.code() is grpc.StatusCode.FAILED_PRECONDITION
 
 
+async def test_get_runtime_info_includes_delivery_features_when_broker_present() -> None:
+    """GetRuntimeInfo advertises delivery features when broker is wired."""
+    broker = RuntimeAppActionBroker(outbox=InMemoryDeliveryOutbox())
+
+    async with _DeliveryGrpcHarness(broker) as stub:
+        response = await stub.GetRuntimeInfo(runtime_pb2.GetRuntimeInfoRequest())
+
+    assert "poll_app_actions" in response.supported_features
+    assert "report_action_result" in response.supported_features
+
+
 def _report_request(
     *,
     delivery_id: str = "delivery-1",

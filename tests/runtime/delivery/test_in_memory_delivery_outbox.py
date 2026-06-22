@@ -579,3 +579,24 @@ async def test_unknown_stale_report_after_re_lease_raises_lease_mismatch() -> No
             result=_failed_result(first_lease, error_reason="timeout"),
             released_at=now + timedelta(seconds=31),
         )
+
+
+async def test_retryable_failed_release_returns_pending_with_retry_metadata() -> None:
+    """Retryable FAILED release returns PENDING with retry metadata."""
+    outbox = InMemoryDeliveryOutbox()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    retry_at = now + timedelta(seconds=30)
+    await outbox.enqueue(envelope(max_attempts=3))
+    leased = (await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30))[0]
+
+    released = await outbox.release(
+        delivery_id=leased.delivery_id,
+        lease_id=leased.lease_id,
+        retry_after=retry_at,
+        result=_failed_result(leased, error_reason="temporary"),
+        released_at=now,
+    )
+
+    assert released.status is DeliveryStatus.PENDING
+    assert released.not_before == retry_at
+    assert released.last_error_reason == "temporary"
