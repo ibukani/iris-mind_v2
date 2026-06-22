@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import json
 from pathlib import Path
 import sqlite3
+import threading
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.app_gateway.ports import AccountStore
 from iris.contracts.accounts import AccountProfile, AccountStoreError
+from iris.core.async_utils import run_sync_in_thread
 from iris.core.ids import AccountId, ActorId, ExternalRef
 
 if TYPE_CHECKING:
@@ -20,13 +21,14 @@ if TYPE_CHECKING:
 class SQLiteAccountStore(AccountStore):
     """SQLite-backed account store.
 
-    Executes synchronous sqlite3 I/O via ``asyncio.to_thread`` to avoid
+    Executes synchronous sqlite3 I/O via a dedicated thread to avoid
     blocking the event loop under concurrent gRPC requests.
     """
 
     def __init__(self, db_path: str | Path) -> None:
         """Initialize the store and create tables if missing."""
         self._db_path = Path(db_path)
+        self._write_lock = threading.Lock()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
@@ -58,7 +60,6 @@ class SQLiteAccountStore(AccountStore):
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout = 5000;")
-        conn.execute("PRAGMA journal_mode = WAL;")
         return conn
 
     @contextlib.contextmanager
@@ -88,7 +89,7 @@ class SQLiteAccountStore(AccountStore):
             metadata=json.loads(row["metadata_json"]),
         )
 
-    # -- synchronous implementation helpers (offloaded via asyncio.to_thread) --
+    # -- synchronous implementation helpers (offloaded to dedicated threads) --
 
     def _get_by_external_ref_sync(
         self,
@@ -114,7 +115,7 @@ class SQLiteAccountStore(AccountStore):
             return self._row_to_profile(row)
 
     def _put_sync(self, account: AccountProfile) -> AccountProfile:
-        with self._transaction() as conn:
+        with self._write_lock, self._transaction() as conn:
             cursor = conn.execute(
                 "SELECT provider, provider_subject FROM accounts WHERE account_id = ?",
                 (str(account.account_id),),
@@ -169,7 +170,7 @@ class SQLiteAccountStore(AccountStore):
         account_id: AccountId,
         actor_id: ActorId,
     ) -> AccountProfile:
-        with self._transaction() as conn:
+        with self._write_lock, self._transaction() as conn:
             cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
             row = cursor.fetchone()
             if not row:
@@ -187,7 +188,7 @@ class SQLiteAccountStore(AccountStore):
             return self._row_to_profile(updated_row)
 
     def _unlink_account_sync(self, account_id: AccountId) -> AccountProfile:
-        with self._transaction() as conn:
+        with self._write_lock, self._transaction() as conn:
             cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
             row = cursor.fetchone()
             if not row:
@@ -218,7 +219,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile | None: The found account profile, or None.
         """
-        return await asyncio.to_thread(
+        return await run_sync_in_thread(
             self._get_by_external_ref_sync,
             provider=provider,
             provider_subject=provider_subject,
@@ -234,7 +235,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile | None: The found account profile, or None.
         """
-        return await asyncio.to_thread(self._get_by_account_id_sync, account_id)
+        return await run_sync_in_thread(self._get_by_account_id_sync, account_id)
 
     @override
     async def put(
@@ -246,7 +247,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The inserted or updated account profile.
         """
-        return await asyncio.to_thread(self._put_sync, account)
+        return await run_sync_in_thread(self._put_sync, account)
 
     @override
     async def link_account_to_actor(
@@ -260,7 +261,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The updated account profile.
         """
-        return await asyncio.to_thread(
+        return await run_sync_in_thread(
             self._link_account_to_actor_sync,
             account_id=account_id,
             actor_id=actor_id,
@@ -276,4 +277,4 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The updated account profile.
         """
-        return await asyncio.to_thread(self._unlink_account_sync, account_id)
+        return await run_sync_in_thread(self._unlink_account_sync, account_id)

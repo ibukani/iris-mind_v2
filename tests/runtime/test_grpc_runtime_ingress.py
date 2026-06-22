@@ -54,6 +54,7 @@ async def test_submit_observation_returns_presented_output() -> None:
             "update_space_occupancy",
             "react_to_activity",
             "internal_event",
+            "register_delivery_target",
         }
     )
     assert response.correlation_id == "corr-1"

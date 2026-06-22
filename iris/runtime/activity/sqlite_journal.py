@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
 import sqlite3
-from typing import TYPE_CHECKING, override
+import threading
+from typing import TYPE_CHECKING, ClassVar, override
 
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
+from iris.core.async_utils import run_sync_in_thread
 from iris.core.ids import (
     AccountId,
     ActivityId,
@@ -58,6 +59,8 @@ class SQLiteActivityJournal(ActivityJournal):
     Provider event dedupeは永続化され、新しいstore instanceへ引き継がれる。
     """
 
+    _write_lock: ClassVar[threading.Lock] = threading.Lock()
+
     def __init__(self, db_path: str | Path) -> None:
         """データベースパスでjournalを初期化する。
 
@@ -92,7 +95,7 @@ class SQLiteActivityJournal(ActivityJournal):
         CREATE INDEX IF NOT EXISTS idx_activity_events_occurred_at
         ON activity_events(occurred_at);
         """
-        with self._transaction() as conn:
+        with self._write_lock, self._transaction() as conn:
             conn.execute(schema)
             conn.execute(dedupe_index)
             conn.execute(occurred_index)
@@ -107,7 +110,6 @@ class SQLiteActivityJournal(ActivityJournal):
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout = 5000;")
-        conn.execute("PRAGMA journal_mode = WAL;")
         return conn
 
     @contextlib.contextmanager
@@ -164,7 +166,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             ActivityAppendResult: 受理結果。
         """
-        return await asyncio.to_thread(self._append_sync, event)
+        return await run_sync_in_thread(self._append_sync, event)
 
     @override
     async def get_by_id(self, activity_id: ActivityId) -> ActivityEventRecord | None:
@@ -176,7 +178,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             ActivityEventRecord | None: 存在すればevent、なければNone。
         """
-        return await asyncio.to_thread(self._get_by_id_sync, activity_id)
+        return await run_sync_in_thread(self._get_by_id_sync, activity_id)
 
     @override
     async def has_seen_provider_event(
@@ -194,7 +196,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             bool: 受理済みならTrue。
         """
-        return await asyncio.to_thread(
+        return await run_sync_in_thread(
             self._has_seen_provider_event_sync,
             source=source,
             provider_event_id=provider_event_id,
@@ -240,7 +242,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Raises:
             sqlite3.IntegrityError: activity_id または provider_event_id 重複時。
         """
-        with self._immediate_transaction() as conn:
+        with self._write_lock, self._immediate_transaction() as conn:
             existing_cursor: sqlite3.Cursor = conn.execute(
                 "SELECT 1 FROM activity_events WHERE activity_id = ?",
                 (str(event.activity_id),),
