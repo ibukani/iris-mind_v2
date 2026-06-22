@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,7 +13,6 @@ import threading
 from typing import TYPE_CHECKING, ClassVar, override
 
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
-from iris.core.async_utils import run_sync_in_thread
 from iris.core.ids import (
     AccountId,
     ActivityId,
@@ -166,7 +166,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             ActivityAppendResult: 受理結果。
         """
-        return await run_sync_in_thread(self._append_sync, event)
+        return await asyncio.to_thread(self._append_sync, event)
 
     @override
     async def get_by_id(self, activity_id: ActivityId) -> ActivityEventRecord | None:
@@ -178,7 +178,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             ActivityEventRecord | None: 存在すればevent、なければNone。
         """
-        return await run_sync_in_thread(self._get_by_id_sync, activity_id)
+        return await asyncio.to_thread(self._get_by_id_sync, activity_id)
 
     @override
     async def has_seen_provider_event(
@@ -196,7 +196,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             bool: 受理済みならTrue。
         """
-        return await run_sync_in_thread(
+        return await asyncio.to_thread(
             self._has_seen_provider_event_sync,
             source=source,
             provider_event_id=provider_event_id,

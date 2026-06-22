@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 from pathlib import Path
@@ -11,7 +12,6 @@ from typing import TYPE_CHECKING, override
 
 from iris.adapters.app_gateway.ports import AccountStore
 from iris.contracts.accounts import AccountProfile, AccountStoreError
-from iris.core.async_utils import run_sync_in_thread
 from iris.core.ids import AccountId, ActorId, ExternalRef
 
 if TYPE_CHECKING:
@@ -219,7 +219,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile | None: The found account profile, or None.
         """
-        return await run_sync_in_thread(
+        return await asyncio.to_thread(
             self._get_by_external_ref_sync,
             provider=provider,
             provider_subject=provider_subject,
@@ -235,7 +235,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile | None: The found account profile, or None.
         """
-        return await run_sync_in_thread(self._get_by_account_id_sync, account_id)
+        return await asyncio.to_thread(self._get_by_account_id_sync, account_id)
 
     @override
     async def put(
@@ -247,7 +247,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The inserted or updated account profile.
         """
-        return await run_sync_in_thread(self._put_sync, account)
+        return await asyncio.to_thread(self._put_sync, account)
 
     @override
     async def link_account_to_actor(
@@ -261,7 +261,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The updated account profile.
         """
-        return await run_sync_in_thread(
+        return await asyncio.to_thread(
             self._link_account_to_actor_sync,
             account_id=account_id,
             actor_id=actor_id,
@@ -277,4 +277,4 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The updated account profile.
         """
-        return await run_sync_in_thread(self._unlink_account_sync, account_id)
+        return await asyncio.to_thread(self._unlink_account_sync, account_id)

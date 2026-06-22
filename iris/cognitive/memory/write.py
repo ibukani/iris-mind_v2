@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from typing import TYPE_CHECKING, override
 
@@ -10,7 +11,6 @@ from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.memory.extraction import RuleBasedMemoryCandidateExtractor
 from iris.cognitive.memory.policy import MemoryWritePolicy
 from iris.contracts.memory import MemoryId, MemoryRecord
-from iris.core.async_utils import run_sync_in_thread
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -105,9 +105,9 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
                 metadata=candidate.metadata,
             )
 
-            await run_sync_in_thread(self._store.update, record)
+            await asyncio.to_thread(self._store.update, record)
             if self._vector_index is not None:
-                await run_sync_in_thread(
+                await asyncio.to_thread(
                     self._vector_index.upsert,
                     memory_id,
                     record.text,

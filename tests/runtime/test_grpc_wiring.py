@@ -67,6 +67,42 @@ async def test_create_grpc_server_returns_started_server() -> None:
     assert server is not None
 
 
+def test_create_grpc_server_raises_when_bind_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """create_grpc_serverがbind失敗をRuntimeErrorにすることを確認する。"""
+
+    class _UnboundServer:
+        def add_generic_rpc_handlers(self, handlers: object) -> None:
+            """Accept generated service registration."""
+            _ = handlers
+
+        def add_registered_method_handlers(
+            self,
+            service_name: str,
+            method_handlers: object,
+        ) -> None:
+            """Accept generated registered method handler registration."""
+            _ = service_name, method_handlers
+
+        def add_insecure_port(self, address: str) -> int:
+            """Return gRPC bind failure sentinel.
+
+            Returns:
+                0, matching grpc add_insecure_port bind failure.
+            """
+            _ = address
+            return 0
+
+    monkeypatch.setattr(grpc.aio, "server", _UnboundServer)
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"failed to bind gRPC port 127\.0\.0\.1:50051",
+    ):
+        create_grpc_server(RecordingRuntimeService("unused"))
+
+
 @pytest.mark.anyio
 async def test_servicer_construction_uses_injected_mapper() -> None:
     """constructorへ渡したmapperがaccount_ref解決に使われることを確認する。"""
