@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import TracebackType
 
 
 async def run_sync_in_thread[R, **P](
@@ -25,23 +26,41 @@ async def run_sync_in_thread[R, **P](
     Returns:
         同期関数の戻り値。
 
-    Raises:
-        RuntimeError: スレッド内部で例外が発生した場合。元の例外情報は
-            標準エラー出力に出力される（``threading.Thread`` の既定動作）。
+    同期関数が例外を送出した場合は、元の例外型とメッセージを保持して
+    await元へ伝搬する。
     """
-    done = asyncio.Event()
-    result_box: list[R] = []
+    loop = asyncio.get_running_loop()
+    future: asyncio.Future[R] = loop.create_future()
 
     def _target() -> None:
-        try:
-            result_box.append(func(*args, **kwargs))
-        finally:
-            done.set()
+        exception_seen = False
+        result_box: list[R] = []
 
-    thread = threading.Thread(target=_target, name="iris-sync-worker")
+        class _WorkerExceptionSink:
+            def __enter__(self) -> None:
+                return None
+
+            def __exit__(
+                self,
+                exc_type: type[BaseException] | None,
+                exc: BaseException | None,
+                traceback: TracebackType | None,
+            ) -> bool:
+                _ = exc_type, traceback
+                nonlocal exception_seen
+                if exc is None:
+                    return False
+                exception_seen = True
+                loop.call_soon_threadsafe(future.set_exception, exc)
+                return True
+
+        with _WorkerExceptionSink():
+            result_box.append(func(*args, **kwargs))
+
+        if exception_seen:
+            return
+        loop.call_soon_threadsafe(future.set_result, result_box[0])
+
+    thread = threading.Thread(target=_target, name="iris-sync-worker", daemon=True)
     thread.start()
-    await done.wait()
-    if not result_box:
-        msg = f"Thread for {func.__qualname__} failed"
-        raise RuntimeError(msg)
-    return result_box[0]
+    return await future
