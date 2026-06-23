@@ -6,7 +6,7 @@ import pytest
 
 from iris.contracts.activity import ActivityKind
 from iris.contracts.availability import AvailabilityStatus
-from iris.runtime.event_reaction.policy import EventReactionPolicy, default_event_reaction_policy
+from iris.features.event_reaction.policy import EventReactionPolicy, default_event_reaction_policy
 
 
 @pytest.fixture

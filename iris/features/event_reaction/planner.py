@@ -13,11 +13,10 @@ from iris.contracts.event_reaction import (
 )
 
 if TYPE_CHECKING:
-    from iris.cognitive.workspace.frame import SituationContextSnapshot
     from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
     from iris.contracts.observations import ActivityEventObservation
-    from iris.runtime.event_reaction.policy import EventReactionPolicy
-    from iris.runtime.event_reaction.templates import EventReactionTemplateProvider
+    from iris.features.event_reaction.policy import EventReactionPolicy
+    from iris.features.event_reaction.templates import EventReactionTemplateProvider
 
 
 @dataclass(frozen=True)
@@ -31,13 +30,13 @@ class EventReactionPlanner:
         self,
         observation: ActivityEventObservation,
         *,
-        situation_context: SituationContextSnapshot,
+        availability: AvailabilitySnapshot | None,
     ) -> EventReactionDecision:
         """Activity kindとavailabilityに基づき決定論的な反応候補を返す。
 
         Args:
             observation: 反応対象のactivity event観測。
-            situation_context: ランタイムから組み立てられた状況スナップショット。
+            availability: ランタイムが導出したavailability snapshot。
 
         Returns:
             EventReactionDecision: 反応するかどうかの決定と候補。
@@ -48,7 +47,7 @@ class EventReactionPlanner:
                 reason="actor not resolved",
             )
 
-        status = _availability_status(situation_context.availability)
+        status = _availability_status(availability)
         if not self.policy.allows(observation.activity_kind, status):
             return EventReactionDecision(
                 should_react=False,

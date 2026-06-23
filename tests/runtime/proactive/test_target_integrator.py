@@ -9,9 +9,12 @@ import pytest
 from iris.contracts.delivery import DeliveryRouteHint
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ExternalRef, ObservationId, SessionId
-from iris.runtime.observations.ingress import ObservationCapability, ObservationIngressContext
-from iris.runtime.proactive.target_integrator import ProactiveTargetIntegrator
-from iris.runtime.proactive.targets import InMemoryProactiveTargetStore
+from iris.runtime.ingress.observation_ingress import (
+    ObservationCapability,
+    ObservationIngressContext,
+)
+from iris.runtime.state.proactive_target_integrator import ProactiveTargetIntegrator
+from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore
 
 pytestmark = pytest.mark.anyio
 

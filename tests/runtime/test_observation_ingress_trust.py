@@ -6,12 +6,12 @@ from datetime import UTC, datetime
 
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
-from iris.runtime.observations.ingress import (
+from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     trusted_adapter_ingress,
     unauthenticated_external_ingress,
 )
-from iris.runtime.observations.trust import ObservationTrustPolicy
+from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.service import ObservationEnvelope
 
 

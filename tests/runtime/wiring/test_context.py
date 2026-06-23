@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from iris.runtime.availability.resolver import AvailabilityResolver
-from iris.runtime.context.workspace_assembler import WorkspaceContextAssembler
+from iris.runtime.state.availability import AvailabilityResolver
+from iris.runtime.state.workspace_assembler import WorkspaceContextAssembler
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 

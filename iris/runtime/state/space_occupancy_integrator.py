@@ -14,9 +14,9 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.observations import Observation
-    from iris.runtime.observations.ingress import ObservationIngressContext
-    from iris.runtime.observations.trust import ObservationTrustPolicy
-    from iris.runtime.spaces.occupancy_store import SpaceOccupancyStore
+    from iris.runtime.ingress.observation_ingress import ObservationIngressContext
+    from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
+    from iris.runtime.state.space_occupancy import SpaceOccupancyStore
 
 
 @dataclass(frozen=True)

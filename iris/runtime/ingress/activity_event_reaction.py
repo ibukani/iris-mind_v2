@@ -11,9 +11,9 @@ from iris.safety.action_gate import GateDecision
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import SituationContextSnapshot
     from iris.contracts.observations import ActivityEventObservation
-    from iris.runtime.event_reaction.runner import EventReactionRunner
-    from iris.runtime.observations.ingress import ObservationIngressContext
-    from iris.runtime.observations.trust import ObservationTrustPolicy
+    from iris.runtime.ingress.activity_event_reaction_runner import EventReactionRunner
+    from iris.runtime.ingress.observation_ingress import ObservationIngressContext
+    from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
     from iris.safety.output_filter import OutputSafetyGate
 
 

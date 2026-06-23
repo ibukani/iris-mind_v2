@@ -14,11 +14,11 @@ from iris.contracts.delivery import DeliveryStatus
 from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
-from iris.runtime.proactive.targets import InMemoryProactiveTargetStore
 from iris.runtime.scheduler.idle_tick import IdleTickSource
 from iris.runtime.scheduler.models import ScheduledObservation
 from iris.runtime.scheduler.runner import SchedulerRunner
 from iris.runtime.service import ObservationEnvelope, RuntimeResponse
+from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore
 from iris.safety.delivery_gate import BasicDeliverySafetyGate, DeliverySafetyDecision
 from tests.runtime.scheduler.test_idle_tick_source import make_target
 

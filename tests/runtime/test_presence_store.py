@@ -8,7 +8,7 @@ import pytest
 
 from iris.contracts.presence import PresenceSnapshot, PresenceStatus
 from iris.core.ids import ActorId
-from iris.runtime.presence.store import InMemoryPresenceStore
+from iris.runtime.state.presence import InMemoryPresenceStore
 
 _NOW = datetime(2026, 6, 13, tzinfo=UTC)
 

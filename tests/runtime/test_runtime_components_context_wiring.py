@@ -23,7 +23,7 @@ from iris.contracts.presence import PresenceStatus
 from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
 from iris.runtime.app import IrisApp
 from iris.runtime.config import default_runtime_config
-from iris.runtime.observations.ingress import (
+from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
     unauthenticated_external_ingress,

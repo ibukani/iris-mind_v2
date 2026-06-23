@@ -12,10 +12,10 @@ from iris.contracts.availability import AvailabilityStatus
 from iris.contracts.delivery import DeliveryTarget
 from iris.contracts.presence import PresenceSnapshot, PresenceStatus
 from iris.core.ids import ActorId, ExternalRef, SessionId
-from iris.runtime.activity.projections import ActivityProjectionStore
-from iris.runtime.availability.resolver import AvailabilityResolver
-from iris.runtime.presence.store import PresenceStore
 from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
+from iris.runtime.state.activity_projection import ActivityProjectionStore
+from iris.runtime.state.availability import AvailabilityResolver
+from iris.runtime.state.presence import PresenceStore
 
 if TYPE_CHECKING:
     from iris.contracts.activity import ActivityEventRecord

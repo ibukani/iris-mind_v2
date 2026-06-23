@@ -77,22 +77,16 @@ iris/
 │
 ├── runtime/
 │   ├── app.py
-│   ├── config.py
+│   ├── service.py
 │   ├── server.py
-│   ├── activity/
-│   ├── availability/
-│   ├── context/
-│   ├── presence/
-│   ├── spaces/
-│   └── wiring/
-│       ├── app.py
-│       ├── availability.py
-│       ├── cognitive.py
-│       ├── context.py
-│       ├── features.py
-│       ├── llm.py
-│       ├── memory.py
-│       └── presentation.py
+│   ├── config/
+│   ├── wiring/
+│   ├── ingress/
+│   ├── state/
+│   ├── scheduler/
+│   ├── delivery/
+│   ├── lifecycle/
+│   └── observability/
 │
 ├── cognitive/
 │   ├── cycle/
@@ -123,15 +117,20 @@ iris/
 │       └── response.py
 │
 ├── presentation/
-│   └── presenter.py
+│   ├── presenter.py
+│   └── event_reaction.py
 │
 ├── features/
-│   └── proactive_talk/
-│       ├── definition.py
-│       ├── goals.py
-│       ├── models.py
+│   ├── proactive_talk/
+│   │   ├── definition.py
+│   │   ├── goals.py
+│   │   ├── models.py
+│   │   ├── policy.py
+│   │   └── scoring.py
+│   └── event_reaction/
+│       ├── planner.py
 │       ├── policy.py
-│       └── scoring.py
+│       └── templates.py
 │
 ├── adapters/
 │   ├── app_gateway/
@@ -226,17 +225,19 @@ adapters/app_gateway/ports.py
 
 ### `runtime/`
 
-アプリケーション起動、構成、スケジューリング、バックグラウンドジョブを担当する。
+アプリケーション起動、構成、ライフサイクル、スケジューリング、配送、観測 ingress、依存配線、可観測性、process-local runtime state を担当する。
 
 主な責務。
 
 - アプリ起動
 - 設定読み込み
 - dependency wiring
-- scheduler
-- background job
 - lifecycle
-- telemetry
+- scheduler
+- delivery outbox / delivery lifecycle
+- ingress orchestration
+- observability
+- process-local runtime state
 
 注意点。
 
@@ -244,6 +245,10 @@ adapters/app_gateway/ports.py
 - `runtime/wiring/` に分割する。
 - `runtime/wiring/` は constructor injection に限定する。
 - `runtime/wiring/` に業務ロジックや認知ロジックを書かない。
+- `runtime/ingress/` は trust check、観測統合、runtime handler 呼び出し、safety gate などの orchestration に限定する。
+- `runtime/state/` は activity journal/projection、presence、space occupancy、proactive target、availability、workspace context assembly など process-local state とその port を置く。
+- feature 固有の policy、planning、scoring、candidate generation、template は `features/` に置く。
+- domain/action/reaction candidate から `PresentedOutput` への変換は `presentation/` に置く。
 
 `runtime` だけが全体を知ってよい。
 
@@ -347,9 +352,10 @@ CognitiveCycle → action step
 
 ### `presentation/`
 
-`cognitive/` が決めた `ActionPlan` を、実際にどのような形で見せるかに変換する。
+`cognitive/` が決めた `ActionPlan`、または feature が生成した domain/action/reaction candidate を、実際にどのような形で見せるかに変換する。
 
 MVPでは軽量。`SimplePresenter` が `ActionPlan` を `PresentedOutput` に変換する。
+`EventReactionPresenter` は `ReactionCandidate` を `PresentedOutput` に変換するだけで、反応可否の判断、trust check、safety gate は行わない。
 
 ```text
 ActionPlan
@@ -368,6 +374,7 @@ adapters/       = どこへ送るかを担当する
 ### `features/`
 
 新機能を縦切りで追加する場所。
+feature 固有の policy、planning、scoring、candidate generation、template、`FeatureDefinition` provider を置く。
 
 ただし、`features/` は好き勝手に内部実装を改造する場所ではない。
 `CognitiveCycle` の拡張ポイントに参加する extension provider である。
@@ -384,13 +391,15 @@ class FeatureDefinition:
     background_jobs: Sequence[BackgroundJob] = ()
 ```
 
-現在実装済みの feature: `proactive_talk/`（salience scoring, goal proposal, proactive policy, expression抑制）。
+現在実装済みの feature: `proactive_talk/`（salience scoring, goal proposal, proactive policy, expression抑制）と `event_reaction/`（activity event reaction policy、planning、template）。
 
 `runtime/wiring/features.py` は `FeatureDefinition` を集めて登録するだけにする。
+feature は `runtime/`、`adapters/`、`presentation/`、`safety/` に依存しない。runtime が feature を配線・実行する。
 
 ### `adapters/`
 
 外部技術との接続を担当する。
+provider、transport、storage、SDK、backend implementation はここに置く。runtime state port は利用側の `runtime/state/` に置く。SQLite activity journal は現時点では既存 adapter→runtime 禁止 guard を優先し、`runtime/state/sqlite_activity_journal.py` に置く。
 
 `adapters/app_gateway/` の責務は、外部アプリとの `Observation / AppAction / ActionResult` protocol boundary である。
 
@@ -651,7 +660,7 @@ SituationContextSnapshot
 ```
 
 `FrameBuilder.build_initial()` は `Observation.context` から `actor_context` と `space_context` を作り、オプションで `SituationContextSnapshot` を受け取る。
-`WorkspaceFrame.situation_context` は `iris.runtime.context.WorkspaceContextAssembler` が `ActivityProjectionStore` / `PresenceStore` / `SpaceOccupancyStore` から組み立てて `IrisRuntimeService` 経由で渡される。
+`WorkspaceFrame.situation_context` は `iris.runtime.state.workspace_assembler.WorkspaceContextAssembler` が `ActivityProjectionStore` / `PresenceStore` / `SpaceOccupancyStore` から組み立てて `IrisRuntimeService` 経由で渡される。
 `AvailabilitySnapshot` は `AvailabilityResolver` が `PresenceSnapshot` と `ActivityEventRecord` から決定論的に導出する。
 `WorkspaceFrame` は frozen typed snapshot のまま。resolver、store、adapter、manager、mutable context bag は入れない。
 

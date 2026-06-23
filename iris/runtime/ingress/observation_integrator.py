@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from iris.contracts.observations import Observation
-    from iris.runtime.observations.ingress import ObservationIngressContext
+    from iris.runtime.ingress.observation_ingress import ObservationIngressContext
 
 
 @runtime_checkable

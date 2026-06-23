@@ -10,9 +10,9 @@ from iris.runtime.scheduler.runner import SchedulerRunner
 if TYPE_CHECKING:
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.delivery.outbox import DeliveryOutbox
-    from iris.runtime.proactive.targets import ProactiveTargetStore
     from iris.runtime.scheduler.ports import DeliveryAvailabilityProvider
     from iris.runtime.service import IrisRuntimeService
+    from iris.runtime.state.proactive_targets import ProactiveTargetStore
     from iris.safety.delivery_gate import DeliverySafetyGate
 
 

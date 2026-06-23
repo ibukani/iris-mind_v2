@@ -14,10 +14,10 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.observations import Observation
-    from iris.runtime.activity.journal import ActivityJournal
-    from iris.runtime.activity.projections import ActivityProjectionStore
-    from iris.runtime.observations.ingress import ObservationIngressContext
-    from iris.runtime.observations.trust import ObservationTrustPolicy
+    from iris.runtime.ingress.observation_ingress import ObservationIngressContext
+    from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
+    from iris.runtime.state.activity_journal import ActivityJournal
+    from iris.runtime.state.activity_projection import ActivityProjectionStore
 
 
 @dataclass(frozen=True)

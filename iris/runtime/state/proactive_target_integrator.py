@@ -5,9 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
-from iris.runtime.observations.ingress import ObservationCapability, ObservationIngressContext
-from iris.runtime.observations.integrator import ObservationIntegrator
-from iris.runtime.proactive.targets import ProactiveTarget, ProactiveTargetStore
+from iris.runtime.ingress.observation_ingress import (
+    ObservationCapability,
+    ObservationIngressContext,
+)
+from iris.runtime.ingress.observation_integrator import ObservationIntegrator
+from iris.runtime.state.proactive_targets import ProactiveTarget, ProactiveTargetStore
 
 if TYPE_CHECKING:
     from iris.contracts.observations import Observation

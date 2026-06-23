@@ -10,8 +10,8 @@ from iris.contracts.observations import ActivityEventObservation, Observation
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import SituationContextSnapshot
     from iris.contracts.actions import PresentedOutput
-    from iris.runtime.event_reaction.planner import EventReactionPlanner
-    from iris.runtime.event_reaction.presenter import EventReactionPresenter
+    from iris.features.event_reaction.planner import EventReactionPlanner
+    from iris.presentation.event_reaction import EventReactionPresenter
 
 
 @dataclass(frozen=True)
@@ -41,7 +41,7 @@ class EventReactionRunner:
 
         decision = self.planner.plan(
             observation,
-            situation_context=situation_context,
+            availability=situation_context.availability,
         )
         if not decision.should_react or decision.candidate is None:
             return None

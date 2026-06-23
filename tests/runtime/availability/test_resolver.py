@@ -11,7 +11,7 @@ from iris.contracts.availability import AvailabilityStatus
 from iris.contracts.presence import PresenceSnapshot, PresenceStatus
 from iris.contracts.space_occupancy import SpaceOccupancySnapshot, SpaceOccupant
 from iris.core.ids import ActivityId, ActorId, ObservationId, SpaceId
-from iris.runtime.availability.resolver import AvailabilityResolver
+from iris.runtime.state.availability import AvailabilityResolver
 
 
 @pytest.fixture

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from iris.runtime.observations.ingress import ObservationCapability, trusted_adapter_ingress
-from iris.runtime.observations.trust import ObservationTrustPolicy
+from iris.runtime.ingress.observation_ingress import ObservationCapability, trusted_adapter_ingress
+from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 
 
 def test_react_to_activity_capability_is_required_for_event_reaction() -> None:

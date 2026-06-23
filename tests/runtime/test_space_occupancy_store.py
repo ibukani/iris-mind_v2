@@ -9,7 +9,7 @@ import pytest
 
 from iris.contracts.space_occupancy import SpaceOccupant
 from iris.core.ids import ActorId, SpaceId
-from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
+from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 
 _NOW = datetime(2026, 6, 13, tzinfo=UTC)
 _SPACE_ID = SpaceId("space-1")

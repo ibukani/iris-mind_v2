@@ -12,11 +12,11 @@ import pytest
 
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
 from iris.core.ids import ActivityId, ActorId, ObservationId, SpaceId
-from iris.runtime.activity.journal import (
+from iris.runtime.state.activity_journal import (
     ActivityAppendResult,
     ActivityAppendSkipReason,
 )
-from iris.runtime.activity.sqlite_journal import SQLiteActivityJournal
+from iris.runtime.state.sqlite_activity_journal import SQLiteActivityJournal
 
 if TYPE_CHECKING:
     from pathlib import Path

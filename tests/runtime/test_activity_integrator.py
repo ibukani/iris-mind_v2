@@ -17,14 +17,14 @@ from iris.contracts.observations import (
 )
 from iris.contracts.presence import PresenceStatus
 from iris.core.ids import ActivityId, ActorId, ObservationId, SessionId, SpaceId
-from iris.runtime.activity.integrator import ActivityIntegrator
-from iris.runtime.activity.journal import InMemoryActivityJournal
-from iris.runtime.activity.projections import InMemoryActivityProjectionStore
-from iris.runtime.observations.ingress import (
+from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
 )
-from iris.runtime.observations.trust import ObservationTrustPolicy
+from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
+from iris.runtime.state.activity_integrator import ActivityIntegrator
+from iris.runtime.state.activity_journal import InMemoryActivityJournal
+from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
 
 _OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
 _RECEIVED_AT = _OCCURRED_AT + timedelta(seconds=1)

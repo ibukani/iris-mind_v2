@@ -10,8 +10,8 @@ import pytest
 from iris.contracts.delivery import DeliveryRouteHint
 from iris.contracts.observations import IdleTickObservation
 from iris.core.ids import AccountId, ExternalRef, SessionId, SpaceId
-from iris.runtime.proactive.targets import InMemoryProactiveTargetStore, ProactiveTarget
 from iris.runtime.scheduler.idle_tick import IdleTickSchedulePolicy, IdleTickSource
+from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore, ProactiveTarget
 
 pytestmark = pytest.mark.anyio
 

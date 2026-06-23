@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from iris.contracts.actions import SendMessageAction
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTarget
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ObservationId
-from iris.runtime.observations.ingress import ObservationCapability
+from iris.runtime.ingress.observation_ingress import ObservationCapability
 from iris.runtime.service import ObservationEnvelope, ObservationRuntimeService, RuntimeResponse
 
 if TYPE_CHECKING:

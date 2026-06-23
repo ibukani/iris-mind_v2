@@ -14,7 +14,7 @@ from iris.runtime.scheduler.ports import RuntimeScheduler
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from iris.runtime.proactive.targets import ProactiveTarget, ProactiveTargetStore
+    from iris.runtime.state.proactive_targets import ProactiveTarget, ProactiveTargetStore
 
 
 @dataclass(frozen=True)

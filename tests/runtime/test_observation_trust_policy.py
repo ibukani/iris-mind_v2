@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from iris.runtime.observations.ingress import (
+from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
     trusted_adapter_ingress,
     unauthenticated_external_ingress,
 )
-from iris.runtime.observations.trust import ObservationTrustPolicy
+from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 
 
 def test_observation_trust_policy_requires_authentication_and_capabilities() -> None:

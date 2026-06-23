@@ -8,7 +8,7 @@ import pytest
 
 from iris.contracts.delivery import DeliveryRouteHint
 from iris.core.ids import ExternalRef, SessionId
-from iris.runtime.proactive.targets import InMemoryProactiveTargetStore, ProactiveTarget
+from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore, ProactiveTarget
 
 pytestmark = pytest.mark.anyio
 

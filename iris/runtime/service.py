@@ -6,15 +6,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from iris.contracts.actions import PresentedOutput
+from iris.runtime.ingress.observation_ingress import (
+    ObservationCapability,
+    trusted_adapter_ingress,
+    unauthenticated_external_ingress,
+)
 from iris.runtime.observation_router import (
     ActivityEventRoute,
     PresenceSignalRoute,
     route_observation,
-)
-from iris.runtime.observations.ingress import (
-    ObservationCapability,
-    trusted_adapter_ingress,
-    unauthenticated_external_ingress,
 )
 
 if TYPE_CHECKING:
@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from iris.contracts.observations import ActivityEventObservation, Observation
     from iris.core.ids import CorrelationId
     from iris.runtime.app import IrisApp
-    from iris.runtime.observations.ingress import ObservationIngressContext
-    from iris.runtime.observations.integrator import ObservationIntegrator
+    from iris.runtime.ingress.observation_ingress import ObservationIngressContext
+    from iris.runtime.ingress.observation_integrator import ObservationIntegrator
 
 
 @dataclass(frozen=True)

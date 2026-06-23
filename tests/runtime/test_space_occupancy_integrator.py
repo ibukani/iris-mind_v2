@@ -14,13 +14,13 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
-from iris.runtime.observations.ingress import (
+from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
 )
-from iris.runtime.observations.trust import ObservationTrustPolicy
-from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
-from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
+from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
+from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
+from iris.runtime.state.space_occupancy_integrator import SpaceOccupancyIntegrator
 
 _OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
 _RECEIVED_AT = _OCCURRED_AT + timedelta(seconds=1)

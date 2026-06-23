@@ -12,10 +12,10 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.observations import Observation
-    from iris.runtime.activity.projections import ActivityProjectionStore
-    from iris.runtime.availability.resolver import AvailabilityResolver
-    from iris.runtime.presence.store import PresenceStore
-    from iris.runtime.spaces.occupancy_store import SpaceOccupancyStore
+    from iris.runtime.state.activity_projection import ActivityProjectionStore
+    from iris.runtime.state.availability import AvailabilityResolver
+    from iris.runtime.state.presence import PresenceStore
+    from iris.runtime.state.space_occupancy import SpaceOccupancyStore
 
 
 @dataclass(frozen=True)

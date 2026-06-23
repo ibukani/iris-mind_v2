@@ -9,11 +9,11 @@ import pytest
 
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
 from iris.core.ids import ActivityId, ActorId, ObservationId, SpaceId
-from iris.runtime.activity.journal import (
+from iris.runtime.state.activity_journal import (
     ActivityAppendSkipReason,
     InMemoryActivityJournal,
 )
-from iris.runtime.activity.projections import InMemoryActivityProjectionStore
+from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
 
 _OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
 

@@ -17,7 +17,7 @@ from iris.contracts.observations import (
 )
 from iris.core.ids import CorrelationId, ObservationId, SessionId
 from iris.runtime.app import IrisApp
-from iris.runtime.observations.ingress import unauthenticated_external_ingress
+from iris.runtime.ingress.observation_ingress import unauthenticated_external_ingress
 from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeResponse
 from iris.runtime.wiring.app import wire_default_app
 from tests.helpers.immutability import assert_frozen_field

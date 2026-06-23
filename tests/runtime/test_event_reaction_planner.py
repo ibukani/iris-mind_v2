@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.cognitive.workspace.frame import SituationContextSnapshot
 from iris.contracts.activity import ActivityKind
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.event_reaction import EventReactionKind
@@ -17,9 +16,9 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ActorId, ObservationId, SessionId
-from iris.runtime.event_reaction.planner import EventReactionPlanner
-from iris.runtime.event_reaction.policy import EventReactionPolicy, default_event_reaction_policy
-from iris.runtime.event_reaction.templates import EventReactionTemplateProvider
+from iris.features.event_reaction.planner import EventReactionPlanner
+from iris.features.event_reaction.policy import EventReactionPolicy, default_event_reaction_policy
+from iris.features.event_reaction.templates import EventReactionTemplateProvider
 
 
 @pytest.fixture
@@ -55,22 +54,17 @@ def now() -> datetime:
     return datetime(2026, 6, 13, tzinfo=UTC)
 
 
-def _situation(
+def _availability(
     availability_status: AvailabilityStatus,
     *,
     now: datetime,
-) -> SituationContextSnapshot:
-    return SituationContextSnapshot(
-        latest_activity=None,
-        presence=None,
-        space_occupancy=None,
-        availability=AvailabilitySnapshot(
-            actor_id=ActorId("actor-1"),
-            status=availability_status,
-            reason="test",
-            observed_at=now,
-            computed_at=now,
-        ),
+) -> AvailabilitySnapshot:
+    return AvailabilitySnapshot(
+        actor_id=ActorId("actor-1"),
+        status=availability_status,
+        reason="test",
+        observed_at=now,
+        computed_at=now,
     )
 
 
@@ -107,7 +101,7 @@ def test_voice_joined_available_returns_greeting(
     """AVAILABLEなVOICE_JOINEDに対してgreeting候補を返す。"""
     decision = planner.plan(
         _activity(ActivityKind.VOICE_JOINED, actor_id=actor_id),
-        situation_context=_situation(AvailabilityStatus.AVAILABLE, now=now),
+        availability=_availability(AvailabilityStatus.AVAILABLE, now=now),
     )
 
     assert decision.should_react is True
@@ -125,7 +119,7 @@ def test_app_opened_available_returns_greeting(
     """AVAILABLEなAPP_OPENEDに対してgreeting候補を返す。"""
     decision = planner.plan(
         _activity(ActivityKind.APP_OPENED, actor_id=actor_id),
-        situation_context=_situation(AvailabilityStatus.AVAILABLE, now=now),
+        availability=_availability(AvailabilityStatus.AVAILABLE, now=now),
     )
 
     assert decision.should_react is True
@@ -142,7 +136,7 @@ def test_app_opened_passive_rejected(
     """APP_OPENEDはPASSIVEでは反応しない。"""
     decision = planner.plan(
         _activity(ActivityKind.APP_OPENED, actor_id=actor_id),
-        situation_context=_situation(AvailabilityStatus.PASSIVE, now=now),
+        availability=_availability(AvailabilityStatus.PASSIVE, now=now),
     )
 
     assert decision.should_react is False
@@ -156,7 +150,7 @@ def test_voice_left_rejected(
     """VOICE_LEFTは反応しない。"""
     decision = planner.plan(
         _activity(ActivityKind.VOICE_LEFT, actor_id=actor_id),
-        situation_context=_situation(AvailabilityStatus.AVAILABLE, now=now),
+        availability=_availability(AvailabilityStatus.AVAILABLE, now=now),
     )
 
     assert decision.should_react is False
@@ -170,7 +164,7 @@ def test_missing_actor_rejected(
     """actorが未解決の場合は反応しない。"""
     decision = planner.plan(
         _activity(ActivityKind.VOICE_JOINED, actor_id=actor_id, include_actor=False),
-        situation_context=_situation(AvailabilityStatus.AVAILABLE, now=now),
+        availability=_availability(AvailabilityStatus.AVAILABLE, now=now),
     )
 
     assert decision.should_react is False
@@ -191,19 +185,17 @@ def test_unknown_allowed_kind_without_candidate(
         policy=policy,
         template_provider=EventReactionTemplateProvider(),
     )
-    situation = SituationContextSnapshot(
-        availability=AvailabilitySnapshot(
-            actor_id=actor_id,
-            status=AvailabilityStatus.AVAILABLE,
-            reason="test",
-            observed_at=now,
-            computed_at=now,
-        ),
+    availability = AvailabilitySnapshot(
+        actor_id=actor_id,
+        status=AvailabilityStatus.AVAILABLE,
+        reason="test",
+        observed_at=now,
+        computed_at=now,
     )
 
     decision = custom_planner.plan(
         _activity(ActivityKind.SYSTEM_INTERACTION, actor_id=actor_id),
-        situation_context=situation,
+        availability=availability,
     )
 
     assert decision.should_react is False
