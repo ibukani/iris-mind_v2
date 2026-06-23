@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from dataclasses import dataclass
 from datetime import datetime
@@ -175,7 +176,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             ActivityAppendResult: 受理結果。
         """
-        return self._append_sync(event)
+        return await asyncio.to_thread(self._append_sync, event)
 
     @override
     async def get_by_id(self, activity_id: ActivityId) -> ActivityEventRecord | None:
@@ -187,7 +188,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             ActivityEventRecord | None: 存在すればevent、なければNone。
         """
-        return self._get_by_id_sync(activity_id)
+        return await asyncio.to_thread(self._get_by_id_sync, activity_id)
 
     @override
     async def has_seen_provider_event(
@@ -205,7 +206,8 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             bool: 受理済みならTrue。
         """
-        return self._has_seen_provider_event_sync(
+        return await asyncio.to_thread(
+            self._has_seen_provider_event_sync,
             source=source,
             provider_event_id=provider_event_id,
         )

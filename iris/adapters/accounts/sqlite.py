@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 from pathlib import Path
@@ -57,7 +58,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             sqlite3.Connection: A new configured connection.
         """
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
+        conn = sqlite3.connect(self._db_path, timeout=5.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout = 5000;")
@@ -230,7 +231,8 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile | None: The found account profile, or None.
         """
-        return self._get_by_external_ref_sync(
+        return await asyncio.to_thread(
+            self._get_by_external_ref_sync,
             provider=provider,
             provider_subject=provider_subject,
         )
@@ -245,7 +247,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile | None: The found account profile, or None.
         """
-        return self._get_by_account_id_sync(account_id)
+        return await asyncio.to_thread(self._get_by_account_id_sync, account_id)
 
     @override
     async def put(
@@ -257,7 +259,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The inserted or updated account profile.
         """
-        return self._put_sync(account)
+        return await asyncio.to_thread(self._put_sync, account)
 
     @override
     async def link_account_to_actor(
@@ -271,7 +273,8 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The updated account profile.
         """
-        return self._link_account_to_actor_sync(
+        return await asyncio.to_thread(
+            self._link_account_to_actor_sync,
             account_id=account_id,
             actor_id=actor_id,
         )
@@ -286,4 +289,4 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The updated account profile.
         """
-        return self._unlink_account_sync(account_id)
+        return await asyncio.to_thread(self._unlink_account_sync, account_id)
