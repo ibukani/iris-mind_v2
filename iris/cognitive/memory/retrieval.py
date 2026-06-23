@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Protocol, override
 
 from iris.cognitive.cycle.models import MemoryRetrievalResult, StepStatus
@@ -62,7 +61,7 @@ class MemoryRetrievalStep(PipelineStep[MemoryRetrievalResult]):
             space_id=frame.space_context.space_id,
             limit=self._limit,
         )
-        memories = tuple(await asyncio.to_thread(self._retriever.search, query))
+        memories = tuple(self._retriever.search(query))
         return MemoryRetrievalResult(
             step_name=self.name,
             status=StepStatus.OK,

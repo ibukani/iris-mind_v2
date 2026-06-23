@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import json
 from pathlib import Path
@@ -29,7 +28,9 @@ class SQLiteAccountStore(AccountStore):
         """Initialize the store and create tables if missing."""
         self._db_path = Path(db_path)
         self._write_lock = threading.Lock()
+        self._conn_lock = threading.RLock()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = self._connect()
         self._init_db()
 
     def _init_db(self) -> None:
@@ -69,8 +70,18 @@ class SQLiteAccountStore(AccountStore):
         Yields:
             sqlite3.Connection: An open, managed connection.
         """
-        with contextlib.closing(self._connect()) as conn, conn:
-            yield conn
+        with self._conn_lock, self._conn:
+            yield self._conn
+
+    def close(self) -> None:
+        """永続connectionを閉じる。"""
+        with self._conn_lock:
+            self._conn.close()
+
+    def __del__(self) -> None:
+        """未closeのconnectionを解放する。"""
+        if hasattr(self, "_conn"):
+            self.close()
 
     @staticmethod
     def _row_to_profile(row: sqlite3.Row) -> AccountProfile:
@@ -219,8 +230,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile | None: The found account profile, or None.
         """
-        return await asyncio.to_thread(
-            self._get_by_external_ref_sync,
+        return self._get_by_external_ref_sync(
             provider=provider,
             provider_subject=provider_subject,
         )
@@ -235,7 +245,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile | None: The found account profile, or None.
         """
-        return await asyncio.to_thread(self._get_by_account_id_sync, account_id)
+        return self._get_by_account_id_sync(account_id)
 
     @override
     async def put(
@@ -247,7 +257,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The inserted or updated account profile.
         """
-        return await asyncio.to_thread(self._put_sync, account)
+        return self._put_sync(account)
 
     @override
     async def link_account_to_actor(
@@ -261,8 +271,7 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The updated account profile.
         """
-        return await asyncio.to_thread(
-            self._link_account_to_actor_sync,
+        return self._link_account_to_actor_sync(
             account_id=account_id,
             actor_id=actor_id,
         )
@@ -277,4 +286,4 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             AccountProfile: The updated account profile.
         """
-        return await asyncio.to_thread(self._unlink_account_sync, account_id)
+        return self._unlink_account_sync(account_id)

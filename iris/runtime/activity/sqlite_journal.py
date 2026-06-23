@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 from dataclasses import dataclass
 from datetime import datetime
@@ -68,7 +67,9 @@ class SQLiteActivityJournal(ActivityJournal):
             db_path: SQLiteデータベースファイルへのパス。
         """
         self._db_path = Path(db_path)
+        self._conn_lock = threading.RLock()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = self._connect()
         self._init_db()
 
     def _init_db(self) -> None:
@@ -106,7 +107,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             sqlite3.Connection: 設定済みのconnection。
         """
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
+        conn = sqlite3.connect(self._db_path, timeout=5.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout = 5000;")
@@ -119,8 +120,18 @@ class SQLiteActivityJournal(ActivityJournal):
         Yields:
             sqlite3.Connection: 開いた管理対象connection。
         """
-        with contextlib.closing(self._connect()) as conn, conn:
-            yield conn
+        with self._conn_lock, self._conn:
+            yield self._conn
+
+    def close(self) -> None:
+        """永続connectionを閉じる。"""
+        with self._conn_lock:
+            self._conn.close()
+
+    def __del__(self) -> None:
+        """未closeのconnectionを解放する。"""
+        if hasattr(self, "_conn"):
+            self.close()
 
     @contextlib.contextmanager
     def _immediate_transaction(self) -> Generator[sqlite3.Connection]:
@@ -141,20 +152,18 @@ class SQLiteActivityJournal(ActivityJournal):
         Yields:
             sqlite3.Connection: ``BEGIN IMMEDIATE`` を開始した管理対象connection。
         """
-        conn = self._connect()
         txn_active = False
-        try:
-            conn.execute("BEGIN IMMEDIATE")
-            txn_active = True
-            yield conn
-            conn.commit()
-        except Exception:
-            if txn_active:
-                with contextlib.suppress(sqlite3.OperationalError):
-                    conn.execute("ROLLBACK")
-            raise
-        finally:
-            conn.close()
+        with self._conn_lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                txn_active = True
+                yield self._conn
+                self._conn.commit()
+            except Exception:
+                if txn_active:
+                    with contextlib.suppress(sqlite3.OperationalError):
+                        self._conn.execute("ROLLBACK")
+                raise
 
     @override
     async def append(self, event: ActivityEventRecord) -> ActivityAppendResult:
@@ -166,7 +175,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             ActivityAppendResult: 受理結果。
         """
-        return await asyncio.to_thread(self._append_sync, event)
+        return self._append_sync(event)
 
     @override
     async def get_by_id(self, activity_id: ActivityId) -> ActivityEventRecord | None:
@@ -178,7 +187,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             ActivityEventRecord | None: 存在すればevent、なければNone。
         """
-        return await asyncio.to_thread(self._get_by_id_sync, activity_id)
+        return self._get_by_id_sync(activity_id)
 
     @override
     async def has_seen_provider_event(
@@ -196,8 +205,7 @@ class SQLiteActivityJournal(ActivityJournal):
         Returns:
             bool: 受理済みならTrue。
         """
-        return await asyncio.to_thread(
-            self._has_seen_provider_event_sync,
+        return self._has_seen_provider_event_sync(
             source=source,
             provider_event_id=provider_event_id,
         )
