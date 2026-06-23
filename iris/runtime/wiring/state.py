@@ -12,7 +12,9 @@ from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.runtime.activity.journal import InMemoryActivityJournal
 from iris.runtime.activity.projections import InMemoryActivityProjectionStore
 from iris.runtime.activity.sqlite_journal import SQLiteActivityJournal
+from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
 from iris.runtime.presence.store import InMemoryPresenceStore
+from iris.runtime.proactive.targets import InMemoryProactiveTargetStore
 from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
 
 if TYPE_CHECKING:
@@ -21,7 +23,9 @@ if TYPE_CHECKING:
     from iris.runtime.activity.journal import ActivityJournal
     from iris.runtime.activity.projections import ActivityProjectionStore
     from iris.runtime.config import IrisRuntimeConfig
+    from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.presence.store import PresenceStore
+    from iris.runtime.proactive.targets import ProactiveTargetStore
     from iris.runtime.spaces.occupancy_store import SpaceOccupancyStore
 
 
@@ -35,48 +39,34 @@ class RuntimeStateStores:
     activity_projection_store: ActivityProjectionStore
     presence_store: PresenceStore
     space_occupancy_store: SpaceOccupancyStore
+    delivery_outbox: DeliveryOutbox
+    proactive_target_store: ProactiveTargetStore
 
 
 def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
-    """永続状態ストアとプロセス内ランタイムstateストアを組み立てて初期化する。
-
-    永続化policy:
-    - ``state.backend = "sqlite"`` 選択時、account store、memory store、activity journal
-      はSQLiteへ永続化される。
-    - Activity projection、presence、space occupancyはvolatileなcurrent-state signal
-      としてprocess-localのin-memory実装のままとなる。
-
-    Args:
-        config: ランタイム設定。
+    """永続状態ストアとプロセス内ランタイムstateストアを組み立てる。
 
     Returns:
-        RuntimeStateStores: ランタイムが使うストア群。
+        構成済みの RuntimeStateStores。
     """
     if config.state.backend == "sqlite":
         account_store: AccountStore = SQLiteAccountStore(config.state.sqlite_path)
         memory_store: MutableMemoryStore = SQLiteMemoryStore(config.state.sqlite_path)
-        # Activity journalはdurable audit history。investigation、debugging、
-        # provider event dedupe、future replay/projection rebuildのために
-        # process restartを超えて永続化する。
         activity_journal: ActivityJournal = SQLiteActivityJournal(config.state.sqlite_path)
     else:
         account_store = InMemoryAccountStore()
         memory_store = InMemoryMemoryStore()
         activity_journal = InMemoryActivityJournal()
 
-    # Activity projectionはhot runtime stateであり、ephemeralのままで
-    # 毎回起動時に空のlatest projectionから組み立てる。
-    activity_projection_store: ActivityProjectionStore = InMemoryActivityProjectionStore()
-    # Presenceはcurrent state signalとしてprocess-localのままとする。
-    presence_store: PresenceStore = InMemoryPresenceStore()
-    # Space occupancyもcurrent state signalとしてprocess-localのままとする。
-    space_occupancy_store: SpaceOccupancyStore = InMemorySpaceOccupancyStore()
-
     return RuntimeStateStores(
         account_store=account_store,
         memory_store=memory_store,
         activity_journal=activity_journal,
-        activity_projection_store=activity_projection_store,
-        presence_store=presence_store,
-        space_occupancy_store=space_occupancy_store,
+        activity_projection_store=InMemoryActivityProjectionStore(),
+        presence_store=InMemoryPresenceStore(),
+        space_occupancy_store=InMemorySpaceOccupancyStore(),
+        delivery_outbox=InMemoryDeliveryOutbox(
+            max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
+        ),
+        proactive_target_store=InMemoryProactiveTargetStore(),
     )

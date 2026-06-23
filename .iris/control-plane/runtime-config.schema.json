@@ -75,6 +75,156 @@
       "description": "SQLite状態ファイルのパス。"
     },
     {
+      "path": "scheduler.enabled",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "RuntimeScheduler lifecycle loop を有効化する。"
+    },
+    {
+      "path": "scheduler.interval_seconds",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "scheduler loop の実行間隔秒数。"
+    },
+    {
+      "path": "scheduler.idle_threshold_seconds",
+      "type": "float",
+      "default": 600.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "IdleTickObservation を発火する idle 秒数。"
+    },
+    {
+      "path": "scheduler.min_interval_per_target_seconds",
+      "type": "float",
+      "default": 1800.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "target ごとの proactive tick 最小間隔秒数。"
+    },
+    {
+      "path": "scheduler.max_due_per_run",
+      "type": "int",
+      "default": 10,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "scheduler run 1回あたりの最大 due observation 数。"
+    },
+    {
+      "path": "delivery.enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "DeliveryOutbox と PollAppActions API を有効化する。"
+    },
+    {
+      "path": "delivery.max_outbox_depth_per_provider",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "provider ごとの最大 outbox depth。"
+    },
+    {
+      "path": "delivery.lease_seconds",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "PollAppActions が取得する lease 秒数。"
+    },
+    {
+      "path": "delivery.max_attempts",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "配送 item ごとの最大試行回数。"
+    },
+    {
+      "path": "delivery.retry_backoff_seconds",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "失敗後に retry 可能になるまでの秒数。"
+    },
+    {
+      "path": "delivery.rate_limit_window_seconds",
+      "type": "float",
+      "default": 1800.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "予約済み: 現在の DeliverySafetyGate では未使用。プロアクティブ送信頻度は scheduler.min_interval_per_target_seconds で制御する。"
+    },
+    {
+      "path": "delivery.quiet_hours.enabled",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "quiet hours による配送 block を有効化する。"
+    },
+    {
+      "path": "delivery.quiet_hours.start",
+      "type": "str",
+      "default": "22:00",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "quiet hours 開始 HH:MM。"
+    },
+    {
+      "path": "delivery.quiet_hours.end",
+      "type": "str",
+      "default": "08:00",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "quiet hours 終了 HH:MM。"
+    },
+    {
+      "path": "delivery.quiet_hours.timezone",
+      "type": "str",
+      "default": "Asia/Tokyo",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "quiet hours 判定 timezone。"
+    },
+    {
       "path": "models.default_chat.provider",
       "type": "enum",
       "default": "fake",

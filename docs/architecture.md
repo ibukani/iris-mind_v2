@@ -854,6 +854,33 @@ CLI / main.py / iris.runtime.server
 - rules.md: AI コーディングルール、Do/Don't Examples
 - legacy.md: 削除済みアーキテクチャ情報
 - tests.md: アーキテクチャテスト受入基準
+
+## Proactive Scheduler / Delivery Foundation
+
+Proactive scheduler は default disabled である。Scheduler は `IdleTickObservation` などの typed internal `Observation` だけを発行し、LLM client、presenter、Discord/CLI/voice 送信 client を直接呼ばない。
+
+配送 path は次に固定する。
+
+```text
+RuntimeScheduler
+→ typed internal Observation
+→ IrisRuntimeService
+→ normal CognitiveCycle
+→ ActionSafetyGate
+→ Presenter
+→ OutputSafetyGate
+→ DeliverySafetyGate
+→ DeliveryOutbox
+→ external client polling
+→ ActionResult
+→ learning/audit hooks
+```
+
+`DeliveryOutbox` は sender ではない。外部 client が `PollAppActions` で lease し、platform send 後に `ReportActionResult` を返す。`PollAppActions` は `LEASED` 状態の item のみ返す。`ReportActionResult` は `SUCCEEDED` / `CANCELLED` / `BLOCKED` を terminal completion、`FAILED` のみ retry として扱う。同一報告の再送は全 status で idempotent とし、`delivery_id`、`lease_id`、`action_id`、`correlation_id`、`status`、`external_message_id`、`error_reason` の同一性で判定する。競合報告は `DeliveryOutboxError` を送出する。現実装は in-memory だが、`DeliveryEnvelope`、lease、idempotency key、`DeliveryStatus` state machine は durable 実装へ置換できる契約にする。
+
+`SchedulerRunner` は `DeliveryAvailabilityProvider` protocol を通じて `AvailabilitySnapshot` を取得し、`DeliverySafetyGate` へ渡す。BUSY / UNAVAILABLE は delivery enqueue を block する。`DeliverySafetyGate` の runtime-level rate limit は現 phase では未実装。プロアクティブ送信頻度は `IdleTickSource` が `min_interval_per_target_seconds` で制御する。
+
+`NoAction`、sendable ではない `PresentedOutput`、`DeliverySafetyGate` が block した output は delivery outbox に入れない。
 - external.md: 外部アプリとの責務分離
 ## Identity and Space Scoping
 
@@ -866,3 +893,5 @@ Do not store conversation history directly on `SpaceBinding`.
 Memory、relationship、persona semantics の主スコープは `actor_id`。`space_id` は外部interaction contextとしてのみ使う。
 
 Default runtime は `SpaceBinding` を永続化しない。Space に conversation history や persona state を紐づけない。
+
+Retry 可能な `FAILED` は `PENDING` へ戻して `not_before` に retry 時刻、`last_error_reason` に失敗理由を保持する。最大試行後のみ `FAILED_PERMANENT` へ遷移する。

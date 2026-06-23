@@ -8,6 +8,8 @@ import "iris/api/v1/outputs.proto";
 service IrisRuntimeService {
   rpc GetRuntimeInfo(GetRuntimeInfoRequest) returns (GetRuntimeInfoResponse);
   rpc SubmitObservation(SubmitObservationRequest) returns (SubmitObservationResponse);
+  rpc PollAppActions(PollAppActionsRequest) returns (PollAppActionsResponse);
+  rpc ReportActionResult(ReportActionResultRequest) returns (ReportActionResultResponse);
 }
 
 message GetRuntimeInfoRequest {}
@@ -33,3 +35,44 @@ message SubmitObservationResponse {
   string correlation_id = 1;
   iris.api.v1.PresentedOutput output = 2;
 }
+
+message PollAppActionsRequest {
+  string provider = 1;
+  int32 max_items = 2;
+}
+
+message PollAppActionsResponse {
+  repeated AppActionEnvelope actions = 1;
+}
+
+message AppActionEnvelope {
+  string delivery_id = 1;
+  string lease_id = 2;
+  string action_id = 3;
+  string correlation_id = 4;
+  string session_id = 5;
+  string provider = 6;
+  string provider_subject = 7;
+  string provider_space_ref = 8;
+  int32 attempts = 9;
+
+  oneof action {
+    SendMessageAction send_message = 20;
+  }
+}
+
+message SendMessageAction {
+  string text = 1;
+}
+
+message ReportActionResultRequest {
+  string delivery_id = 1;
+  string lease_id = 2;
+  string action_id = 3;
+  string correlation_id = 4;
+  string status = 5;
+  string external_message_id = 6;
+  string error_reason = 7;
+}
+
+message ReportActionResultResponse {}

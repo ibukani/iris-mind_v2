@@ -7,6 +7,7 @@ implementation details and should not be imported directly by consumers.
 
 from __future__ import annotations
 
+from iris.runtime.config.delivery import RuntimeDeliveryConfig, RuntimeQuietHoursConfig
 from iris.runtime.config.diagnostics import (
     DiagnosticsMode,
     RuntimeDiagnosticsConfig,
@@ -37,6 +38,7 @@ from iris.runtime.config.root import (
     resolve_runtime_config_path,
 )
 from iris.runtime.config.safety import RuntimeSafetyConfig
+from iris.runtime.config.scheduler import RuntimeSchedulerConfig
 from iris.runtime.config.server import RuntimeServerConfig
 from iris.runtime.config.spec import (
     ConfigFieldSpec,
@@ -54,13 +56,16 @@ __all__ = [
     "ModelSlotName",
     "RuntimeConfigMetadata",
     "RuntimeConfigOverrides",
+    "RuntimeDeliveryConfig",
     "RuntimeDiagnosticsConfig",
     "RuntimeLoggingConfig",
     "RuntimeModelConfig",
     "RuntimeModelsConfig",
     "RuntimeOllamaConfig",
     "RuntimeOpenAIConfig",
+    "RuntimeQuietHoursConfig",
     "RuntimeSafetyConfig",
+    "RuntimeSchedulerConfig",
     "RuntimeServerConfig",
     "RuntimeStateConfig",
     "all_model_slots_are_fake",

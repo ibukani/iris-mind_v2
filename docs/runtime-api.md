@@ -150,3 +150,15 @@ Actor identity is the primary owner for memory and relationship semantics.
 - Discord thread: `provider = "discord"`、`provider_space_ref = "thread:<thread-id>"`
 
 `display_name`、metadata、`space_kind` は `space_id` のidentity keyではない。
+
+## Pull-based Delivery API
+
+Retry 可能な `FAILED` は `PENDING` へ戻して `not_before` に次回 retry 時刻、`last_error_reason` に失敗理由を保持する。最大試行後のみ `FAILED_PERMANENT` へ遷移する。
+
+`PollAppActions` と `ReportActionResult` は proactive delivery outbox 用の pull 型 API である。この phase では信頼済み local/internal client 前提であり、public network に unauthenticated で公開してはならない。provider-level authorization は out of scope。
+
+外部 client は `PollAppActions(provider, max_items)` で provider ごとの due action を lease する。`PollAppActions` は `LEASED` 状態の item のみ返す。terminal item（`SUCCEEDED` / `FAILED_PERMANENT` / `CANCELLED` / `BLOCKED`）は返さない。Mind runtime は Discord / CLI / voice などの platform send を直接実行しない。現 phase の delivery polling API は `SendMessageAction` のみを返し、`NoAction` は配送されない。
+
+外部 client は platform send 後に `ReportActionResult` を呼ぶ。`SUCCEEDED` / `CANCELLED` / `BLOCKED` は terminal completion となり、それぞれ `DeliveryStatus.SUCCEEDED` / `CANCELLED` / `BLOCKED` に遷移する。`FAILED` のみ retry 可能で、retry 可能なら release し、最大試行後は permanent failure にする。同一 `ActionResult` の再報告は全 status で idempotent に扱う。同一性は `delivery_id`、`lease_id`、`action_id`、`correlation_id`、`status`、`external_message_id`、`error_reason` で判定する。同じ `delivery_id` / `lease_id` でこれらが異なる再報告は `DeliveryOutboxError` を送出する。
+
+`SchedulerRunner` は `DeliveryAvailabilityProvider` protocol を通じて配信先の `AvailabilitySnapshot` を取得し、`DeliverySafetyGate` へ渡す。`availability=None` の場合は safety gate は availability check を skip する。BUSY / UNAVAILABLE は delivery enqueue を block する。

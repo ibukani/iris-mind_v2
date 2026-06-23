@@ -38,6 +38,12 @@ class ConfigFieldSpec:
     deprecated: bool = False
 
 
+_RATE_LIMIT_RESERVED_DESC = (
+    "予約済み: 現在の DeliverySafetyGate では未使用。"
+    "プロアクティブ送信頻度は scheduler.min_interval_per_target_seconds で制御する。"
+)
+
+
 def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
     """全ユーザー向けランタイム設定フィールドの正規仕様を返す。
 
@@ -133,6 +139,96 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             ".iris/runtime/state.sqlite3",
             "SQLite状態ファイルのパス。",
             env="IRIS_STATE_SQLITE_PATH",
+        ),
+        ConfigFieldSpec(
+            "scheduler.enabled",
+            "bool",
+            default=False,
+            description="RuntimeScheduler lifecycle loop を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "scheduler.interval_seconds",
+            "float",
+            30.0,
+            "scheduler loop の実行間隔秒数。",
+        ),
+        ConfigFieldSpec(
+            "scheduler.idle_threshold_seconds",
+            "float",
+            600.0,
+            "IdleTickObservation を発火する idle 秒数。",
+        ),
+        ConfigFieldSpec(
+            "scheduler.min_interval_per_target_seconds",
+            "float",
+            1800.0,
+            "target ごとの proactive tick 最小間隔秒数。",
+        ),
+        ConfigFieldSpec(
+            "scheduler.max_due_per_run",
+            "int",
+            10,
+            "scheduler run 1回あたりの最大 due observation 数。",
+        ),
+        ConfigFieldSpec(
+            "delivery.enabled",
+            "bool",
+            default=True,
+            description="DeliveryOutbox と PollAppActions API を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "delivery.max_outbox_depth_per_provider",
+            "int",
+            100,
+            "provider ごとの最大 outbox depth。",
+        ),
+        ConfigFieldSpec(
+            "delivery.lease_seconds",
+            "float",
+            30.0,
+            "PollAppActions が取得する lease 秒数。",
+        ),
+        ConfigFieldSpec(
+            "delivery.max_attempts",
+            "int",
+            3,
+            "配送 item ごとの最大試行回数。",
+        ),
+        ConfigFieldSpec(
+            "delivery.retry_backoff_seconds",
+            "float",
+            30.0,
+            "失敗後に retry 可能になるまでの秒数。",
+        ),
+        ConfigFieldSpec(
+            "delivery.rate_limit_window_seconds",
+            "float",
+            1800.0,
+            _RATE_LIMIT_RESERVED_DESC,
+        ),
+        ConfigFieldSpec(
+            "delivery.quiet_hours.enabled",
+            "bool",
+            default=False,
+            description="quiet hours による配送 block を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "delivery.quiet_hours.start",
+            "str",
+            "22:00",
+            "quiet hours 開始 HH:MM。",
+        ),
+        ConfigFieldSpec(
+            "delivery.quiet_hours.end",
+            "str",
+            "08:00",
+            "quiet hours 終了 HH:MM。",
+        ),
+        ConfigFieldSpec(
+            "delivery.quiet_hours.timezone",
+            "str",
+            "Asia/Tokyo",
+            "quiet hours 判定 timezone。",
         ),
         *model_specs,
         ConfigFieldSpec(

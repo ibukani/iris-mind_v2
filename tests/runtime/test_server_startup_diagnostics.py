@@ -231,6 +231,7 @@ def test_serve_invokes_run_startup_diagnostics_before_components(
             runtime_service=SimpleNamespace(),
             identity_resolver=SimpleNamespace(),
             space_resolver=SimpleNamespace(),
+            app_action_broker=SimpleNamespace(),
         )
 
     def fake_create_grpc_server(*_args: object, **_kwargs: object) -> object:

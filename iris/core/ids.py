@@ -7,6 +7,8 @@ from typing import NewType
 ObservationId = NewType("ObservationId", str)
 ActivityId = NewType("ActivityId", str)
 ActionId = NewType("ActionId", str)
+DeliveryId = NewType("DeliveryId", str)
+LeaseId = NewType("LeaseId", str)
 TurnId = NewType("TurnId", str)
 SessionId = NewType("SessionId", str)
 ConversationId = NewType("ConversationId", str)

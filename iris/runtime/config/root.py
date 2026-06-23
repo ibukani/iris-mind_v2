@@ -19,6 +19,11 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from iris.runtime.config.delivery import (
+    RuntimeDeliveryConfig,
+    apply_delivery_toml,
+    validate_delivery_config,
+)
 from iris.runtime.config.diagnostics import (
     RuntimeDiagnosticsConfig,
     apply_diagnostics_env,
@@ -40,6 +45,11 @@ from iris.runtime.config.parsing import (
     validate_toml_keys,
 )
 from iris.runtime.config.safety import RuntimeSafetyConfig, apply_safety_env, apply_safety_toml
+from iris.runtime.config.scheduler import (
+    RuntimeSchedulerConfig,
+    apply_scheduler_toml,
+    validate_scheduler_config,
+)
 from iris.runtime.config.server import (
     RuntimeServerConfig,
     apply_server_env,
@@ -87,6 +97,8 @@ class IrisRuntimeConfig:
     logging: RuntimeLoggingConfig
     safety: RuntimeSafetyConfig
     diagnostics: RuntimeDiagnosticsConfig
+    scheduler: RuntimeSchedulerConfig
+    delivery: RuntimeDeliveryConfig
 
 
 @dataclass(frozen=True)
@@ -132,6 +144,8 @@ def default_runtime_config() -> IrisRuntimeConfig:
         logging=RuntimeLoggingConfig(),
         safety=RuntimeSafetyConfig(),
         diagnostics=RuntimeDiagnosticsConfig(),
+        scheduler=RuntimeSchedulerConfig(),
+        delivery=RuntimeDeliveryConfig(),
     )
 
 
@@ -179,7 +193,9 @@ def load_runtime_config(
         config = apply_runtime_overrides(config, overrides)
 
     config = replace(config, server=validate_server_config(config.server))
-    return replace(config, state=validate_state_config(config.state))
+    config = replace(config, state=validate_state_config(config.state))
+    config = replace(config, scheduler=validate_scheduler_config(config.scheduler))
+    return replace(config, delivery=validate_delivery_config(config.delivery))
 
 
 def resolve_runtime_config_path(
@@ -350,6 +366,8 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     metadata = _apply_config_toml(table_or_empty(table, "config"))
     server = apply_server_toml(config.server, table_or_empty(table, "server"))
     state = apply_state_toml(config.state, table_or_empty(table, "state"))
+    scheduler = apply_scheduler_toml(config.scheduler, table_or_empty(table, "scheduler"))
+    delivery = apply_delivery_toml(config.delivery, table_or_empty(table, "delivery"))
     safety = apply_safety_toml(config.safety, table_or_empty(table, "safety"))
     diagnostics = apply_diagnostics_toml(
         config.diagnostics,
@@ -368,6 +386,8 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
         config=metadata,
         server=server,
         state=state,
+        scheduler=scheduler,
+        delivery=delivery,
         models=models,
         ollama=ollama,
         openai=openai,

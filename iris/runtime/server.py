@@ -17,7 +17,9 @@ if TYPE_CHECKING:
 
     import grpc
 
+    from iris.adapters.app_gateway.ports import AppActionBroker
     from iris.runtime.app import IrisApp
+    from iris.runtime.scheduler.runner import SchedulerRunner
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
@@ -31,17 +33,22 @@ from iris.runtime.config import (
 from iris.runtime.config.init import init_runtime_config, runtime_config_template
 from iris.runtime.config.root import all_model_slots_are_fake
 from iris.runtime.event_reaction.handler import ActivityEventReactionHandler
+from iris.runtime.lifecycle.scheduler_loop import run_scheduler_loop
 from iris.runtime.observability.diagnostics import run_startup_diagnostics
 from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.observations.trust import ObservationTrustPolicy
 from iris.runtime.presence.integrator import PresenceIntegrator
+from iris.runtime.proactive.target_integrator import ProactiveTargetIntegrator
+from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
 from iris.runtime.service import IntegratingObservationPipeline, IrisRuntimeService
 from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
+from iris.runtime.wiring.delivery import wire_app_action_broker, wire_delivery_safety_gate
 from iris.runtime.wiring.event_reaction import wire_event_reaction_runner
 from iris.runtime.wiring.grpc import create_grpc_server
+from iris.runtime.wiring.scheduler import wire_runtime_scheduler, wire_scheduler_runner
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
 from iris.safety.output_filter import AllowAllOutputGate
 
@@ -54,6 +61,8 @@ class RuntimeComponents:
     runtime_service: IrisRuntimeService
     identity_resolver: AccountBackedIdentityResolver
     space_resolver: EphemeralSpaceResolver
+    app_action_broker: AppActionBroker | None
+    scheduler_runner: SchedulerRunner
 
 
 def build_runtime_service(
@@ -93,6 +102,9 @@ def build_runtime_service(
         trust_policy=trust_policy,
         now=current_now,
     )
+    proactive_target_integrator = ProactiveTargetIntegrator(
+        target_store=stores.proactive_target_store,
+    )
     availability_resolver = wire_availability_resolver()
     workspace_context_assembler = wire_workspace_context_assembler(
         activity_projection_store=stores.activity_projection_store,
@@ -114,6 +126,7 @@ def build_runtime_service(
                 activity_integrator,
                 presence_integrator,
                 occupancy_integrator,
+                proactive_target_integrator,
             )
         ),
         workspace_context_assembler=workspace_context_assembler,
@@ -148,12 +161,122 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     runtime_service = build_runtime_service(app, stores)
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
     space_resolver = EphemeralSpaceResolver()
+    app_action_broker = (
+        wire_app_action_broker(stores.delivery_outbox, config.delivery)
+        if config.delivery.enabled
+        else None
+    )
+    delivery_gate = wire_delivery_safety_gate(config.delivery)
+    scheduler = wire_runtime_scheduler(stores.proactive_target_store, config)
+    availability_resolver = wire_availability_resolver()
+    availability_provider = DeliveryAvailabilityResolverAdapter(
+        resolver=availability_resolver,
+        presence_store=stores.presence_store,
+        activity_projection_store=stores.activity_projection_store,
+    )
+    scheduler_runner = wire_scheduler_runner(
+        runtime_service=runtime_service,
+        scheduler=scheduler,
+        delivery_gate=delivery_gate,
+        outbox=stores.delivery_outbox,
+        config=config,
+        availability_provider=availability_provider,
+    )
     return RuntimeComponents(
         stores=stores,
         runtime_service=runtime_service,
         identity_resolver=identity_resolver,
         space_resolver=space_resolver,
+        app_action_broker=app_action_broker,
+        scheduler_runner=scheduler_runner,
     )
+
+
+def _log_development_warnings(config: IrisRuntimeConfig) -> None:
+    """開発用設定の危険な warning を出力する。
+
+    Args:
+        config: ランタイム設定。
+    """
+    if all_model_slots_are_fake(config):
+        msg = (
+            "all model slots are using the fake provider; "
+            "runtime responses are not backed by a real LLM"
+        )
+        logger.warning(msg)
+    if config.safety.mode == "development":
+        logger.warning("safety mode is 'development'; all safety gates are pass-through")
+
+
+def _log_startup(config: IrisRuntimeConfig, config_path: Path | None) -> None:
+    """起動時の設定ログを出力する。
+
+    Args:
+        config: ランタイム設定。
+        config_path: 解決済み設定ファイルパス。なければ None。
+    """
+    logger.info("runtime server starting")
+    if config_path is None:
+        logger.info("config source: built-in defaults; no TOML file found")
+    else:
+        logger.info("config source: {}", config_path)
+    logger.info("config source policy: single TOML < environment < CLI")
+    logger.info("host: {}", config.server.host)
+    logger.info("port: {}", config.server.port)
+    logger.info("state backend: {}", config.state.backend)
+    logger.info("default_chat provider: {}", config.models.default_chat.provider)
+    logger.info("fast_judge provider: {}", config.models.fast_judge.provider)
+    logger.info("reasoning provider: {}", config.models.reasoning.provider)
+    logger.info("log level: {}", config.logging.level)
+    logger.info("log format: {}", config.logging.format)
+    logger.info("safety mode: {}", config.safety.mode)
+    if config.logging.file_path:
+        logger.info("log file path: {}", config.logging.file_path)
+
+
+def _start_scheduler_task(
+    components: RuntimeComponents,
+    config: IrisRuntimeConfig,
+) -> asyncio.Task[None] | None:
+    """scheduler.enabled の場合のみ scheduler loop task を起動する。
+
+    Args:
+        components: 起動済みランタイムコンポーネント。
+        config: ランタイム設定。
+
+    Returns:
+        起動した scheduler task。無効時は None。
+    """
+    if not config.scheduler.enabled:
+        return None
+    return asyncio.create_task(
+        run_scheduler_loop(
+            components.scheduler_runner,
+            interval_seconds=config.scheduler.interval_seconds,
+        )
+    )
+
+
+async def _shutdown(
+    server: grpc.aio.Server,
+    scheduler_task: asyncio.Task[None] | None,
+    grace: float,
+) -> None:
+    """Scheduler task と gRPC server を安全に停止する。
+
+    Args:
+        server: 起動中の gRPC server。
+        scheduler_task: 起動中の scheduler task。無ければ None。
+        grace: server stop の grace 秒。
+    """
+    if scheduler_task is not None:
+        scheduler_task.cancel()
+        try:
+            await scheduler_task
+        except asyncio.CancelledError:
+            logger.info("scheduler loop cancelled")
+    await server.stop(grace=grace)
+    logger.info("shutdown complete")
 
 
 async def serve(
@@ -170,34 +293,8 @@ async def serve(
     config = load_runtime_config(selected_config_path, overrides=overrides)
 
     configure_runtime_logging(config.logging)
-
-    if all_model_slots_are_fake(config):
-        msg = (
-            "all model slots are using the fake provider; "
-            "runtime responses are not backed by a real LLM"
-        )
-        logger.warning(msg)
-
-    if config.safety.mode == "development":
-        logger.warning("safety mode is 'development'; all safety gates are pass-through")
-
-    logger.info("runtime server starting")
-    if selected_config_path is None:
-        logger.info("config source: built-in defaults; no TOML file found")
-    else:
-        logger.info("config source: {}", selected_config_path)
-    logger.info("config source policy: single TOML < environment < CLI")
-    logger.info("host: {}", config.server.host)
-    logger.info("port: {}", config.server.port)
-    logger.info("state backend: {}", config.state.backend)
-    logger.info("default_chat provider: {}", config.models.default_chat.provider)
-    logger.info("fast_judge provider: {}", config.models.fast_judge.provider)
-    logger.info("reasoning provider: {}", config.models.reasoning.provider)
-    logger.info("log level: {}", config.logging.level)
-    logger.info("log format: {}", config.logging.format)
-    logger.info("safety mode: {}", config.safety.mode)
-    if config.logging.file_path:
-        logger.info("log file path: {}", config.logging.file_path)
+    _log_development_warnings(config)
+    _log_startup(config, selected_config_path)
 
     await run_startup_diagnostics(config)
 
@@ -207,19 +304,20 @@ async def serve(
         components.runtime_service,
         host=config.server.host,
         port=config.server.port,
+        app_action_broker=components.app_action_broker,
         identity_resolver=components.identity_resolver,
         space_resolver=components.space_resolver,
     )
 
     await server.start()
+    scheduler_task = _start_scheduler_task(components, config)
 
     try:
         await server.wait_for_termination()
     except asyncio.CancelledError:
         logger.info("shutdown requested")
     finally:
-        await server.stop(grace=config.server.shutdown_grace_seconds)
-        logger.info("shutdown complete")
+        await _shutdown(server, scheduler_task, config.server.shutdown_grace_seconds)
 
 
 def main() -> None:

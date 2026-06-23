@@ -272,7 +272,8 @@ def test_sqlite_activity_journal_immediate_transaction_no_rollback_on_begin_fail
             self.actions.append("CLOSE")
 
     fake = _FakeConn()
-    monkeypatch.setattr(journal, "_connect", lambda: fake)
+    journal.close()
+    monkeypatch.setattr(journal, "_conn", fake)
 
     raised: BaseException | None = None
     name = "_immediate_transaction"

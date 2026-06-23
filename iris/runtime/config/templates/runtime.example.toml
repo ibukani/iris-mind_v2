@@ -18,6 +18,27 @@ shutdown_grace_seconds = 5.0
 backend = "memory"
 sqlite_path = ".iris/runtime/state.sqlite3"
 
+[scheduler]
+enabled = false
+interval_seconds = 30.0
+idle_threshold_seconds = 600.0
+min_interval_per_target_seconds = 1800.0
+max_due_per_run = 10
+
+[delivery]
+enabled = true
+max_outbox_depth_per_provider = 100
+lease_seconds = 30.0
+max_attempts = 3
+retry_backoff_seconds = 30.0
+rate_limit_window_seconds = 1800.0
+
+[delivery.quiet_hours]
+enabled = false
+start = "22:00"
+end = "08:00"
+timezone = "Asia/Tokyo"
+
 [models.default_chat]
 provider = "fake"
 model = "fake-llm"

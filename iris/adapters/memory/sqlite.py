@@ -7,6 +7,7 @@ import dataclasses
 import json
 from pathlib import Path
 import sqlite3
+import threading
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.memory.ports import MutableMemoryStore
@@ -37,12 +38,15 @@ class SQLiteMemoryStore(MutableMemoryStore):
     def __init__(self, db_path: str | Path) -> None:
         """Initialize the store and create tables if missing."""
         self._db_path = Path(db_path)
+        self._lock = threading.RLock()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = self._connect()
         self._init_db()
 
     def _init_db(self) -> None:
         """Create the memories table, filter indexes, and FTS5 virtual table if missing."""
         with self._transaction() as conn:
+            conn.execute("BEGIN IMMEDIATE;")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memories (
@@ -84,7 +88,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout = 5000;")
-        conn.execute("PRAGMA journal_mode = WAL;")
+        conn.execute("PRAGMA synchronous = NORMAL;")
         return conn
 
     @contextlib.contextmanager
@@ -94,8 +98,18 @@ class SQLiteMemoryStore(MutableMemoryStore):
         Yields:
             sqlite3.Connection: An open, managed connection.
         """
-        with contextlib.closing(self._connect()) as conn, conn:
-            yield conn
+        with self._lock, self._conn:
+            yield self._conn
+
+    def close(self) -> None:
+        """永続connectionを閉じる。"""
+        with self._lock:
+            self._conn.close()
+
+    def __del__(self) -> None:
+        """未closeのconnectionを解放する。"""
+        if hasattr(self, "_conn"):
+            self.close()
 
     def search_fts5(self, query: MemoryQuery) -> Sequence[MemorySearchResult]:
         """FTS5 全文検索でメモリレコードを返す。

@@ -7,6 +7,7 @@ import contextlib
 import json
 from pathlib import Path
 import sqlite3
+import threading
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.app_gateway.ports import AccountStore
@@ -20,14 +21,17 @@ if TYPE_CHECKING:
 class SQLiteAccountStore(AccountStore):
     """SQLite-backed account store.
 
-    Executes synchronous sqlite3 I/O via ``asyncio.to_thread`` to avoid
+    Executes synchronous sqlite3 I/O via a dedicated thread to avoid
     blocking the event loop under concurrent gRPC requests.
     """
 
     def __init__(self, db_path: str | Path) -> None:
         """Initialize the store and create tables if missing."""
         self._db_path = Path(db_path)
+        self._write_lock = threading.Lock()
+        self._conn_lock = threading.RLock()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = self._connect()
         self._init_db()
 
     def _init_db(self) -> None:
@@ -54,11 +58,10 @@ class SQLiteAccountStore(AccountStore):
         Returns:
             sqlite3.Connection: A new configured connection.
         """
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
+        conn = sqlite3.connect(self._db_path, timeout=5.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout = 5000;")
-        conn.execute("PRAGMA journal_mode = WAL;")
         return conn
 
     @contextlib.contextmanager
@@ -68,8 +71,18 @@ class SQLiteAccountStore(AccountStore):
         Yields:
             sqlite3.Connection: An open, managed connection.
         """
-        with contextlib.closing(self._connect()) as conn, conn:
-            yield conn
+        with self._conn_lock, self._conn:
+            yield self._conn
+
+    def close(self) -> None:
+        """永続connectionを閉じる。"""
+        with self._conn_lock:
+            self._conn.close()
+
+    def __del__(self) -> None:
+        """未closeのconnectionを解放する。"""
+        if hasattr(self, "_conn"):
+            self.close()
 
     @staticmethod
     def _row_to_profile(row: sqlite3.Row) -> AccountProfile:
@@ -88,7 +101,7 @@ class SQLiteAccountStore(AccountStore):
             metadata=json.loads(row["metadata_json"]),
         )
 
-    # -- synchronous implementation helpers (offloaded via asyncio.to_thread) --
+    # -- synchronous implementation helpers (offloaded to dedicated threads) --
 
     def _get_by_external_ref_sync(
         self,
@@ -114,7 +127,7 @@ class SQLiteAccountStore(AccountStore):
             return self._row_to_profile(row)
 
     def _put_sync(self, account: AccountProfile) -> AccountProfile:
-        with self._transaction() as conn:
+        with self._write_lock, self._transaction() as conn:
             cursor = conn.execute(
                 "SELECT provider, provider_subject FROM accounts WHERE account_id = ?",
                 (str(account.account_id),),
@@ -169,7 +182,7 @@ class SQLiteAccountStore(AccountStore):
         account_id: AccountId,
         actor_id: ActorId,
     ) -> AccountProfile:
-        with self._transaction() as conn:
+        with self._write_lock, self._transaction() as conn:
             cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
             row = cursor.fetchone()
             if not row:
@@ -187,7 +200,7 @@ class SQLiteAccountStore(AccountStore):
             return self._row_to_profile(updated_row)
 
     def _unlink_account_sync(self, account_id: AccountId) -> AccountProfile:
-        with self._transaction() as conn:
+        with self._write_lock, self._transaction() as conn:
             cursor = conn.execute("SELECT * FROM accounts WHERE account_id = ?", (str(account_id),))
             row = cursor.fetchone()
             if not row:

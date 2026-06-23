@@ -54,6 +54,7 @@ async def test_submit_observation_returns_presented_output() -> None:
             "update_space_occupancy",
             "react_to_activity",
             "internal_event",
+            "register_delivery_target",
         }
     )
     assert response.correlation_id == "corr-1"
@@ -274,6 +275,8 @@ async def test_get_runtime_info_returns_supported_features() -> None:
     assert "submit_observation" in response.supported_features
     assert "persistent_account" in response.supported_features
     assert "ephemeral_space" in response.supported_features
+    assert "poll_app_actions" not in response.supported_features
+    assert "report_action_result" not in response.supported_features
 
 
 @pytest.mark.anyio
