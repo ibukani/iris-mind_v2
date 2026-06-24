@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from iris.runtime.availability.resolver import AvailabilityResolver
+from iris.runtime.state.availability import AvailabilityResolver
 
 
 def wire_availability_resolver(

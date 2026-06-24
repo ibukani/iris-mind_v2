@@ -34,6 +34,14 @@ DELETED_PACKAGES: set[str] = {
     "iris/tools",
     "iris/heartbeat",
     "iris/admin",
+    "iris/runtime/activity",
+    "iris/runtime/availability",
+    "iris/runtime/context",
+    "iris/runtime/event_reaction",
+    "iris/runtime/observations",
+    "iris/runtime/presence",
+    "iris/runtime/proactive",
+    "iris/runtime/spaces",
 }
 
 DELETED_IMPORTS: set[str] = {
@@ -49,6 +57,14 @@ DELETED_IMPORTS: set[str] = {
     "iris.room",
     "iris.tools",
     "iris.admin",
+    "iris.runtime.activity",
+    "iris.runtime.availability",
+    "iris.runtime.context",
+    "iris.runtime.event_reaction",
+    "iris.runtime.observations",
+    "iris.runtime.presence",
+    "iris.runtime.proactive",
+    "iris.runtime.spaces",
 }
 
 # ── Forbidden concepts in source code ───────────────────────────
@@ -134,7 +150,7 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
     (
         "iris/adapters",
         "iris/adapters/grpc/mappers.py",
-        "iris.runtime.observations.ingress",
+        "iris.runtime.ingress.observation_ingress",
         "gRPC ingress mapper needs ObservationCapability for adapter capabilities typing",
     ),
     (
@@ -142,6 +158,12 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
         "iris/adapters/grpc/server.py",
         "iris.runtime.service",
         "gRPC transport adapter delegates to IrisRuntimeService boundary",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/activity/sqlite_journal.py",
+        "iris.runtime.state.activity_journal",
+        "SQLite activity adapter implements the runtime-owned ActivityJournal port",
     ),
 ]
 
@@ -160,8 +182,7 @@ WIRING_FILES: set[str] = {
 
 
 def _skip_if_missing(rel_dir: str) -> None:
-    if not (PROJECT_ROOT / rel_dir).is_dir():
-        pytest.skip(f"Target layer '{rel_dir}' does not exist yet")
+    assert (PROJECT_ROOT / rel_dir).is_dir(), f"Target layer '{rel_dir}' must exist"
 
 
 def _get_python_files(base: Path) -> list[Path]:
@@ -341,6 +362,33 @@ def test_layer_dependency_direction(layer_dir: str, forbidden: set[str]) -> None
     )
 
 
+def test_adapter_runtime_imports_are_explicitly_allowlisted() -> None:
+    """Adapter から runtime への import 例外を file/import pair 単位で固定する。"""
+    allowed_pairs = {
+        (rel_path, import_prefix)
+        for layer_dir, rel_path, import_prefix, _reason in LAYER_EXCEPTIONS
+        if layer_dir == "iris/adapters" and import_prefix.startswith("iris.runtime")
+    }
+    violations: list[str] = []
+    adapters_root = PROJECT_ROOT / "iris/adapters"
+
+    for filepath in _get_python_files(adapters_root):
+        rel_path = filepath.relative_to(PROJECT_ROOT).as_posix()
+        tree = ast.parse(filepath.read_text(encoding="utf-8"))
+        for imported in _all_imports(tree):
+            if not imported.startswith("iris.runtime"):
+                continue
+            if (rel_path, imported) in allowed_pairs:
+                continue
+            violations.append(f" {rel_path}: imports '{imported}'")
+
+    message = (
+        "Adapters must not import runtime unless the file/import pair is explicitly "
+        "approved with an architecture reason.\n"
+    )
+    assert not violations, message + "\n".join(violations)
+
+
 # ═══════════════════════════════════════════════════════════════════
 # 4.  Runtime entrypoint rules
 # ═══════════════════════════════════════════════════════════════════
@@ -350,8 +398,7 @@ def test_layer_dependency_direction(layer_dir: str, forbidden: set[str]) -> None
 def test_entrypoint_no_deleted_imports(rel_path: str) -> None:
     """エントリポイントと配線ファイルは削除されたパッケージをインポートしてはならない。"""
     file_path = PROJECT_ROOT / rel_path
-    if not file_path.is_file():
-        pytest.skip(f"Guard file missing (expected for phased rollout): {rel_path}")
+    assert file_path.is_file(), f"Guard file must exist: {rel_path}"
     text = file_path.read_text(encoding="utf-8")
     for prefix in DELETED_IMPORTS:
         if prefix.replace(".", "/") in text or prefix in text:

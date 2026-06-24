@@ -7,26 +7,26 @@ from typing import TYPE_CHECKING
 
 from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
+from iris.adapters.activity.sqlite_journal import SQLiteActivityJournal
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
-from iris.runtime.activity.journal import InMemoryActivityJournal
-from iris.runtime.activity.projections import InMemoryActivityProjectionStore
-from iris.runtime.activity.sqlite_journal import SQLiteActivityJournal
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
-from iris.runtime.presence.store import InMemoryPresenceStore
-from iris.runtime.proactive.targets import InMemoryProactiveTargetStore
-from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
+from iris.runtime.state.activity_journal import InMemoryActivityJournal
+from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
+from iris.runtime.state.presence import InMemoryPresenceStore
+from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore
+from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 
 if TYPE_CHECKING:
     from iris.adapters.app_gateway.ports import AccountStore
     from iris.adapters.memory.ports import MutableMemoryStore
-    from iris.runtime.activity.journal import ActivityJournal
-    from iris.runtime.activity.projections import ActivityProjectionStore
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.delivery.outbox import DeliveryOutbox
-    from iris.runtime.presence.store import PresenceStore
-    from iris.runtime.proactive.targets import ProactiveTargetStore
-    from iris.runtime.spaces.occupancy_store import SpaceOccupancyStore
+    from iris.runtime.state.activity_journal import ActivityJournal
+    from iris.runtime.state.activity_projection import ActivityProjectionStore
+    from iris.runtime.state.presence import PresenceStore
+    from iris.runtime.state.proactive_targets import ProactiveTargetStore
+    from iris.runtime.state.space_occupancy import SpaceOccupancyStore
 
 
 @dataclass(frozen=True)

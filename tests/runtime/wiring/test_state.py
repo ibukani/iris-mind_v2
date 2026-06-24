@@ -7,15 +7,15 @@ from typing import TYPE_CHECKING
 
 from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
+from iris.adapters.activity.sqlite_journal import SQLiteActivityJournal
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
-from iris.runtime.activity.journal import InMemoryActivityJournal
-from iris.runtime.activity.projections import InMemoryActivityProjectionStore
-from iris.runtime.activity.sqlite_journal import SQLiteActivityJournal
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateConfig
-from iris.runtime.presence.store import InMemoryPresenceStore
-from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
+from iris.runtime.state.activity_journal import InMemoryActivityJournal
+from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
+from iris.runtime.state.presence import InMemoryPresenceStore
+from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 from iris.runtime.wiring.state import wire_runtime_state
 
 if TYPE_CHECKING:

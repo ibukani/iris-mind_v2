@@ -84,12 +84,28 @@ Forbidden:
 - safety gate execution
 - feature registration
 
+### `iris/presentation/`
+
+Allowed:
+
+- converting `ActionPlan` to `PresentedOutput`
+- converting feature candidates such as `ReactionCandidate` to `PresentedOutput`
+- style, emotion, expression, timing, priority, and interruptibility hints
+
+Forbidden:
+
+- deciding whether a feature should react
+- running safety gates
+- importing runtime/features/adapters/safety
+- executing app actions
+
 ### `iris/features/`
 
 Allowed:
 
 - vertical feature slices
 - `FeatureDefinition` providers
+- feature-specific policy, planning, scoring, candidate generation, templates
 - feature-specific pipeline steps, learning hooks, background jobs, observation sources
 
 Forbidden:
@@ -105,7 +121,17 @@ Allowed:
 - OpenAI or other LLM provider translation
 - memory backend implementations
 - external app gateway boundaries
+- transport adapters
+- SDK wrappers
+- backend implementations for runtime-owned ports, when architecture guards grant a narrow exception
 - external SDK usage
+
+Adapter to runtime exceptions must stay narrow. A backend adapter may implement a runtime-owned port only when:
+
+- the port is intentionally owned by the consuming runtime module
+- the adapter imports only that narrow port module
+- the adapter does not import runtime wiring, service, app, ingress, scheduler, delivery, lifecycle, or observability
+- the file/import pair is listed in architecture tests with a reason
 
 Forbidden:
 
@@ -119,15 +145,22 @@ Forbidden:
 Allowed:
 
 - startup
-- CLI
+- config
 - dependency wiring
-- scheduler/background job composition
+- lifecycle
+- scheduler
+- delivery
+- ingress orchestration
+- observability
+- process-local runtime state
 - selecting adapter implementations
 
 Forbidden:
 
 - domain model definitions
 - cognitive business logic
+- feature-specific policy, planning, scoring, candidate generation, or templates
+- presentation formatting
 - hidden service locator behavior
 
 ## Required architectural shape

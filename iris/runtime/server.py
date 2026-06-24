@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
-from iris.runtime.activity.integrator import ActivityIntegrator
 from iris.runtime.config import (
     IrisRuntimeConfig,
     RuntimeConfigOverrides,
@@ -32,16 +31,17 @@ from iris.runtime.config import (
 )
 from iris.runtime.config.init import init_runtime_config, runtime_config_template
 from iris.runtime.config.root import all_model_slots_are_fake
-from iris.runtime.event_reaction.handler import ActivityEventReactionHandler
+from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
+from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.lifecycle.scheduler_loop import run_scheduler_loop
 from iris.runtime.observability.diagnostics import run_startup_diagnostics
 from iris.runtime.observability.logging import configure_runtime_logging
-from iris.runtime.observations.trust import ObservationTrustPolicy
-from iris.runtime.presence.integrator import PresenceIntegrator
-from iris.runtime.proactive.target_integrator import ProactiveTargetIntegrator
 from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
 from iris.runtime.service import IntegratingObservationPipeline, IrisRuntimeService
-from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
+from iris.runtime.state.activity_integrator import ActivityIntegrator
+from iris.runtime.state.presence_integrator import PresenceIntegrator
+from iris.runtime.state.proactive_target_integrator import ProactiveTargetIntegrator
+from iris.runtime.state.space_occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler

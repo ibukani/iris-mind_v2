@@ -11,6 +11,8 @@ forbidden_modules =
     iris.runtime
     iris.adapters
     iris.features
+    iris.presentation
+    iris.safety
 
 [importlinter:contract:cognitive_is_pure]
 name = cognitive must not import runtime, adapters, or features
@@ -22,24 +24,40 @@ forbidden_modules =
     iris.adapters
     iris.features
 
-[importlinter:contract:features_do_not_import_runtime_or_adapters]
-name = features must not import runtime or adapters
+[importlinter:contract:features_do_not_import_outer_layers]
+name = features must not import runtime, adapters, presentation, or safety
 type = forbidden
 source_modules =
     iris.features
 forbidden_modules =
     iris.runtime
     iris.adapters
+    iris.presentation
+    iris.safety
+
+[importlinter:contract:presentation_is_pure]
+name = presentation must not import runtime, features, adapters, or safety
+type = forbidden
+source_modules =
+    iris.presentation
+forbidden_modules =
+    iris.runtime
+    iris.features
+    iris.adapters
+    iris.safety
 
 [importlinter:contract:runtime_service_does_not_import_low_level_effects]
 name = runtime service must not import low level runtime effects
 type = forbidden
+allow_indirect_imports = True
 source_modules =
     iris.runtime.service
 forbidden_modules =
-    iris.runtime.activity
-    iris.runtime.presence
-    iris.runtime.spaces
-    iris.runtime.event_reaction.planner
-    iris.runtime.event_reaction.policy
-    iris.runtime.event_reaction.runner
+    iris.runtime.state
+    iris.runtime.scheduler
+    iris.runtime.delivery
+    iris.runtime.lifecycle
+    iris.runtime.observability
+    iris.features
+    iris.presentation
+    iris.adapters

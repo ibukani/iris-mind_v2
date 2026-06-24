@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from iris.runtime.event_reaction.planner import EventReactionPlanner
-from iris.runtime.event_reaction.policy import default_event_reaction_policy
-from iris.runtime.event_reaction.presenter import EventReactionPresenter
-from iris.runtime.event_reaction.runner import EventReactionRunner
-from iris.runtime.event_reaction.templates import EventReactionTemplateProvider
+from iris.features.event_reaction.planner import EventReactionPlanner
+from iris.features.event_reaction.policy import default_event_reaction_policy
+from iris.features.event_reaction.templates import EventReactionTemplateProvider
+from iris.presentation.event_reaction import EventReactionPresenter
+from iris.runtime.ingress.activity_event_reaction_runner import EventReactionRunner
 
 
 def wire_event_reaction_runner() -> EventReactionRunner:

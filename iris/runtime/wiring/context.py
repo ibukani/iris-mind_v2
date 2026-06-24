@@ -5,15 +5,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from iris.runtime.availability.resolver import AvailabilityResolver
-from iris.runtime.context.workspace_assembler import WorkspaceContextAssembler
+from iris.runtime.state.availability import AvailabilityResolver
+from iris.runtime.state.context_assembler import WorkspaceContextAssembler
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from iris.runtime.activity.projections import ActivityProjectionStore
-    from iris.runtime.presence.store import PresenceStore
-    from iris.runtime.spaces.occupancy_store import SpaceOccupancyStore
+    from iris.runtime.state.activity_projection import ActivityProjectionStore
+    from iris.runtime.state.presence import PresenceStore
+    from iris.runtime.state.space_occupancy import SpaceOccupancyStore
 
 
 def wire_workspace_context_assembler(

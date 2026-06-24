@@ -23,19 +23,19 @@ from iris.contracts.presence import PresenceStatus
 from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
 from iris.runtime.app import IrisApp
 from iris.runtime.config import default_runtime_config
-from iris.runtime.event_reaction.handler import ActivityEventReactionHandler
-from iris.runtime.observations.ingress import (
+from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
+from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
 )
-from iris.runtime.observations.trust import ObservationTrustPolicy
-from iris.runtime.presence.integrator import PresenceIntegrator
+from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.server import build_runtime_service
 from iris.runtime.service import (
     IntegratingObservationPipeline,
     IrisRuntimeService,
     ObservationEnvelope,
 )
+from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.event_reaction import wire_event_reaction_runner

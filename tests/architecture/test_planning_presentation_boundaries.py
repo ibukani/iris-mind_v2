@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-PLANNER_PATH = PROJECT_ROOT / "iris" / "runtime" / "event_reaction" / "planner.py"
+PLANNER_PATH = PROJECT_ROOT / "iris" / "features" / "event_reaction" / "planner.py"
 
 _USER_FACING_LITERALS: frozenset[str] = frozenset(
     {
@@ -21,5 +21,5 @@ def test_event_reaction_planner_does_not_own_user_facing_templates() -> None:
     for literal in _USER_FACING_LITERALS:
         assert literal not in source, (
             f"planner.py contains user-facing literal {literal!r}; "
-            "move it to iris/runtime/event_reaction/templates.py"
+            "move it to iris/features/event_reaction/templates.py"
         )

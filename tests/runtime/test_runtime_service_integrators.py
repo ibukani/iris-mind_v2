@@ -17,29 +17,29 @@ from iris.contracts.observations import (
 )
 from iris.contracts.presence import PresenceStatus
 from iris.core.ids import ActivityId, ActorId, ObservationId, SessionId, SpaceId
-from iris.runtime.activity.integrator import ActivityIntegrator
-from iris.runtime.activity.journal import InMemoryActivityJournal
-from iris.runtime.activity.projections import InMemoryActivityProjectionStore
 from iris.runtime.app import IrisApp
-from iris.runtime.observations.ingress import (
+from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
 )
-from iris.runtime.observations.trust import ObservationTrustPolicy
-from iris.runtime.presence.integrator import PresenceIntegrator
-from iris.runtime.presence.store import InMemoryPresenceStore
+from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.service import (
     IntegratingObservationPipeline,
     IrisRuntimeService,
     ObservationEnvelope,
 )
-from iris.runtime.spaces.occupancy_integrator import SpaceOccupancyIntegrator
-from iris.runtime.spaces.occupancy_store import InMemorySpaceOccupancyStore
+from iris.runtime.state.activity_integrator import ActivityIntegrator
+from iris.runtime.state.activity_journal import InMemoryActivityJournal
+from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
+from iris.runtime.state.presence import InMemoryPresenceStore
+from iris.runtime.state.presence_integrator import PresenceIntegrator
+from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
+from iris.runtime.state.space_occupancy_integrator import SpaceOccupancyIntegrator
 
 if TYPE_CHECKING:
     from iris.cognitive.cycle.models import ActionSelectionResult
     from iris.cognitive.workspace.frame import WorkspaceFrame
-    from iris.runtime.observations.integrator import ObservationIntegrator
+    from iris.runtime.ingress.observation_integrator import ObservationIntegrator
 
 _OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
 _RECEIVED_AT = _OCCURRED_AT + timedelta(seconds=1)

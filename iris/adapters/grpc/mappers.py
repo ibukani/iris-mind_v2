@@ -54,7 +54,7 @@ from iris.core.ids import (
 )
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
-from iris.runtime.observations.ingress import ObservationCapability
+from iris.runtime.ingress.observation_ingress import ObservationCapability
 from iris.runtime.service import ObservationEnvelope
 
 _ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
