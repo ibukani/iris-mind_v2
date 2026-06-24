@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from iris.cognitive.cycle.models import (
     ActionSelectionResult,
+    AffectPersistenceResult,
     AppraisalResult,
     MemoryRetrievalResult,
     MemoryWriteResult,
@@ -164,6 +165,6 @@ class FrameBuilder:
         Returns:
             更新されたワークスペースフレーム。
         """
-        if isinstance(result, MemoryWriteResult):
+        if isinstance(result, (AffectPersistenceResult, MemoryWriteResult)):
             return frame
         return FrameBuilder._dispatch(frame, result)

@@ -64,8 +64,8 @@ def runtime_state_persistence_policy(
             presence_store="ephemeral",
             space_occupancy_store="ephemeral",
             space_binding_store="ephemeral",
-            relationship_store="deferred",
-            affect_store="deferred",
+            relationship_store="durable",
+            affect_store="durable",
         )
 
     return RuntimeStatePersistencePolicy(
@@ -76,6 +76,6 @@ def runtime_state_persistence_policy(
         presence_store="ephemeral",
         space_occupancy_store="ephemeral",
         space_binding_store="ephemeral",
-        relationship_store="deferred",
-        affect_store="deferred",
+        relationship_store="ephemeral",
+        affect_store="ephemeral",
     )
