@@ -143,6 +143,12 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
         "iris.runtime.service",
         "gRPC transport adapter delegates to IrisRuntimeService boundary",
     ),
+    (
+        "iris/adapters",
+        "iris/adapters/activity/sqlite_journal.py",
+        "iris.runtime.state.activity_journal",
+        "SQLite activity adapter implements the runtime-owned ActivityJournal port",
+    ),
 ]
 
 ENTRYPOINT_FILES: set[str] = {
@@ -160,8 +166,7 @@ WIRING_FILES: set[str] = {
 
 
 def _skip_if_missing(rel_dir: str) -> None:
-    if not (PROJECT_ROOT / rel_dir).is_dir():
-        pytest.skip(f"Target layer '{rel_dir}' does not exist yet")
+    assert (PROJECT_ROOT / rel_dir).is_dir(), f"Target layer '{rel_dir}' must exist"
 
 
 def _get_python_files(base: Path) -> list[Path]:
@@ -350,8 +355,7 @@ def test_layer_dependency_direction(layer_dir: str, forbidden: set[str]) -> None
 def test_entrypoint_no_deleted_imports(rel_path: str) -> None:
     """エントリポイントと配線ファイルは削除されたパッケージをインポートしてはならない。"""
     file_path = PROJECT_ROOT / rel_path
-    if not file_path.is_file():
-        pytest.skip(f"Guard file missing (expected for phased rollout): {rel_path}")
+    assert file_path.is_file(), f"Guard file must exist: {rel_path}"
     text = file_path.read_text(encoding="utf-8")
     for prefix in DELETED_IMPORTS:
         if prefix.replace(".", "/") in text or prefix in text:

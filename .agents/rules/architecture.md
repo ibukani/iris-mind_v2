@@ -123,6 +123,7 @@ Allowed:
 - external app gateway boundaries
 - transport adapters
 - SDK wrappers
+- backend implementations for runtime-owned ports, when architecture guards grant a narrow exception
 - external SDK usage
 
 Forbidden:

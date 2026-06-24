@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from iris.runtime.state.availability import AvailabilityResolver
-from iris.runtime.state.workspace_assembler import WorkspaceContextAssembler
+from iris.runtime.state.context_assembler import WorkspaceContextAssembler
 
 if TYPE_CHECKING:
     from collections.abc import Callable

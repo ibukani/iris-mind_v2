@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from iris.adapters.activity.sqlite_journal import SQLiteActivityJournal
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
 from iris.core.ids import ActivityId, ActorId, ObservationId, SpaceId
 from iris.runtime.state.activity_journal import (
     ActivityAppendResult,
     ActivityAppendSkipReason,
 )
-from iris.runtime.state.sqlite_activity_journal import SQLiteActivityJournal
 
 if TYPE_CHECKING:
     from pathlib import Path

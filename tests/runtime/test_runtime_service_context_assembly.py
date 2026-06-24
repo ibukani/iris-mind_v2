@@ -35,9 +35,9 @@ from iris.runtime.ingress.observation_ingress import unauthenticated_external_in
 from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
 from iris.runtime.state.availability import AvailabilityResolver
+from iris.runtime.state.context_assembler import WorkspaceContextAssembler
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
-from iris.runtime.state.workspace_assembler import WorkspaceContextAssembler
 
 _OCCURRED_AT = datetime(2026, 6, 13, 12, 0, 0, tzinfo=UTC)
 _NOW = _OCCURRED_AT + timedelta(seconds=5)

@@ -160,7 +160,10 @@ iris/
 将来の拡張予定（未実装）:
 - `cognitive/motivation/` — MotivationStep の実装（`MotivationResult` 型と `FrameBuilder` 対応は既存）
 - `cognitive/learning/` — LearningHook / BackgroundJob
-- `runtime/scheduler.py`, `background_jobs.py`, `lifecycle.py`, `telemetry.py`
+- `runtime/scheduler/` — scheduled observation source と scheduler runner
+- `runtime/lifecycle/` — 長時間動く runtime loop
+- `runtime/observability/` — telemetry、diagnostics、logging
+- `runtime/state/` — process-local runtime state と state projection
 - `features/chat/`, `features/memory_consolidation/`, `features/relationship_update/`, `features/persona_patch/`, `features/command_control/`
 - `adapters/tools/`, `adapters/embeddings/`, `adapters/external_clients/`
 - `safety/policy_engine.py`
@@ -396,10 +399,23 @@ class FeatureDefinition:
 `runtime/wiring/features.py` は `FeatureDefinition` を集めて登録するだけにする。
 feature は `runtime/`、`adapters/`、`presentation/`、`safety/` に依存しない。runtime が feature を配線・実行する。
 
+`event_reaction` は名前が同じでも層ごとに責務を分ける。
+
+```text
+features/event_reaction/
+  反応可否、policy、planning、template、ReactionCandidate生成を担当する。
+
+presentation/event_reaction.py
+  ReactionCandidate を PresentedOutput に変換する。
+
+runtime/ingress/activity_event_reaction.py
+  trust check、reaction pipeline呼び出し、OutputSafetyGate適用を担当する。
+```
+
 ### `adapters/`
 
 外部技術との接続を担当する。
-provider、transport、storage、SDK、backend implementation はここに置く。runtime state port は利用側の `runtime/state/` に置く。SQLite activity journal は現時点では既存 adapter→runtime 禁止 guard を優先し、`runtime/state/sqlite_activity_journal.py` に置く。
+provider、transport、storage、SDK、backend implementation はここに置く。runtime state port は利用側の `runtime/state/` に置く。SQLite activity journal は backend implementation として `adapters/activity/sqlite_journal.py` に置き、runtime-owned `ActivityJournal` port を実装する。
 
 `adapters/app_gateway/` の責務は、外部アプリとの `Observation / AppAction / ActionResult` protocol boundary である。
 
@@ -660,7 +676,7 @@ SituationContextSnapshot
 ```
 
 `FrameBuilder.build_initial()` は `Observation.context` から `actor_context` と `space_context` を作り、オプションで `SituationContextSnapshot` を受け取る。
-`WorkspaceFrame.situation_context` は `iris.runtime.state.workspace_assembler.WorkspaceContextAssembler` が `ActivityProjectionStore` / `PresenceStore` / `SpaceOccupancyStore` から組み立てて `IrisRuntimeService` 経由で渡される。
+`WorkspaceFrame.situation_context` は `iris.runtime.state.context_assembler.WorkspaceContextAssembler` が `ActivityProjectionStore` / `PresenceStore` / `SpaceOccupancyStore` から組み立てて `IrisRuntimeService` 経由で渡される。
 `AvailabilitySnapshot` は `AvailabilityResolver` が `PresenceSnapshot` と `ActivityEventRecord` から決定論的に導出する。
 `WorkspaceFrame` は frozen typed snapshot のまま。resolver、store、adapter、manager、mutable context bag は入れない。
 

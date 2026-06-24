@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
+from iris.adapters.activity.sqlite_journal import SQLiteActivityJournal
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
@@ -15,7 +16,6 @@ from iris.runtime.state.activity_projection import InMemoryActivityProjectionSto
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
-from iris.runtime.state.sqlite_activity_journal import SQLiteActivityJournal
 
 if TYPE_CHECKING:
     from iris.adapters.app_gateway.ports import AccountStore
