@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 import sqlite3
+import time
 from typing import TYPE_CHECKING
 
 import pytest
@@ -289,6 +290,44 @@ def test_sqlite_activity_journal_immediate_transaction_no_rollback_on_begin_fail
     assert isinstance(raised, sqlite3.OperationalError)
     assert "database is locked" in str(raised)
     assert not any(action == "ROLLBACK" for action in fake.actions)
+
+
+@pytest.mark.anyio
+async def test_sqlite_activity_journal_append_does_not_block_event_loop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """append() はblocking SQLite workをevent loop外へ逃がす。"""
+    journal = SQLiteActivityJournal(tmp_path / "activity_journal.db")
+    event = _build_event()
+
+    def slow_append_sync(event: ActivityEventRecord) -> ActivityAppendResult:
+        time.sleep(0.05)
+        return ActivityAppendResult(accepted=True, event=event, reason=None)
+
+    monkeypatch.setattr(journal, "_append_sync", slow_append_sync)
+
+    journal_task = asyncio.create_task(journal.append(event))
+    await asyncio.sleep(0)
+
+    assert not journal_task.done()
+
+    progressed = False
+
+    async def progress_probe() -> None:
+        nonlocal progressed
+        await asyncio.sleep(0)
+        progressed = True
+
+    await progress_probe()
+
+    assert progressed
+    assert not journal_task.done()
+
+    result = await journal_task
+    assert result.accepted is True
+    assert result.event == event
+    assert result.reason is None
 
 
 @pytest.mark.anyio
