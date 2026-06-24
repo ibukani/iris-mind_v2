@@ -133,6 +133,8 @@ iris/
 │       └── templates.py
 │
 ├── adapters/
+│ ├── activity/
+│ │ └── sqlite_journal.py
 │   ├── app_gateway/
 │   │   ├── ingress.py
 │   │   ├── identity_resolver.py
@@ -249,7 +251,8 @@ adapters/app_gateway/ports.py
 - `runtime/wiring/` は constructor injection に限定する。
 - `runtime/wiring/` に業務ロジックや認知ロジックを書かない。
 - `runtime/ingress/` は trust check、観測統合、runtime handler 呼び出し、safety gate などの orchestration に限定する。
-- `runtime/state/` は activity journal/projection、presence、space occupancy、proactive target、availability、workspace context assembly など process-local state とその port を置く。
+- `runtime/state/` は activity journal/projection、presence、space occupancy、proactive target、availability、workspace context assembly など process-local state とその port を置く。`ActivityJournal` port は consuming runtime state module の近くに置く。
+- `runtime/state/` は当面 flat に保つ。大きくなった場合だけ state family ごとに `runtime/state/activity/`、`runtime/state/presence/`、`runtime/state/space_occupancy/`、`runtime/state/proactive_targets/` へ分割する。複数ファイルが同じ family に溜まるまで、美観だけで nested package を作らない。
 - feature 固有の policy、planning、scoring、candidate generation、template は `features/` に置く。
 - domain/action/reaction candidate から `PresentedOutput` への変換は `presentation/` に置く。
 
@@ -416,6 +419,15 @@ runtime/ingress/activity_event_reaction.py
 
 外部技術との接続を担当する。
 provider、transport、storage、SDK、backend implementation はここに置く。runtime state port は利用側の `runtime/state/` に置く。SQLite activity journal は backend implementation として `adapters/activity/sqlite_journal.py` に置き、runtime-owned `ActivityJournal` port を実装する。
+`runtime/wiring/state.py` は設定に基づき `SQLiteActivityJournal` を選択し、`ActivityJournal` port として注入してよい。
+
+原則として `adapters/` は `runtime/` を import しない。
+例外として backend adapter が runtime-owned port を実装できる条件:
+
+- port が consuming runtime module の近くに意図的に置かれている。
+- adapter が import する runtime module はその narrow port module だけ。
+- adapter は `runtime/wiring`、`runtime/service`、`runtime/app`、`runtime/ingress`、`runtime/scheduler`、`runtime/delivery`、`runtime/lifecycle`、`runtime/observability` を import しない。
+- 例外は architecture test に file/import pair と理由つきで登録する。
 
 `adapters/app_gateway/` の責務は、外部アプリとの `Observation / AppAction / ActionResult` protocol boundary である。
 

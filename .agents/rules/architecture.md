@@ -126,6 +126,13 @@ Allowed:
 - backend implementations for runtime-owned ports, when architecture guards grant a narrow exception
 - external SDK usage
 
+Adapter to runtime exceptions must stay narrow. A backend adapter may implement a runtime-owned port only when:
+
+- the port is intentionally owned by the consuming runtime module
+- the adapter imports only that narrow port module
+- the adapter does not import runtime wiring, service, app, ingress, scheduler, delivery, lifecycle, or observability
+- the file/import pair is listed in architecture tests with a reason
+
 Forbidden:
 
 - cognitive decisions

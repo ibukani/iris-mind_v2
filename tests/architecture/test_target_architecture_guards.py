@@ -34,6 +34,14 @@ DELETED_PACKAGES: set[str] = {
     "iris/tools",
     "iris/heartbeat",
     "iris/admin",
+    "iris/runtime/activity",
+    "iris/runtime/availability",
+    "iris/runtime/context",
+    "iris/runtime/event_reaction",
+    "iris/runtime/observations",
+    "iris/runtime/presence",
+    "iris/runtime/proactive",
+    "iris/runtime/spaces",
 }
 
 DELETED_IMPORTS: set[str] = {
@@ -49,6 +57,14 @@ DELETED_IMPORTS: set[str] = {
     "iris.room",
     "iris.tools",
     "iris.admin",
+    "iris.runtime.activity",
+    "iris.runtime.availability",
+    "iris.runtime.context",
+    "iris.runtime.event_reaction",
+    "iris.runtime.observations",
+    "iris.runtime.presence",
+    "iris.runtime.proactive",
+    "iris.runtime.spaces",
 }
 
 # ── Forbidden concepts in source code ───────────────────────────
@@ -344,6 +360,33 @@ def test_layer_dependency_direction(layer_dir: str, forbidden: set[str]) -> None
     assert not violations, f"Layer '{layer_dir}' imports from forbidden layers:\n" + "\n".join(
         violations
     )
+
+
+def test_adapter_runtime_imports_are_explicitly_allowlisted() -> None:
+    """Adapter から runtime への import 例外を file/import pair 単位で固定する。"""
+    allowed_pairs = {
+        (rel_path, import_prefix)
+        for layer_dir, rel_path, import_prefix, _reason in LAYER_EXCEPTIONS
+        if layer_dir == "iris/adapters" and import_prefix.startswith("iris.runtime")
+    }
+    violations: list[str] = []
+    adapters_root = PROJECT_ROOT / "iris/adapters"
+
+    for filepath in _get_python_files(adapters_root):
+        rel_path = filepath.relative_to(PROJECT_ROOT).as_posix()
+        tree = ast.parse(filepath.read_text(encoding="utf-8"))
+        for imported in _all_imports(tree):
+            if not imported.startswith("iris.runtime"):
+                continue
+            if (rel_path, imported) in allowed_pairs:
+                continue
+            violations.append(f" {rel_path}: imports '{imported}'")
+
+    message = (
+        "Adapters must not import runtime unless the file/import pair is explicitly "
+        "approved with an architecture reason.\n"
+    )
+    assert not violations, message + "\n".join(violations)
 
 
 # ═══════════════════════════════════════════════════════════════════
