@@ -10,8 +10,10 @@ from typing import TYPE_CHECKING, TypeGuard, override
 
 import pytest
 
+from iris.adapters.affect.memory import InMemoryAffectStore
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
 from iris.adapters.memory.fake import FakeMemoryStore
+from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
@@ -458,7 +460,13 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
             reasoning=RuntimeModelConfig(provider="fake", model="unused-reasoning"),
         ),
     )
-    app = build_app_from_config(config, client_factory=factory, memory_store=memory_store)
+    app = build_app_from_config(
+        config,
+        client_factory=factory,
+        memory_store=memory_store,
+        relationship_store=InMemoryRelationshipStore(),
+        affect_store=InMemoryAffectStore(),
+    )
 
     await app.process_observation(_actor_observation("I need help with suicide and tea"))
 
@@ -473,7 +481,7 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
     user_message = client.request.messages[1].content
     assert "Affect context:" in user_message
     assert "Relationship context:" in user_message
-    assert "Mina relationship" in user_message
+    assert "Mina: neutral relationship" in user_message
     assert "Policy constraints:" in user_message
     assert "avoid escalating beyond the safety layer" in user_message
 
@@ -492,7 +500,13 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
             default_chat=RuntimeModelConfig(provider="openai", model="fake-llm"),
         ),
     )
-    app = build_app_from_config(config, client_factory=factory, memory_store=memory_store)
+    app = build_app_from_config(
+        config,
+        client_factory=factory,
+        memory_store=memory_store,
+        relationship_store=InMemoryRelationshipStore(),
+        affect_store=InMemoryAffectStore(),
+    )
 
     await app.process_observation(_observation("hello"))
 

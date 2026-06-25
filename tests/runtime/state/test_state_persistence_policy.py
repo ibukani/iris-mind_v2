@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
@@ -25,6 +25,9 @@ from iris.runtime.wiring.state_policy import (
     PERSISTENCE_KIND_VALUES,
     runtime_state_persistence_policy,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_memory_backend_policy_marks_runtime_state_ephemeral() -> None:

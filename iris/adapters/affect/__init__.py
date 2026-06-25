@@ -1,4 +1,5 @@
 """Affect baseline store adapter。"""
+
 from __future__ import annotations
 
 from iris.adapters.affect.memory import InMemoryAffectStore

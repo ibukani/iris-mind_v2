@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 import sqlite3
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from iris.contracts.affect import AffectBaselineRecord, AffectScope, AffectStore
 from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.core.ids import ActorId, ObservationId
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 _GLOBAL_KEY = "__global__"
 
@@ -23,11 +27,6 @@ class SQLiteAffectStore(AffectStore):
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
-        """実用的な pragma を設定した SQLite connection を返す。
-
-        Returns:
-            初期 pragma を設定した sqlite3.Connection。
-        """
         conn = sqlite3.connect(self._db_path, timeout=5.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL;")
@@ -35,9 +34,17 @@ class SQLiteAffectStore(AffectStore):
         conn.execute("PRAGMA foreign_keys=ON;")
         return conn
 
+    @contextmanager
+    def _connection(self) -> Generator[sqlite3.Connection]:
+        conn = self._connect()
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
+
     def _init_db(self) -> None:
-        """affect_baselines table を作成する。"""
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS affect_baselines (
@@ -54,9 +61,16 @@ class SQLiteAffectStore(AffectStore):
                     updated_at TEXT NOT NULL,
                     version INTEGER NOT NULL,
                     CHECK (
-                        (scope = 'global' AND actor_id IS NULL AND owner_key = '__global__')
-                        OR
-                        (scope = 'actor' AND actor_id IS NOT NULL AND owner_key = actor_id)
+                        (
+                            scope = 'global'
+                            AND actor_id IS NULL
+                            AND owner_key = '__global__'
+                        )
+                        OR (
+                            scope = 'actor'
+                            AND actor_id IS NOT NULL
+                            AND owner_key = actor_id
+                        )
                     )
                 )
                 """,
@@ -73,7 +87,7 @@ class SQLiteAffectStore(AffectStore):
 
     @override
     def upsert_global(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
-        """Global affect baseline を upsert して保存後の値を返す。
+        """Global affect baseline を保存して返す。
 
         Returns:
             保存後の AffectBaselineRecord。
@@ -91,19 +105,19 @@ class SQLiteAffectStore(AffectStore):
         """Actor-scoped affect baseline を取得する。
 
         Returns:
-            保存済み actor baseline。存在しない場合は None。
+            保存済み actor-scoped baseline。存在しない場合は None。
         """
         return self._get(str(actor_id))
 
     @override
     def upsert_for_actor(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
-        """Actor-scoped affect baseline を upsert して保存後の値を返す。
+        """Actor-scoped affect baseline を保存して返す。
 
         Returns:
             保存後の AffectBaselineRecord。
 
         Raises:
-            ValueError: record が actor scope と actor_id を満たさない場合。
+            ValueError: record.scope が actor ではないか actor_id がない場合。
         """
         if record.scope != "actor" or record.actor_id is None:
             msg = "upsert_for_actor requires scope='actor' and actor_id"
@@ -111,17 +125,21 @@ class SQLiteAffectStore(AffectStore):
         return self._upsert(record, owner_key=str(record.actor_id))
 
     def _get(self, owner_key: str) -> AffectBaselineRecord | None:
-        """Owner key に対応する affect baseline を取得する。
-
-        Returns:
-            保存済み AffectBaselineRecord。存在しない場合は None。
-        """
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute(
                 """
-                SELECT scope, actor_id, mood_label, valence, arousal, dominance,
-                       affect_summary, source_observation_id,
-                       created_at, updated_at, version
+                SELECT
+                    scope,
+                    actor_id,
+                    mood_label,
+                    valence,
+                    arousal,
+                    dominance,
+                    affect_summary,
+                    source_observation_id,
+                    created_at,
+                    updated_at,
+                    version
                 FROM affect_baselines
                 WHERE owner_key = ?
                 """,
@@ -131,12 +149,12 @@ class SQLiteAffectStore(AffectStore):
             return None
         return _row_to_record(row)
 
-    def _upsert(self, record: AffectBaselineRecord, *, owner_key: str) -> AffectBaselineRecord:
-        """Affect baseline を upsert して保存後の値を返す。
-
-        Returns:
-            保存後の AffectBaselineRecord。
-        """
+    def _upsert(
+        self,
+        record: AffectBaselineRecord,
+        *,
+        owner_key: str,
+    ) -> AffectBaselineRecord:
         now = now_utc()
         current = self._get(owner_key)
         stored = replace(
@@ -144,12 +162,22 @@ class SQLiteAffectStore(AffectStore):
             created_at=current.created_at if current else record.created_at or now,
             updated_at=now,
         )
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 INSERT INTO affect_baselines (
-                    scope, owner_key, actor_id, mood_label, valence, arousal, dominance,
-                    affect_summary, source_observation_id, created_at, updated_at, version
+                    scope,
+                    owner_key,
+                    actor_id,
+                    mood_label,
+                    valence,
+                    arousal,
+                    dominance,
+                    affect_summary,
+                    source_observation_id,
+                    created_at,
+                    updated_at,
+                    version
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(owner_key) DO UPDATE SET
@@ -171,9 +199,11 @@ class SQLiteAffectStore(AffectStore):
                     stored.arousal,
                     stored.dominance,
                     stored.affect_summary,
-                    str(stored.source_observation_id)
-                    if stored.source_observation_id is not None
-                    else None,
+                    (
+                        str(stored.source_observation_id)
+                        if stored.source_observation_id is not None
+                        else None
+                    ),
                     stored.created_at.isoformat() if stored.created_at else None,
                     stored.updated_at.isoformat() if stored.updated_at else None,
                     stored.version,
@@ -183,41 +213,27 @@ class SQLiteAffectStore(AffectStore):
 
 
 def _row_to_record(row: sqlite3.Row) -> AffectBaselineRecord:
-    """SQLite row を AffectBaselineRecord に変換する。
-
-    Returns:
-        変換済み AffectBaselineRecord。
-    """
+    actor_id = row["actor_id"]
     source = row["source_observation_id"]
-    actor = row["actor_id"]
     return AffectBaselineRecord(
-        scope=_scope_from_row(row["scope"]),
-        actor_id=ActorId(str(actor)) if actor is not None else None,
+        scope=_scope_from_row(str(row["scope"])),
+        actor_id=ActorId(str(actor_id)) if actor_id is not None else None,
         mood_label=row["mood_label"],
         valence=float(row["valence"]),
         arousal=float(row["arousal"]),
         dominance=float(row["dominance"]),
         affect_summary=row["affect_summary"],
         source_observation_id=ObservationId(str(source)) if source is not None else None,
-        created_at=parse_datetime(row["created_at"]),
-        updated_at=parse_datetime(row["updated_at"]),
+        created_at=parse_datetime(str(row["created_at"])),
+        updated_at=parse_datetime(str(row["updated_at"])),
         version=int(row["version"]),
     )
 
 
-def _scope_from_row(value: object) -> AffectScope:
-    """SQLite row の scope 値を AffectScope に検証変換する。
-
-    Returns:
-        検証済み AffectScope。
-
-    Raises:
-        ValueError: scope 値が未対応の場合。
-    """
-    scope = str(value)
-    if scope == "global":
+def _scope_from_row(value: str) -> AffectScope:
+    if value == "global":
         return "global"
-    if scope == "actor":
+    if value == "actor":
         return "actor"
-    msg = f"unsupported affect scope: {scope}"
+    msg = f"unknown affect scope: {value}"
     raise ValueError(msg)

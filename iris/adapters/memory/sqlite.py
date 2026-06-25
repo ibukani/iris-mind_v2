@@ -84,7 +84,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         Returns:
             sqlite3.Connection: A new configured connection.
         """
-        conn = sqlite3.connect(self._db_path, timeout=5.0)
+        conn = sqlite3.connect(self._db_path, timeout=5.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA busy_timeout = 5000;")

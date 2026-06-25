@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 _OLD_WEIGHT = 0.9
 _NEW_WEIGHT = 0.1
 _ZERO_AFFECT_EPSILON = 0.000001
-_NO_AFFECT_MOOD_LABELS = {None, "neutral"}
+_NO_AFFECT_MOOD_LABELS = (None, "neutral")
 
 
 class AffectPersistenceStep(PipelineStep[AffectPersistenceResult]):
