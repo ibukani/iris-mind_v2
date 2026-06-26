@@ -89,6 +89,13 @@ class RuntimeIngressProfile(StrEnum):
     TRUSTED_ADAPTER = "trusted_adapter"
 
 
+def _runtime_ingress_profile(value: RuntimeIngressProfile | str) -> RuntimeIngressProfile:
+    try:
+        return RuntimeIngressProfile(value)
+    except (TypeError, ValueError) as exc:
+        _raise_mapping_error("invalid runtime ingress profile", cause=exc)
+
+
 class GrpcRuntimeMapper:
     """Async mapper for gRPC proto DTOs to Iris runtime contracts.
 
@@ -100,7 +107,7 @@ class GrpcRuntimeMapper:
         self,
         identity_resolver: IdentityResolver | None = None,
         space_resolver: SpaceResolver | None = None,
-        ingress_profile: RuntimeIngressProfile = RuntimeIngressProfile.EXTERNAL_CLIENT,
+        ingress_profile: RuntimeIngressProfile | str = RuntimeIngressProfile.EXTERNAL_CLIENT,
         adapter_capabilities: Iterable[ObservationCapability] | None = None,
     ) -> None:
         """Create mapper with optional resolvers and adapter capabilities.
@@ -114,7 +121,8 @@ class GrpcRuntimeMapper:
         """
         self._identity_resolver = identity_resolver
         self._space_resolver = space_resolver
-        self._ingress_profile = ingress_profile
+        profile = _runtime_ingress_profile(ingress_profile)
+        self._ingress_profile = profile
         if (
             self._ingress_profile is RuntimeIngressProfile.TRUSTED_ADAPTER
             and adapter_capabilities is None

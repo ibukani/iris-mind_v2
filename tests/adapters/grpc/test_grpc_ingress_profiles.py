@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, override
 
 import pytest
 
@@ -70,6 +70,56 @@ async def test_trusted_adapter_profile_preserves_explicit_capabilities_and_route
     assert envelope.ingress.delivery_route.provider == "discord"
     assert envelope.ingress.delivery_route.provider_subject == "user-1"
     assert envelope.ingress.delivery_route.provider_space_ref == "channel-1"
+
+
+@pytest.mark.anyio
+async def test_raw_string_external_client_is_normalized() -> None:
+    """Raw string 'external_client' is normalized and produces external client ingress."""
+    mapper = GrpcRuntimeMapper(
+        identity_resolver=FakeIdentityResolver(),
+        space_resolver=_RecordingSpaceResolver(),
+        ingress_profile="external_client",
+    )
+
+    envelope = await mapper.observation_envelope_from_proto(_request_with_refs())
+
+    assert not envelope.ingress.authenticated
+    assert envelope.ingress.adapter_id == "external_client"
+
+
+@pytest.mark.anyio
+async def test_raw_string_trusted_adapter_is_normalized() -> None:
+    """Raw string 'trusted_adapter' with explicit capabilities produces trusted ingress."""
+    mapper = GrpcRuntimeMapper(
+        identity_resolver=FakeIdentityResolver(),
+        space_resolver=_RecordingSpaceResolver(),
+        ingress_profile="trusted_adapter",
+        adapter_capabilities={ObservationCapability.INTEGRATE_ACTIVITY},
+    )
+
+    envelope = await mapper.observation_envelope_from_proto(_request_with_refs())
+
+    assert envelope.ingress.authenticated
+    assert envelope.ingress.capabilities == frozenset({ObservationCapability.INTEGRATE_ACTIVITY})
+
+
+def test_raw_string_trusted_adapter_without_capabilities_raises() -> None:
+    """Raw string 'trusted_adapter' without capabilities raises GrpcMappingError."""
+    with pytest.raises(GrpcMappingError, match="explicit capabilities"):
+        GrpcRuntimeMapper(ingress_profile="trusted_adapter")
+
+
+def test_invalid_string_profile_raises() -> None:
+    """Invalid string profile raises GrpcMappingError."""
+    with pytest.raises(GrpcMappingError, match="invalid runtime ingress profile"):
+        GrpcRuntimeMapper(ingress_profile="invalid_profile")
+
+
+def test_none_profile_from_untyped_caller_raises() -> None:
+    """None profile raises GrpcMappingError and fails closed."""
+    invalid_profile: Any = None
+    with pytest.raises(GrpcMappingError, match="invalid runtime ingress profile"):
+        GrpcRuntimeMapper(ingress_profile=invalid_profile)
 
 
 def _request_with_refs() -> runtime_pb2.SubmitObservationRequest:

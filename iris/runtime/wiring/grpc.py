@@ -24,7 +24,7 @@ class WiringKwargs(TypedDict, total=False):
     app_action_broker: AppActionBroker | None
     identity_resolver: IdentityResolver | None
     space_resolver: SpaceResolver | None
-    ingress_profile: RuntimeIngressProfile
+    ingress_profile: RuntimeIngressProfile | str
     adapter_capabilities: Iterable[ObservationCapability] | None
 
 

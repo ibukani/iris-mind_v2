@@ -387,6 +387,17 @@ def test_trusted_wiring_without_capabilities_raises() -> None:
         )
 
 
+def test_invalid_wiring_profile_raises() -> None:
+    """Invalid wiring profile raises during service registration."""
+    server = grpc.aio.server()
+    with pytest.raises(GrpcMappingError, match="invalid runtime ingress profile"):
+        add_iris_runtime_servicer(
+            server,
+            RecordingRuntimeService("unused"),
+            ingress_profile="invalid_profile",
+        )
+
+
 def _actor_message_request() -> runtime_pb2.SubmitObservationRequest:
     """ActorMessage SubmitObservationRequest fixtureを作る。
 
