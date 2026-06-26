@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from iris.contracts.actions import PresentedOutput
 from iris.safety.action_gate import GateDecision
@@ -11,10 +11,22 @@ from iris.safety.action_gate import GateDecision
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import SituationContextSnapshot
     from iris.contracts.observations import ActivityEventObservation
-    from iris.runtime.ingress.activity_event_reaction_runner import EventReactionRunner
     from iris.runtime.ingress.observation_ingress import ObservationIngressContext
     from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
     from iris.safety.output_filter import OutputSafetyGate
+
+
+class EventReactionRunnerPort(Protocol):
+    """EventReactionRunner の runtime 境界 port。"""
+
+    async def react(
+        self,
+        observation: ActivityEventObservation,
+        *,
+        situation_context: SituationContextSnapshot,
+    ) -> PresentedOutput | None:
+        """反応条件を満たせばPresentedOutputを返す。"""
+        ...
 
 
 @dataclass(frozen=True)
@@ -22,7 +34,7 @@ class ActivityEventReactionHandler:
     """ActivityEventObservation に対する trust check → reaction → output gate パイプライン。"""
 
     trust_policy: ObservationTrustPolicy
-    runner: EventReactionRunner
+    runner: EventReactionRunnerPort
     output_gate: OutputSafetyGate
 
     async def handle(

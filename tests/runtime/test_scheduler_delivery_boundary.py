@@ -109,6 +109,27 @@ async def test_availability_snapshot_is_propagated_to_delivery_gate() -> None:
     assert len(await _leased(outbox)) == 1
 
 
+async def test_runtime_failure_marks_scheduled_observation_failed() -> None:
+    """RuntimeError from runtime service triggers scheduler.mark_failed."""
+    scheduler = _RecordingScheduler()
+    outbox = InMemoryDeliveryOutbox()
+    runner = SchedulerRunner(
+        scheduler=scheduler,
+        runtime_service=_FailingRuntimeService(),
+        delivery_gate=BasicDeliverySafetyGate(),
+        outbox=outbox,
+        delivery_enabled=True,
+    )
+
+    result = await runner.run_once(_NOW)
+
+    assert result.results[0].status == "failed"
+    assert len(scheduler.failures) == 1
+    assert scheduler.failures[0].observation_id == ObservationId("obs-1")
+    assert not scheduler.dispatched
+    assert await _leased(outbox) == ()
+
+
 def _runner(
     output: PresentedOutput,
     *,
@@ -149,6 +170,16 @@ class _RuntimeService:
         return RuntimeResponse(output=self.output, correlation_id=envelope.correlation_id)
 
 
+@dataclass
+class _FailingRuntimeService:
+    """RuntimeError を投げる runtime service（failure 境界テスト用）。"""
+
+    async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
+        _ = envelope
+        msg = "runtime processing failed"
+        raise RuntimeError(msg)
+
+
 class _SingleScheduler:
     def __init__(self, *, has_target: bool) -> None:
         self._target = _delivery_target() if has_target else None
@@ -180,6 +211,53 @@ class _SingleScheduler:
         reason: str,
     ) -> None:
         _ = observation_id, failed_at, reason
+
+
+@dataclass
+class _FailureRecord:
+    """mark_failed 呼び出しの記録。"""
+
+    observation_id: ObservationId
+    failed_at: datetime
+    reason: str
+
+
+class _RecordingScheduler:
+    """mark_failed 呼び出しを記録する scheduler テストダブル。"""
+
+    def __init__(self, *, has_target: bool = True) -> None:
+        self._target = _delivery_target() if has_target else None
+        self.dispatched: list[ObservationId] = []
+        self.failures: list[_FailureRecord] = []
+
+    async def due_observations(self, now: datetime) -> tuple[ScheduledObservation, ...]:
+        _ = now
+        return (
+            ScheduledObservation(
+                observation=_idle_tick(),
+                correlation_id=None,
+                reason="test",
+                target=self._target,
+            ),
+        )
+
+    async def mark_dispatched(
+        self,
+        observation_id: ObservationId,
+        *,
+        dispatched_at: datetime,
+    ) -> None:
+        _ = dispatched_at
+        self.dispatched.append(observation_id)
+
+    async def mark_failed(
+        self,
+        observation_id: ObservationId,
+        *,
+        failed_at: datetime,
+        reason: str,
+    ) -> None:
+        self.failures.append(_FailureRecord(observation_id, failed_at, reason))
 
 
 class _BlockingGate:

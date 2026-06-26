@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import pytest
@@ -23,7 +24,6 @@ from iris.runtime.ingress.observation_ingress import (
     ObservationIngressContext,
 )
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
-from iris.runtime.wiring.event_reaction import wire_event_reaction_runner
 from iris.safety.action_gate import GateDecision, SafetyDecision
 
 _OCCURRED_AT = datetime(2026, 6, 24, 11, 0, tzinfo=UTC)
@@ -31,11 +31,13 @@ _OCCURRED_AT = datetime(2026, 6, 24, 11, 0, tzinfo=UTC)
 
 @pytest.mark.anyio
 async def test_reaction_handler_does_not_react_when_trust_policy_rejects() -> None:
-    """Missing REACT_TO_ACTIVITY capability never reaches sendable output."""
+    """Missing REACT_TO_ACTIVITY capability never calls runner or output gate."""
+    runner = _RecordingRunner(PresentedOutput(text="should not appear"))
+    gate = _RecordingOutputGate(GateDecision.ALLOW)
     handler = ActivityEventReactionHandler(
         trust_policy=ObservationTrustPolicy(),
-        runner=wire_event_reaction_runner(),
-        output_gate=_RecordingOutputGate(GateDecision.ALLOW),
+        runner=runner,
+        output_gate=gate,
     )
 
     output = await handler.handle(
@@ -45,15 +47,19 @@ async def test_reaction_handler_does_not_react_when_trust_policy_rejects() -> No
     )
 
     assert output == PresentedOutput(text=None)
+    assert runner.calls == 0
+    assert gate.checked == 0
 
 
 @pytest.mark.anyio
 async def test_reaction_handler_does_not_react_without_situation_context() -> None:
-    """Missing situation context prevents event reaction runner path."""
+    """Missing situation context prevents runner and output gate calls."""
+    runner = _RecordingRunner(PresentedOutput(text="should not appear"))
+    gate = _RecordingOutputGate(GateDecision.ALLOW)
     handler = ActivityEventReactionHandler(
         trust_policy=ObservationTrustPolicy(),
-        runner=wire_event_reaction_runner(),
-        output_gate=_RecordingOutputGate(GateDecision.ALLOW),
+        runner=runner,
+        output_gate=gate,
     )
 
     output = await handler.handle(
@@ -63,15 +69,40 @@ async def test_reaction_handler_does_not_react_without_situation_context() -> No
     )
 
     assert output == PresentedOutput(text=None)
+    assert runner.calls == 0
+    assert gate.checked == 0
+
+
+@pytest.mark.anyio
+async def test_unauthenticated_ingress_blocks_reaction_even_with_capability() -> None:
+    """Unauthenticated ingress with REACT_TO_ACTIVITY capability is still blocked."""
+    runner = _RecordingRunner(PresentedOutput(text="should not appear"))
+    gate = _RecordingOutputGate(GateDecision.ALLOW)
+    handler = ActivityEventReactionHandler(
+        trust_policy=ObservationTrustPolicy(),
+        runner=runner,
+        output_gate=gate,
+    )
+
+    output = await handler.handle(
+        _activity_observation(),
+        _situation_context(),
+        _unauthenticated_ingress(ObservationCapability.REACT_TO_ACTIVITY),
+    )
+
+    assert output == PresentedOutput(text=None)
+    assert runner.calls == 0
+    assert gate.checked == 0
 
 
 @pytest.mark.anyio
 async def test_sendable_reaction_output_passes_through_output_safety_gate() -> None:
-    """Sendable event reaction output is checked by OutputSafetyGate."""
+    """Sendable event reaction output is checked by OutputSafetyGate exactly once."""
+    runner = _RecordingRunner(PresentedOutput(text="Welcome back."))
     gate = _RecordingOutputGate(GateDecision.ALLOW)
     handler = ActivityEventReactionHandler(
         trust_policy=ObservationTrustPolicy(),
-        runner=wire_event_reaction_runner(),
+        runner=runner,
         output_gate=gate,
     )
 
@@ -81,6 +112,7 @@ async def test_sendable_reaction_output_passes_through_output_safety_gate() -> N
         _ingress(ObservationCapability.REACT_TO_ACTIVITY),
     )
 
+    assert runner.calls == 1
     assert gate.checked == 1
     assert output.is_sendable
     assert output.text == "Welcome back."
@@ -89,10 +121,12 @@ async def test_sendable_reaction_output_passes_through_output_safety_gate() -> N
 @pytest.mark.anyio
 async def test_output_safety_block_returns_no_send_output() -> None:
     """OutputSafetyGate BLOCK converts reaction output to no-send."""
+    runner = _RecordingRunner(PresentedOutput(text="blocked text"))
+    gate = _RecordingOutputGate(GateDecision.BLOCK)
     handler = ActivityEventReactionHandler(
         trust_policy=ObservationTrustPolicy(),
-        runner=wire_event_reaction_runner(),
-        output_gate=_RecordingOutputGate(GateDecision.BLOCK),
+        runner=runner,
+        output_gate=gate,
     )
 
     output = await handler.handle(
@@ -101,6 +135,52 @@ async def test_output_safety_block_returns_no_send_output() -> None:
         _ingress(ObservationCapability.REACT_TO_ACTIVITY),
     )
 
+    assert runner.calls == 1
+    assert gate.checked == 1
+    assert output == PresentedOutput(text=None)
+
+
+@pytest.mark.anyio
+async def test_runner_returns_none_skips_gate() -> None:
+    """When runner returns None, output gate is not called."""
+    runner = _RecordingRunner(None)
+    gate = _RecordingOutputGate(GateDecision.ALLOW)
+    handler = ActivityEventReactionHandler(
+        trust_policy=ObservationTrustPolicy(),
+        runner=runner,
+        output_gate=gate,
+    )
+
+    output = await handler.handle(
+        _activity_observation(),
+        _situation_context(),
+        _ingress(ObservationCapability.REACT_TO_ACTIVITY),
+    )
+
+    assert runner.calls == 1
+    assert gate.checked == 0
+    assert output == PresentedOutput(text=None)
+
+
+@pytest.mark.anyio
+async def test_runner_returns_no_send_output_skips_gate() -> None:
+    """When runner returns non-sendable output, output gate is not called."""
+    runner = _RecordingRunner(PresentedOutput(text=None))
+    gate = _RecordingOutputGate(GateDecision.ALLOW)
+    handler = ActivityEventReactionHandler(
+        trust_policy=ObservationTrustPolicy(),
+        runner=runner,
+        output_gate=gate,
+    )
+
+    output = await handler.handle(
+        _activity_observation(),
+        _situation_context(),
+        _ingress(ObservationCapability.REACT_TO_ACTIVITY),
+    )
+
+    assert runner.calls == 1
+    assert gate.checked == 0
     assert output == PresentedOutput(text=None)
 
 
@@ -145,6 +225,35 @@ def _ingress(*capabilities: ObservationCapability) -> ObservationIngressContext:
         authenticated=True,
         capabilities=frozenset(capabilities),
     )
+
+
+def _unauthenticated_ingress(*capabilities: ObservationCapability) -> ObservationIngressContext:
+    """未認証 ingress context（境界テスト用）。"""
+    return ObservationIngressContext(
+        adapter_id="external_client",
+        provider=None,
+        authenticated=False,
+        capabilities=frozenset(capabilities),
+    )
+
+
+@dataclass
+class _RecordingRunner:
+    """react() 呼び出しを記録し、固定出力を返すテストダブル。"""
+
+    output: PresentedOutput | None
+    calls: int = field(default=0, init=False)
+
+    async def react(
+        self,
+        observation: ActivityEventObservation,
+        *,
+        situation_context: SituationContextSnapshot,
+    ) -> PresentedOutput | None:
+        """呼び出しを記録し固定出力を返す。"""
+        _ = observation, situation_context
+        self.calls += 1
+        return self.output
 
 
 class _RecordingOutputGate:

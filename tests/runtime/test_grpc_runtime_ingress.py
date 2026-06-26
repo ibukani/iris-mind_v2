@@ -11,16 +11,23 @@ import pytest
 
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver
 from iris.adapters.app_gateway.ports import SpaceResolver
-from iris.adapters.grpc.mappers import GrpcRuntimeMapper, timestamp_from_datetime
+from iris.adapters.grpc.mappers import (
+    GrpcMappingError,
+    GrpcRuntimeMapper,
+    RuntimeIngressProfile,
+    timestamp_from_datetime,
+)
 from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
 from iris.contracts.spaces import InteractionSpace
 from iris.core.ids import SpaceId
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
+from iris.runtime.ingress.observation_ingress import ObservationCapability
 from iris.runtime.service import IrisRuntimeService, RuntimeResponse
 from tests.helpers.grpc_test import RecordingRuntimeService, grpc_call
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from types import TracebackType
 
     from iris.adapters.app_gateway.ports import IdentityResolver
@@ -330,6 +337,54 @@ async def test_submit_observation_with_cli_like_request_succeeds() -> None:
     assert space_id == "resolved-space-cli-session:cli-session-1"
 
 
+@pytest.mark.anyio
+async def test_default_wiring_creates_external_client_ingress() -> None:
+    """Default gRPC wiring produces unauthenticated ingress with no capabilities."""
+    runtime_service = RecordingRuntimeService("default wiring")
+
+    async with _GrpcRuntimeHarness(
+        runtime_service,
+        identity_resolver=FakeIdentityResolver(),
+    ) as stub:
+        response = await grpc_call(stub.SubmitObservation(_actor_message_request()))
+        assert isinstance(response, runtime_pb2.SubmitObservationResponse)
+
+    assert runtime_service.envelope is not None
+    assert not runtime_service.envelope.ingress.authenticated
+    assert runtime_service.envelope.ingress.capabilities == frozenset()
+
+
+@pytest.mark.anyio
+async def test_trusted_wiring_creates_authenticated_ingress_with_capabilities() -> None:
+    """Trusted gRPC wiring preserves explicit capabilities."""
+    capabilities = {
+        ObservationCapability.INTEGRATE_ACTIVITY,
+        ObservationCapability.REACT_TO_ACTIVITY,
+    }
+    runtime_service = RecordingRuntimeService("trusted wiring")
+
+    async with _GrpcRuntimeHarness(
+        runtime_service,
+        identity_resolver=FakeIdentityResolver(),
+        ingress_profile=RuntimeIngressProfile.TRUSTED_ADAPTER,
+        adapter_capabilities=capabilities,
+    ) as stub:
+        response = await grpc_call(stub.SubmitObservation(_actor_message_request()))
+        assert isinstance(response, runtime_pb2.SubmitObservationResponse)
+
+    assert runtime_service.envelope is not None
+    assert runtime_service.envelope.ingress.authenticated
+    assert runtime_service.envelope.ingress.capabilities == frozenset(capabilities)
+
+
+def test_trusted_wiring_without_capabilities_raises() -> None:
+    """Trusted wiring without explicit capabilities raises at mapper construction."""
+    with pytest.raises(GrpcMappingError, match="explicit capabilities"):
+        GrpcRuntimeMapper(
+            ingress_profile=RuntimeIngressProfile.TRUSTED_ADAPTER,
+        )
+
+
 def _actor_message_request() -> runtime_pb2.SubmitObservationRequest:
     """ActorMessage SubmitObservationRequest fixtureを作る。
 
@@ -427,11 +482,15 @@ class _GrpcRuntimeHarness:
         *,
         identity_resolver: IdentityResolver | None = None,
         space_resolver: SpaceResolver | None = None,
+        ingress_profile: RuntimeIngressProfile = RuntimeIngressProfile.EXTERNAL_CLIENT,
+        adapter_capabilities: Iterable[ObservationCapability] | None = None,
     ) -> None:
         """Create harness around a fake runtime service."""
         self._runtime_service = runtime_service
         self._identity_resolver = identity_resolver
         self._space_resolver = space_resolver
+        self._ingress_profile = ingress_profile
+        self._adapter_capabilities = adapter_capabilities
         self._server: grpc.aio.Server | None = None
         self._channel: grpc.aio.Channel | None = None
 
@@ -445,6 +504,8 @@ class _GrpcRuntimeHarness:
         mapper = GrpcRuntimeMapper(
             identity_resolver=self._identity_resolver,
             space_resolver=self._space_resolver,
+            ingress_profile=self._ingress_profile,
+            adapter_capabilities=self._adapter_capabilities,
         )
         runtime_pb2_grpc.add_IrisRuntimeServiceServicer_to_server(
             IrisRuntimeGrpcServicer(self._runtime_service, mapper=mapper),

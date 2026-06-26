@@ -15,6 +15,7 @@ RUNTIME_SERVICE = PROJECT_ROOT / "iris/runtime/service.py"
 OBSERVATION_ROUTER = PROJECT_ROOT / "iris/runtime/observation_router.py"
 SCHEDULER_RUNNER = PROJECT_ROOT / "iris/runtime/scheduler/runner.py"
 DELIVERY_ROOT = PROJECT_ROOT / "iris/runtime/delivery"
+SCHEDULER_ROOT = PROJECT_ROOT / "iris/runtime/scheduler"
 GRPC_SERVER = PROJECT_ROOT / "iris/adapters/grpc/server.py"
 
 EXTERNAL_SDK_IMPORT_PREFIXES = (
@@ -64,11 +65,17 @@ def test_runtime_service_constructs_only_no_send_presented_output() -> None:
         if not isinstance(node, ast.Call):
             continue
         if name_of(node.func) == "PresentedOutput":
+            # Detect keyword text=<non-None>
             violations.extend(
                 f"PresentedOutput text at line {node.lineno}"
                 for keyword in node.keywords
                 if keyword.arg == "text" and not _is_none_constant(keyword.value)
             )
+            # Detect positional first arg that is not None
+            if node.args and not _is_none_constant(node.args[0]):
+                violations.append(
+                    f"PresentedOutput positional text at line {node.lineno}"
+                )
         if name_of(node.func) in app_action_names:
             violations.append(f"AppAction construction at line {node.lineno}")
 
@@ -89,6 +96,26 @@ def test_scheduler_runner_does_not_import_generation_or_transport_adapters() -> 
     assert not violations
 
 
+def test_scheduler_modules_do_not_import_generation_or_transport_adapters() -> None:
+    """All scheduler modules are isolated from LLM, presentation, gRPC server, and external SDKs."""
+    forbidden_prefixes = (
+        "iris.adapters.llm",
+        "iris.presentation",
+        "iris.adapters.grpc.server",
+        *EXTERNAL_SDK_IMPORT_PREFIXES,
+    )
+    violations: list[str] = []
+    for path in sorted(SCHEDULER_ROOT.rglob("*.py")):
+        imports = imported_modules(parse_python_file(path))
+        violations.extend(
+            f"{path.relative_to(PROJECT_ROOT)} imports {imported}"
+            for imported in imports
+            if imported.startswith(forbidden_prefixes)
+        )
+
+    assert not violations, "\n".join(violations)
+
+
 def test_delivery_outbox_does_not_import_runtime_or_sender_boundaries() -> None:
     """DeliveryOutbox remains pull-based storage, not sender/runtime owner."""
     forbidden_prefixes = (
@@ -99,7 +126,7 @@ def test_delivery_outbox_does_not_import_runtime_or_sender_boundaries() -> None:
         *EXTERNAL_SDK_IMPORT_PREFIXES,
     )
     violations: list[str] = []
-    for path in sorted(DELIVERY_ROOT.glob("*.py")):
+    for path in sorted(DELIVERY_ROOT.rglob("*.py")):
         imports = imported_modules(parse_python_file(path))
         violations.extend(
             f"{path.relative_to(PROJECT_ROOT)} imports {imported}"
