@@ -10,7 +10,7 @@ from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
-from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest
+from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
 from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
 
@@ -56,8 +56,8 @@ class LLMResponseGenerator(ResponseGenerator):
         request = LLMRequest(
             model=self._model,
             messages=(
-                LLMMessage(role="system", content=prompt.system_instruction),
-                LLMMessage(role="user", content=_build_user_content(prompt)),
+                LLMMessage(role=LLMRole.SYSTEM, content=prompt.system_instruction),
+                LLMMessage(role=LLMRole.USER, content=_build_user_content(prompt)),
             ),
             temperature=self._temperature,
             max_tokens=self._max_tokens,

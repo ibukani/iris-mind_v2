@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
-from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
+from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse, LLMRole
 
 
 @pytest.mark.anyio
@@ -14,7 +14,7 @@ async def test_fake_llm_returns_deterministic_typed_response() -> None:
     client = FakeLLMClient(responses=("first", "second"))
     request = LLMRequest(
         model="fake-llm",
-        messages=(LLMMessage(role="user", content="hello"),),
+        messages=(LLMMessage(role=LLMRole.USER, content="hello"),),
     )
 
     first = await client.generate(request)
@@ -34,8 +34,8 @@ async def test_fake_llm_default_response_uses_last_user_message() -> None:
     request = LLMRequest(
         model="fake-llm",
         messages=(
-            LLMMessage(role="system", content="instruction"),
-            LLMMessage(role="user", content="hello"),
+            LLMMessage(role=LLMRole.SYSTEM, content="instruction"),
+            LLMMessage(role=LLMRole.USER, content="hello"),
         ),
     )
 
@@ -51,7 +51,9 @@ async def test_fake_llm_extracts_actor_message_from_structured_prompt() -> None:
     prompt = (
         "Relevant memories:\n- memory1\n\nPolicy constraints: rule1\n\nActor message:\nこんにちは"
     )
-    request = LLMRequest(model="fake-llm", messages=(LLMMessage(role="user", content=prompt),))
+    request = LLMRequest(
+        model="fake-llm", messages=(LLMMessage(role=LLMRole.USER, content=prompt),)
+    )
     response = await client.generate(request)
     assert response.text == "fake response: こんにちは"
 
@@ -65,7 +67,9 @@ async def test_fake_llm_ignores_sections_after_marker() -> None:
         "Actor message:\nhello\n\n"
         "Extra section:\nshould not appear"
     )
-    request = LLMRequest(model="fake-llm", messages=(LLMMessage(role="user", content=prompt),))
+    request = LLMRequest(
+        model="fake-llm", messages=(LLMMessage(role=LLMRole.USER, content=prompt),)
+    )
     response = await client.generate(request)
     assert "should not appear" not in response.text
     assert response.text == "fake response: hello"
@@ -76,6 +80,8 @@ async def test_fake_llm_fallback_when_marker_missing() -> None:
     """Actor message marker がない場合はプロンプト全体が抽出される。"""
     client = FakeLLMClient()
     prompt = "Just a plain text prompt"
-    request = LLMRequest(model="fake-llm", messages=(LLMMessage(role="user", content=prompt),))
+    request = LLMRequest(
+        model="fake-llm", messages=(LLMMessage(role=LLMRole.USER, content=prompt),)
+    )
     response = await client.generate(request)
     assert response.text == "fake response: Just a plain text prompt"

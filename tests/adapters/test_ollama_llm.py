@@ -19,7 +19,7 @@ from iris.adapters.llm.diagnostics import (
     LLMProviderTimeoutError,
 )
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
-from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
+from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse, LLMRole
 
 type _JsonPrimitive = str | int | float | bool | None
 type _JsonValue = _JsonPrimitive | _JsonObject | list[_JsonValue]
@@ -62,8 +62,8 @@ async def test_ollama_client_posts_chat_payload() -> None:
         LLMRequest(
             model="qwen3:8b",
             messages=(
-                LLMMessage(role="system", content="system prompt"),
-                LLMMessage(role="user", content="hello"),
+                LLMMessage(role=LLMRole.SYSTEM, content="system prompt"),
+                LLMMessage(role=LLMRole.USER, content="hello"),
             ),
             max_tokens=64,
         )

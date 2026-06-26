@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from enum import StrEnum
+from typing import Protocol
 
-LLMRole = Literal["system", "user", "assistant"]
+
+class LLMRole(StrEnum):
+    """LLMメッセージのロール。"""
+
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
 
 
 @dataclass(frozen=True)
