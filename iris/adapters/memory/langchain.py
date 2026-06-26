@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib
-from typing import TYPE_CHECKING, Protocol, override, runtime_checkable
+from typing import TYPE_CHECKING, NotRequired, Protocol, TypedDict, override, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -32,6 +32,15 @@ _ERR_REQUIRES_LANGCHAIN_CORE = (
 
 class LangChainMemoryStoreError(RuntimeError):
     """オプションのLangChainメモリアダプタのベースエラー。"""
+
+
+class LangChainMetadata(TypedDict):
+    """LangChainドキュメントのメタデータ型。"""
+
+    iris_memory_id: str
+    iris_salience: float
+    iris_actor_id: NotRequired[str]
+    iris_space_id: NotRequired[str]
 
 
 class LangChainMemoryStoreUnavailableError(LangChainMemoryStoreError):
@@ -185,15 +194,15 @@ def _load_document_factory() -> DocumentFactory:
     return document_cls
 
 
-def _metadata_from_record(record: MemoryRecord) -> Mapping[str, object]:
-    metadata: dict[str, object] = {
-        _MEMORY_ID_KEY: str(record.id),
-        _SALIENCE_KEY: record.salience,
+def _metadata_from_record(record: MemoryRecord) -> LangChainMetadata:
+    metadata: LangChainMetadata = {
+        "iris_memory_id": str(record.id),
+        "iris_salience": record.salience,
     }
     if record.actor_id is not None:
-        metadata[_ACTOR_ID_KEY] = str(record.actor_id)
+        metadata["iris_actor_id"] = str(record.actor_id)
     if record.space_id is not None:
-        metadata[_SPACE_ID_KEY] = str(record.space_id)
+        metadata["iris_space_id"] = str(record.space_id)
     return metadata
 
 
