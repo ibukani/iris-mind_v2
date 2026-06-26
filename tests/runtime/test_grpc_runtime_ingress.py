@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, override
@@ -376,7 +377,8 @@ async def test_trusted_wiring_creates_authenticated_ingress_with_capabilities() 
     assert runtime_service.envelope.ingress.capabilities == frozenset(capabilities)
 
 
-def test_trusted_wiring_without_capabilities_raises() -> None:
+@pytest.mark.anyio
+async def test_trusted_wiring_without_capabilities_raises() -> None:
     """Trusted wiring without explicit capabilities raises during service registration."""
     server = grpc.aio.server()
     with pytest.raises(GrpcMappingError, match="explicit capabilities"):
@@ -385,9 +387,11 @@ def test_trusted_wiring_without_capabilities_raises() -> None:
             RecordingRuntimeService("unused"),
             ingress_profile=RuntimeIngressProfile.TRUSTED_ADAPTER,
         )
+    await asyncio.sleep(0)
 
 
-def test_invalid_wiring_profile_raises() -> None:
+@pytest.mark.anyio
+async def test_invalid_wiring_profile_raises() -> None:
     """Invalid wiring profile raises during service registration."""
     server = grpc.aio.server()
     with pytest.raises(GrpcMappingError, match="invalid runtime ingress profile"):
@@ -396,6 +400,7 @@ def test_invalid_wiring_profile_raises() -> None:
             RecordingRuntimeService("unused"),
             ingress_profile="invalid_profile",
         )
+    await asyncio.sleep(0)
 
 
 def _actor_message_request() -> runtime_pb2.SubmitObservationRequest:
