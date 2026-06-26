@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta
+from enum import StrEnum
 from typing import override
 
 from iris.contracts.actions import ActionResult, ActionStatus, NoAction
@@ -287,7 +288,7 @@ type _ReportFingerprint = tuple[
 ]
 
 
-class _ReportOutcome:
+class _ReportOutcome(StrEnum):
     """Report classification outcomes for history reconciliation."""
 
     IDEMPOTENT = "idempotent"
@@ -298,7 +299,7 @@ class _ReportOutcome:
 def _classify_report(
     history: frozenset[_ReportFingerprint],
     current: _ReportFingerprint,
-) -> str:
+) -> _ReportOutcome:
     """Classify a report against recorded history.
 
     Returns:
