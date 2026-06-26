@@ -6,7 +6,7 @@ import time
 from typing import TYPE_CHECKING
 
 from iris.adapters.affect.sqlite import SQLiteAffectStore
-from iris.contracts.affect import AffectBaselineRecord
+from iris.contracts.affect import AffectBaselineRecord, AffectScope
 from iris.core.ids import ActorId, ObservationId
 from tests.helpers.approx import approx
 
@@ -18,7 +18,7 @@ def test_sqlite_affect_store_upserts_and_gets_global(tmp_path: Path) -> None:
     """Upsert then get returns the global affect baseline."""
     store = SQLiteAffectStore(tmp_path / "state.db")
     record = AffectBaselineRecord(
-        scope="global",
+        scope=AffectScope.GLOBAL,
         mood_label="positive",
         valence=0.5,
         source_observation_id=ObservationId("obs-1"),
@@ -37,7 +37,7 @@ def test_sqlite_affect_store_creates_parent_directory(tmp_path: Path) -> None:
     """Nested DB path parent directory is created during initialization."""
     store = SQLiteAffectStore(tmp_path / "nested" / "state.db")
     record = AffectBaselineRecord(
-        scope="global",
+        scope=AffectScope.GLOBAL,
         mood_label="positive",
         valence=0.5,
         source_observation_id=ObservationId("obs-nested"),
@@ -55,9 +55,9 @@ def test_sqlite_affect_update_preserves_created_at_and_advances_updated_at(
 ) -> None:
     """Update preserves created_at and advances updated_at for global baseline."""
     store = SQLiteAffectStore(tmp_path / "state.db")
-    first = store.upsert_global(AffectBaselineRecord(scope="global", valence=0.1))
+    first = store.upsert_global(AffectBaselineRecord(scope=AffectScope.GLOBAL, valence=0.1))
     time.sleep(0.001)
-    second = store.upsert_global(AffectBaselineRecord(scope="global", valence=0.4))
+    second = store.upsert_global(AffectBaselineRecord(scope=AffectScope.GLOBAL, valence=0.4))
 
     assert second.created_at == first.created_at
     assert second.updated_at is not None
@@ -70,7 +70,7 @@ def test_sqlite_affect_survives_new_store_instance(tmp_path: Path) -> None:
     """Affect baseline survives a new store instance using the same DB path."""
     db_path = tmp_path / "state.db"
     SQLiteAffectStore(db_path).upsert_global(
-        AffectBaselineRecord(scope="global", valence=0.2),
+        AffectBaselineRecord(scope=AffectScope.GLOBAL, valence=0.2),
     )
 
     loaded = SQLiteAffectStore(db_path).get_global()
@@ -82,10 +82,10 @@ def test_sqlite_affect_survives_new_store_instance(tmp_path: Path) -> None:
 def test_sqlite_affect_global_and_actor_are_separate(tmp_path: Path) -> None:
     """Actor-scoped affect does not overwrite global affect."""
     store = SQLiteAffectStore(tmp_path / "state.db")
-    store.upsert_global(AffectBaselineRecord(scope="global", valence=0.2))
+    store.upsert_global(AffectBaselineRecord(scope=AffectScope.GLOBAL, valence=0.2))
     store.upsert_for_actor(
         AffectBaselineRecord(
-            scope="actor",
+            scope=AffectScope.ACTOR,
             actor_id=ActorId("actor-1"),
             valence=0.7,
         ),
@@ -104,10 +104,10 @@ def test_sqlite_affect_actor_uniqueness(tmp_path: Path) -> None:
     """Actor-scoped affect is unique by actor_id."""
     store = SQLiteAffectStore(tmp_path / "state.db")
     store.upsert_for_actor(
-        AffectBaselineRecord(scope="actor", actor_id=ActorId("actor-1"), valence=0.1),
+        AffectBaselineRecord(scope=AffectScope.ACTOR, actor_id=ActorId("actor-1"), valence=0.1),
     )
     store.upsert_for_actor(
-        AffectBaselineRecord(scope="actor", actor_id=ActorId("actor-1"), valence=0.5),
+        AffectBaselineRecord(scope=AffectScope.ACTOR, actor_id=ActorId("actor-1"), valence=0.5),
     )
 
     loaded = store.get_for_actor(ActorId("actor-1"))

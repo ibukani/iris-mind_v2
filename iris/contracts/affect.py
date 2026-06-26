@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol
+from enum import StrEnum
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.core.ids import ActorId, ObservationId
 
-type AffectScope = Literal["global", "actor"]
+
+class AffectScope(StrEnum):
+    """感情ベースラインのスコープ。"""
+
+    GLOBAL = "global"
+    ACTOR = "actor"
 
 
 def _validate_vad(value: float, *, field_name: str) -> None:
@@ -46,13 +52,13 @@ class AffectBaselineRecord:
         Raises:
             ValueError: scope と actor_id の組み合わせまたは VAD 値が不正な場合。
         """
-        if self.scope not in {"global", "actor"}:
+        if self.scope not in AffectScope:
             msg = f"unknown affect scope: {self.scope}"
             raise ValueError(msg)
-        if self.scope == "global" and self.actor_id is not None:
+        if self.scope == AffectScope.GLOBAL and self.actor_id is not None:
             msg = "global affect baseline must not have actor_id"
             raise ValueError(msg)
-        if self.scope == "actor" and self.actor_id is None:
+        if self.scope == AffectScope.ACTOR and self.actor_id is None:
             msg = "actor-scoped affect baseline requires actor_id"
             raise ValueError(msg)
         _validate_vad(self.valence, field_name="valence")

@@ -100,7 +100,7 @@ class SQLiteAffectStore(AffectStore):
         Raises:
             ValueError: record.scope が global ではない場合。
         """
-        if record.scope != "global":
+        if record.scope != AffectScope.GLOBAL:
             msg = "upsert_global requires scope='global'"
             raise ValueError(msg)
         return self._upsert(record, owner_key=_GLOBAL_KEY)
@@ -124,7 +124,7 @@ class SQLiteAffectStore(AffectStore):
         Raises:
             ValueError: record.scope が actor ではないか actor_id がない場合。
         """
-        if record.scope != "actor" or record.actor_id is None:
+        if record.scope != AffectScope.ACTOR or record.actor_id is None:
             msg = "upsert_for_actor requires scope='actor' and actor_id"
             raise ValueError(msg)
         return self._upsert(record, owner_key=str(record.actor_id))
@@ -236,9 +236,8 @@ def _row_to_record(row: sqlite3.Row) -> AffectBaselineRecord:
 
 
 def _scope_from_row(value: str) -> AffectScope:
-    if value == "global":
-        return "global"
-    if value == "actor":
-        return "actor"
-    msg = f"unknown affect scope: {value}"
-    raise ValueError(msg)
+    try:
+        return AffectScope(value)
+    except ValueError as err:
+        msg = f"unknown affect scope: {value}"
+        raise ValueError(msg) from err
