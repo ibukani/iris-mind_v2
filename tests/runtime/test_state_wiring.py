@@ -7,8 +7,12 @@ from typing import TYPE_CHECKING
 
 from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
+from iris.adapters.affect.memory import InMemoryAffectStore
+from iris.adapters.affect.sqlite import SQLiteAffectStore
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.adapters.relationship.memory import InMemoryRelationshipStore
+from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateConfig
 from iris.runtime.wiring.state import wire_runtime_state
@@ -24,6 +28,8 @@ def test_wire_memory_backend() -> None:
 
     assert isinstance(stores.account_store, InMemoryAccountStore)
     assert isinstance(stores.memory_store, InMemoryMemoryStore)
+    assert isinstance(stores.relationship_store, InMemoryRelationshipStore)
+    assert isinstance(stores.affect_store, InMemoryAffectStore)
     assert not hasattr(stores, "space_binding_store")
 
 
@@ -37,6 +43,8 @@ def test_wire_sqlite_backend(tmp_path: Path) -> None:
 
     assert isinstance(stores.account_store, SQLiteAccountStore)
     assert isinstance(stores.memory_store, SQLiteMemoryStore)
+    assert isinstance(stores.relationship_store, SQLiteRelationshipStore)
+    assert isinstance(stores.affect_store, SQLiteAffectStore)
     assert not hasattr(stores, "space_binding_store")
     assert db_path.exists()
 
@@ -50,3 +58,5 @@ def test_wire_memory_backend_uses_independent_stores() -> None:
 
     assert stores_a.account_store is not stores_b.account_store
     assert stores_a.memory_store is not stores_b.memory_store
+    assert stores_a.relationship_store is not stores_b.relationship_store
+    assert stores_a.affect_store is not stores_b.affect_store

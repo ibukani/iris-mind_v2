@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.cognitive.affect.appraisal import AppraisalStep
-from iris.cognitive.affect.relationship import InMemoryRelationshipState, RelationshipStep
+from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.cognitive.cycle.service import CognitiveCycle
+    from iris.contracts.relationship import RelationshipStore
     from iris.features.definition import FeatureDefinition
 
 
@@ -34,14 +36,14 @@ def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefin
 
 def wire_proactive_talk_cognitive_cycle(
     memory_store: MemoryStore | None = None,
-    relationship_state: InMemoryRelationshipState | None = None,
+    relationship_store: RelationshipStore | None = None,
     salience_threshold: float = 0.5,
 ) -> CognitiveCycle:
     """Proactive talk 機能で拡張された認知サイクルを組み立てる。
 
     Args:
         memory_store: 任意の取得用メモリストア。
-        relationship_state: 任意の共有関係状態。
+        relationship_store: 任意の共有関係性 state store。
         salience_threshold: 能動的開始を行うためのサリエンス最小値。
 
     Returns:
@@ -54,7 +56,7 @@ def wire_proactive_talk_cognitive_cycle(
     steps.extend(
         (
             AppraisalStep(),
-            RelationshipStep(relationship_state or InMemoryRelationshipState()),
+            RelationshipStep(relationship_store or InMemoryRelationshipStore()),
             PolicyInhibitionStep(),
             *feature.pipeline_steps,
         )

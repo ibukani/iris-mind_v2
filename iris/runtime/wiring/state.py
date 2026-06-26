@@ -8,8 +8,12 @@ from typing import TYPE_CHECKING
 from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.accounts.sqlite import SQLiteAccountStore
 from iris.adapters.activity.sqlite_journal import SQLiteActivityJournal
+from iris.adapters.affect.memory import InMemoryAffectStore
+from iris.adapters.affect.sqlite import SQLiteAffectStore
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.adapters.relationship.memory import InMemoryRelationshipStore
+from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
@@ -20,6 +24,8 @@ from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 if TYPE_CHECKING:
     from iris.adapters.app_gateway.ports import AccountStore
     from iris.adapters.memory.ports import MutableMemoryStore
+    from iris.contracts.affect import AffectStore
+    from iris.contracts.relationship import RelationshipStore
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.state.activity_journal import ActivityJournal
@@ -35,6 +41,8 @@ class RuntimeStateStores:
 
     account_store: AccountStore
     memory_store: MutableMemoryStore
+    relationship_store: RelationshipStore
+    affect_store: AffectStore
     activity_journal: ActivityJournal
     activity_projection_store: ActivityProjectionStore
     presence_store: PresenceStore
@@ -52,15 +60,25 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     if config.state.backend == "sqlite":
         account_store: AccountStore = SQLiteAccountStore(config.state.sqlite_path)
         memory_store: MutableMemoryStore = SQLiteMemoryStore(config.state.sqlite_path)
-        activity_journal: ActivityJournal = SQLiteActivityJournal(config.state.sqlite_path)
+        relationship_store: RelationshipStore = SQLiteRelationshipStore(
+            config.state.sqlite_path,
+        )
+        affect_store: AffectStore = SQLiteAffectStore(config.state.sqlite_path)
+        activity_journal: ActivityJournal = SQLiteActivityJournal(
+            config.state.sqlite_path,
+        )
     else:
         account_store = InMemoryAccountStore()
         memory_store = InMemoryMemoryStore()
+        relationship_store = InMemoryRelationshipStore()
+        affect_store = InMemoryAffectStore()
         activity_journal = InMemoryActivityJournal()
 
     return RuntimeStateStores(
         account_store=account_store,
         memory_store=memory_store,
+        relationship_store=relationship_store,
+        affect_store=affect_store,
         activity_journal=activity_journal,
         activity_projection_store=InMemoryActivityProjectionStore(),
         presence_store=InMemoryPresenceStore(),

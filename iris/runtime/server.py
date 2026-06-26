@@ -157,6 +157,8 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     app: IrisApp = build_app_from_config(
         config,
         memory_store=stores.memory_store,
+        relationship_store=stores.relationship_store,
+        affect_store=stores.affect_store,
     )
     runtime_service = build_runtime_service(app, stores)
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
