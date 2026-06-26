@@ -46,6 +46,9 @@ class AffectBaselineRecord:
         Raises:
             ValueError: scope と actor_id の組み合わせまたは VAD 値が不正な場合。
         """
+        if self.scope not in {"global", "actor"}:
+            msg = f"unknown affect scope: {self.scope}"
+            raise ValueError(msg)
         if self.scope == "global" and self.actor_id is not None:
             msg = "global affect baseline must not have actor_id"
             raise ValueError(msg)

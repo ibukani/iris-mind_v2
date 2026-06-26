@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import json
 
 import pytest
 
-from iris.contracts.affect import AffectBaselineRecord
+from iris.contracts.affect import AffectBaselineRecord, AffectScope
 from iris.core.ids import ActorId, ObservationId
 from tests.helpers.immutability import assert_frozen_field
+
+
+def _unknown_affect_scope() -> AffectScope:
+    scope: AffectScope = json.loads('"invalid"')
+    return scope
 
 
 def test_affect_baseline_record_is_immutable() -> None:
@@ -28,6 +34,12 @@ def test_actor_affect_requires_actor_id() -> None:
     """Actor-scoped affect baseline requires actor_id."""
     with pytest.raises(ValueError, match="actor"):
         AffectBaselineRecord(scope="actor")
+
+
+def test_affect_baseline_rejects_unknown_scope() -> None:
+    """AffectBaselineRecord rejects unknown runtime scope values."""
+    with pytest.raises(ValueError, match="unknown affect scope"):
+        AffectBaselineRecord(scope=_unknown_affect_scope())
 
 
 def test_affect_baseline_validates_vad_ranges() -> None:
