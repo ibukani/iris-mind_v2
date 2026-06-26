@@ -56,7 +56,7 @@ class InMemoryProactiveTargetStore(ProactiveTargetStore):
 
     def __init__(self) -> None:
         """Create an empty target store."""
-        self._targets: dict[str, ProactiveTarget] = {}
+        self._targets: dict[tuple[str, str, str, str], ProactiveTarget] = {}
 
     @override
     async def upsert_target(self, target: ProactiveTarget) -> None:
@@ -78,7 +78,7 @@ class InMemoryProactiveTargetStore(ProactiveTargetStore):
         now: datetime,
     ) -> tuple[ProactiveTarget, ...]:
         """Return all targets in deterministic order."""
-        return tuple(sorted(self._targets.values(), key=_target_sort_key))
+        return tuple(sorted(self._targets.values(), key=_target_key))
 
     @override
     async def mark_proactive_attempt(
@@ -96,8 +96,8 @@ class InMemoryProactiveTargetStore(ProactiveTargetStore):
             )
 
 
-def _target_sort_key(target: ProactiveTarget) -> tuple[str, str, str, str]:
-    """Return a deterministic sort key for target listing.
+def _target_key(target: ProactiveTarget) -> tuple[str, str, str, str]:
+    """Return a deterministic sort/storage key for a target.
 
     Returns:
         Tuple of provider, subject, space ref, and session id strings.
@@ -107,20 +107,4 @@ def _target_sort_key(target: ProactiveTarget) -> tuple[str, str, str, str]:
         str(target.route.provider_subject or ""),
         str(target.route.provider_space_ref or ""),
         str(target.session_id),
-    )
-
-
-def _target_key(target: ProactiveTarget) -> str:
-    """Build a durable-compatible stable target key.
-
-    Returns:
-        Stable key combining provider, subject, space ref, and session id.
-    """
-    return "|".join(
-        (
-            target.route.provider,
-            str(target.route.provider_subject or ""),
-            str(target.route.provider_space_ref or ""),
-            str(target.session_id),
-        )
     )
