@@ -254,20 +254,6 @@ async def test_failed_item_can_retry_then_max_attempts_permanent() -> None:
     assert released.status is DeliveryStatus.FAILED_PERMANENT
 
 
-async def test_blocked_item_is_terminal() -> None:
-    """Blocked item is never leased."""
-    outbox = InMemoryDeliveryOutbox()
-    now = datetime(2026, 1, 1, tzinfo=UTC)
-    item = await outbox.enqueue(envelope())
-    blocked = await outbox.mark_blocked(
-        delivery_id=item.delivery_id,
-        reason="safety",
-        blocked_at=now,
-    )
-    assert blocked.status is DeliveryStatus.BLOCKED
-    assert await outbox.lease_due(provider="discord", now=now, max_items=10, lease_seconds=30) == ()
-
-
 async def test_no_action_is_not_accepted_for_delivery() -> None:
     """NoAction cannot be enqueued in DeliveryOutbox."""
     outbox = InMemoryDeliveryOutbox()
@@ -323,13 +309,18 @@ async def test_lease_due_returns_only_leased_items() -> None:
     outbox = InMemoryDeliveryOutbox()
     now = datetime(2026, 1, 1, tzinfo=UTC)
     await outbox.enqueue(envelope("delivery-1", idempotency_key="k1"))
-    await outbox.enqueue(envelope("delivery-2", idempotency_key="k2"))
-    blocked = await outbox.mark_blocked(
-        delivery_id=DeliveryId("delivery-2"),
-        reason="safety",
-        blocked_at=now,
+
+    # Simulate a successful item that is terminal
+    leased_list = await outbox.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30)
+    leased_first = leased_list[0]
+    await outbox.complete(
+        delivery_id=leased_first.delivery_id,
+        lease_id=leased_first.lease_id,
+        result=_success_result(leased_first),
+        completed_at=now,
     )
-    assert blocked.status is DeliveryStatus.BLOCKED
+
+    await outbox.enqueue(envelope("delivery-2", idempotency_key="k2"))
     leased = await outbox.lease_due(provider="discord", now=now, max_items=10, lease_seconds=30)
     assert len(leased) == 1
     assert all(item.status is DeliveryStatus.LEASED for item in leased)

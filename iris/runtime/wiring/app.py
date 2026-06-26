@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.adapters.llm.fake import FakeLLMClient
-from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
-from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
@@ -51,44 +48,6 @@ def wire_default_app(
         max_tokens=max_tokens,
     )
     return IrisApp(cycle=cycle)
-
-
-def wire_fake_app(responses: tuple[str, ...] | None = None) -> IrisApp:
-    """決定論的なフェイク LLM をバックエンドとする IrisApp を組み立てる。
-
-    Returns:
-        FakeLLMClient を使う IrisApp。
-    """
-    llm = FakeLLMClient(responses=responses)
-    return wire_default_app(llm)
-
-
-def wire_openai_app(
-    config: OpenAIConfig | None = None,
-    *,
-    model: str = "gpt-5-mini",
-) -> IrisApp:
-    """OpenAI LLM クライアントをバックエンドとする IrisApp を組み立てる。
-
-    Returns:
-        OpenAI LLM client を使う IrisApp。
-    """
-    llm = OpenAILLMClient(config=config or OpenAIConfig.from_env(model=model))
-    return wire_default_app(llm, model=model)
-
-
-def wire_ollama_app(
-    config: OllamaConfig | None = None,
-    *,
-    model: str = "llama3.2",
-) -> IrisApp:
-    """Ollama LLM クライアントをバックエンドとする IrisApp を組み立てる。
-
-    Returns:
-        Ollama LLM client を使う IrisApp。
-    """
-    llm = OllamaLLMClient(config=config)
-    return wire_default_app(llm, model=model)
 
 
 def build_app_from_config(

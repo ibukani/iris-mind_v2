@@ -191,33 +191,6 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         self._report_index[delivery_id] = history | {current}
         return released
 
-    @override
-    async def mark_blocked(
-        self,
-        *,
-        delivery_id: DeliveryId,
-        reason: str,
-        blocked_at: datetime,
-    ) -> DeliveryEnvelope:
-        """Mark an item blocked as a terminal state.
-
-        Returns:
-            The blocked envelope, or the existing terminal envelope.
-        """
-        item = self._get(delivery_id)
-        if item.status in TERMINAL_DELIVERY_STATUSES:
-            return item
-        blocked = replace(
-            item,
-            status=DeliveryStatus.BLOCKED,
-            updated_at=blocked_at,
-            lease_id=None,
-            lease_expires_at=None,
-            blocked_reason=reason,
-        )
-        self._items[delivery_id] = blocked
-        return blocked
-
     def _lease_item(
         self,
         item: DeliveryEnvelope,
