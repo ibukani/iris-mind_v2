@@ -16,6 +16,8 @@ Runtime の可観測性は `iris/runtime/observability/` に置く。runtime bus
 
 この境界により、service は typed port / context 経由で観測し、server / wiring が concrete observer を設置する。observability implementation は routing、retry、safety、delivery、memory behavior を決めない。
 
+`context.py` と `ports.py` は意図的に pure boundary module として保つ。これにより `IrisRuntimeService` は concrete observability implementation へ indirect dependency を持たずに依存できる。
+
 `correlation_id` を primary trace key とする。`ObservationEnvelope.correlation_id` がある場合はそれを使い、ない場合は `observation_id` を trace fallback として使う。trace context は `contextvars` で request scope に束縛する。
 
 ログに出してよいものは安全な ID と metadata に限定する。例:

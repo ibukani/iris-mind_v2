@@ -90,6 +90,26 @@ RUNTIME_SERVICE_FORBIDDEN_DIRECT_IMPORTS: frozenset[str] = frozenset(
         "iris.runtime.state",
     },
 )
+OBSERVABILITY_BOUNDARY_MODULES: tuple[Path, ...] = (
+    RUNTIME_ROOT / "observability" / "context.py",
+    RUNTIME_ROOT / "observability" / "ports.py",
+)
+OBSERVABILITY_BOUNDARY_FORBIDDEN_IMPORTS: frozenset[str] = frozenset(
+    {
+        "iris.adapters",
+        "iris.features",
+        "iris.presentation",
+        "iris.safety",
+        "iris.runtime.delivery",
+        "iris.runtime.lifecycle",
+        "iris.runtime.observability.diagnostics",
+        "iris.runtime.observability.events",
+        "iris.runtime.observability.llm",
+        "iris.runtime.observability.logger",
+        "iris.runtime.scheduler",
+        "iris.runtime.state",
+    },
+)
 
 
 def _python_files(root: Path) -> tuple[Path, ...]:
@@ -195,6 +215,22 @@ def test_runtime_service_does_not_directly_import_low_level_effects() -> None:
 
     assert not violations, (
         "runtime.service must stay a thin boundary and avoid direct imports:\n"
+        + "\n".join(violations)
+    )
+
+
+def test_runtime_observability_boundary_modules_do_not_import_concrete_implementations() -> None:
+    """observability boundary API modules は concrete implementation に依存しない。"""
+    violations = [
+        f"{path.relative_to(PROJECT_ROOT).as_posix()}: imports {imported}"
+        for path in OBSERVABILITY_BOUNDARY_MODULES
+        for imported in _imports(path)
+        for forbidden in OBSERVABILITY_BOUNDARY_FORBIDDEN_IMPORTS
+        if imported.startswith(forbidden)
+    ]
+
+    assert not violations, (
+        "runtime observability boundary modules must stay pure:\n"
         + "\n".join(violations)
     )
 

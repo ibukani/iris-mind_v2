@@ -10,6 +10,8 @@ Do not inject concrete activity, presence, occupancy, event-reaction, or future 
 
 `IrisRuntimeService` may import runtime-local observability boundary APIs such as `iris.runtime.observability.context` and `iris.runtime.observability.ports`. It must not import concrete observability implementations, logging backends, LLM observers, diagnostics runners, exporters, or provider-specific diagnostic implementations.
 
+The observability boundary modules `iris.runtime.observability.context` and `iris.runtime.observability.ports` must remain stdlib/typing-level boundary APIs. They must not import concrete observability implementations, diagnostics runners, exporters, adapters, or runtime effect layers.
+
 Runtime responsibilities must remain separated:
 
 - observation integration
