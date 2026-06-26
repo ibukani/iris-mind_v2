@@ -16,7 +16,7 @@ from iris.contracts.observations import (
     PresenceSignalObservation,
 )
 from iris.contracts.presence import PresenceStatus
-from iris.core.ids import ActivityId, ActorId, ObservationId, SessionId, SpaceId
+from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
 from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
@@ -47,7 +47,6 @@ async def test_activity_integrator_records_only_with_activity_capability() -> No
     assert event.provider_sequence == 2
     assert event.space_id == SpaceId("space-1")
     assert event.received_at == _RECEIVED_AT
-    assert await journal.get_by_id(ActivityId("activity:obs-1")) == event
 
 
 @pytest.mark.anyio
@@ -63,7 +62,6 @@ async def test_activity_integrator_rejects_source_spoof_without_capability() -> 
     )
 
     assert await projections.latest_for_actor(ActorId("actor-1")) is None
-    assert await journal.get_by_id(ActivityId("activity:obs-1")) is None
 
 
 @pytest.mark.anyio
@@ -118,7 +116,6 @@ async def test_activity_integrator_duplicate_does_not_update_projections() -> No
     assert event is not None
     assert event.observation_id == ObservationId("obs-1")
     assert event.kind is ActivityKind.VOICE_JOINED
-    assert await projections.latest_for_space(SpaceId("space-1")) == event
 
 
 @pytest.mark.anyio

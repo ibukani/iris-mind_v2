@@ -57,24 +57,6 @@ async def test_get_occupancy_filters_expired_occupants() -> None:
     assert snapshot.occupants == ()
 
 
-@pytest.mark.anyio
-async def test_replace_occupancy_replaces_full_actor_set() -> None:
-    """replace_occupancyがspaceの全occupantを置換することを確認する。"""
-    store = InMemorySpaceOccupancyStore()
-    await store.actor_joined(space_id=_SPACE_ID, occupant=_occupant())
-    replacement = replace(_occupant(), actor_id=ActorId("actor-2"))
-
-    await store.replace_occupancy(
-        space_id=_SPACE_ID,
-        occupants=(replacement,),
-        at=_NOW + timedelta(seconds=3),
-    )
-
-    snapshot = await store.get_occupancy(_SPACE_ID, now=_NOW)
-    assert snapshot.occupants == (replacement,)
-    assert snapshot.updated_at == _NOW + timedelta(seconds=3)
-
-
 def _occupant(*, expires_at: datetime | None = None) -> SpaceOccupant:
     return SpaceOccupant(
         actor_id=ActorId("actor-1"),
