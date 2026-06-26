@@ -87,6 +87,12 @@ RUNTIME_SERVICE_FORBIDDEN_DIRECT_IMPORTS: frozenset[str] = frozenset(
         "iris.runtime.state",
     },
 )
+RUNTIME_SERVICE_ALLOWED_OBSERVABILITY_IMPORTS: frozenset[str] = frozenset(
+    {
+        "iris.runtime.observability.context",
+        "iris.runtime.observability.ports",
+    },
+)
 
 
 def _python_files(root: Path) -> tuple[Path, ...]:
@@ -188,6 +194,7 @@ def test_runtime_service_does_not_directly_import_low_level_effects() -> None:
         for imported in imports
         for forbidden in RUNTIME_SERVICE_FORBIDDEN_DIRECT_IMPORTS
         if imported.startswith(forbidden)
+        and imported not in RUNTIME_SERVICE_ALLOWED_OBSERVABILITY_IMPORTS
     ]
 
     assert not violations, (

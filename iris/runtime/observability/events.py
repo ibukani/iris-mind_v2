@@ -2,22 +2,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, override
 
 from iris.runtime.observability.logger import LoguruRuntimeLogger, RuntimeLogger
+from iris.runtime.observability.ports import RuntimeObservationObserver
 
 if TYPE_CHECKING:
-    from iris.runtime.trace_context import RuntimeLogValue
+    from iris.runtime.observability.context import RuntimeLogValue
 
 
-class RuntimeObservationObserver(Protocol):
-    """IrisRuntimeService の observation lifecycle を観測する port。"""
-
-    def record(self, event: str, **fields: RuntimeLogValue) -> None:
-        """Observation lifecycle event を記録する。"""
-
-
-class LoggingRuntimeObservationObserver:
+class LoggingRuntimeObservationObserver(RuntimeObservationObserver):
     """RuntimeLogger へ observation lifecycle event を送る observer。"""
 
     def __init__(self, runtime_logger: RuntimeLogger | None = None) -> None:
@@ -28,6 +22,7 @@ class LoggingRuntimeObservationObserver:
         """
         self._logger = runtime_logger or LoguruRuntimeLogger()
 
+    @override
     def record(self, event: str, **fields: RuntimeLogValue) -> None:
         """Observation lifecycle event を記録する。"""
         if event.endswith(".error"):

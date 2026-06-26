@@ -41,11 +41,13 @@ Runtime の可観測性は `iris/runtime/observability/` に置く。runtime bus
 - token
 - secret
 
+Sensitive field filtering は broad substring match ではなく exact key と sensitive suffix のみで行う。`memory_result_count`、`context_assembled`、`content_type` のような safe diagnostic field は保持する。
+
 Runtime は当面 Loguru-based structured logging を使う。`configure_runtime_logging` は既存の backend 設定を維持し、`LoguruRuntimeLogger` はその上に置く facade とする。
 
 LLM request logs は runtime trace context aware にする。runtime wiring が作る LLM client は `RuntimeLLMRequestObserver` で wrap し、adapter-level の `LoggingRequestObserver` は低レベル利用と既存 adapter tests のために残す。
 
-`iris.runtime.doctor` は read-only / non-mutating command とする。設定 discovery、設定 validation、state backend、SQLite/log path permission、server、model slots、startup diagnostics readiness、delivery/scheduler enablement を確認する。
+`iris.runtime.doctor` は read-only / non-mutating command とする。設定 discovery、設定 validation、state backend、SQLite/log path permission、server、model slots、startup diagnostics readiness、delivery/scheduler enablement を確認する。`diagnostics.warmup_models = true` の設定でも provider warmup は実行しない。
 
 OpenTelemetry、Prometheus、Sentry、structlog、Rich、外部 exporter は deferred。internal event model と safe field policy が安定してから導入を再検討する。初期実装では新規 dependency を追加しない。
 

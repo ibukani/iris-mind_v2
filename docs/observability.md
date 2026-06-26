@@ -20,7 +20,6 @@ trace context の field:
 - `provider`
 - `actor_id`
 - `space_id`
-- `request_started_at`
 
 optional field は値がない場合、log extra から省略される。
 
@@ -73,7 +72,12 @@ runtime lifecycle logs は観測するだけで、routing、retry、safety、del
 - token
 - secret
 
-safe ID と safe metadata はログに出してよい。`RuntimeLogger` は `text`、`prompt`、`memory`、`secret`、`token` などを含む field key を drop する。
+safe ID と safe metadata はログに出してよい。`RuntimeLogger` は exact key
+(`text`, `prompt_text`, `user_text`, `raw_response_body`, `api_key`, `token`,
+`secret`, `password` など) と sensitive suffix (`_text`, `_prompt`, `_token`,
+`_secret`, `_password`, `_response_body` など) だけを drop する。`memory_result_count`,
+`context_assembled`, `content_type`, `output_present`, `route` のような safe diagnostic
+field は保持する。
 
 ## 起動時診断 (Startup Diagnostics)
 
@@ -274,6 +278,8 @@ export IRIS_DIAGNOSTICS_WARMUP_MODELS=true
 ## Runtime Doctor
 
 runtime doctor は read-only / non-mutating な診断コマンドである。
+`diagnostics.warmup_models = true` の設定でも、runtime doctor は provider warmup を
+実行しない。startup diagnostics は readiness check のみを使う。
 
 ```bash
 uv run python -m iris.runtime.doctor

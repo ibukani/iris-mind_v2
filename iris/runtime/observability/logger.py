@@ -6,23 +6,34 @@ from typing import Protocol
 
 from loguru import logger
 
-from iris.runtime.trace_context import RuntimeLogFields, RuntimeLogValue, trace_extra
+from iris.runtime.observability.context import RuntimeLogFields, RuntimeLogValue, trace_extra
 
-_SENSITIVE_FIELD_FRAGMENTS = frozenset(
+_SENSITIVE_FIELD_KEYS = frozenset(
     {
         "api_key",
-        "content",
-        "memory",
         "password",
         "prompt",
+        "prompt_text",
         "raw",
+        "raw_response",
+        "raw_response_body",
         "response_body",
         "secret",
         "system_instruction",
         "text",
         "token",
+        "user_text",
         "user_message",
     },
+)
+_SENSITIVE_FIELD_SUFFIXES = (
+    "_api_key",
+    "_password",
+    "_prompt",
+    "_response_body",
+    "_secret",
+    "_text",
+    "_token",
 )
 
 
@@ -86,4 +97,4 @@ def _safe_fields(fields: RuntimeLogFields) -> RuntimeLogFields:
 
 def _is_sensitive_key(key: str) -> bool:
     normalized = key.lower()
-    return any(fragment in normalized for fragment in _SENSITIVE_FIELD_FRAGMENTS)
+    return normalized in _SENSITIVE_FIELD_KEYS or normalized.endswith(_SENSITIVE_FIELD_SUFFIXES)

@@ -12,6 +12,7 @@ from iris.runtime.ingress.observation_ingress import (
     trusted_adapter_ingress,
     unauthenticated_external_ingress,
 )
+from iris.runtime.observability.context import RuntimeTraceContext, bind_trace_context, trace_extra
 from iris.runtime.observation_router import (
     ActivityEventRoute,
     PresenceSignalRoute,
@@ -26,14 +27,10 @@ if TYPE_CHECKING:
     from iris.contracts.observations import ActivityEventObservation, Observation
     from iris.core.ids import CorrelationId
     from iris.runtime.app import IrisApp
+    from iris.runtime.ingress.observation_ingress import ObservationIngressContext
     from iris.runtime.ingress.observation_integrator import ObservationIntegrator
-from iris.runtime.ingress.observation_ingress import ObservationIngressContext
-from iris.runtime.trace_context import (
-    RuntimeLogValue,
-    RuntimeTraceContext,
-    bind_trace_context,
-    trace_extra,
-)
+    from iris.runtime.observability.context import RuntimeLogValue
+    from iris.runtime.observability.ports import RuntimeObservationObserver
 
 
 @dataclass(frozen=True)
@@ -155,13 +152,6 @@ class ActivityEventReactionPipeline(Protocol):
         ...
 
 
-class RuntimeObservationObserver(Protocol):
-    """IrisRuntimeService の observation lifecycle を観測する port。"""
-
-    def record(self, event: str, **fields: RuntimeLogValue) -> None:
-        """Observation lifecycle event を記録する。"""
-
-
 @dataclass(frozen=True)
 class IntegratingObservationPipeline:
     """複数の observation integrator を一つの runtime 境界として実行する。"""
@@ -204,7 +194,7 @@ class IrisRuntimeService:
             RuntimeResponse: PresentedOutput と保持された correlation ID。
         """
         started_at = time.perf_counter()
-        trace_context = _trace_context_from_envelope(envelope, started_at)
+        trace_context = _trace_context_from_envelope(envelope)
         with bind_trace_context(trace_context):
             try:
                 return await self._handle_observation_bound(envelope, started_at)
@@ -356,7 +346,6 @@ class IrisRuntimeService:
 
 def _trace_context_from_envelope(
     envelope: ObservationEnvelope,
-    started_at: float,
 ) -> RuntimeTraceContext:
     """ObservationEnvelope から安全な trace context を生成する。
 
@@ -376,7 +365,6 @@ def _trace_context_from_envelope(
         provider=envelope.ingress.provider,
         actor_id=str(actor_id) if actor_id is not None else None,
         space_id=str(space_id) if space_id is not None else None,
-        request_started_at=started_at,
     )
 
 

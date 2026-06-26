@@ -80,7 +80,6 @@ def _context() -> RuntimeTraceContext:
         provider="discord",
         actor_id="actor-1",
         space_id="space-1",
-        request_started_at=2.0,
     )
 
 

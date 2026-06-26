@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import os
 from pathlib import Path
 import sys
 
+from iris.adapters.llm.diagnostics import ProviderReadinessResult, ReadinessStatus
 from iris.runtime.config import (
     ConfigError,
     IrisRuntimeConfig,
@@ -258,7 +259,7 @@ async def _startup_diagnostics_checks(
     config: IrisRuntimeConfig,
 ) -> tuple[RuntimeDoctorCheck, ...]:
     try:
-        report = await run_startup_diagnostics(config)
+        report = await run_startup_diagnostics(_read_only_diagnostics_config(config))
     except ConfigError as exc:
         return (
             RuntimeDoctorCheck(
@@ -289,23 +290,86 @@ async def _startup_diagnostics_checks(
     return tuple(checks)
 
 
+def _read_only_diagnostics_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
+    """Provider warmup を無効化した runtime doctor 用 config を返す。
+
+    Returns:
+        diagnostics.warmup_models が False の runtime config。
+    """
+    return replace(
+        config,
+        diagnostics=replace(config.diagnostics, warmup_models=False),
+    )
+
+
 def _diagnostics_outcome_check(outcome: DiagnosticsCheckOutcome) -> RuntimeDoctorCheck:
-    status = "ok"
-    issue = None
-    next_action = None
-    readiness = outcome.readiness
-    if readiness.issues:
-        first_issue = readiness.issues[0]
-        status = "fail" if readiness.status.value == "fail" else "warn"
-        issue = first_issue.code
-        next_action = first_issue.remediation
-    summary = f"{outcome.slot} {outcome.provider.value} {outcome.model} {readiness.status.value}"
+    stage = _worst_diagnostics_stage(outcome.readiness, outcome.warmup)
+    status = stage.status.value
+    issue = stage.issue_code
+    next_action = stage.next_action
+    summary = _diagnostics_summary(outcome, stage)
     return RuntimeDoctorCheck(
         name="provider-readiness",
         status=status,
         summary=summary,
         issue=issue,
         next_action=next_action,
+    )
+
+
+@dataclass(frozen=True)
+class _DiagnosticsStage:
+    stage: str
+    status: ReadinessStatus
+    issue_code: str | None
+    next_action: str | None
+
+
+def _worst_diagnostics_stage(
+    readiness: ProviderReadinessResult,
+    warmup: ProviderReadinessResult | None,
+) -> _DiagnosticsStage:
+    stages: list[_DiagnosticsStage] = [_diagnostics_stage("readiness", readiness)]
+    if warmup is not None:
+        stages.append(_diagnostics_stage("warmup", warmup))
+    return max(stages, key=_diagnostics_stage_rank)
+
+
+def _diagnostics_stage_rank(stage: _DiagnosticsStage) -> int:
+    return _status_rank(stage.status)
+
+
+def _diagnostics_stage(stage: str, result: ProviderReadinessResult) -> _DiagnosticsStage:
+    issue = result.issues[0] if result.issues else None
+    issue_code = None if issue is None else f"{stage}:{issue.code}"
+    next_action = None if issue is None else issue.remediation
+    return _DiagnosticsStage(
+        stage=stage,
+        status=result.status,
+        issue_code=issue_code,
+        next_action=next_action,
+    )
+
+
+def _status_rank(status: ReadinessStatus) -> int:
+    if status is ReadinessStatus.FAIL:
+        return 3
+    if status is ReadinessStatus.WARN:
+        return 2
+    if status is ReadinessStatus.OK:
+        return 1
+    return 0
+
+
+def _diagnostics_summary(
+    outcome: DiagnosticsCheckOutcome,
+    stage: _DiagnosticsStage,
+) -> str:
+    readiness = outcome.readiness.status.value
+    warmup = "none" if outcome.warmup is None else outcome.warmup.status.value
+    return (
+        f"{outcome.slot} {outcome.provider.value} {outcome.model} "
+        f"readiness={readiness} warmup={warmup} selected={stage.stage}:{stage.status.value}"
     )
 
 

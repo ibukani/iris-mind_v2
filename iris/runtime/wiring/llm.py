@@ -298,7 +298,7 @@ def _wrap_with_observer(client: LLMClient) -> LLMClient:
 
     Returns:
         The same client wrapped in :class:`ObservableLLMClient` with
-        a :class:`LoggingRequestObserver`.
+        a :class:`RuntimeLLMRequestObserver`.
     """
     return ObservableLLMClient(client, RuntimeLLMRequestObserver())
 

@@ -20,7 +20,6 @@ def _context(correlation_id: str = "corr-1") -> RuntimeTraceContext:
         provider=None,
         actor_id="actor-1",
         space_id=None,
-        request_started_at=12.5,
     )
 
 

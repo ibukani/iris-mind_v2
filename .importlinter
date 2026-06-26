@@ -52,6 +52,9 @@ type = forbidden
 allow_indirect_imports = True
 source_modules =
     iris.runtime.service
+ignore_imports =
+    iris.runtime.service -> iris.runtime.observability.context
+    iris.runtime.service -> iris.runtime.observability.ports
 forbidden_modules =
     iris.runtime.state
     iris.runtime.scheduler
