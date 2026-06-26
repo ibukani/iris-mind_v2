@@ -11,7 +11,12 @@ from iris.contracts.memory import MemoryQuery, MemorySearchResult
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from iris.contracts.memory import MemoryStore, VectorMemoryIndex, VectorMemorySearchResult
+    from iris.contracts.memory import (
+        MemoryId,
+        MemoryStore,
+        VectorMemoryIndex,
+        VectorMemorySearchResult,
+    )
 
 
 _ERR_WEIGHT_TOTAL = "Total reranker weight must be > 0"
@@ -86,21 +91,21 @@ class MemoryReranker:
     def _merge_results(
         fts_results: Sequence[MemorySearchResult],
         vector_results: Sequence[MemorySearchResult],
-    ) -> dict[str, _HybridScore]:
+    ) -> dict[MemoryId, _HybridScore]:
         """FTS5 とベクトル結果を memory_id 単位でマージする。
 
         Returns:
-            dict[str, _HybridScore]: memory_id ごとのスコアマップ。
+            dict[MemoryId, _HybridScore]: memory_id ごとのスコアマップ。
         """
-        merged: dict[str, _HybridScore] = {}
+        merged: dict[MemoryId, _HybridScore] = {}
         for result in fts_results:
-            merged[str(result.record.id)] = _HybridScore(
+            merged[result.record.id] = _HybridScore(
                 fts_score=result.score,
                 vector_score=0.0,
                 result=result,
             )
         for result in vector_results:
-            key = str(result.record.id)
+            key = result.record.id
             if key in merged:
                 existing_score = merged[key]
                 merged[key] = _HybridScore(
@@ -118,7 +123,7 @@ class MemoryReranker:
 
     def _rank_merged(
         self,
-        merged: dict[str, _HybridScore],
+        merged: dict[MemoryId, _HybridScore],
         *,
         limit: int,
     ) -> Sequence[MemorySearchResult]:
