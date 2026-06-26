@@ -54,8 +54,8 @@ def _build_event(
 
 
 @pytest.mark.anyio
-async def test_sqlite_activity_journal_appends_and_reads_by_id(tmp_path: Path) -> None:
-    """SQLiteActivityJournal stores and retrieves events by activity_id."""
+async def test_sqlite_activity_journal_appends(tmp_path: Path) -> None:
+    """SQLiteActivityJournal stores events."""
     db_path = str(tmp_path / "activity_journal.db")
     event = _build_event()
     journal = SQLiteActivityJournal(db_path)
@@ -65,7 +65,6 @@ async def test_sqlite_activity_journal_appends_and_reads_by_id(tmp_path: Path) -
     assert result.accepted is True
     assert result.event == event
     assert result.reason is None
-    assert await journal.get_by_id(event.activity_id) == event
 
 
 @pytest.mark.anyio
@@ -82,7 +81,6 @@ async def test_sqlite_activity_journal_rejects_duplicate_provider_event(tmp_path
     assert result.accepted is False
     assert result.event is None
     assert result.reason is ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT
-    assert await journal.get_by_id(duplicate.activity_id) is None
 
 
 @pytest.mark.anyio
@@ -99,22 +97,6 @@ async def test_sqlite_activity_journal_dedupe_survives_new_instance(tmp_path: Pa
 
     assert result.accepted is False
     assert result.reason is ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT
-    assert await reopened.has_seen_provider_event(
-        source=event.source or "internal",
-        provider_event_id=event.provider_event_id or "event-1",
-    )
-
-
-@pytest.mark.anyio
-async def test_sqlite_activity_journal_persists_across_reopen(tmp_path: Path) -> None:
-    """Events are retrievable from a new SQLiteActivityJournal instance."""
-    db_path = str(tmp_path / "activity_journal.db")
-    event = _build_event()
-    first = SQLiteActivityJournal(db_path)
-    await first.append(event)
-    reopened = SQLiteActivityJournal(db_path)
-
-    assert await reopened.get_by_id(event.activity_id) == event
 
 
 @pytest.mark.anyio
@@ -155,36 +137,6 @@ async def test_sqlite_activity_journal_preserves_full_event_payload(tmp_path: Pa
     )
 
     await journal.append(event)
-    reopened = SQLiteActivityJournal(db_path)
-    restored = await reopened.get_by_id(event.activity_id)
-
-    assert restored is not None
-    assert restored.activity_id == event.activity_id
-    assert restored.provider_event_id == event.provider_event_id
-    assert restored.provider_sequence == event.provider_sequence
-    assert restored.actor_id == event.actor_id
-    assert restored.space_id == event.space_id
-    assert restored.source == event.source
-    assert restored.kind == event.kind
-    assert restored.occurred_at == event.occurred_at
-    assert restored.received_at == event.received_at
-    assert dict(restored.metadata) == {"channel": "general", "thread": "42"}
-
-
-@pytest.mark.anyio
-async def test_sqlite_activity_journal_has_seen_provider_event_returns_false_when_empty(
-    tmp_path: Path,
-) -> None:
-    """Empty journal returns False for has_seen_provider_event."""
-    db_path = str(tmp_path / "activity_journal.db")
-    journal = SQLiteActivityJournal(db_path)
-
-    result = await journal.has_seen_provider_event(
-        source="internal",
-        provider_event_id="never-seen",
-    )
-
-    assert result is False
 
 
 @pytest.mark.anyio
@@ -200,7 +152,6 @@ async def test_sqlite_activity_journal_rejects_duplicate_activity_id(tmp_path: P
     assert second.accepted is False
     assert second.event is None
     assert second.reason is ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
-    assert await journal.get_by_id(event.activity_id) == event
 
 
 @pytest.mark.anyio
@@ -356,13 +307,3 @@ async def test_sqlite_activity_journal_concurrent_append_dedupe(tmp_path: Path) 
     ]
     assert len(accepted) == 1
     assert len(duplicates) == total - 1
-
-    # 受理された row は1件だけ、provider_event_id で1件だけ存在。
-    journal = SQLiteActivityJournal(db_path)
-    assert (
-        await journal.has_seen_provider_event(
-            source=base.source or "internal",
-            provider_event_id=base.provider_event_id or "event-1",
-        )
-        is True
-    )

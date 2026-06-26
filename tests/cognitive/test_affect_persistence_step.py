@@ -12,7 +12,7 @@ from iris.cognitive.affect.appraisal import classify_appraisal
 from iris.cognitive.affect.persistence import AffectBaselineLoadStep, AffectPersistenceStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import AppraisalResult, PerceptionResult, StepStatus
-from iris.contracts.affect import AffectBaselineRecord
+from iris.contracts.affect import AffectBaselineRecord, AffectScope
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActorMessageObservation,
@@ -100,7 +100,7 @@ async def test_affect_baseline_load_populates_frame_affect() -> None:
     store = InMemoryAffectStore()
     store.upsert_global(
         AffectBaselineRecord(
-            scope="global",
+            scope=AffectScope.GLOBAL,
             mood_label="positive",
             valence=0.5,
             arousal=0.2,
@@ -134,7 +134,7 @@ async def test_appraisal_affect_is_persisted_to_global_baseline() -> None:
     assert result.status == StepStatus.OK
     assert result.persisted
     assert stored is not None
-    assert stored.scope == "global"
+    assert stored.scope == AffectScope.GLOBAL
     assert stored.actor_id is None
     assert stored.valence == approx(0.6)
     assert stored.source_observation_id == ObservationId("obs-affect-persist")

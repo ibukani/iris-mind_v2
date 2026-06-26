@@ -28,7 +28,6 @@ async def test_activity_journal_appends_new_event() -> None:
 
     assert result.accepted
     assert result.event == event
-    assert await journal.get_by_id(event.activity_id) == event
 
 
 @pytest.mark.anyio
@@ -44,7 +43,6 @@ async def test_activity_journal_rejects_duplicate_activity_id() -> None:
     assert not second.accepted
     assert second.event is None
     assert second.reason is ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
-    assert await journal.get_by_id(event.activity_id) == event
 
 
 @pytest.mark.anyio
@@ -60,7 +58,6 @@ async def test_activity_journal_rejects_duplicate_provider_event() -> None:
     assert not result.accepted
     assert result.event is None
     assert result.reason is ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT
-    assert await journal.get_by_id(duplicate.activity_id) is None
 
 
 @pytest.mark.anyio
@@ -84,7 +81,6 @@ async def test_activity_projection_updates_only_after_accepted_event() -> None:
         await projections.update_latest(duplicate_result.event)
 
     assert await projections.latest_for_actor(ActorId("actor-1")) == first
-    assert await projections.latest_for_space(SpaceId("space-1")) == first
 
 
 @pytest.mark.anyio
@@ -107,15 +103,6 @@ async def test_activity_journal_eviction_does_not_clear_projection() -> None:
     if second_result.event is not None:
         await projections.update_latest(second_result.event)
 
-    assert await journal.get_by_id(first.activity_id) is None
-    assert await journal.get_by_id(second.activity_id) == second
-    assert (
-        await journal.has_seen_provider_event(
-            source="internal",
-            provider_event_id="event-1",
-        )
-        is False
-    )
     assert await projections.latest_for_actor(ActorId("actor-1")) == second
 
 

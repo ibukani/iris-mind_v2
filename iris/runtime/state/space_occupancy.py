@@ -44,16 +44,6 @@ class SpaceOccupancyStore(Protocol):
         """期限切れoccupantを除いたsnapshotを取得する。"""
         ...
 
-    async def replace_occupancy(
-        self,
-        *,
-        space_id: SpaceId,
-        occupants: tuple[SpaceOccupant, ...],
-        at: datetime,
-    ) -> None:
-        """spaceのoccupancy全体を置換する。"""
-        ...
-
 
 class InMemorySpaceOccupancyStore(SpaceOccupancyStore):
     """process内でlive space occupancyを保持するstore。"""
@@ -113,15 +103,3 @@ class InMemorySpaceOccupancyStore(SpaceOccupancyStore):
             occupants=active_occupants,
             updated_at=self._updated_at_by_space.get(space_id, now),
         )
-
-    @override
-    async def replace_occupancy(
-        self,
-        *,
-        space_id: SpaceId,
-        occupants: tuple[SpaceOccupant, ...],
-        at: datetime,
-    ) -> None:
-        """spaceのoccupancy全体をactor ID単位で置換する。"""
-        self._occupants_by_space[space_id] = {occupant.actor_id: occupant for occupant in occupants}
-        self._updated_at_by_space[space_id] = at

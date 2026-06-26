@@ -8,6 +8,7 @@ import pytest
 
 from iris.runtime.config import (
     ConfigError,
+    DiagnosticsMode,
     RuntimeDiagnosticsConfig,
     default_runtime_config,
     load_runtime_config,
@@ -23,7 +24,7 @@ def test_default_diagnostics_config() -> None:
     config = default_runtime_config()
 
     assert config.diagnostics == RuntimeDiagnosticsConfig()
-    assert config.diagnostics.mode == "warn"
+    assert config.diagnostics.mode == DiagnosticsMode.WARN
     assert config.diagnostics.timeout_seconds == approx(5.0)
     assert config.diagnostics.warmup_models is False
 
@@ -38,7 +39,7 @@ def test_diagnostics_toml_is_applied(tmp_path: Path) -> None:
         env={},
     )
 
-    assert config.diagnostics.mode == "strict"
+    assert config.diagnostics.mode == DiagnosticsMode.STRICT
     assert config.diagnostics.timeout_seconds == approx(2.5)
     assert config.diagnostics.warmup_models is True
 
@@ -53,7 +54,7 @@ def test_diagnostics_toml_partial_override_preserves_defaults(
     )
 
     assert config.diagnostics.timeout_seconds == approx(10.0)
-    assert config.diagnostics.mode == "warn"
+    assert config.diagnostics.mode == DiagnosticsMode.WARN
     assert config.diagnostics.warmup_models is False
 
 
@@ -71,7 +72,7 @@ def test_diagnostics_env_overrides_toml(tmp_path: Path) -> None:
         },
     )
 
-    assert config.diagnostics.mode == "strict"
+    assert config.diagnostics.mode == DiagnosticsMode.STRICT
     assert config.diagnostics.timeout_seconds == approx(12.5)
     assert config.diagnostics.warmup_models is True
 
@@ -82,7 +83,7 @@ def test_diagnostics_mode_off_via_env() -> None:
         None,
         env={"IRIS_DIAGNOSTICS_MODE": "off"},
     )
-    assert config.diagnostics.mode == "off"
+    assert config.diagnostics.mode == DiagnosticsMode.OFF
 
 
 def test_diagnostics_env_accepts_common_bool_forms() -> None:

@@ -56,13 +56,3 @@ class DeliveryOutbox(Protocol):
     ) -> DeliveryEnvelope:
         """Release a leased item for retry or permanent failure."""
         ...
-
-    async def mark_blocked(
-        self,
-        *,
-        delivery_id: DeliveryId,
-        reason: str,
-        blocked_at: datetime,
-    ) -> DeliveryEnvelope:
-        """Mark an item blocked by delivery safety."""
-        ...

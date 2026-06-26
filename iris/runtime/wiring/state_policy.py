@@ -3,30 +3,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, get_args
+from enum import StrEnum
 
-type PersistenceKind = Literal["durable", "ephemeral", "deferred"]
-type RuntimeStateBackend = Literal["memory", "sqlite"]
-
-
-def _literal_values(alias: object) -> tuple[str, ...]:
-    """`type` 構文で定義したLiteralから、実行時に値のtupleを取り出す。
-
-    Args:
-        alias: `type` で宣言したエイリアス。
-
-    Returns:
-        tuple[str, ...]: Literalの値のtuple。
-    """
-    raw: object = getattr(alias, "__value__", None)
-    if raw is None:
-        return ()
-    args: tuple[object, ...] = get_args(raw)
-    return tuple(str(arg) for arg in args)
+from iris.runtime.config.state import RuntimeStateBackend
 
 
-PERSISTENCE_KIND_VALUES: tuple[str, ...] = _literal_values(PersistenceKind)
-RUNTIME_STATE_BACKEND_VALUES: tuple[str, ...] = _literal_values(RuntimeStateBackend)
+class PersistenceKind(StrEnum):
+    """永続化種別。"""
+
+    DURABLE = "durable"
+    EPHEMERAL = "ephemeral"
+    DEFERRED = "deferred"
+
+
+PERSISTENCE_KIND_VALUES: tuple[str, ...] = tuple(k.value for k in PersistenceKind)
+RUNTIME_STATE_BACKEND_VALUES: tuple[str, ...] = tuple(k.value for k in RuntimeStateBackend)
 
 
 @dataclass(frozen=True)
@@ -39,7 +30,6 @@ class RuntimeStatePersistencePolicy:
     activity_projection_store: PersistenceKind
     presence_store: PersistenceKind
     space_occupancy_store: PersistenceKind
-    space_binding_store: PersistenceKind
     relationship_store: PersistenceKind
     affect_store: PersistenceKind
 
@@ -55,27 +45,25 @@ def runtime_state_persistence_policy(
     Returns:
         RuntimeStatePersistencePolicy: backendに対応する永続化ポリシー。
     """
-    if backend == "sqlite":
+    if backend == RuntimeStateBackend.SQLITE:
         return RuntimeStatePersistencePolicy(
-            account_store="durable",
-            memory_store="durable",
-            activity_journal="durable",
-            activity_projection_store="ephemeral",
-            presence_store="ephemeral",
-            space_occupancy_store="ephemeral",
-            space_binding_store="ephemeral",
-            relationship_store="durable",
-            affect_store="durable",
+            account_store=PersistenceKind.DURABLE,
+            memory_store=PersistenceKind.DURABLE,
+            activity_journal=PersistenceKind.DURABLE,
+            activity_projection_store=PersistenceKind.EPHEMERAL,
+            presence_store=PersistenceKind.EPHEMERAL,
+            space_occupancy_store=PersistenceKind.EPHEMERAL,
+            relationship_store=PersistenceKind.DURABLE,
+            affect_store=PersistenceKind.DURABLE,
         )
 
     return RuntimeStatePersistencePolicy(
-        account_store="ephemeral",
-        memory_store="ephemeral",
-        activity_journal="ephemeral",
-        activity_projection_store="ephemeral",
-        presence_store="ephemeral",
-        space_occupancy_store="ephemeral",
-        space_binding_store="ephemeral",
-        relationship_store="ephemeral",
-        affect_store="ephemeral",
+        account_store=PersistenceKind.EPHEMERAL,
+        memory_store=PersistenceKind.EPHEMERAL,
+        activity_journal=PersistenceKind.EPHEMERAL,
+        activity_projection_store=PersistenceKind.EPHEMERAL,
+        presence_store=PersistenceKind.EPHEMERAL,
+        space_occupancy_store=PersistenceKind.EPHEMERAL,
+        relationship_store=PersistenceKind.EPHEMERAL,
+        affect_store=PersistenceKind.EPHEMERAL,
     )

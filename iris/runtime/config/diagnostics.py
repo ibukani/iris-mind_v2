@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Literal
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.parsing import env_bool, env_float, parse_bool, parse_float, parse_string
@@ -13,10 +14,16 @@ if TYPE_CHECKING:
 
     from iris.runtime.config.parsing import TomlTable
 
-DiagnosticsMode = Literal["off", "warn", "strict"]
-"""LLM 起動時診断の動作モード。"""
 
-_VALID_DIAGNOSTICS_MODES: frozenset[str] = frozenset({"off", "warn", "strict"})
+class DiagnosticsMode(StrEnum):
+    """LLM 起動時診断の動作モード。"""
+
+    OFF = "off"
+    WARN = "warn"
+    STRICT = "strict"
+
+
+_VALID_DIAGNOSTICS_MODES: frozenset[str] = frozenset({m.value for m in DiagnosticsMode})
 
 
 @dataclass(frozen=True)
@@ -34,7 +41,7 @@ class RuntimeDiagnosticsConfig:
     フラグで、 ``off`` 以外のすべての mode で意味を持つ。
     """
 
-    mode: DiagnosticsMode = "warn"
+    mode: DiagnosticsMode = DiagnosticsMode.WARN
     timeout_seconds: float = 5.0
     warmup_models: bool = False
 
@@ -123,9 +130,9 @@ def _validate_mode(value: str) -> DiagnosticsMode:
     Raises:
         ConfigError: mode が ``off`` / ``warn`` / ``strict`` のいずれでもない場合。
     """
-    for candidate in ("off", "warn", "strict"):
-        if value == candidate:
-            return candidate
+    for mode in DiagnosticsMode:
+        if value == mode.value:
+            return mode
     allowed = ", ".join(sorted(_VALID_DIAGNOSTICS_MODES))
     message = f"Invalid diagnostics.mode: {value}. Allowed values: {allowed}"
     raise ConfigError(message)

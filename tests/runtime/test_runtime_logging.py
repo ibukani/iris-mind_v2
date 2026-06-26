@@ -9,20 +9,20 @@ from loguru import logger
 if TYPE_CHECKING:
     from pathlib import Path
 
-from iris.runtime.config.logging import RuntimeLoggingConfig
+from iris.runtime.config.logging import LogFormat, LogLevel, RuntimeLoggingConfig
 from iris.runtime.observability.logging import configure_runtime_logging
 
 
 def test_configure_runtime_logging_text() -> None:
     """Test configuring text logging without file."""
-    config = RuntimeLoggingConfig(level="DEBUG", format="text")
+    config = RuntimeLoggingConfig(level=LogLevel.DEBUG, format=LogFormat.TEXT)
     # This should not raise an error
     configure_runtime_logging(config)
 
 
 def test_configure_runtime_logging_json() -> None:
     """Test configuring json logging without file."""
-    config = RuntimeLoggingConfig(level="INFO", format="json")
+    config = RuntimeLoggingConfig(level=LogLevel.INFO, format=LogFormat.JSON)
     configure_runtime_logging(config)
 
 
@@ -30,8 +30,8 @@ def test_configure_runtime_logging_with_file(tmp_path: Path) -> None:
     """Test configuring logging with a file path."""
     log_file = tmp_path / "logs" / "iris.log"
     config = RuntimeLoggingConfig(
-        level="INFO",
-        format="json",
+        level=LogLevel.INFO,
+        format=LogFormat.JSON,
         file_path=str(log_file),
     )
     configure_runtime_logging(config)

@@ -15,7 +15,7 @@ from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
 from iris.runtime.config import default_runtime_config
-from iris.runtime.config.state import RuntimeStateConfig
+from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
 from iris.runtime.state.presence import InMemoryPresenceStore
@@ -53,7 +53,7 @@ def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqlite(
     config = default_runtime_config()
     config = replace(
         config,
-        state=RuntimeStateConfig(backend="sqlite", sqlite_path=str(db_path)),
+        state=RuntimeStateConfig(backend=RuntimeStateBackend.SQLITE, sqlite_path=str(db_path)),
     )
 
     stores = wire_runtime_state(config)

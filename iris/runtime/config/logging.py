@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Literal
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.parsing import parse_optional_string, parse_string
@@ -14,47 +15,64 @@ if TYPE_CHECKING:
     from iris.runtime.config.parsing import TomlTable
 
 
+class LogLevel(StrEnum):
+    """ログレベル。"""
+
+    TRACE = "TRACE"
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+
+class LogFormat(StrEnum):
+    """ログフォーマット。"""
+
+    TEXT = "text"
+    JSON = "json"
+
+
 @dataclass(frozen=True)
 class RuntimeLoggingConfig:
     """Loguru ベースのランタイム可観測性設定。"""
 
-    level: str = "INFO"
-    format: Literal["text", "json"] = "text"
+    level: LogLevel = LogLevel.INFO
+    format: LogFormat = LogFormat.TEXT
     file_path: str | None = None
     rotation: str = "10 MB"
     retention: str = "7 days"
 
 
-def validate_level(value: str) -> str:
+def validate_level(value: str) -> LogLevel:
     """ログレベル文字列を検証する。
 
     Returns:
-        str: 正規化された検証済みログレベル。
+        LogLevel: 正規化された検証済みログレベル。
 
     Raises:
         ConfigError: ログレベルが不正な場合。
     """
-    allowed = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
     upper_value = value.upper()
-    if upper_value not in allowed:
-        msg = f"Invalid log level: {value}"
-        raise ConfigError(msg)
-    return upper_value
+    for level in LogLevel:
+        if upper_value == level.value:
+            return level
+    msg = f"Invalid log level: {value}"
+    raise ConfigError(msg)
 
 
-def validate_format(value: str) -> Literal["text", "json"]:
+def validate_format(value: str) -> LogFormat:
     """ログフォーマットを検証する。
 
     Returns:
-        Literal["text", "json"]: 検証済みログフォーマット。
+        LogFormat: 検証済みログフォーマット。
 
     Raises:
         ConfigError: ログフォーマットが不正な場合。
     """
-    if value == "text":
-        return "text"
-    if value == "json":
-        return "json"
+    for fmt in LogFormat:
+        if value == fmt.value:
+            return fmt
     msg = f"Invalid log format: {value}"
     raise ConfigError(msg)
 

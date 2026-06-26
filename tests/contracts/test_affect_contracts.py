@@ -19,7 +19,7 @@ def _unknown_affect_scope() -> AffectScope:
 
 def test_affect_baseline_record_is_immutable() -> None:
     """AffectBaselineRecord is frozen."""
-    record = AffectBaselineRecord(scope="global", valence=0.1)
+    record = AffectBaselineRecord(scope=AffectScope.GLOBAL, valence=0.1)
 
     assert_frozen_field(record, "valence", 0.2)
 
@@ -27,13 +27,13 @@ def test_affect_baseline_record_is_immutable() -> None:
 def test_global_affect_must_not_have_actor_id() -> None:
     """Global affect baseline rejects actor_id."""
     with pytest.raises(ValueError, match="global"):
-        AffectBaselineRecord(scope="global", actor_id=ActorId("actor-1"))
+        AffectBaselineRecord(scope=AffectScope.GLOBAL, actor_id=ActorId("actor-1"))
 
 
 def test_actor_affect_requires_actor_id() -> None:
     """Actor-scoped affect baseline requires actor_id."""
     with pytest.raises(ValueError, match="actor"):
-        AffectBaselineRecord(scope="actor")
+        AffectBaselineRecord(scope=AffectScope.ACTOR)
 
 
 def test_affect_baseline_rejects_unknown_scope() -> None:
@@ -45,18 +45,18 @@ def test_affect_baseline_rejects_unknown_scope() -> None:
 def test_affect_baseline_validates_vad_ranges() -> None:
     """AffectBaselineRecord validates VAD ranges."""
     with pytest.raises(ValueError, match="valence"):
-        AffectBaselineRecord(scope="global", valence=1.1)
+        AffectBaselineRecord(scope=AffectScope.GLOBAL, valence=1.1)
     with pytest.raises(ValueError, match="arousal"):
-        AffectBaselineRecord(scope="global", arousal=-1.1)
+        AffectBaselineRecord(scope=AffectScope.GLOBAL, arousal=-1.1)
     with pytest.raises(ValueError, match="dominance"):
-        AffectBaselineRecord(scope="global", dominance=1.1)
+        AffectBaselineRecord(scope=AffectScope.GLOBAL, dominance=1.1)
 
 
 def test_affect_baseline_preserves_contract_fields() -> None:
     """AffectBaselineRecord preserves scope, values, and provenance."""
     created_at = datetime(2026, 6, 24, tzinfo=UTC)
     record = AffectBaselineRecord(
-        scope="actor",
+        scope=AffectScope.ACTOR,
         actor_id=ActorId("actor-1"),
         mood_label="positive",
         valence=0.4,
@@ -68,7 +68,7 @@ def test_affect_baseline_preserves_contract_fields() -> None:
         updated_at=created_at,
     )
 
-    assert record.scope == "actor"
+    assert record.scope == AffectScope.ACTOR
     assert record.actor_id == ActorId("actor-1")
     assert record.source_observation_id == ObservationId("obs-1")
     assert record.version == 1

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol
 
 from loguru import logger
 
+from iris.core.datetime_utils import now_utc
+
 if TYPE_CHECKING:
+    from datetime import datetime
     from types import TracebackType
 
 
@@ -28,7 +30,7 @@ async def run_scheduler_loop(
     """Run SchedulerRunner periodically until cancelled or stopped."""
     while stop_event is None or not stop_event.is_set():
         with _LogSchedulerRunFailure():
-            await runner.run_once(datetime.now(UTC))
+            await runner.run_once(now_utc())
         try:
             if stop_event is None:
                 await asyncio.sleep(interval_seconds)

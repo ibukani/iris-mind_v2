@@ -12,7 +12,7 @@ from iris.cognitive.cycle.models import (
     StepStatus,
 )
 from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.contracts.affect import AffectBaselineRecord, AffectStore
+from iris.contracts.affect import AffectBaselineRecord, AffectScope, AffectStore
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import AffectSnapshot, WorkspaceFrame
@@ -133,7 +133,7 @@ def _update_baseline(
     """
     if current is None:
         return AffectBaselineRecord(
-            scope="global",
+            scope=AffectScope.GLOBAL,
             mood_label=affect.mood_label,
             valence=affect.valence,
             arousal=affect.arousal,
@@ -142,7 +142,7 @@ def _update_baseline(
             source_observation_id=source_observation_id,
         )
     return AffectBaselineRecord(
-        scope="global",
+        scope=AffectScope.GLOBAL,
         mood_label=affect.mood_label or current.mood_label,
         valence=_smooth(current.valence, affect.valence),
         arousal=_smooth(current.arousal, affect.arousal),

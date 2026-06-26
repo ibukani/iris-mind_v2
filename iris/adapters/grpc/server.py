@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 import time
 from typing import TYPE_CHECKING, override
 
@@ -20,6 +19,7 @@ from iris.adapters.grpc.mappers import (
     runtime_response_to_proto,
 )
 from iris.adapters.llm.diagnostics import LLMProviderError
+from iris.core.datetime_utils import now_utc
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 
 if TYPE_CHECKING:
@@ -154,7 +154,7 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         try:
             envelopes = await self._app_action_broker.poll_actions(
                 provider=request.provider,
-                now=datetime.now(UTC),
+                now=now_utc(),
                 max_items=max_items,
             )
         except AppActionBrokerError as exc:
@@ -178,7 +178,7 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         if self._app_action_broker is None:
             await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "app action broker disabled")
         try:
-            report = delivery_report_from_proto(request, datetime.now(UTC))
+            report = delivery_report_from_proto(request, now_utc())
             await self._app_action_broker.report_action_result(report)
         except GrpcMappingError as exc:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))

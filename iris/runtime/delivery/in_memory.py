@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta
+from enum import StrEnum
 from typing import override
 
 from iris.contracts.actions import ActionResult, ActionStatus, NoAction
@@ -190,33 +191,6 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         self._report_index[delivery_id] = history | {current}
         return released
 
-    @override
-    async def mark_blocked(
-        self,
-        *,
-        delivery_id: DeliveryId,
-        reason: str,
-        blocked_at: datetime,
-    ) -> DeliveryEnvelope:
-        """Mark an item blocked as a terminal state.
-
-        Returns:
-            The blocked envelope, or the existing terminal envelope.
-        """
-        item = self._get(delivery_id)
-        if item.status in TERMINAL_DELIVERY_STATUSES:
-            return item
-        blocked = replace(
-            item,
-            status=DeliveryStatus.BLOCKED,
-            updated_at=blocked_at,
-            lease_id=None,
-            lease_expires_at=None,
-            blocked_reason=reason,
-        )
-        self._items[delivery_id] = blocked
-        return blocked
-
     def _lease_item(
         self,
         item: DeliveryEnvelope,
@@ -287,7 +261,7 @@ type _ReportFingerprint = tuple[
 ]
 
 
-class _ReportOutcome:
+class _ReportOutcome(StrEnum):
     """Report classification outcomes for history reconciliation."""
 
     IDEMPOTENT = "idempotent"
@@ -298,7 +272,7 @@ class _ReportOutcome:
 def _classify_report(
     history: frozenset[_ReportFingerprint],
     current: _ReportFingerprint,
-) -> str:
+) -> _ReportOutcome:
     """Classify a report against recorded history.
 
     Returns:

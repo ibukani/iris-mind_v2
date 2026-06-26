@@ -10,13 +10,13 @@ from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
-from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest
+from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
 from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
+from iris.runtime.config.llm import LLMProvider
 
 if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
-    from iris.runtime.config.llm import LLMProvider
 
 
 class LLMResponseGenerator(ResponseGenerator):
@@ -56,8 +56,8 @@ class LLMResponseGenerator(ResponseGenerator):
         request = LLMRequest(
             model=self._model,
             messages=(
-                LLMMessage(role="system", content=prompt.system_instruction),
-                LLMMessage(role="user", content=_build_user_content(prompt)),
+                LLMMessage(role=LLMRole.SYSTEM, content=prompt.system_instruction),
+                LLMMessage(role=LLMRole.USER, content=_build_user_content(prompt)),
             ),
             temperature=self._temperature,
             max_tokens=self._max_tokens,
@@ -130,15 +130,12 @@ def wire_ollama_llm_client(config: OllamaConfig) -> LLMClient:
     return OllamaLLMClient(config)
 
 
-_LLM_KNOWN_PROVIDERS: tuple[LLMProvider, ...] = ("fake", "ollama", "openai")
-
-
 class LLMClientFactory:
     """プロバイダ固有の LLM クライアントを組み立てる明示的なランタイムファクトリ。"""
 
     def __init__(self) -> None:
         """明示的な LLM クライアントファクトリを作成する。"""
-        self._known_providers = _LLM_KNOWN_PROVIDERS
+        self._known_providers = frozenset(LLMProvider)
 
     def create_client(
         self,
@@ -160,9 +157,9 @@ class LLMClientFactory:
         if model_config.provider not in self._known_providers:
             message = f"Unknown LLM provider: {model_config.provider}"
             raise ConfigError(message)
-        if model_config.provider == "fake":
+        if model_config.provider == LLMProvider.FAKE:
             return _wrap_with_observer(FakeLLMClient(model=model_config.model))
-        if model_config.provider == "ollama":
+        if model_config.provider == LLMProvider.OLLAMA:
             return _wrap_with_observer(
                 OllamaLLMClient(ollama_adapter_config(model_config, runtime_config)),
             )
@@ -190,9 +187,9 @@ class LLMClientFactory:
         if model_config.provider not in self._known_providers:
             message = f"Unknown LLM provider: {model_config.provider}"
             raise ConfigError(message)
-        if model_config.provider == "ollama":
+        if model_config.provider == LLMProvider.OLLAMA:
             return ollama_adapter_config(model_config, runtime_config).model
-        if model_config.provider == "openai":
+        if model_config.provider == LLMProvider.OPENAI:
             return openai_adapter_config(model_config, runtime_config).model
         return model_config.model
 
@@ -219,13 +216,13 @@ def build_provider_diagnostics(
     Raises:
         ConfigError: 未知のプロバイダ名、もしくは adapter 構築失敗時。
     """
-    if model_config.provider not in _LLM_KNOWN_PROVIDERS:
+    if model_config.provider not in frozenset(LLMProvider):
         message = f"Unknown LLM provider for diagnostics: {model_config.provider}"
         raise ConfigError(message)
-    if model_config.provider == "fake":
+    if model_config.provider == LLMProvider.FAKE:
         return None
     try:
-        if model_config.provider == "ollama":
+        if model_config.provider == LLMProvider.OLLAMA:
             return OllamaDiagnostics(ollama_adapter_config(model_config, runtime_config))
         return OpenAIDiagnostics(openai_adapter_config(model_config, runtime_config))
     except OpenAIAdapterError as exc:

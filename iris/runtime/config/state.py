@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Literal
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -15,32 +16,37 @@ if TYPE_CHECKING:
     from iris.runtime.config.parsing import TomlTable
 
 
+class RuntimeStateBackend(StrEnum):
+    """ランタイムstateバックエンド。"""
+
+    MEMORY = "memory"
+    SQLITE = "sqlite"
+
+
 @dataclass(frozen=True)
 class RuntimeStateConfig:
     """永続状態とストレージの設定。"""
 
-    backend: Literal["memory", "sqlite"] = "memory"
+    backend: RuntimeStateBackend = RuntimeStateBackend.MEMORY
     sqlite_path: str = ".iris/runtime/state.sqlite3"
 
 
-_VALID_BACKENDS: tuple[Literal["memory", "sqlite"], ...] = ("memory", "sqlite")
-
-
-def validate_backend(value: str, path: str) -> Literal["memory", "sqlite"]:
-    """バックエンド名を検証し、型付きリテラルを返す。
+def validate_backend(value: str, path: str) -> RuntimeStateBackend:
+    """バックエンド名を検証する。
 
     Args:
         value: 検証対象のバックエンド名。
         path: エラーメッセージに含める設定パス。
 
     Returns:
-        Literal["memory", "sqlite"]: 検証済みバックエンド名。
+        RuntimeStateBackend: 検証済みバックエンド名。
 
     Raises:
         ConfigError: バックエンド名が不正な場合。
     """
-    if value in _VALID_BACKENDS:
-        return value
+    for backend in RuntimeStateBackend:
+        if value == backend.value:
+            return backend
     message = f"Invalid {path}: {value}"
     raise ConfigError(message)
 
@@ -57,10 +63,7 @@ def validate_state_config(config: RuntimeStateConfig) -> RuntimeStateConfig:
     Raises:
         ConfigError: 制約に違反している場合。
     """
-    if config.backend not in {"memory", "sqlite"}:
-        message = f"Invalid state.backend: {config.backend}"
-        raise ConfigError(message)
-    if config.backend == "sqlite" and not config.sqlite_path:
+    if config.backend == RuntimeStateBackend.SQLITE and not config.sqlite_path:
         message = "state.sqlite_path must be non-empty when backend is sqlite"
         raise ConfigError(message)
     return config

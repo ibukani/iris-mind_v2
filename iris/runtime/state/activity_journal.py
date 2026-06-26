@@ -49,25 +49,6 @@ class ActivityJournal(Protocol):
         """Activity eventをjournalへ追加する。"""
         ...
 
-    async def get_by_id(self, activity_id: ActivityId) -> ActivityEventRecord | None:
-        """Activity IDでeventを取得する。"""
-        ...
-
-    async def has_seen_provider_event(
-        self,
-        *,
-        source: str,
-        provider_event_id: str,
-    ) -> bool:
-        """``(source, provider_event_id)`` の dedupe 記録が実装内部にあるか返す。
-
-        実装は bounded window (例: ``InMemoryActivityJournal``) または
-        永続 audit log (例: ``SQLiteActivityJournal``) のいずれでもよく、
-        呼び出し側は戻り値を「同一視 (source, provider_event_id) を
-        append が拒否するかどうか」の判定に用いてよい。
-        """
-        ...
-
 
 class InMemoryActivityJournal(ActivityJournal):
     """process内のbounded activity event journal。
@@ -112,29 +93,6 @@ class InMemoryActivityJournal(ActivityJournal):
             self._provider_events.add(provider_key)
         self._evict_overflow()
         return ActivityAppendResult(accepted=True, event=event)
-
-    @override
-    async def get_by_id(self, activity_id: ActivityId) -> ActivityEventRecord | None:
-        """Activity IDでeventを取得する。
-
-        Returns:
-            window内のevent。evictedまたは未保存の場合はNone。
-        """
-        return self._events_by_id.get(activity_id)
-
-    @override
-    async def has_seen_provider_event(
-        self,
-        *,
-        source: str,
-        provider_event_id: str,
-    ) -> bool:
-        """Provider eventがbounded dedupe window内にあるか返す。
-
-        Returns:
-            window内で見たeventならTrue。
-        """
-        return (source, provider_event_id) in self._provider_events
 
     def _evict_overflow(self) -> None:
         while len(self._event_order) > self._max_events:

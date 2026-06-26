@@ -20,6 +20,7 @@ from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 import iris.runtime.config as config_pkg
 from iris.runtime.config import (
     ConfigError,
+    DiagnosticsMode,
     IrisRuntimeConfig,
     RuntimeConfigOverrides,
     RuntimeModelConfig,
@@ -32,6 +33,7 @@ from iris.runtime.config import (
     normalize_config_path,
     parse_llm_provider,
 )
+from iris.runtime.config.llm import LLMProvider
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.llm import LLMClientFactory
 
@@ -47,7 +49,7 @@ def test_default_config_uses_fake_default_chat() -> None:
     config = default_runtime_config()
 
     assert config.models.default_chat == RuntimeModelConfig(
-        provider="fake",
+        provider=LLMProvider.FAKE,
         model="fake-llm",
         max_output_tokens=512,
     )
@@ -58,12 +60,12 @@ def test_default_config_includes_fast_judge_and_reasoning_slots() -> None:
     config = default_runtime_config()
 
     assert config.models.fast_judge == RuntimeModelConfig(
-        provider="fake",
+        provider=LLMProvider.FAKE,
         model="fake-llm",
         max_output_tokens=128,
     )
     assert config.models.reasoning == RuntimeModelConfig(
-        provider="fake",
+        provider=LLMProvider.FAKE,
         model="fake-llm",
         max_output_tokens=1024,
     )
@@ -85,7 +87,7 @@ def test_toml_sets_default_chat_slot(tmp_path: Path) -> None:
     config = load_runtime_config(config_path, env={})
 
     assert config.models.default_chat == RuntimeModelConfig(
-        provider="ollama",
+        provider=LLMProvider.OLLAMA,
         model="qwen3:8b",
         temperature=0.7,
         max_output_tokens=512,
@@ -153,12 +155,12 @@ def test_toml_sets_fast_judge_and_reasoning_slots(tmp_path: Path) -> None:
     config = load_runtime_config(config_path, env={})
 
     assert config.models.fast_judge == RuntimeModelConfig(
-        provider="ollama",
+        provider=LLMProvider.OLLAMA,
         model="qwen3:4b",
         max_output_tokens=128,
     )
     assert config.models.reasoning == RuntimeModelConfig(
-        provider="ollama",
+        provider=LLMProvider.OLLAMA,
         model="deepseek-r1:8b",
         max_output_tokens=1024,
     )
@@ -218,7 +220,7 @@ def test_env_vars_override_toml_values(tmp_path: Path) -> None:
     config = load_runtime_config(config_path, env=env)
 
     assert config.models.default_chat == RuntimeModelConfig(
-        provider="ollama",
+        provider=LLMProvider.OLLAMA,
         model="env-model",
         temperature=0.2,
         max_output_tokens=128,
@@ -246,7 +248,7 @@ def test_cli_args_override_env_values(tmp_path: Path) -> None:
         config_path,
         env=env,
         overrides=RuntimeConfigOverrides(
-            llm="ollama",
+            llm=LLMProvider.OLLAMA,
             model="cli-model",
             ollama_host="http://cli-host:11434",
         ),
@@ -451,13 +453,13 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
         models=replace(
             base.models,
             default_chat=RuntimeModelConfig(
-                provider="fake",
+                provider=LLMProvider.FAKE,
                 model="slot-model",
                 temperature=0.3,
                 max_output_tokens=77,
             ),
-            fast_judge=RuntimeModelConfig(provider="fake", model="unused-fast"),
-            reasoning=RuntimeModelConfig(provider="fake", model="unused-reasoning"),
+            fast_judge=RuntimeModelConfig(provider=LLMProvider.FAKE, model="unused-fast"),
+            reasoning=RuntimeModelConfig(provider=LLMProvider.FAKE, model="unused-reasoning"),
         ),
     )
     app = build_app_from_config(
@@ -497,7 +499,7 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
         base,
         models=replace(
             base.models,
-            default_chat=RuntimeModelConfig(provider="openai", model="fake-llm"),
+            default_chat=RuntimeModelConfig(provider=LLMProvider.OPENAI, model="fake-llm"),
         ),
     )
     app = build_app_from_config(
@@ -795,7 +797,7 @@ def test_local_ollama_example_enables_diagnostics() -> None:
 
     config = load_runtime_config(local, env={})
 
-    assert config.diagnostics.mode == "warn"
+    assert config.diagnostics.mode == DiagnosticsMode.WARN
     assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
     assert config.diagnostics.warmup_models is False
 
@@ -806,7 +808,7 @@ def test_openai_example_enables_diagnostics() -> None:
 
     config = load_runtime_config(openai, env={})
 
-    assert config.diagnostics.mode == "warn"
+    assert config.diagnostics.mode == DiagnosticsMode.WARN
     assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
     assert config.diagnostics.warmup_models is False
 
@@ -817,7 +819,7 @@ def test_minimal_example_enables_diagnostics() -> None:
 
     config = load_runtime_config(minimal, env={})
 
-    assert config.diagnostics.mode == "warn"
+    assert config.diagnostics.mode == DiagnosticsMode.WARN
     assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
 
 
@@ -850,7 +852,7 @@ def test_env_overrides_toml_and_cli_overrides_env(tmp_path: Path) -> None:
         config_path,
         env=env,
         overrides=RuntimeConfigOverrides(
-            llm="fake",
+            llm=LLMProvider.FAKE,
             model="cli-model",
             ollama_host="http://cli-host:11434",
         ),

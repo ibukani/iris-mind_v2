@@ -22,7 +22,7 @@ from iris.adapters.llm.openai import (
     OpenAILLMClient,
     OpenAIResponsesClient,
 )
-from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
+from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse, LLMRole
 
 
 class StubResponsesResource:
@@ -80,8 +80,8 @@ async def test_openai_client_converts_llm_request_to_responses_api_shape() -> No
     request = LLMRequest(
         model="gpt-test",
         messages=(
-            LLMMessage(role="system", content="system text"),
-            LLMMessage(role="user", content="user text"),
+            LLMMessage(role=LLMRole.SYSTEM, content="system text"),
+            LLMMessage(role=LLMRole.USER, content="user text"),
         ),
         temperature=0.2,
     )

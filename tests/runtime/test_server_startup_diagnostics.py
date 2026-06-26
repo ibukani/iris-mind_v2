@@ -22,6 +22,7 @@ from iris.runtime.config import (
     ConfigError,
     DiagnosticsMode,
     IrisRuntimeConfig,
+    LLMProvider,
     RuntimeDiagnosticsConfig,
     RuntimeModelConfig,
     RuntimeModelsConfig,
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
 def _with_diagnostics(
     config: IrisRuntimeConfig,
     *,
-    mode: DiagnosticsMode = "warn",
+    mode: DiagnosticsMode = DiagnosticsMode.WARN,
     warmup_models: bool = False,
 ) -> IrisRuntimeConfig:
     """Return a copy of ``config`` with the given diagnostics config.
@@ -80,9 +81,9 @@ def _with_ollama_slots(
         Updated runtime config.
     """
     new_models = RuntimeModelsConfig(
-        default_chat=RuntimeModelConfig(provider="ollama", model=model),
-        fast_judge=RuntimeModelConfig(provider="ollama", model=model),
-        reasoning=RuntimeModelConfig(provider="ollama", model=model),
+        default_chat=RuntimeModelConfig(provider=LLMProvider.OLLAMA, model=model),
+        fast_judge=RuntimeModelConfig(provider=LLMProvider.OLLAMA, model=model),
+        reasoning=RuntimeModelConfig(provider=LLMProvider.OLLAMA, model=model),
     )
     return replace(config, models=new_models)
 
@@ -217,7 +218,9 @@ def test_serve_invokes_run_startup_diagnostics_before_components(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """serve() must call run_startup_diagnostics() before building components."""
-    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="warn"))
+    config = _with_ollama_slots(
+        _with_diagnostics(default_runtime_config(), mode=DiagnosticsMode.WARN)
+    )
     call_order: list[str] = []
 
     async def fake_runner(_: IrisRuntimeConfig) -> StartupDiagnosticsReport:
@@ -296,7 +299,9 @@ async def test_run_startup_diagnostics_continues_when_fail_fast_false(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``mode="warn"`` should not raise even if every outcome fails."""
-    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="warn"))
+    config = _with_ollama_slots(
+        _with_diagnostics(default_runtime_config(), mode=DiagnosticsMode.WARN)
+    )
     monkeypatch.setattr(
         "iris.runtime.observability.diagnostics.build_provider_diagnostics",
         _stub_factory(status=ReadinessStatus.FAIL, issue_code="daemon_unreachable"),
@@ -313,7 +318,9 @@ async def test_run_startup_diagnostics_aborts_when_fail_fast_true(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``mode="strict"`` should raise ``ConfigError`` on any FAIL outcome."""
-    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="strict"))
+    config = _with_ollama_slots(
+        _with_diagnostics(default_runtime_config(), mode=DiagnosticsMode.STRICT)
+    )
     monkeypatch.setattr(
         "iris.runtime.observability.diagnostics.build_provider_diagnostics",
         _stub_factory(status=ReadinessStatus.FAIL, issue_code="daemon_unreachable"),
@@ -356,7 +363,7 @@ async def test_warn_mode_emits_issue_warnings(
     config = _with_ollama_slots(
         _with_diagnostics(
             default_runtime_config(),
-            mode="warn",
+            mode=DiagnosticsMode.WARN,
         )
     )
     monkeypatch.setattr(
@@ -375,7 +382,9 @@ async def test_warn_mode_does_not_raise_on_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``mode="warn"`` returns a report even when every outcome fails."""
-    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="warn"))
+    config = _with_ollama_slots(
+        _with_diagnostics(default_runtime_config(), mode=DiagnosticsMode.WARN)
+    )
     monkeypatch.setattr(
         "iris.runtime.observability.diagnostics.build_provider_diagnostics",
         _stub_factory(status=ReadinessStatus.FAIL, issue_code="daemon_unreachable"),
@@ -394,7 +403,9 @@ async def test_warn_mode_does_not_raise_on_failure(
 @pytest.mark.anyio
 async def test_off_mode_skips_external_checks() -> None:
     """``mode="off"`` returns an empty report and does not call factory."""
-    config = _with_ollama_slots(_with_diagnostics(default_runtime_config(), mode="off"))
+    config = _with_ollama_slots(
+        _with_diagnostics(default_runtime_config(), mode=DiagnosticsMode.OFF)
+    )
 
     report = await run_startup_diagnostics(config)
 

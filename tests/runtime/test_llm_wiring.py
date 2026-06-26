@@ -11,6 +11,7 @@ from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
 from iris.cognitive.action.response import ResponsePrompt
 from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime_config
+from iris.runtime.config.llm import LLMProvider
 from iris.runtime.wiring.llm import (
     LLMClientFactory,
     LLMResponseGenerator,
@@ -73,7 +74,7 @@ def _model_config_with_unknown_provider() -> RuntimeModelConfig:
     # RuntimeModelConfig is frozen and provider is typed as LLMProvider Literal.
     # To test the unknown-provider error path we bypass the dataclass invariant
     # by directly mutating the underlying __dict__ through object.__setattr__.
-    model_config = RuntimeModelConfig(provider="fake", model="x")
+    model_config = RuntimeModelConfig(provider=LLMProvider.FAKE, model="x")
     model_config.__dict__["provider"] = "unknown"
     return model_config
 
@@ -97,7 +98,7 @@ def test_llm_client_factory_resolve_model_unknown_provider() -> None:
 def test_ollama_adapter_config_replaces_fake_llm_model() -> None:
     """ollama_adapter_config replaces fake-llm with the Ollama default model."""
     config = default_runtime_config()
-    model_config = RuntimeModelConfig(provider="ollama", model="fake-llm")
+    model_config = RuntimeModelConfig(provider=LLMProvider.OLLAMA, model="fake-llm")
     result = ollama_adapter_config(model_config, config)
     assert result.model == OllamaConfig().model
 
@@ -105,7 +106,7 @@ def test_ollama_adapter_config_replaces_fake_llm_model() -> None:
 def test_openai_adapter_config_replaces_fake_llm_model() -> None:
     """openai_adapter_config replaces fake-llm with the OpenAI default model."""
     config = default_runtime_config()
-    model_config = RuntimeModelConfig(provider="openai", model="fake-llm")
+    model_config = RuntimeModelConfig(provider=LLMProvider.OPENAI, model="fake-llm")
     result = openai_adapter_config(model_config, config)
     assert result.model == "gpt-5-mini"
 
@@ -113,7 +114,7 @@ def test_openai_adapter_config_replaces_fake_llm_model() -> None:
 def test_openai_adapter_config_uses_runtime_max_tokens() -> None:
     """openai_adapter_config uses runtime max_output_tokens when model config has None."""
     config = default_runtime_config()
-    model_config = RuntimeModelConfig(provider="openai", model="gpt-test")
+    model_config = RuntimeModelConfig(provider=LLMProvider.OPENAI, model="gpt-test")
     result = openai_adapter_config(model_config, config)
     assert result.max_output_tokens == config.openai.max_output_tokens
 

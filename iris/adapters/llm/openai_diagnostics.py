@@ -11,7 +11,7 @@ explanatory issue.
 
 from __future__ import annotations
 
-from typing import Protocol, TypeGuard, override
+from typing import Protocol, override
 
 from iris.adapters.llm.diagnostics import (
     LLMProviderDiagnostics,
@@ -25,6 +25,7 @@ from iris.adapters.llm.openai import (
     OpenAIConfig,
     openai_sdk,
 )
+from iris.adapters.llm.type_utils import is_object_sequence
 
 _OPENAI_DIAGNOSTICS_PROVIDER = "openai"
 
@@ -277,19 +278,6 @@ def _aggregate_severity(issues: tuple[ProviderDiagnosticIssue, ...]) -> Readines
     return ReadinessStatus.SKIPPED
 
 
-def _is_object_sequence(value: object) -> TypeGuard[list[object] | tuple[object, ...]]:
-    """Narrow an object to a list or tuple of arbitrary objects.
-
-    Runtime check uses ``isinstance`` against the base sequence types.
-    The element type is widened to ``object`` because the runtime cannot
-    verify the inner type parameters of the openai SDK's page object.
-
-    Returns:
-        True if value is a list or tuple, narrowing the element type to object.
-    """
-    return isinstance(value, (list, tuple))
-
-
 def _extract_model_ids(listed: object) -> frozenset[str] | None:
     """Extract model ids from the openai ``/models`` listing.
 
@@ -301,7 +289,7 @@ def _extract_model_ids(listed: object) -> frozenset[str] | None:
         does not match the expected shape.
     """
     data_value: object = getattr(listed, "data", None)
-    if not _is_object_sequence(data_value):
+    if not is_object_sequence(data_value):
         return None
     names: set[str] = set()
     for entry in data_value:

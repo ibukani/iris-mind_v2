@@ -5,22 +5,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from dataclasses import dataclass
-from datetime import datetime
 import json
 from pathlib import Path
 import sqlite3
 import threading
 from typing import TYPE_CHECKING, ClassVar, override
 
-from iris.contracts.activity import ActivityEventRecord, ActivityKind
-from iris.core.ids import (
-    AccountId,
-    ActivityId,
-    ActorId,
-    DeviceId,
-    ObservationId,
-    SpaceId,
-)
 from iris.runtime.state.activity_journal import (
     ActivityAppendResult,
     ActivityAppendSkipReason,
@@ -29,6 +19,8 @@ from iris.runtime.state.activity_journal import (
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+
+    from iris.contracts.activity import ActivityEventRecord
 
 type MetadataMapping = dict[str, str]
 type JsonStorageMapping = dict[str, str]
@@ -178,40 +170,6 @@ class SQLiteActivityJournal(ActivityJournal):
         """
         return await asyncio.to_thread(self._append_sync, event)
 
-    @override
-    async def get_by_id(self, activity_id: ActivityId) -> ActivityEventRecord | None:
-        """activity_idでeventを取得する。
-
-        Args:
-            activity_id: 取得対象のactivity ID。
-
-        Returns:
-            ActivityEventRecord | None: 存在すればevent、なければNone。
-        """
-        return await asyncio.to_thread(self._get_by_id_sync, activity_id)
-
-    @override
-    async def has_seen_provider_event(
-        self,
-        *,
-        source: str,
-        provider_event_id: str,
-    ) -> bool:
-        """Provider eventを受理済みか返す。
-
-        Args:
-            source: providerのsource識別子。
-            provider_event_id: provider側のevent ID。
-
-        Returns:
-            bool: 受理済みならTrue。
-        """
-        return await asyncio.to_thread(
-            self._has_seen_provider_event_sync,
-            source=source,
-            provider_event_id=provider_event_id,
-        )
-
     def _append_sync(self, event: ActivityEventRecord) -> ActivityAppendResult:
         provider_key = _provider_key(event)
         payload = _serialize_event(event)
@@ -292,34 +250,6 @@ class SQLiteActivityJournal(ActivityJournal):
                     json.dumps(_payload_to_json_dict(payload)),
                 ),
             )
-
-    def _get_by_id_sync(self, activity_id: ActivityId) -> ActivityEventRecord | None:
-        with self._transaction() as conn:
-            cursor = conn.execute(
-                "SELECT * FROM activity_events WHERE activity_id = ?",
-                (str(activity_id),),
-            )
-            row: sqlite3.Row | None = cursor.fetchone()
-        if row is None:
-            return None
-        return _row_to_event(row)
-
-    def _has_seen_provider_event_sync(
-        self,
-        *,
-        source: str,
-        provider_event_id: str,
-    ) -> bool:
-        with self._transaction() as conn:
-            cursor = conn.execute(
-                """
-                SELECT activity_id FROM activity_events
-                WHERE source = ? AND provider_event_id = ?
-                """,
-                (source, provider_event_id),
-            )
-            row: sqlite3.Row | None = cursor.fetchone()
-        return row is not None
 
 
 def _provider_key(event: ActivityEventRecord) -> tuple[str, str] | None:
@@ -414,139 +344,3 @@ def _payload_to_json_dict(payload: _EventPayload) -> JsonStorageMapping:
         "received_at": payload.received_at,
         "metadata": json.dumps(payload.metadata),
     }
-
-
-def _json_dict_to_payload(data: JsonStorageMapping) -> _EventPayload:
-    """JSON dictをpayloadへ逆変換する。
-
-    Args:
-        data: JSONから読み出したdict。
-
-    Returns:
-        _EventPayload: 復元したpayload。
-    """
-    provider_sequence_raw = data["provider_sequence"]
-    provider_sequence: int | None = int(provider_sequence_raw) if provider_sequence_raw else None
-    metadata_raw = data["metadata"]
-    metadata: MetadataMapping = _loads_metadata_mapping(metadata_raw) if metadata_raw else {}
-    return _EventPayload(
-        observation_id=data["observation_id"] or None,
-        provider_event_id=data["provider_event_id"] or None,
-        provider_sequence=provider_sequence,
-        actor_id=data["actor_id"] or None,
-        account_id=data["account_id"] or None,
-        device_id=data["device_id"] or None,
-        space_id=data["space_id"] or None,
-        source=data["source"] or None,
-        kind=data["kind"],
-        occurred_at=data["occurred_at"],
-        received_at=data["received_at"],
-        metadata=metadata,
-    )
-
-
-def _load_json_string_dict(value: str) -> dict[str, str]:
-    """JSON文字列を ``dict[str, str]`` として読み出すadapter。
-
-    キーと値を ``str`` 化してtyped dictへ変換する。value が ``None`` の場合は
-    空文字列を格納する。JSON構文エラーは ``json.JSONDecodeError``
-    (``ValueError``) としてそのまま伝搬する。
-
-    Args:
-        value: JSON object をエンコードした文字列。
-
-    Returns:
-        dict[str, str]: キー・値を ``str`` 化したJSON object。
-    """
-    parsed: dict[str, str] = json.loads(value, object_pairs_hook=_json_pairs_to_str_str)
-    return parsed
-
-
-def _json_pairs_to_str_str(pairs: list[tuple[object, object]]) -> dict[str, str]:
-    """``object_pairs_hook`` として dict を ``dict[str, str]`` へ変換する。
-
-    Args:
-        pairs: ``json.loads`` が渡す ``(key, value)`` ペア列。
-
-    Returns:
-        dict[str, str]: キーと値を ``str`` 化したdict。
-    """
-    result: dict[str, str] = {}
-    for raw_key, raw_value in pairs:
-        result[str(raw_key)] = "" if raw_value is None else str(raw_value)
-    return result
-
-
-def _loads_metadata_mapping(value: str) -> MetadataMapping:
-    """Activity payload内のmetadata JSON文字列を ``Mapping[str, str]`` として読み出す。
-
-    Args:
-        value: ``Mapping[str, str]`` をJSONエンコードした文字列。
-
-    Returns:
-        MetadataMapping: 読み出した ``Mapping[str, str]``。
-    """
-    return _load_json_string_dict(value)
-
-
-def _row_to_event(row: sqlite3.Row) -> ActivityEventRecord:
-    """SQLite rowをActivityEventRecordへ変換する。
-
-    Args:
-        row: SQLiteから取得したrow。
-
-    Returns:
-        ActivityEventRecord: 復元したevent。
-
-    Raises:
-        TypeError: rowが必須フィールドをstr型として持たない場合。
-    """
-    raw_json_value: object = row["payload_json"]
-    if not isinstance(raw_json_value, str):
-        message = "activity_events.payload_json must be a string"
-        raise TypeError(message)
-    raw_dict: JsonStorageMapping = _loads_json_storage_mapping(raw_json_value)
-    payload = _json_dict_to_payload(raw_dict)
-    activity_id_value: object = row["activity_id"]
-    if not isinstance(activity_id_value, str):
-        message = "activity_events.activity_id must be a string"
-        raise TypeError(message)
-    return ActivityEventRecord(
-        activity_id=ActivityId(activity_id_value),
-        observation_id=ObservationId(payload.observation_id) if payload.observation_id else None,
-        provider_event_id=payload.provider_event_id,
-        provider_sequence=payload.provider_sequence,
-        actor_id=ActorId(payload.actor_id) if payload.actor_id else None,
-        account_id=AccountId(payload.account_id) if payload.account_id else None,
-        device_id=DeviceId(payload.device_id) if payload.device_id else None,
-        space_id=SpaceId(payload.space_id) if payload.space_id else None,
-        source=payload.source,
-        kind=ActivityKind(payload.kind),
-        occurred_at=_parse_iso(payload.occurred_at),
-        received_at=_parse_iso(payload.received_at),
-        metadata=payload.metadata,
-    )
-
-
-def _loads_json_storage_mapping(value: str) -> JsonStorageMapping:
-    """Activity payload JSON文字列を ``Mapping[str, str]`` として読み出す。
-
-    Args:
-        value: ``Mapping[str, str]`` をJSONエンコードした文字列。
-
-    Returns:
-        JsonStorageMapping: 読み出した ``Mapping[str, str]``。
-    """
-    return _load_json_string_dict(value)
-
-
-def _parse_iso(value: str) -> datetime:
-    """ISO 8601文字列をdatetimeへ変換する。
-
-    Args:
-        value: ISO 8601文字列。
-
-    Returns:
-        datetime: パース済みdatetime。
-    """
-    return datetime.fromisoformat(value)

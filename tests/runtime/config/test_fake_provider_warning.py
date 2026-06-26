@@ -8,7 +8,7 @@ from iris.runtime.config import (
     all_model_slots_are_fake,
     default_runtime_config,
 )
-from iris.runtime.config.llm import RuntimeModelConfig
+from iris.runtime.config.llm import LLMProvider, RuntimeModelConfig
 
 
 def test_default_config_is_all_fake() -> None:
@@ -24,7 +24,7 @@ def test_mixed_provider_config_is_not_all_fake() -> None:
         config,
         models=replace(
             config.models,
-            default_chat=RuntimeModelConfig(provider="openai", model="gpt-5-mini"),
+            default_chat=RuntimeModelConfig(provider=LLMProvider.OPENAI, model="gpt-5-mini"),
         ),
     )
     assert all_model_slots_are_fake(config) is False
@@ -37,12 +37,12 @@ def test_all_real_provider_config_is_not_all_fake() -> None:
         config,
         models=replace(
             config.models,
-            default_chat=RuntimeModelConfig(provider="openai", model="gpt-5-mini"),
+            default_chat=RuntimeModelConfig(provider=LLMProvider.OPENAI, model="gpt-5-mini"),
             fast_judge=RuntimeModelConfig(
-                provider="ollama", model="qwen3:8b", max_output_tokens=128
+                provider=LLMProvider.OLLAMA, model="qwen3:8b", max_output_tokens=128
             ),
             reasoning=RuntimeModelConfig(
-                provider="ollama", model="qwen3:8b", max_output_tokens=1024
+                provider=LLMProvider.OLLAMA, model="qwen3:8b", max_output_tokens=1024
             ),
         ),
     )
@@ -56,7 +56,7 @@ def test_partial_fake_config_is_not_all_fake() -> None:
         config,
         models=replace(
             config.models,
-            default_chat=RuntimeModelConfig(provider="ollama", model="qwen3:8b"),
+            default_chat=RuntimeModelConfig(provider=LLMProvider.OLLAMA, model="qwen3:8b"),
         ),
     )
     assert all_model_slots_are_fake(config) is False

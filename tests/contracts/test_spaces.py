@@ -6,10 +6,9 @@ from types import MappingProxyType
 
 from iris.contracts.spaces import (
     InteractionSpace,
-    SpaceBinding,
     SpaceKind,
 )
-from iris.core.ids import ExternalRef, SpaceId
+from iris.core.ids import SpaceId
 from tests.helpers.immutability import assert_frozen_field
 from tests.helpers.mapping import assert_mapping_rejects_item_assignment
 
@@ -83,21 +82,3 @@ def test_interaction_space_metadata_is_defensively_copied() -> None:
 
     assert space.metadata["topic"] == "general"
     assert_mapping_rejects_item_assignment(space.metadata)
-
-
-def test_space_binding_metadata_is_defensively_copied() -> None:
-    """SpaceBinding defensively copies metadata."""
-    metadata = {"region": "us-east"}
-    binding = SpaceBinding(
-        provider="discord",
-        provider_space_ref=ExternalRef("guild-1/channel-1"),
-        space_id=SpaceId("space-1"),
-        display_name="general",
-        space_kind=SpaceKind.TEXT_CHANNEL,
-        metadata=metadata,
-    )
-
-    metadata["region"] = "changed"
-
-    assert binding.metadata["region"] == "us-east"
-    assert_mapping_rejects_item_assignment(binding.metadata)

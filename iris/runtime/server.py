@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING
@@ -14,6 +13,7 @@ from loguru import logger
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
 
     import grpc
 
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
+from iris.core.datetime_utils import now_utc
 from iris.runtime.config import (
     IrisRuntimeConfig,
     RuntimeConfigOverrides,
@@ -85,7 +86,7 @@ def build_runtime_service(
         構成済みの IrisRuntimeService。
     """
     trust_policy = ObservationTrustPolicy()
-    current_now = now or _utc_now
+    current_now = now or now_utc
     activity_integrator = ActivityIntegrator(
         journal=stores.activity_journal,
         projections=stores.activity_projection_store,
@@ -132,11 +133,6 @@ def build_runtime_service(
         workspace_context_assembler=workspace_context_assembler,
         activity_event_reaction_handler=activity_event_reaction_handler,
     )
-
-
-def _utc_now() -> datetime:
-    """Return current UTC time."""
-    return datetime.now(UTC)
 
 
 def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:

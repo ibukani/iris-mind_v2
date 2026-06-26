@@ -19,7 +19,6 @@ from iris.runtime.state.presence import PresenceStore
 
 if TYPE_CHECKING:
     from iris.contracts.activity import ActivityEventRecord
-    from iris.core.ids import SpaceId
 
 pytestmark = pytest.mark.anyio
 
@@ -84,19 +83,6 @@ class _FakeActivityProjectionStore(ActivityProjectionStore):
             常に None。
         """
         _ = actor_id
-        return None
-
-    @override
-    async def latest_for_space(
-        self,
-        space_id: SpaceId,
-    ) -> ActivityEventRecord | None:
-        """Return None for tests.
-
-        Returns:
-            常に None。
-        """
-        _ = space_id
         return None
 
 

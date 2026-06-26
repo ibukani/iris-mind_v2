@@ -12,7 +12,7 @@ from iris.adapters.llm.observability import (
     LoggingRequestObserver,
     ObservableLLMClient,
 )
-from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
+from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse, LLMRole
 from tests.helpers.approx import approx
 from tests.helpers.exact_eq import assert_exact_eq
 from tests.helpers.private_access import get_private_attr_as
@@ -62,7 +62,7 @@ def _build_request(model: str = "test-model") -> LLMRequest:
     """
     return LLMRequest(
         model=model,
-        messages=(LLMMessage(role="user", content="hello"),),
+        messages=(LLMMessage(role=LLMRole.USER, content="hello"),),
     )
 
 

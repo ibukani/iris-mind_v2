@@ -16,7 +16,7 @@ from iris.contracts.observations import (
     PresenceSignalObservation,
 )
 from iris.contracts.presence import PresenceStatus
-from iris.core.ids import ActivityId, ActorId, ObservationId, SessionId, SpaceId
+from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
 from iris.runtime.app import IrisApp
 from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
@@ -127,7 +127,7 @@ async def test_runtime_service_does_not_mutate_state_without_capabilities() -> N
     assert not activity_response.output.is_sendable
     assert not presence_response.output.is_sendable
     assert await projections.latest_for_actor(ActorId("actor-1")) is None
-    assert await journal.get_by_id(_activity_id()) is None
+
     assert (
         await presence_store.get_presence_for_actor(
             ActorId("actor-1"),
@@ -206,10 +206,6 @@ def _ingress(
         authenticated=authenticated,
         capabilities=frozenset(capabilities),
     )
-
-
-def _activity_id() -> ActivityId:
-    return ActivityId("activity:obs-activity")
 
 
 def _now() -> datetime:
