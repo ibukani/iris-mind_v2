@@ -220,7 +220,7 @@ def test_runtime_service_does_not_directly_import_low_level_effects() -> None:
 
 
 def test_runtime_observability_boundary_modules_do_not_import_concrete_implementations() -> None:
-    """observability boundary API modules は concrete implementation に依存しない。"""
+    """Observability boundary API modules は concrete implementation に依存しない。"""
     violations = [
         f"{path.relative_to(PROJECT_ROOT).as_posix()}: imports {imported}"
         for path in OBSERVABILITY_BOUNDARY_MODULES
@@ -229,9 +229,8 @@ def test_runtime_observability_boundary_modules_do_not_import_concrete_implement
         if imported.startswith(forbidden)
     ]
 
-    assert not violations, (
-        "runtime observability boundary modules must stay pure:\n"
-        + "\n".join(violations)
+    assert not violations, "runtime observability boundary modules must stay pure:\n" + "\n".join(
+        violations
     )
 
 
