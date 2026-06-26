@@ -12,6 +12,10 @@ Iris は長時間動く Cognitive Runtime であり、1 request の流れ、LLM 
 
 Runtime の可観測性は `iris/runtime/observability/` に置く。runtime business code は `RuntimeLogger`、`RuntimeObservationObserver`、`RuntimeLLMRequestObserver` の typed boundary に依存し、Loguru への直接依存を広げない。
 
+`IrisRuntimeService` は observability boundary API に依存してよい。具体例は `RuntimeTraceContext`、`bind_trace_context`、`trace_extra` を置く `iris.runtime.observability.context` と、`RuntimeObservationObserver` を置く `iris.runtime.observability.ports`。一方で `LoguruRuntimeLogger`、`LoggingRuntimeObservationObserver`、`RuntimeLLMRequestObserver`、startup diagnostics runner、exporter/backend 実装、provider-specific diagnostics などの concrete observability implementation には依存しない。
+
+この境界により、service は typed port / context 経由で観測し、server / wiring が concrete observer を設置する。observability implementation は routing、retry、safety、delivery、memory behavior を決めない。
+
 `correlation_id` を primary trace key とする。`ObservationEnvelope.correlation_id` がある場合はそれを使い、ない場合は `observation_id` を trace fallback として使う。trace context は `contextvars` で request scope に束縛する。
 
 ログに出してよいものは安全な ID と metadata に限定する。例:

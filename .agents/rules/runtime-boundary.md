@@ -8,6 +8,8 @@ Do not add new `isinstance(observation, ...)`, `type(observation) is ...`, or `m
 
 Do not inject concrete activity, presence, occupancy, event-reaction, or future runtime-effect implementations directly into `IrisRuntimeService`. Use typed runtime ports, pipelines, routers, providers, runtimes, policies, gates, or app boundaries.
 
+`IrisRuntimeService` may import runtime-local observability boundary APIs such as `iris.runtime.observability.context` and `iris.runtime.observability.ports`. It must not import concrete observability implementations, logging backends, LLM observers, diagnostics runners, exporters, or provider-specific diagnostic implementations.
+
 Runtime responsibilities must remain separated:
 
 - observation integration

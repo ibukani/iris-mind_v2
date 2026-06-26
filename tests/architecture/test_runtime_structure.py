@@ -82,15 +82,12 @@ RUNTIME_SERVICE_FORBIDDEN_DIRECT_IMPORTS: frozenset[str] = frozenset(
         "iris.presentation",
         "iris.runtime.delivery",
         "iris.runtime.lifecycle",
-        "iris.runtime.observability",
+        "iris.runtime.observability.diagnostics",
+        "iris.runtime.observability.events",
+        "iris.runtime.observability.llm",
+        "iris.runtime.observability.logger",
         "iris.runtime.scheduler",
         "iris.runtime.state",
-    },
-)
-RUNTIME_SERVICE_ALLOWED_OBSERVABILITY_IMPORTS: frozenset[str] = frozenset(
-    {
-        "iris.runtime.observability.context",
-        "iris.runtime.observability.ports",
     },
 )
 
@@ -194,7 +191,6 @@ def test_runtime_service_does_not_directly_import_low_level_effects() -> None:
         for imported in imports
         for forbidden in RUNTIME_SERVICE_FORBIDDEN_DIRECT_IMPORTS
         if imported.startswith(forbidden)
-        and imported not in RUNTIME_SERVICE_ALLOWED_OBSERVABILITY_IMPORTS
     ]
 
     assert not violations, (
