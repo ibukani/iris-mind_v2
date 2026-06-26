@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import PerceptionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
+from iris.contracts.observations import ActorMessageObservation
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
@@ -25,8 +26,11 @@ class SimplePerceptionStep(PipelineStep[PerceptionResult]):
             PerceptionResult: 観測から抽出されたテキストとメタデータ。
         """
         obs = frame.observation
-        raw_text: object = getattr(obs, "text", None)
-        text: str | None = raw_text if isinstance(raw_text, str) else str(obs.kind)
+
+        if isinstance(obs, ActorMessageObservation):
+            text: str | None = obs.text
+        else:
+            text = str(obs.kind)
         return PerceptionResult(
             step_name=self.name,
             status=StepStatus.OK,
