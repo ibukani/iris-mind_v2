@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
     from iris.contracts.identity import Identity
     from iris.contracts.observations import Observation
-    from iris.contracts.spaces import InteractionSpace, SpaceBinding
+    from iris.contracts.spaces import InteractionSpace
     from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 
 
@@ -114,31 +114,6 @@ class SpaceResolver(Protocol):
         space_ref: ExternalSpaceRef,
     ) -> InteractionSpace:
         """外部provider space refから型付きInteractionSpaceを返す。"""
-        ...
-
-
-class SpaceBindingStore(Protocol):
-    """Reserved extension protocol for external space binding storage.
-
-    The default Iris-Mind runtime does not persist or wire SpaceBinding.
-    Default space resolution is ephemeral and deterministic from
-    provider + provider_space_ref.
-    """
-
-    async def get_by_external_ref(
-        self,
-        *,
-        provider: str,
-        provider_space_ref: ExternalRef,
-    ) -> SpaceBinding | None:
-        """Get a space binding by provider and external space ref."""
-        ...
-
-    async def put(
-        self,
-        binding: SpaceBinding,
-    ) -> SpaceBinding:
-        """Create or replace a space binding."""
         ...
 
 
