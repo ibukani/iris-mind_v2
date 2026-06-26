@@ -6,14 +6,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from iris.contracts.activity import ActivityKind
-from iris.contracts.observations import ActivityEventObservation
 from iris.contracts.space_occupancy import SpaceOccupant
+from iris.runtime.observation_router import activity_event_observation
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
-    from iris.contracts.observations import Observation
+    from iris.contracts.observations import ActivityEventObservation, Observation
     from iris.runtime.ingress.observation_ingress import ObservationIngressContext
     from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
     from iris.runtime.state.space_occupancy import SpaceOccupancyStore
@@ -59,11 +59,12 @@ class SpaceOccupancyIntegrator:
 
 
 def _voice_activity(observation: Observation) -> ActivityEventObservation | None:
-    if not isinstance(observation, ActivityEventObservation):
+    activity = activity_event_observation(observation)
+    if activity is None:
         return None
-    if observation.activity_kind not in {
+    if activity.activity_kind not in {
         ActivityKind.VOICE_JOINED,
         ActivityKind.VOICE_LEFT,
     }:
         return None
-    return observation
+    return activity

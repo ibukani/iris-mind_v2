@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.contracts.observations import PresenceSignalObservation
 from iris.contracts.presence import PresenceSnapshot
+from iris.runtime.observation_router import presence_signal_observation
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -32,9 +32,10 @@ class PresenceIntegrator:
         ingress: ObservationIngressContext,
     ) -> None:
         """Resolved actorを持つtrusted PresenceSignalObservationだけを統合する。"""
-        if not isinstance(observation, PresenceSignalObservation):
+        presence = presence_signal_observation(observation)
+        if presence is None:
             return
-        context = observation.context
+        context = presence.context
         if not self.trust_policy.can_integrate_presence_signal(ingress):
             return
         if context.actor is None:
@@ -46,10 +47,10 @@ class PresenceIntegrator:
                 account_id=context.account_id,
                 device_id=context.device_id,
                 source=context.source,
-                status=observation.status,
-                observed_at=observation.occurred_at,
+                status=presence.status,
+                observed_at=presence.occurred_at,
                 received_at=self.now(),
-                expires_at=observation.expires_at,
-                metadata=observation.metadata,
+                expires_at=presence.expires_at,
+                metadata=presence.metadata,
             )
         )

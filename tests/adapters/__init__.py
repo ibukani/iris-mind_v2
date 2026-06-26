@@ -1,1 +1,1 @@
-"""Irisコグニティブランタイムのアダプター層テスト。"""
+"""Adapter tests package."""

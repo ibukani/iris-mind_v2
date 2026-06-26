@@ -5,11 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.contracts.observations import ActivityEventObservation, Observation
-
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import SituationContextSnapshot
     from iris.contracts.actions import PresentedOutput
+    from iris.contracts.observations import ActivityEventObservation
     from iris.features.event_reaction.planner import EventReactionPlanner
     from iris.presentation.event_reaction import EventReactionPresenter
 
@@ -23,7 +22,7 @@ class EventReactionRunner:
 
     async def react(
         self,
-        observation: Observation,
+        observation: ActivityEventObservation,
         *,
         situation_context: SituationContextSnapshot,
     ) -> PresentedOutput | None:
@@ -36,9 +35,6 @@ class EventReactionRunner:
         Returns:
             PresentedOutput | None: 反応があれば出力、なければNone。
         """
-        if not isinstance(observation, ActivityEventObservation):
-            return None
-
         decision = self.planner.plan(
             observation,
             availability=situation_context.availability,

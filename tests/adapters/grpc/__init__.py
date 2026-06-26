@@ -1,0 +1,1 @@
+"""gRPC adapter tests package."""
