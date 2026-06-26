@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass
 import os
-from typing import Any, Protocol
+from typing import Any, NotRequired, Protocol, TypedDict
 
 from iris.adapters.llm.diagnostics import (
     LLMProviderAuthenticationError,
@@ -18,6 +18,23 @@ from iris.adapters.llm.diagnostics import (
 )
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 from iris.adapters.llm.type_utils import is_object_mapping, is_object_sequence
+
+
+class OpenAIProviderMessage(TypedDict):
+    """OpenAIプロバイダに送信するメッセージの型。"""
+
+    role: str
+    content: str
+
+
+class OpenAIProviderRequestPayload(TypedDict):
+    """OpenAIプロバイダに送信するリクエストの型。"""
+
+    model: str
+    input: tuple[OpenAIProviderMessage, ...]
+    temperature: float
+    max_output_tokens: NotRequired[int]
+
 
 _openai: Any = None
 with contextlib.suppress(ImportError):
@@ -170,10 +187,10 @@ class OpenAILLMClient:
             return self._config.model
         return request.model or self._config.model
 
-    def _to_provider_request(self, request: LLMRequest) -> dict[str, object]:
+    def _to_provider_request(self, request: LLMRequest) -> OpenAIProviderRequestPayload:
         max_output_tokens = request.max_tokens or self._config.max_output_tokens
         temperature = request.temperature if request.temperature is not None else 0.0
-        provider_request: dict[str, object] = {
+        provider_request: OpenAIProviderRequestPayload = {
             "model": self._request_model(request),
             "input": tuple(_to_provider_message(message) for message in request.messages),
             "temperature": temperature,
@@ -183,7 +200,7 @@ class OpenAILLMClient:
         return provider_request
 
 
-def _to_provider_message(message: LLMMessage) -> dict[str, str]:
+def _to_provider_message(message: LLMMessage) -> OpenAIProviderMessage:
     return {
         "role": message.role,
         "content": message.content,
