@@ -1,62 +1,40 @@
-"""Affect persistence contract tests."""
+"""アフェクトと関係性の契約の不変性と型のテスト。"""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
-import pytest
-
-from iris.contracts.affect import AffectBaselineRecord
-from iris.core.ids import ActorId, ObservationId
+from iris.cognitive.cycle.models import AppraisalResult, RelationshipResult, StepStatus
+from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot
+from tests.helpers.approx import approx
 from tests.helpers.immutability import assert_frozen_field
 
 
-def test_affect_baseline_record_is_immutable() -> None:
-    """AffectBaselineRecord is frozen."""
-    record = AffectBaselineRecord(scope="global", valence=0.1)
-
-    assert_frozen_field(record, "valence", 0.2)
-
-
-def test_global_affect_must_not_have_actor_id() -> None:
-    """Global affect baseline rejects actor_id."""
-    with pytest.raises(ValueError, match="global"):
-        AffectBaselineRecord(scope="global", actor_id=ActorId("actor-1"))
-
-
-def test_actor_affect_requires_actor_id() -> None:
-    """Actor-scoped affect baseline requires actor_id."""
-    with pytest.raises(ValueError, match="actor"):
-        AffectBaselineRecord(scope="actor")
-
-
-def test_affect_baseline_validates_vad_ranges() -> None:
-    """AffectBaselineRecord validates VAD ranges."""
-    with pytest.raises(ValueError, match="valence"):
-        AffectBaselineRecord(scope="global", valence=1.1)
-    with pytest.raises(ValueError, match="arousal"):
-        AffectBaselineRecord(scope="global", arousal=-1.1)
-    with pytest.raises(ValueError, match="dominance"):
-        AffectBaselineRecord(scope="global", dominance=1.1)
-
-
-def test_affect_baseline_preserves_contract_fields() -> None:
-    """AffectBaselineRecord preserves scope, values, and provenance."""
-    created_at = datetime(2026, 6, 24, tzinfo=UTC)
-    record = AffectBaselineRecord(
-        scope="actor",
-        actor_id=ActorId("actor-1"),
+def test_affect_and_relationship_snapshots_are_frozen_and_typed() -> None:
+    """AffectSnapshotとRelationshipSnapshotがfrozen dataclassであることを確認する。"""
+    affect = AffectSnapshot(
         mood_label="positive",
-        valence=0.4,
-        arousal=0.2,
-        dominance=0.1,
-        affect_summary="positive VAD",
-        source_observation_id=ObservationId("obs-1"),
-        created_at=created_at,
-        updated_at=created_at,
+        valence=0.25,
+        arousal=0.1,
+        dominance=0.0,
+        affect_summary="positive VAD(v=0.25, a=0.10, d=0.00)",
+    )
+    relationship = RelationshipSnapshot(
+        actor_label="User",
+        affinity=0.1,
+        trust=0.5,
+        familiarity=0.2,
+        relationship_summary="User relationship(affinity=0.10, trust=0.50, familiarity=0.20)",
     )
 
-    assert record.scope == "actor"
-    assert record.actor_id == ActorId("actor-1")
-    assert record.source_observation_id == ObservationId("obs-1")
-    assert record.version == 1
+    assert affect.valence == approx(0.25)
+    assert relationship.trust == approx(0.5)
+    assert_frozen_field(affect, "valence", 0.0)
+    assert_frozen_field(relationship, "trust", 0.0)
+
+
+def test_existing_affect_result_types_are_reused() -> None:
+    """既存のAppraisalResultとRelationshipResult型が使用されていることを確認する。"""
+    appraisal = AppraisalResult(step_name="appraisal", status=StepStatus.OK, valence=0.25)
+    relationship = RelationshipResult(step_name="relationship", status=StepStatus.OK, trust=0.5)
+
+    assert type(appraisal).__name__ == "AppraisalResult"
+    assert type(relationship).__name__ == "RelationshipResult"

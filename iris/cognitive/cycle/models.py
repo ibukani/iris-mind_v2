@@ -58,17 +58,6 @@ class AppraisalResult(PipelineStepResult):
 
 
 @dataclass(frozen=True)
-class AffectPersistenceResult(PipelineStepResult):
-    """感情ベースライン永続化ステップの結果。"""
-
-    persisted: bool = False
-    mood_label: str | None = None
-    valence: float = 0.0
-    arousal: float = 0.0
-    dominance: float = 0.0
-
-
-@dataclass(frozen=True)
 class RelationshipResult(PipelineStepResult):
     """関係ステップの結果。"""
 
