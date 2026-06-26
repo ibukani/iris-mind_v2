@@ -70,6 +70,7 @@ class Check:
     command: tuple[str, ...]
     full_only: bool = False
     failure_class: str = "environment"
+    stream_output: bool = False
 
 
 CHECKS: tuple[Check, ...] = (
@@ -105,6 +106,7 @@ CHECKS: tuple[Check, ...] = (
         ("uv", "run", "pytest", *DEFAULT_TEST_TARGETS, *COVERAGE_ARGS),
         full_only=True,
         failure_class="tests+coverage",
+        stream_output=True,
     ),
 )
 
@@ -194,7 +196,7 @@ def run_check(check: Check) -> int:
         check.command,
         cwd=REPO_ROOT,
         check=False,
-        capture_output=True,
+        capture_output=not check.stream_output,
         text=True,
     )
     if completed.returncode == 0:
