@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from iris.adapters.affect.sqlite import SQLiteAffectStore
 from iris.contracts.affect import AffectBaselineRecord
 from iris.core.ids import ActorId, ObservationId
-from tests.helpers.approx import approx
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_sqlite_affect_store_upserts_and_gets_global(tmp_path: Path) -> None:
@@ -46,7 +42,7 @@ def test_sqlite_affect_update_preserves_created_at_and_advances_updated_at(
     assert second.updated_at is not None
     assert first.updated_at is not None
     assert second.updated_at > first.updated_at
-    assert second.valence == approx(0.4)
+    assert second.valence == 0.4
 
 
 def test_sqlite_affect_survives_new_store_instance(tmp_path: Path) -> None:
@@ -59,7 +55,7 @@ def test_sqlite_affect_survives_new_store_instance(tmp_path: Path) -> None:
     loaded = SQLiteAffectStore(db_path).get_global()
 
     assert loaded is not None
-    assert loaded.valence == approx(0.2)
+    assert loaded.valence == 0.2
 
 
 def test_sqlite_affect_global_and_actor_are_separate(tmp_path: Path) -> None:
@@ -79,8 +75,8 @@ def test_sqlite_affect_global_and_actor_are_separate(tmp_path: Path) -> None:
 
     assert global_record is not None
     assert actor_record is not None
-    assert global_record.valence == approx(0.2)
-    assert actor_record.valence == approx(0.7)
+    assert global_record.valence == 0.2
+    assert actor_record.valence == 0.7
 
 
 def test_sqlite_affect_actor_uniqueness(tmp_path: Path) -> None:
@@ -96,4 +92,4 @@ def test_sqlite_affect_actor_uniqueness(tmp_path: Path) -> None:
     loaded = store.get_for_actor(ActorId("actor-1"))
 
     assert loaded is not None
-    assert loaded.valence == approx(0.5)
+    assert loaded.valence == 0.5

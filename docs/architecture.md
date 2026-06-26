@@ -932,10 +932,3 @@ Memory、relationship、persona semantics の主スコープは `actor_id`。`sp
 Default runtime は `SpaceBinding` を永続化しない。Space に conversation history や persona state を紐づけない。
 
 Retry 可能な `FAILED` は `PENDING` へ戻して `not_before` に retry 時刻、`last_error_reason` に失敗理由を保持する。最大試行後のみ `FAILED_PERMANENT` へ遷移する。
-## Durable Memory / Relationship / Affect Scope
-
-Memory は検索可能な長期 content を扱う。対象は facts、preferences、notes、tasks、relationship events である。`MemoryKind.RELATIONSHIP_EVENT` は relationship に関する出来事の summary であり、現在の relationship state ではない。
-
-Relationship は `ActorId` を主キーにした current per-actor state として `RelationshipSnapshotRecord` に保存する。Affect は Iris の baseline/current affect state として `AffectBaselineRecord` に保存する。Global affect baseline は `scope="global"` と `actor_id=None` を使う。
-
-SQLite backend は memory、relationship、affect、account、activity journal を durable にする。Activity projection、presence、space occupancy は ephemeral のままにする。`space_id` は durable relationship / affect の owner ではなく、memory でも補助的な interaction context として扱う。

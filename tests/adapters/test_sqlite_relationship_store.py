@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
 from iris.contracts.relationship import RelationshipSnapshotRecord
 from iris.core.ids import ActorId, ObservationId
-from tests.helpers.approx import approx
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_sqlite_relationship_store_upserts_and_gets(tmp_path: Path) -> None:
@@ -55,7 +51,7 @@ def test_sqlite_relationship_update_preserves_created_at_and_advances_updated_at
     assert second.updated_at is not None
     assert first.updated_at is not None
     assert second.updated_at > first.updated_at
-    assert second.affinity == approx(0.4)
+    assert second.affinity == 0.4
 
 
 def test_sqlite_relationship_survives_new_store_instance(tmp_path: Path) -> None:
@@ -68,7 +64,7 @@ def test_sqlite_relationship_survives_new_store_instance(tmp_path: Path) -> None
     loaded = SQLiteRelationshipStore(db_path).get(ActorId("actor-1"))
 
     assert loaded is not None
-    assert loaded.familiarity == approx(0.5)
+    assert loaded.familiarity == 0.5
 
 
 def test_sqlite_relationship_actor_uniqueness(tmp_path: Path) -> None:
@@ -80,4 +76,4 @@ def test_sqlite_relationship_actor_uniqueness(tmp_path: Path) -> None:
     loaded = store.get(ActorId("actor-1"))
 
     assert loaded is not None
-    assert loaded.affinity == approx(0.3)
+    assert loaded.affinity == 0.3

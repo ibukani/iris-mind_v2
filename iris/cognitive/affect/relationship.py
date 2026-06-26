@@ -184,4 +184,7 @@ def _summarize(
         tone = "strained"
     else:
         tone = "neutral"
-    return f"{label}: {tone} relationship, trust={trust:.2f}, familiarity={familiarity:.2f}"
+    return (
+        f"{label}: {tone} relationship, "
+        f"trust={trust:.2f}, familiarity={familiarity:.2f}"
+    )

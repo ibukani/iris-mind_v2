@@ -6,27 +6,20 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.adapters.affect.memory import InMemoryAffectStore
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryQuery
-from iris.contracts.observations import (
-    ActorMessageObservation,
-    ObservationContext,
-    ObservationKind,
-)
+from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
-    CognitiveCycleStores,
     wire_policy_affect_memory_aware_text_response_cognitive_cycle,
 )
 
 
 def _actor_message(text: str) -> ActorMessageObservation:
-    """Return ActorMessageObservation text test identity."""
+    """Return an ActorMessageObservation with the given text and a test identity."""
     return ActorMessageObservation(
         observation_id=ObservationId("obs-write-flow"),
         session_id=SessionId("session-write-flow"),
@@ -52,22 +45,23 @@ async def test_two_turn_memory_write_then_retrieval_flow() -> None:
     llm = FakeLLMClient(responses=("saved", "how about jasmine tea?"))
     app = IrisApp(
         cycle=wire_policy_affect_memory_aware_text_response_cognitive_cycle(
-            stores=CognitiveCycleStores(
-                memory_store=memory_store,
-                relationship_store=InMemoryRelationshipStore(),
-                affect_store=InMemoryAffectStore(),
-            ),
+            memory_store=memory_store,
             llm_client=llm,
-        ),
+        )
     )
 
-    output1 = await app.process_observation(_actor_message("覚えて: jasmine tea favorite"))
-    output2 = await app.process_observation(_actor_message("what tea do I like?"))
-
-    records = memory_store.filter(MemoryQuery(text="", include_archived=True))
-    second_prompt = llm.requests[1].messages[-1].content
-
+    # Turn 1: explicit remember request should trigger memory write
+    output1 = await app.process_observation(_actor_message("覚えて: jasmine tea is my favorite"))
     assert output1.text == "saved"
+
+    # Turn 2: retrieval should include the previously written memory
+    output2 = await app.process_observation(_actor_message("what tea do I like?"))
     assert output2.text == "how about jasmine tea?"
-    assert any("jasmine tea" in record.text for record in records)
+
+    # Verify the memory was persisted
+    records = memory_store.filter(MemoryQuery(text="", include_archived=True))
+    assert any("jasmine tea" in r.text for r in records)
+
+    # Verify the memory appeared in the second turn's LLM prompt
+    second_prompt = llm.requests[1].messages[-1].content
     assert "jasmine tea" in second_prompt
