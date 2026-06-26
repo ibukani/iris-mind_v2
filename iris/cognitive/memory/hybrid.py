@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from iris.cognitive.memory.retrieval import MemoryRetriever
@@ -14,6 +15,15 @@ if TYPE_CHECKING:
 
 
 _ERR_WEIGHT_TOTAL = "Total reranker weight must be > 0"
+
+
+@dataclass(frozen=True)
+class _HybridScore:
+    """ハイブリッド検索結果のスコア保持用データクラス。"""
+
+    fts_score: float
+    vector_score: float
+    result: MemorySearchResult
 
 
 class MemoryReranker:
@@ -76,28 +86,39 @@ class MemoryReranker:
     def _merge_results(
         fts_results: Sequence[MemorySearchResult],
         vector_results: Sequence[MemorySearchResult],
-    ) -> dict[str, tuple[float, float, MemorySearchResult]]:
+    ) -> dict[str, _HybridScore]:
         """FTS5 とベクトル結果を memory_id 単位でマージする。
 
         Returns:
-            dict[str, tuple[float, float, MemorySearchResult]]:
-                memory_id ごとの (fts_score, vector_score, result) マップ。
+            dict[str, _HybridScore]: memory_id ごとのスコアマップ。
         """
-        merged: dict[str, tuple[float, float, MemorySearchResult]] = {}
+        merged: dict[str, _HybridScore] = {}
         for result in fts_results:
-            merged[str(result.record.id)] = (result.score, 0.0, result)
+            merged[str(result.record.id)] = _HybridScore(
+                fts_score=result.score,
+                vector_score=0.0,
+                result=result,
+            )
         for result in vector_results:
             key = str(result.record.id)
             if key in merged:
-                fts_score, _, existing = merged[key]
-                merged[key] = (fts_score, result.score, existing)
+                existing_score = merged[key]
+                merged[key] = _HybridScore(
+                    fts_score=existing_score.fts_score,
+                    vector_score=result.score,
+                    result=existing_score.result,
+                )
             else:
-                merged[key] = (0.0, result.score, result)
+                merged[key] = _HybridScore(
+                    fts_score=0.0,
+                    vector_score=result.score,
+                    result=result,
+                )
         return merged
 
     def _rank_merged(
         self,
-        merged: dict[str, tuple[float, float, MemorySearchResult]],
+        merged: dict[str, _HybridScore],
         *,
         limit: int,
     ) -> Sequence[MemorySearchResult]:
@@ -108,25 +129,25 @@ class MemoryReranker:
         """
         fts_max = float("-inf")
         vec_max = float("-inf")
-        for fts_score, vec_score, _ in merged.values():
-            fts_max = max(fts_max, fts_score)
-            vec_max = max(vec_max, vec_score)
+        for score_entry in merged.values():
+            fts_max = max(fts_max, score_entry.fts_score)
+            vec_max = max(vec_max, score_entry.vector_score)
         if fts_max == 0:
             fts_max = 1.0
         if vec_max == 0:
             vec_max = 1.0
 
         ranked: list[tuple[float, int, MemorySearchResult]] = []
-        for index, (fts_score, vec_score, result) in enumerate(merged.values()):
-            normalized_fts = fts_score / fts_max
-            normalized_vec = vec_score / vec_max
+        for index, score_entry in enumerate(merged.values()):
+            normalized_fts = score_entry.fts_score / fts_max
+            normalized_vec = score_entry.vector_score / vec_max
             composite = (
                 normalized_fts * self._fts_weight
                 + normalized_vec * self._vector_weight
-                + result.record.salience * self._salience_weight
-                + result.record.confidence * self._confidence_weight
+                + score_entry.result.record.salience * self._salience_weight
+                + score_entry.result.record.confidence * self._confidence_weight
             )
-            entry = MemorySearchResult(record=result.record, score=composite)
+            entry = MemorySearchResult(record=score_entry.result.record, score=composite)
             ranked.append((composite, index, entry))
 
         def _sort_key(item: tuple[float, int, MemorySearchResult]) -> tuple[float, int]:
