@@ -1,4 +1,4 @@
-.PHONY: check verify quick ai-check ai-quick ai-context ai-report ai-arch ai-test-target e2e lint lint-fix format format-write type pyright arch imports semgrep static-arch test coverage deps doctor ci generate-protos help
+.PHONY: check verify quick ai-check ai-quick ai-context ai-report ai-arch ai-test-target e2e lint lint-fix format format-write type pyright arch imports semgrep static-arch test coverage deps doctor runtime-doctor runtime-doctor-json ci generate-protos help
 
 DEFAULT_TEST_TARGETS := tests/adapters tests/architecture tests/cognitive tests/contracts tests/core tests/features tests/presentation tests/runtime tests/scripts tests/test_oneturn_flow.py
 
@@ -28,6 +28,8 @@ help:
 	@echo "  make generate-protos - regenerate protobuf and gRPC code from proto definitions"
 	@echo "  make deps         - sync project dependencies with uv"
 	@echo "  make doctor       - print local tool versions"
+	@echo "  make runtime-doctor - run read-only runtime diagnostics"
+	@echo "  make runtime-doctor-json - run read-only runtime diagnostics as JSON"
 	@echo "  make ci           - sync dependencies and run make check"
 
 check:
@@ -124,5 +126,11 @@ doctor:
 	uv run mypy --version
 	uv run pyright --version
 	uv run pytest --version
+
+runtime-doctor:
+	uv run python -m iris.runtime.doctor
+
+runtime-doctor-json:
+	uv run python -m iris.runtime.doctor --json
 
 ci: deps check
