@@ -173,73 +173,109 @@ class GrpcRuntimeMapper:
         occurred_at = _datetime_from_timestamp(observation)
         context = await self.observation_context_from_proto(observation.context)
         if kind is ObservationKind.ACTOR_MESSAGE:
-            actor_payload = observation.actor_message
-            return ActorMessageObservation(
-                observation_id=ObservationId(observation.observation_id),
-                session_id=SessionId(observation.session_id),
-                context=context,
-                occurred_at=occurred_at,
-                kind=kind,
-                text=actor_payload.text,
-                external_message_id=(
-                    ExternalRef(actor_payload.external_message_id)
-                    if actor_payload.external_message_id
-                    else None
-                ),
-            )
+            return self._map_actor_message(observation, kind, occurred_at, context)
         if kind is ObservationKind.IDLE_TICK:
-            idle_payload = observation.idle_tick
-            return IdleTickObservation(
-                observation_id=ObservationId(observation.observation_id),
-                session_id=SessionId(observation.session_id),
-                context=context,
-                occurred_at=occurred_at,
-                kind=kind,
-                reason=idle_payload.reason or None,
-                idle_seconds=idle_payload.idle_seconds,
-            )
+            return self._map_idle_tick(observation, kind, occurred_at, context)
         if kind is ObservationKind.ACTIVITY_EVENT:
-            activity_payload = observation.activity_event
-            if activity_payload.provider_sequence < 0:
-                _raise_mapping_error("activity_event.provider_sequence must not be negative")
-            activity_kind = _activity_kind_from_proto(activity_payload.activity_kind)
-            _require_activity_subject(
-                activity_kind=activity_kind,
-                context=context,
-            )
-            return ActivityEventObservation(
-                observation_id=ObservationId(observation.observation_id),
-                session_id=SessionId(observation.session_id),
-                context=context,
-                occurred_at=occurred_at,
-                kind=kind,
-                activity_kind=activity_kind,
-                provider_event_id=activity_payload.provider_event_id or None,
-                provider_sequence=activity_payload.provider_sequence or None,
-                metadata=_metadata_dict(activity_payload.metadata),
-            )
+            return self._map_activity_event(observation, kind, occurred_at, context)
         if kind is ObservationKind.PRESENCE_SIGNAL:
-            _require_presence_subject(context)
-            presence_payload = observation.presence_signal
-            expires_at = (
-                _datetime_from_proto_timestamp(
-                    presence_payload.expires_at,
-                    field_name="presence_signal.expires_at",
-                )
-                if presence_payload.HasField("expires_at")
-                else None
-            )
-            return PresenceSignalObservation(
-                observation_id=ObservationId(observation.observation_id),
-                session_id=SessionId(observation.session_id),
-                context=context,
-                occurred_at=occurred_at,
-                kind=kind,
-                status=_presence_status_from_proto(presence_payload.status),
-                expires_at=expires_at,
-                metadata=_metadata_dict(presence_payload.metadata),
-            )
+            return self._map_presence_signal(observation, kind, occurred_at, context)
         assert_never(kind)
+
+    @staticmethod
+    def _map_actor_message(
+        observation: observations_pb2.Observation,
+        kind: ObservationKind,
+        occurred_at: datetime,
+        context: ObservationContext,
+    ) -> ActorMessageObservation:
+        actor_payload = observation.actor_message
+        return ActorMessageObservation(
+            observation_id=ObservationId(observation.observation_id),
+            session_id=SessionId(observation.session_id),
+            context=context,
+            occurred_at=occurred_at,
+            kind=kind,
+            text=actor_payload.text,
+            external_message_id=(
+                ExternalRef(actor_payload.external_message_id)
+                if actor_payload.external_message_id
+                else None
+            ),
+        )
+
+    @staticmethod
+    def _map_idle_tick(
+        observation: observations_pb2.Observation,
+        kind: ObservationKind,
+        occurred_at: datetime,
+        context: ObservationContext,
+    ) -> IdleTickObservation:
+        idle_payload = observation.idle_tick
+        return IdleTickObservation(
+            observation_id=ObservationId(observation.observation_id),
+            session_id=SessionId(observation.session_id),
+            context=context,
+            occurred_at=occurred_at,
+            kind=kind,
+            reason=idle_payload.reason or None,
+            idle_seconds=idle_payload.idle_seconds,
+        )
+
+    @staticmethod
+    def _map_activity_event(
+        observation: observations_pb2.Observation,
+        kind: ObservationKind,
+        occurred_at: datetime,
+        context: ObservationContext,
+    ) -> ActivityEventObservation:
+        activity_payload = observation.activity_event
+        if activity_payload.provider_sequence < 0:
+            _raise_mapping_error("activity_event.provider_sequence must not be negative")
+        activity_kind = _activity_kind_from_proto(activity_payload.activity_kind)
+        _require_activity_subject(
+            activity_kind=activity_kind,
+            context=context,
+        )
+        return ActivityEventObservation(
+            observation_id=ObservationId(observation.observation_id),
+            session_id=SessionId(observation.session_id),
+            context=context,
+            occurred_at=occurred_at,
+            kind=kind,
+            activity_kind=activity_kind,
+            provider_event_id=activity_payload.provider_event_id or None,
+            provider_sequence=activity_payload.provider_sequence or None,
+            metadata=_metadata_dict(activity_payload.metadata),
+        )
+
+    @staticmethod
+    def _map_presence_signal(
+        observation: observations_pb2.Observation,
+        kind: ObservationKind,
+        occurred_at: datetime,
+        context: ObservationContext,
+    ) -> PresenceSignalObservation:
+        _require_presence_subject(context)
+        presence_payload = observation.presence_signal
+        expires_at = (
+            _datetime_from_proto_timestamp(
+                presence_payload.expires_at,
+                field_name="presence_signal.expires_at",
+            )
+            if presence_payload.HasField("expires_at")
+            else None
+        )
+        return PresenceSignalObservation(
+            observation_id=ObservationId(observation.observation_id),
+            session_id=SessionId(observation.session_id),
+            context=context,
+            occurred_at=occurred_at,
+            kind=kind,
+            status=_presence_status_from_proto(presence_payload.status),
+            expires_at=expires_at,
+            metadata=_metadata_dict(presence_payload.metadata),
+        )
 
     async def observation_context_from_proto(
         self,
