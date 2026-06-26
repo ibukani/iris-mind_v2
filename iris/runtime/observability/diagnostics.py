@@ -33,21 +33,23 @@ from iris.adapters.llm.diagnostics import (
     ReadinessStatus,
 )
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.llm import (
+    ModelSlotName,
+)
 from iris.runtime.wiring.llm import build_provider_diagnostics
 
 if TYPE_CHECKING:
     from iris.runtime.config.llm import (
         LLMProvider,
-        ModelSlotName,
         RuntimeModelConfig,
         RuntimeModelsConfig,
     )
     from iris.runtime.config.root import IrisRuntimeConfig
 
 _DIAGNOSTICS_MODEL_SLOTS: tuple[ModelSlotName, ...] = (
-    "default_chat",
-    "fast_judge",
-    "reasoning",
+    ModelSlotName.DEFAULT_CHAT,
+    ModelSlotName.FAST_JUDGE,
+    ModelSlotName.REASONING,
 )
 
 

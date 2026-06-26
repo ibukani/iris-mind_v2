@@ -124,17 +124,17 @@ def default_runtime_config() -> IrisRuntimeConfig:
         state=RuntimeStateConfig(),
         models=RuntimeModelsConfig(
             default_chat=RuntimeModelConfig(
-                provider="fake",
+                provider=LLMProvider.FAKE,
                 model="fake-llm",
                 max_output_tokens=512,
             ),
             fast_judge=RuntimeModelConfig(
-                provider="fake",
+                provider=LLMProvider.FAKE,
                 model="fake-llm",
                 max_output_tokens=128,
             ),
             reasoning=RuntimeModelConfig(
-                provider="fake",
+                provider=LLMProvider.FAKE,
                 model="fake-llm",
                 max_output_tokens=1024,
             ),

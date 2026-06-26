@@ -12,7 +12,7 @@ from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.runtime.config import default_runtime_config
-from iris.runtime.config.state import RuntimeStateConfig
+from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.server import build_runtime_components
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
@@ -38,7 +38,7 @@ def test_build_runtime_components_uses_fts5_retrieval_for_sqlite(
     config = default_runtime_config()
     config = replace(
         config,
-        state=RuntimeStateConfig(backend="sqlite", sqlite_path=str(db_path)),
+        state=RuntimeStateConfig(backend=RuntimeStateBackend.SQLITE, sqlite_path=str(db_path)),
     )
 
     components = build_runtime_components(config)
@@ -82,7 +82,7 @@ def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
     config = default_runtime_config()
     config = replace(
         config,
-        state=RuntimeStateConfig(backend="sqlite", sqlite_path=str(db_path)),
+        state=RuntimeStateConfig(backend=RuntimeStateBackend.SQLITE, sqlite_path=str(db_path)),
     )
 
     components = build_runtime_components(config)

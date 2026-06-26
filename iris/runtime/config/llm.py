@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Literal
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.parsing import (
@@ -22,12 +23,34 @@ from iris.runtime.config.parsing import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-LLMProvider = Literal["fake", "ollama", "openai"]
-ModelSlotName = Literal["default_chat", "fast_judge", "reasoning"]
 
-_LLM_PROVIDERS: tuple[LLMProvider, ...] = ("fake", "ollama", "openai")
+class LLMProvider(StrEnum):
+    """サポート対象のLLMプロバイダ。"""
+
+    FAKE = "fake"
+    OLLAMA = "ollama"
+    OPENAI = "openai"
+
+
+class ModelSlotName(StrEnum):
+    """ランタイムのモデルスロット名。"""
+
+    DEFAULT_CHAT = "default_chat"
+    FAST_JUDGE = "fast_judge"
+    REASONING = "reasoning"
+
+
+_LLM_PROVIDERS: tuple[LLMProvider, ...] = (
+    LLMProvider.FAKE,
+    LLMProvider.OLLAMA,
+    LLMProvider.OPENAI,
+)
 _VALID_PROVIDERS: frozenset[str] = frozenset(_LLM_PROVIDERS)
-_MODEL_SLOTS: tuple[ModelSlotName, ...] = ("default_chat", "fast_judge", "reasoning")
+_MODEL_SLOTS: tuple[ModelSlotName, ...] = (
+    ModelSlotName.DEFAULT_CHAT,
+    ModelSlotName.FAST_JUDGE,
+    ModelSlotName.REASONING,
+)
 
 
 def is_valid_provider(value: str) -> bool:
@@ -55,10 +78,11 @@ def validate_provider(value: str, path: str) -> LLMProvider:
     Raises:
         ConfigError: 認識できないプロバイダー名の場合。
     """
-    if value in _LLM_PROVIDERS:
-        return value
-    message = f"Invalid LLM provider for {path}: {value}"
-    raise ConfigError(message)
+    try:
+        return LLMProvider(value)
+    except ValueError:
+        message = f"Invalid LLM provider for {path}: {value}"
+        raise ConfigError(message) from None
 
 
 def env_provider(
@@ -405,8 +429,8 @@ def _slot_config(
     Returns:
         指定スロットに格納された model config。
     """
-    if slot == "default_chat":
+    if slot == ModelSlotName.DEFAULT_CHAT:
         return models.default_chat
-    if slot == "fast_judge":
+    if slot == ModelSlotName.FAST_JUDGE:
         return models.fast_judge
     return models.reasoning

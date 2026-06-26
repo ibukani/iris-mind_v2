@@ -14,7 +14,7 @@ from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
 from iris.runtime.config import default_runtime_config
-from iris.runtime.config.state import RuntimeStateConfig
+from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.wiring.state import wire_runtime_state
 
 if TYPE_CHECKING:
@@ -37,7 +37,10 @@ def test_wire_sqlite_backend(tmp_path: Path) -> None:
     """SQLite backend persists accounts and memory, not SpaceBinding."""
     db_path = tmp_path / "state.db"
     config = default_runtime_config()
-    config = replace(config, state=RuntimeStateConfig(backend="sqlite", sqlite_path=str(db_path)))
+    config = replace(
+        config,
+        state=RuntimeStateConfig(backend=RuntimeStateBackend.SQLITE, sqlite_path=str(db_path)),
+    )
 
     stores = wire_runtime_state(config)
 

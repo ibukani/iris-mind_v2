@@ -8,6 +8,8 @@ import pytest
 
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.logging import (
+    LogFormat,
+    LogLevel,
     RuntimeLoggingConfig,
     apply_logging_env,
     apply_logging_toml,
@@ -17,8 +19,8 @@ from iris.runtime.config.logging import (
 def test_logging_config_defaults() -> None:
     """Test default logging configuration."""
     config = RuntimeLoggingConfig()
-    assert config.level == "INFO"
-    assert config.format == "text"
+    assert config.level == LogLevel.INFO
+    assert config.format == LogFormat.TEXT
     assert config.file_path is None
     assert config.rotation == "10 MB"
     assert config.retention == "7 days"
@@ -36,8 +38,8 @@ def test_apply_logging_toml() -> None:
     }
     config = apply_logging_toml(base, table)
 
-    assert config.level == "DEBUG"
-    assert config.format == "json"
+    assert config.level == LogLevel.DEBUG
+    assert config.format == LogFormat.JSON
     assert config.file_path == ".iris/test.log"
     assert config.rotation == "5 MB"
     assert config.retention == "3 days"
@@ -53,8 +55,8 @@ def test_apply_logging_env() -> None:
     }
     config = apply_logging_env(base, env)
 
-    assert config.level == "TRACE"
-    assert config.format == "json"
+    assert config.level == LogLevel.TRACE
+    assert config.format == LogFormat.JSON
     assert config.file_path == ".iris/test_env.log"
 
 

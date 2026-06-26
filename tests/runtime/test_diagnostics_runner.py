@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
 
 import pytest
 
@@ -24,6 +23,7 @@ from iris.runtime.config import (
     RuntimeModelConfig,
     default_runtime_config,
 )
+from iris.runtime.config.llm import LLMProvider, ModelSlotName
 from iris.runtime.observability.diagnostics import (
     DiagnosticsCheckOutcome,
     StartupDiagnosticsReport,
@@ -32,9 +32,6 @@ from iris.runtime.observability.diagnostics import (
 from iris.runtime.wiring.llm import build_provider_diagnostics
 from tests.helpers.immutability import assert_frozen_field
 from tests.helpers.private_access import get_private_attr_path_as
-
-if TYPE_CHECKING:
-    from iris.runtime.config.llm import LLMProvider, ModelSlotName
 
 
 @dataclass(frozen=True)
@@ -188,7 +185,7 @@ class _HangingDiagnostics:
 def test_build_provider_diagnostics_returns_none_for_fake() -> None:
     """Fake プロバイダは診断対象外として None を返す。"""
     config = default_runtime_config()
-    model_config = config.models.default_chat  # provider="fake"
+    model_config = config.models.default_chat  # provider=LLMProvider.FAKE
 
     result = build_provider_diagnostics(model_config, config)
 
@@ -197,7 +194,9 @@ def test_build_provider_diagnostics_returns_none_for_fake() -> None:
 
 def test_build_provider_diagnostics_returns_ollama_diagnostics() -> None:
     """Ollama プロバイダは OllamaDiagnostics を組み立てる。"""
-    config = _set_default_slot(default_runtime_config(), provider="ollama", model="qwen3:8b")
+    config = _set_default_slot(
+        default_runtime_config(), provider=LLMProvider.OLLAMA, model="qwen3:8b"
+    )
 
     result = build_provider_diagnostics(config.models.default_chat, config)
 
@@ -211,7 +210,7 @@ def test_build_provider_diagnostics_returns_openai_diagnostics(
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     config = _set_default_slot(
         default_runtime_config(),
-        provider="openai",
+        provider=LLMProvider.OPENAI,
         model="gpt-test",
     )
 
@@ -224,7 +223,7 @@ def test_build_provider_diagnostics_returns_openai_diagnostics(
 def test_build_provider_diagnostics_raises_for_unknown_provider() -> None:
     """未知のプロバイダは ConfigError を送出する。"""
     config = default_runtime_config()
-    model_config = RuntimeModelConfig(provider="fake", model="x")
+    model_config = RuntimeModelConfig(provider=LLMProvider.FAKE, model="x")
     model_config.__dict__["provider"] = "unknown"
 
     with pytest.raises(ConfigError, match="Unknown LLM provider for diagnostics"):
@@ -238,7 +237,7 @@ def test_build_provider_diagnostics_openai_missing_api_key_raises(
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     config = _set_default_slot(
         default_runtime_config(),
-        provider="openai",
+        provider=LLMProvider.OPENAI,
         model="gpt-test",
     )
 
@@ -254,7 +253,7 @@ def test_build_provider_diagnostics_openai_missing_api_key_raises(
 @pytest.mark.anyio
 async def test_run_startup_diagnostics_returns_empty_when_disabled() -> None:
     """diagnostics.mode="off" のときは空レポートを返す。"""
-    config = _with_diagnostics(default_runtime_config(), mode="off")
+    config = _with_diagnostics(default_runtime_config(), mode=DiagnosticsMode.OFF)
 
     report = await run_startup_diagnostics(config)
 
@@ -286,9 +285,9 @@ async def test_run_startup_diagnostics_probes_each_non_fake_slot(
     """non-fake スロットはそれぞれ probe され outcome に集約される。"""
     config = _with_providers(
         default_runtime_config(),
-        default_chat=("ollama", "qwen3:8b"),
-        fast_judge=("ollama", "fast-model"),
-        reasoning=("fake", "fake-llm"),
+        default_chat=(LLMProvider.OLLAMA, "qwen3:8b"),
+        fast_judge=(LLMProvider.OLLAMA, "fast-model"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
     )
     default_stub = _ok_stub("ollama")
     fast_stub = _ok_stub("ollama")
@@ -296,8 +295,8 @@ async def test_run_startup_diagnostics_probes_each_non_fake_slot(
         monkeypatch,
         _slot_stub_factory(
             {
-                "default_chat": default_stub,
-                "fast_judge": fast_stub,
+                ModelSlotName.DEFAULT_CHAT: default_stub,
+                ModelSlotName.FAST_JUDGE: fast_stub,
             },
         ),
     )
@@ -318,9 +317,9 @@ async def test_run_startup_diagnostics_calls_warmup_when_enabled_and_supported(
     """warmup_models=True かつ capability.warmup=True のときのみ warmup を呼ぶ。"""
     config = _with_providers(
         default_runtime_config(),
-        default_chat=("ollama", "qwen3:8b"),
-        fast_judge=("fake", "fake-llm"),
-        reasoning=("fake", "fake-llm"),
+        default_chat=(LLMProvider.OLLAMA, "qwen3:8b"),
+        fast_judge=(LLMProvider.FAKE, "fake-llm"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
     )
     config = _with_diagnostics(config, warmup_models=True)
     ollama_capability = ProviderCapability(
@@ -330,7 +329,7 @@ async def test_run_startup_diagnostics_calls_warmup_when_enabled_and_supported(
         warmup=True,
     )
     default_stub = _StubDiagnostics(
-        provider_name="ollama",
+        provider_name=LLMProvider.OLLAMA,
         capability=ollama_capability,
         outcome=_OutcomeSpec(
             readiness=ReadinessStatus.OK,
@@ -339,7 +338,7 @@ async def test_run_startup_diagnostics_calls_warmup_when_enabled_and_supported(
     )
     _install_factory(
         monkeypatch,
-        _slot_stub_factory({"default_chat": default_stub}),
+        _slot_stub_factory({ModelSlotName.DEFAULT_CHAT: default_stub}),
     )
 
     report = await run_startup_diagnostics(config)
@@ -356,9 +355,9 @@ async def test_run_startup_diagnostics_skips_warmup_when_disabled(
     """warmup_models=False のとき warmup は呼ばれない。"""
     config = _with_providers(
         default_runtime_config(),
-        default_chat=("ollama", "qwen3:8b"),
-        fast_judge=("fake", "fake-llm"),
-        reasoning=("fake", "fake-llm"),
+        default_chat=(LLMProvider.OLLAMA, "qwen3:8b"),
+        fast_judge=(LLMProvider.FAKE, "fake-llm"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
     )
     config = _with_diagnostics(config, warmup_models=False)
     ollama_capability = ProviderCapability(
@@ -368,7 +367,7 @@ async def test_run_startup_diagnostics_skips_warmup_when_disabled(
         warmup=True,
     )
     default_stub = _StubDiagnostics(
-        provider_name="ollama",
+        provider_name=LLMProvider.OLLAMA,
         capability=ollama_capability,
         outcome=_OutcomeSpec(
             readiness=ReadinessStatus.OK,
@@ -377,7 +376,7 @@ async def test_run_startup_diagnostics_skips_warmup_when_disabled(
     )
     _install_factory(
         monkeypatch,
-        _slot_stub_factory({"default_chat": default_stub}),
+        _slot_stub_factory({ModelSlotName.DEFAULT_CHAT: default_stub}),
     )
 
     report = await run_startup_diagnostics(config)
@@ -393,9 +392,9 @@ async def test_run_startup_diagnostics_skips_warmup_when_capability_false(
     """capability.warmup=False のときは warmup を呼ばない。"""
     config = _with_providers(
         default_runtime_config(),
-        default_chat=("openai", "gpt-test"),
-        fast_judge=("fake", "fake-llm"),
-        reasoning=("fake", "fake-llm"),
+        default_chat=(LLMProvider.OPENAI, "gpt-test"),
+        fast_judge=(LLMProvider.FAKE, "fake-llm"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
     )
     config = _with_diagnostics(config, warmup_models=True)
     openai_capability = ProviderCapability(
@@ -411,7 +410,7 @@ async def test_run_startup_diagnostics_skips_warmup_when_capability_false(
     )
     _install_factory(
         monkeypatch,
-        _slot_stub_factory({"default_chat": default_stub}),
+        _slot_stub_factory({ModelSlotName.DEFAULT_CHAT: default_stub}),
     )
 
     report = await run_startup_diagnostics(config)
@@ -427,9 +426,9 @@ async def test_run_startup_diagnostics_captures_construction_failure(
     """build_provider_diagnostics の失敗は FAIL outcome として記録される。"""
     config = _with_providers(
         default_runtime_config(),
-        default_chat=("openai", "gpt-test"),
-        fast_judge=("ollama", "fast-model"),
-        reasoning=("fake", "fake-llm"),
+        default_chat=(LLMProvider.OPENAI, "gpt-test"),
+        fast_judge=(LLMProvider.OLLAMA, "fast-model"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
     )
     fast_stub = _ok_stub("ollama")
     _install_factory(
@@ -483,16 +482,16 @@ async def test_run_startup_diagnostics_warn_mode_converts_timeout_to_fail(
     """
     config = _with_providers(
         default_runtime_config(),
-        default_chat=("ollama", "qwen3:8b"),
-        fast_judge=("fake", "fake-llm"),
-        reasoning=("fake", "fake-llm"),
+        default_chat=(LLMProvider.OLLAMA, "qwen3:8b"),
+        fast_judge=(LLMProvider.FAKE, "fake-llm"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
     )
     config = _with_timeout(config, timeout_seconds=0.01)
     hanging = _HangingDiagnostics(
-        provider_name="ollama",
+        provider_name=LLMProvider.OLLAMA,
         capability=ProviderCapability(health_check=True, warmup=True),
     )
-    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": hanging}))
+    _install_factory(monkeypatch, _slot_stub_factory({ModelSlotName.DEFAULT_CHAT: hanging}))
 
     try:
         report = await run_startup_diagnostics(config)
@@ -520,17 +519,17 @@ async def test_run_startup_diagnostics_strict_mode_raises_config_error_on_timeou
     """
     config = _with_providers(
         default_runtime_config(),
-        default_chat=("ollama", "qwen3:8b"),
-        fast_judge=("fake", "fake-llm"),
-        reasoning=("fake", "fake-llm"),
+        default_chat=(LLMProvider.OLLAMA, "qwen3:8b"),
+        fast_judge=(LLMProvider.FAKE, "fake-llm"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
     )
-    config = _with_diagnostics(config, mode="strict")
+    config = _with_diagnostics(config, mode=DiagnosticsMode.STRICT)
     config = _with_timeout(config, timeout_seconds=0.01)
     hanging = _HangingDiagnostics(
-        provider_name="ollama",
+        provider_name=LLMProvider.OLLAMA,
         capability=ProviderCapability(health_check=True, warmup=True),
     )
-    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": hanging}))
+    _install_factory(monkeypatch, _slot_stub_factory({ModelSlotName.DEFAULT_CHAT: hanging}))
 
     try:
         with pytest.raises(ConfigError, match="readiness_timeout"):
@@ -552,9 +551,9 @@ async def test_run_startup_diagnostics_warmup_timeout_produces_warmup_fail(
     """
     config = _with_providers(
         default_runtime_config(),
-        default_chat=("ollama", "qwen3:8b"),
-        fast_judge=("fake", "fake-llm"),
-        reasoning=("fake", "fake-llm"),
+        default_chat=(LLMProvider.OLLAMA, "qwen3:8b"),
+        fast_judge=(LLMProvider.FAKE, "fake-llm"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
     )
     config = _with_diagnostics(config, warmup_models=True)
     config = _with_timeout(config, timeout_seconds=0.01)
@@ -592,7 +591,7 @@ async def test_run_startup_diagnostics_warmup_timeout_produces_warmup_fail(
                 self.wakeup.set()
 
     hanging_warmup = _ReadinessOkWarmupHangs()
-    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": hanging_warmup}))
+    _install_factory(monkeypatch, _slot_stub_factory({ModelSlotName.DEFAULT_CHAT: hanging_warmup}))
 
     try:
         report = await run_startup_diagnostics(config)
@@ -615,7 +614,7 @@ async def test_run_startup_diagnostics_off_mode_does_not_call_factory() -> None:
     a regression guard against an implementation that would call the
     factory and then ignore the result.
     """
-    config = _with_diagnostics(default_runtime_config(), mode="off")
+    config = _with_diagnostics(default_runtime_config(), mode=DiagnosticsMode.OFF)
     config = _with_timeout(config, timeout_seconds=0.01)
 
     # No factory monkeypatch: if the runner were to call
@@ -641,21 +640,21 @@ async def test_run_startup_diagnostics_uses_configured_timeout_value(
     """
     config = _with_providers(
         default_runtime_config(),
-        default_chat=("ollama", "qwen3:8b"),
-        fast_judge=("fake", "fake-llm"),
-        reasoning=("fake", "fake-llm"),
+        default_chat=(LLMProvider.OLLAMA, "qwen3:8b"),
+        fast_judge=(LLMProvider.FAKE, "fake-llm"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
     )
     hanging = _HangingDiagnostics(
-        provider_name="ollama",
+        provider_name=LLMProvider.OLLAMA,
         capability=ProviderCapability(health_check=True, warmup=True),
     )
-    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": hanging}))
+    _install_factory(monkeypatch, _slot_stub_factory({ModelSlotName.DEFAULT_CHAT: hanging}))
 
     # Use a large timeout: the runner should NOT cut the probe short.
     config_large = _with_timeout(config, timeout_seconds=5.0)
     # Patch the stub to complete quickly to avoid hanging the test.
     fast_stub = _ok_stub("ollama")
-    _install_factory(monkeypatch, _slot_stub_factory({"default_chat": fast_stub}))
+    _install_factory(monkeypatch, _slot_stub_factory({ModelSlotName.DEFAULT_CHAT: fast_stub}))
 
     report = await run_startup_diagnostics(config_large)
 
@@ -676,11 +675,11 @@ def test_report_has_failures_when_any_outcome_fails() -> None:
     report = StartupDiagnosticsReport(
         outcomes=(
             DiagnosticsCheckOutcome(
-                slot="default_chat",
-                provider="ollama",
+                slot=ModelSlotName.DEFAULT_CHAT,
+                provider=LLMProvider.OLLAMA,
                 model="qwen3:8b",
                 readiness=ProviderReadinessResult(
-                    provider="ollama",
+                    provider=LLMProvider.OLLAMA,
                     model="qwen3:8b",
                     status=ReadinessStatus.FAIL,
                     capabilities=ProviderCapability(),
@@ -698,11 +697,11 @@ def test_report_all_ok_when_all_outcomes_ok() -> None:
     report = StartupDiagnosticsReport(
         outcomes=(
             DiagnosticsCheckOutcome(
-                slot="default_chat",
-                provider="ollama",
+                slot=ModelSlotName.DEFAULT_CHAT,
+                provider=LLMProvider.OLLAMA,
                 model="qwen3:8b",
                 readiness=ProviderReadinessResult(
-                    provider="ollama",
+                    provider=LLMProvider.OLLAMA,
                     model="qwen3:8b",
                     status=ReadinessStatus.OK,
                     capabilities=ProviderCapability(),
@@ -724,11 +723,11 @@ def test_report_all_ok_false_when_empty() -> None:
 def test_outcome_is_frozen() -> None:
     """DiagnosticsCheckOutcome は frozen。"""
     outcome = DiagnosticsCheckOutcome(
-        slot="default_chat",
-        provider="ollama",
+        slot=ModelSlotName.DEFAULT_CHAT,
+        provider=LLMProvider.OLLAMA,
         model="qwen3:8b",
         readiness=ProviderReadinessResult(
-            provider="ollama",
+            provider=LLMProvider.OLLAMA,
             model="qwen3:8b",
             status=ReadinessStatus.OK,
             capabilities=ProviderCapability(),
@@ -776,7 +775,7 @@ def _set_default_slot(
 def _with_diagnostics(
     config: IrisRuntimeConfig,
     *,
-    mode: DiagnosticsMode = "warn",
+    mode: DiagnosticsMode = DiagnosticsMode.WARN,
     warmup_models: bool = False,
 ) -> IrisRuntimeConfig:
     new_diag = RuntimeDiagnosticsConfig(
@@ -850,11 +849,11 @@ def _slot_stub_factory(stubs: dict[ModelSlotName, LLMProviderDiagnostics]) -> ob
         runtime_config: IrisRuntimeConfig,
     ) -> LLMProviderDiagnostics | None:
         if model_config is runtime_config.models.default_chat:
-            return stubs.get("default_chat")
+            return stubs.get(ModelSlotName.DEFAULT_CHAT)
         if model_config is runtime_config.models.fast_judge:
-            return stubs.get("fast_judge")
+            return stubs.get(ModelSlotName.FAST_JUDGE)
         if model_config is runtime_config.models.reasoning:
-            return stubs.get("reasoning")
+            return stubs.get(ModelSlotName.REASONING)
         return None
 
     return factory
