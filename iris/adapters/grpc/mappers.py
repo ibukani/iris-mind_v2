@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING, NoReturn, assert_never
 
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -54,7 +55,6 @@ from iris.core.ids import (
 )
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
-from iris.runtime.ingress.observation_ingress import ObservationCapability
 from iris.runtime.service import ObservationEnvelope
 
 _ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
@@ -69,27 +69,24 @@ _ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
 _GRPC_ADAPTER_ID = "grpc"
 _GRPC_ADAPTER_PROVIDER = "grpc"
 
-_GRPC_OBSERVATION_CAPABILITIES = frozenset(
-    {
-        ObservationCapability.INTEGRATE_ACTIVITY,
-        ObservationCapability.INTEGRATE_PRESENCE,
-        ObservationCapability.UPDATE_SPACE_OCCUPANCY,
-        ObservationCapability.REACT_TO_ACTIVITY,
-        ObservationCapability.INTERNAL_EVENT,
-        ObservationCapability.REGISTER_DELIVERY_TARGET,
-    }
-)
-
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
     from iris.contracts.spaces import InteractionSpace
+    from iris.runtime.ingress.observation_ingress import ObservationCapability
     from iris.runtime.service import RuntimeResponse
 
 
 class GrpcMappingError(ValueError):
     """Raised when gRPC DTOs cannot be mapped to Iris contracts."""
+
+
+class RuntimeIngressProfile(StrEnum):
+    """gRPC SubmitObservation ingress trust profile."""
+
+    EXTERNAL_CLIENT = "external_client"
+    TRUSTED_ADAPTER = "trusted_adapter"
 
 
 class GrpcRuntimeMapper:
@@ -103,6 +100,7 @@ class GrpcRuntimeMapper:
         self,
         identity_resolver: IdentityResolver | None = None,
         space_resolver: SpaceResolver | None = None,
+        ingress_profile: RuntimeIngressProfile = RuntimeIngressProfile.EXTERNAL_CLIENT,
         adapter_capabilities: Iterable[ObservationCapability] | None = None,
     ) -> None:
         """Create mapper with optional resolvers and adapter capabilities.
@@ -110,16 +108,19 @@ class GrpcRuntimeMapper:
         Args:
             identity_resolver: Optional identity resolver for ExternalAccountRef.
             space_resolver: Optional space resolver for ExternalSpaceRef.
+            ingress_profile: Trust profile for SubmitObservation ingress.
             adapter_capabilities: Capabilities to grant on the trusted
-                ingress context. Defaults to all standard capabilities.
+                adapter ingress. Required for TRUSTED_ADAPTER.
         """
         self._identity_resolver = identity_resolver
         self._space_resolver = space_resolver
-        self._adapter_capabilities = (
-            frozenset(adapter_capabilities)
-            if adapter_capabilities is not None
-            else _GRPC_OBSERVATION_CAPABILITIES
-        )
+        self._ingress_profile = ingress_profile
+        if (
+            self._ingress_profile is RuntimeIngressProfile.TRUSTED_ADAPTER
+            and adapter_capabilities is None
+        ):
+            _raise_mapping_error("trusted adapter ingress requires explicit capabilities")
+        self._adapter_capabilities = frozenset(adapter_capabilities or ())
 
     async def observation_envelope_from_proto(
         self,
@@ -134,6 +135,12 @@ class GrpcRuntimeMapper:
             _raise_mapping_error("observation is required")
         correlation_id = CorrelationId(request.correlation_id) if request.correlation_id else None
         observation = await self.observation_from_proto(request.observation)
+        if self._ingress_profile is RuntimeIngressProfile.EXTERNAL_CLIENT:
+            return ObservationEnvelope.external_client(
+                observation=observation,
+                correlation_id=correlation_id,
+            )
+
         delivery_route = delivery_route_hint_from_context(request.observation.context)
         return ObservationEnvelope.trusted_adapter(
             observation=observation,

@@ -46,17 +46,8 @@ async def test_submit_observation_returns_presented_output() -> None:
         assert isinstance(response, runtime_pb2.SubmitObservationResponse)
     assert runtime_service.envelope is not None
     assert runtime_service.envelope.observation.kind.value == "actor_message"
-    assert runtime_service.envelope.ingress.authenticated
-    assert runtime_service.envelope.ingress.capabilities == frozenset(
-        {
-            "integrate_activity",
-            "integrate_presence",
-            "update_space_occupancy",
-            "react_to_activity",
-            "internal_event",
-            "register_delivery_target",
-        }
-    )
+    assert not runtime_service.envelope.ingress.authenticated
+    assert runtime_service.envelope.ingress.capabilities == frozenset()
     assert response.correlation_id == "corr-1"
     assert response.output.text == "grpc response"
 

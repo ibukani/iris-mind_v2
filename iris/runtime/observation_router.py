@@ -46,3 +46,29 @@ def route_observation(observation: Observation) -> ObservationRoute:
     if isinstance(observation, PresenceSignalObservation):
         return PresenceSignalRoute(observation)
     return CognitiveRoute(observation)
+
+
+def activity_event_observation(
+    observation: Observation,
+) -> ActivityEventObservation | None:
+    """ActivityEventObservation なら typed observation を返す。
+
+    Returns:
+        ActivityEventObservation または None。
+    """
+    if isinstance(observation, ActivityEventObservation):
+        return observation
+    return None
+
+
+def presence_signal_observation(
+    observation: Observation,
+) -> PresenceSignalObservation | None:
+    """PresenceSignalObservation なら typed observation を返す。
+
+    Returns:
+        PresenceSignalObservation または None。
+    """
+    if isinstance(observation, PresenceSignalObservation):
+        return observation
+    return None

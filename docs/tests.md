@@ -139,6 +139,7 @@ All tests verify the current target architecture only.
 | `test_workspace_frame_mutation_extended.py` | Frame mutation 拡張チェック |
 | `test_quality_gate_config.py` | Quality gate 設定の保全 |
 | `test_runtime_boundaries.py` | Runtime 層の境界ルール |
+| `test_runtime_boundary_guards.py` | Runtime service / scheduler / delivery / gRPC server の境界 guard |
 | `test_ai_harness_integrity.py` | AI harness 設定の保全 |
 | `test_precommit_no_broad_autofix.py` | Pre-commit autofix 範囲制限 |
 

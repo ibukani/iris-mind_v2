@@ -40,3 +40,12 @@ Scheduler runner may call `IrisRuntimeService.handle_observation(...)` and may e
 `IrisRuntimeService` must not import scheduler or delivery modules, must not branch on scheduler/proactive delivery behavior, and must not enqueue delivery items directly.
 
 `runtime/server.py` may load config, build components, start gRPC, start optional scheduler lifecycle task when `scheduler.enabled`, and cancel tasks on shutdown. It must not contain delivery state transition logic, scheduler decision logic, delivery safety policy, or provider-specific send logic.
+## Guard Test Mapping
+
+- `tests/architecture/test_runtime_boundary_guards.py`: `IrisRuntimeService` import禁止、runtime concrete `Observation` routing 集約、user-facing `PresentedOutput` / `AppAction` construction 禁止、scheduler/delivery/gRPC server import 境界。
+- `tests/architecture/test_runtime_service_shape.py`: `IrisRuntimeService.__init__` が低レベル store/resolver/planner/runner を直接受けないこと。
+- `tests/architecture/test_coordinator_type_branching.py`: coordinator で concrete `Observation` subclass branch を増やさないこと。
+- `tests/runtime/test_observation_envelope_ingress.py`: external client と trusted adapter ingress factory の capability semantics。
+- `tests/adapters/grpc/test_grpc_ingress_profiles.py`: public gRPC `SubmitObservation` default external-client safe、trusted adapter profile は明示 capability 必須。
+- `tests/runtime/test_activity_event_reaction_boundary.py`: event reaction trust / situation context / `OutputSafetyGate` 境界。
+- `tests/runtime/test_scheduler_delivery_boundary.py`: scheduler no-send、delivery disabled、missing target、delivery safety block/allow、availability propagation。

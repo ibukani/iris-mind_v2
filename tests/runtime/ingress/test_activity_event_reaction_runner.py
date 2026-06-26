@@ -12,7 +12,6 @@ from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActivityEventObservation,
-    ActorMessageObservation,
     ObservationContext,
     ObservationKind,
 )
@@ -140,37 +139,6 @@ async def test_voice_left_returns_none(
     """VOICE_LEFTは反応を生成しない。"""
     output = await runner.react(
         _activity(ActivityKind.VOICE_LEFT, actor_id=actor_id, now=now),
-        situation_context=_situation(AvailabilityStatus.AVAILABLE, now=now),
-    )
-
-    assert output is None
-
-
-@pytest.mark.anyio
-async def test_non_activity_observation_returns_none(
-    runner: EventReactionRunner,
-    actor_id: ActorId,
-    now: datetime,
-) -> None:
-    """ActivityEventObservation以外には反応しない。"""
-    observation = ActorMessageObservation(
-        observation_id=ObservationId("obs-msg"),
-        session_id=SessionId("session-1"),
-        context=ObservationContext(
-            actor=Identity(
-                actor_id=actor_id,
-                actor_kind=ActorKind.HUMAN,
-                display_name="Actor",
-            ),
-            source="test",
-        ),
-        occurred_at=now,
-        kind=ObservationKind.ACTOR_MESSAGE,
-        text="hello",
-    )
-
-    output = await runner.react(
-        observation,
         situation_context=_situation(AvailabilityStatus.AVAILABLE, now=now),
     )
 

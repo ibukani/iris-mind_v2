@@ -17,6 +17,11 @@ Use this checklist for changes that touch runtime, cognitive flow, observations,
 - [ ] New runtime behavior uses a dedicated router, pipeline, provider, runtime handler, or app/cognitive boundary.
 - [ ] Runtime integration, context assembly, routing, reaction, presentation, safety, and cognitive processing remain separate.
 - [ ] No low-level integrator/store/journal/resolver/planner/runner was injected directly into `IrisRuntimeService`.
+- [ ] `IrisRuntimeService` does not import scheduler, delivery, adapters, presentation, safety, or external SDK modules.
+- [ ] Concrete `Observation` routing lives in `iris/runtime/observation_router.py`, not service/runner/planner code.
+- [ ] Public gRPC `SubmitObservation` defaults to external-client ingress; trusted adapter ingress requires explicit capabilities.
+- [ ] `IrisRuntimeService` does not enqueue delivery, call scheduler, construct user-facing text, or construct `AppAction`.
+- [ ] Scheduler enqueues only after normal output path and `DeliverySafetyGate`; delivery outbox remains pull-based and never sends.
 
 ## 3. Observation and Routing
 
