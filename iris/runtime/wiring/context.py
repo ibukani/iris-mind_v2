@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from iris.core.datetime_utils import now_utc
 from iris.runtime.state.availability import AvailabilityResolver
 from iris.runtime.state.context_assembler import WorkspaceContextAssembler
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
 
     from iris.runtime.state.activity_projection import ActivityProjectionStore
     from iris.runtime.state.presence import PresenceStore
@@ -39,7 +40,7 @@ def wire_workspace_context_assembler(
     if availability_resolver is None:
         availability_resolver = AvailabilityResolver()
     if now is None:
-        now = _utc_now
+        now = now_utc
     return WorkspaceContextAssembler(
         activity_projection_store=activity_projection_store,
         presence_store=presence_store,
@@ -47,8 +48,3 @@ def wire_workspace_context_assembler(
         availability_resolver=availability_resolver,
         now=now,
     )
-
-
-def _utc_now() -> datetime:
-    """Return current UTC time."""
-    return datetime.now(UTC)
