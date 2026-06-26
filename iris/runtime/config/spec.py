@@ -3,20 +3,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from enum import StrEnum
 
 from iris.runtime.config.errors import ConfigError
 
-type ConfigValueType = Literal[
-    "str",
-    "int",
-    "float",
-    "bool",
-    "enum",
-    "optional_str",
-    "optional_int",
-    "optional_float",
-]
+
+class ConfigValueType(StrEnum):
+    """設定値の型。"""
+
+    STR = "str"
+    INT = "int"
+    FLOAT = "float"
+    BOOL = "bool"
+    ENUM = "enum"
+    OPTIONAL_STR = "optional_str"
+    OPTIONAL_INT = "optional_int"
+    OPTIONAL_FLOAT = "optional_float"
+
+
 type ConfigDefault = str | int | float | bool | None
 
 
@@ -60,7 +64,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         for spec in (
             ConfigFieldSpec(
                 f"models.{slot}.provider",
-                "enum",
+                ConfigValueType.ENUM,
                 "fake",
                 f"{slot}モデルスロットのプロバイダ。",
                 env=f"IRIS_{slot.upper()}_PROVIDER",
@@ -68,21 +72,21 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             ),
             ConfigFieldSpec(
                 f"models.{slot}.model",
-                "str",
+                ConfigValueType.STR,
                 "fake-llm",
                 f"{slot}モデルスロットのモデル名。",
                 env=f"IRIS_{slot.upper()}_MODEL",
             ),
             ConfigFieldSpec(
                 f"models.{slot}.temperature",
-                "float",
+                ConfigValueType.FLOAT,
                 0.0,
                 f"{slot}モデルスロットのtemperature。",
                 env=f"IRIS_{slot.upper()}_TEMPERATURE",
             ),
             ConfigFieldSpec(
                 f"models.{slot}.max_output_tokens",
-                "optional_int",
+                ConfigValueType.OPTIONAL_INT,
                 max_tokens,
                 f"{slot}モデルスロットの最大出力トークン数。",
                 env=f"IRIS_{slot.upper()}_MAX_OUTPUT_TOKENS",
@@ -92,14 +96,14 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
     return (
         ConfigFieldSpec(
             "config.version",
-            "int",
+            ConfigValueType.INT,
             1,
             "ランタイム設定ファイル形式のバージョン。",
             control_plane_editable=False,
         ),
         ConfigFieldSpec(
             "server.host",
-            "str",
+            ConfigValueType.STR,
             "127.0.0.1",
             "gRPCサーバーのbind host。",
             env="IRIS_SERVER_HOST",
@@ -107,7 +111,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ),
         ConfigFieldSpec(
             "server.port",
-            "int",
+            ConfigValueType.INT,
             50051,
             "gRPCサーバーのbind port。",
             env="IRIS_SERVER_PORT",
@@ -115,19 +119,19 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ),
         ConfigFieldSpec(
             path="server.local_only",
-            value_type="bool",
+            value_type=ConfigValueType.BOOL,
             default=True,
             description="loopback hostのみを許可する。",
         ),
         ConfigFieldSpec(
             "server.shutdown_grace_seconds",
-            "float",
+            ConfigValueType.FLOAT,
             5.0,
             "gRPCサーバー停止時の猶予秒数。",
         ),
         ConfigFieldSpec(
             "state.backend",
-            "enum",
+            ConfigValueType.ENUM,
             "memory",
             "ランタイム状態の永続化backend。",
             env="IRIS_STATE_BACKEND",
@@ -135,147 +139,147 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ),
         ConfigFieldSpec(
             "state.sqlite_path",
-            "str",
+            ConfigValueType.STR,
             ".iris/runtime/state.sqlite3",
             "SQLite状態ファイルのパス。",
             env="IRIS_STATE_SQLITE_PATH",
         ),
         ConfigFieldSpec(
             "scheduler.enabled",
-            "bool",
+            ConfigValueType.BOOL,
             default=False,
             description="RuntimeScheduler lifecycle loop を有効化する。",
         ),
         ConfigFieldSpec(
             "scheduler.interval_seconds",
-            "float",
+            ConfigValueType.FLOAT,
             30.0,
             "scheduler loop の実行間隔秒数。",
         ),
         ConfigFieldSpec(
             "scheduler.idle_threshold_seconds",
-            "float",
+            ConfigValueType.FLOAT,
             600.0,
             "IdleTickObservation を発火する idle 秒数。",
         ),
         ConfigFieldSpec(
             "scheduler.min_interval_per_target_seconds",
-            "float",
+            ConfigValueType.FLOAT,
             1800.0,
             "target ごとの proactive tick 最小間隔秒数。",
         ),
         ConfigFieldSpec(
             "scheduler.max_due_per_run",
-            "int",
+            ConfigValueType.INT,
             10,
             "scheduler run 1回あたりの最大 due observation 数。",
         ),
         ConfigFieldSpec(
             "delivery.enabled",
-            "bool",
+            ConfigValueType.BOOL,
             default=True,
             description="DeliveryOutbox と PollAppActions API を有効化する。",
         ),
         ConfigFieldSpec(
             "delivery.max_outbox_depth_per_provider",
-            "int",
+            ConfigValueType.INT,
             100,
             "provider ごとの最大 outbox depth。",
         ),
         ConfigFieldSpec(
             "delivery.lease_seconds",
-            "float",
+            ConfigValueType.FLOAT,
             30.0,
             "PollAppActions が取得する lease 秒数。",
         ),
         ConfigFieldSpec(
             "delivery.max_attempts",
-            "int",
+            ConfigValueType.INT,
             3,
             "配送 item ごとの最大試行回数。",
         ),
         ConfigFieldSpec(
             "delivery.retry_backoff_seconds",
-            "float",
+            ConfigValueType.FLOAT,
             30.0,
             "失敗後に retry 可能になるまでの秒数。",
         ),
         ConfigFieldSpec(
             "delivery.rate_limit_window_seconds",
-            "float",
+            ConfigValueType.FLOAT,
             1800.0,
             _RATE_LIMIT_RESERVED_DESC,
         ),
         ConfigFieldSpec(
             "delivery.quiet_hours.enabled",
-            "bool",
+            ConfigValueType.BOOL,
             default=False,
             description="quiet hours による配送 block を有効化する。",
         ),
         ConfigFieldSpec(
             "delivery.quiet_hours.start",
-            "str",
+            ConfigValueType.STR,
             "22:00",
             "quiet hours 開始 HH:MM。",
         ),
         ConfigFieldSpec(
             "delivery.quiet_hours.end",
-            "str",
+            ConfigValueType.STR,
             "08:00",
             "quiet hours 終了 HH:MM。",
         ),
         ConfigFieldSpec(
             "delivery.quiet_hours.timezone",
-            "str",
+            ConfigValueType.STR,
             "Asia/Tokyo",
             "quiet hours 判定 timezone。",
         ),
         *model_specs,
         ConfigFieldSpec(
             "ollama.base_url",
-            "str",
+            ConfigValueType.STR,
             "http://localhost:11434",
             "Ollama APIのbase URL。",
             env="IRIS_OLLAMA_HOST",
         ),
         ConfigFieldSpec(
             "ollama.timeout_seconds",
-            "float",
+            ConfigValueType.FLOAT,
             120.0,
             "Ollama request timeout秒数。",
             env="IRIS_OLLAMA_TIMEOUT_SECONDS",
         ),
         ConfigFieldSpec(
             "ollama.keep_alive",
-            "optional_str",
+            ConfigValueType.OPTIONAL_STR,
             None,
             "Ollamaモデルのkeep-alive指定。",
             env="IRIS_OLLAMA_KEEP_ALIVE",
         ),
         ConfigFieldSpec(
             "openai.model",
-            "str",
+            ConfigValueType.STR,
             "gpt-5-mini",
             "OpenAI providerの既定モデル。",
             env="IRIS_OPENAI_MODEL",
         ),
         ConfigFieldSpec(
             "openai.timeout_seconds",
-            "optional_float",
+            ConfigValueType.OPTIONAL_FLOAT,
             None,
             "OpenAI request timeout秒数。",
             env="IRIS_OPENAI_TIMEOUT_SECONDS",
         ),
         ConfigFieldSpec(
             "openai.max_output_tokens",
-            "optional_int",
+            ConfigValueType.OPTIONAL_INT,
             None,
             "OpenAI providerの最大出力トークン数。",
             env="IRIS_OPENAI_MAX_OUTPUT_TOKENS",
         ),
         ConfigFieldSpec(
             "logging.level",
-            "enum",
+            ConfigValueType.ENUM,
             "INFO",
             "ランタイムログレベル。",
             env="IRIS_LOG_LEVEL",
@@ -283,7 +287,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ),
         ConfigFieldSpec(
             "logging.format",
-            "enum",
+            ConfigValueType.ENUM,
             "text",
             "ランタイムログ形式。",
             env="IRIS_LOG_FORMAT",
@@ -291,7 +295,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ),
         ConfigFieldSpec(
             "logging.file_path",
-            "optional_str",
+            ConfigValueType.OPTIONAL_STR,
             None,
             "任意のログ出力ファイルパス。",
             env="IRIS_LOG_FILE",
@@ -299,19 +303,19 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ),
         ConfigFieldSpec(
             "logging.rotation",
-            "str",
+            ConfigValueType.STR,
             "10 MB",
             "ログファイルrotation指定。",
         ),
         ConfigFieldSpec(
             "logging.retention",
-            "str",
+            ConfigValueType.STR,
             "7 days",
             "ログファイルretention指定。",
         ),
         ConfigFieldSpec(
             "safety.mode",
-            "enum",
+            ConfigValueType.ENUM,
             "development",
             "出力safety gateの動作モード。",
             env="IRIS_SAFETY_MODE",
@@ -319,14 +323,14 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ),
         ConfigFieldSpec(
             "safety.max_output_chars",
-            "int",
+            ConfigValueType.INT,
             4000,
             "出力可能な最大文字数。",
             env="IRIS_SAFETY_MAX_OUTPUT_CHARS",
         ),
         ConfigFieldSpec(
             "diagnostics.mode",
-            "enum",
+            ConfigValueType.ENUM,
             "warn",
             "起動時 LLM プロバイダ診断の動作モード。",
             env="IRIS_DIAGNOSTICS_MODE",
@@ -334,14 +338,14 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ),
         ConfigFieldSpec(
             "diagnostics.timeout_seconds",
-            "float",
+            ConfigValueType.FLOAT,
             5.0,
             "診断チェック 1 件あたりのタイムアウト秒数。",
             env="IRIS_DIAGNOSTICS_TIMEOUT_SECONDS",
         ),
         ConfigFieldSpec(
             "diagnostics.warmup_models",
-            "bool",
+            ConfigValueType.BOOL,
             default=False,
             description="診断後に provider 固有の warmup を実行する。",
             env="IRIS_DIAGNOSTICS_WARMUP_MODELS",
