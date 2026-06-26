@@ -30,7 +30,6 @@ def test_wire_memory_backend() -> None:
     assert isinstance(stores.memory_store, InMemoryMemoryStore)
     assert isinstance(stores.relationship_store, InMemoryRelationshipStore)
     assert isinstance(stores.affect_store, InMemoryAffectStore)
-    assert not hasattr(stores, "space_binding_store")
 
 
 def test_wire_sqlite_backend(tmp_path: Path) -> None:
@@ -48,7 +47,6 @@ def test_wire_sqlite_backend(tmp_path: Path) -> None:
     assert isinstance(stores.memory_store, SQLiteMemoryStore)
     assert isinstance(stores.relationship_store, SQLiteRelationshipStore)
     assert isinstance(stores.affect_store, SQLiteAffectStore)
-    assert not hasattr(stores, "space_binding_store")
     assert db_path.exists()
 
 

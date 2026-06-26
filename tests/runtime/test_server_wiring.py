@@ -45,7 +45,6 @@ def test_build_runtime_components_uses_fts5_retrieval_for_sqlite(
 
     assert isinstance(components.stores.memory_store, SQLiteMemoryStore)
     assert isinstance(components.space_resolver, EphemeralSpaceResolver)
-    assert not hasattr(components.stores, "space_binding_store")
     cycle = get_private_attr_path_as(components.runtime_service, ("_app", "_cycle"), object)
     steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])
     retrieval_steps = [step for step in steps if isinstance(step, MemoryRetrievalStep)]
@@ -63,7 +62,6 @@ def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> 
 
     assert isinstance(components.stores.memory_store, InMemoryMemoryStore)
     assert isinstance(components.space_resolver, EphemeralSpaceResolver)
-    assert not hasattr(components.stores, "space_binding_store")
     cycle = get_private_attr_path_as(components.runtime_service, ("_app", "_cycle"), object)
     steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])
     retrieval_steps = [step for step in steps if isinstance(step, MemoryRetrievalStep)]
