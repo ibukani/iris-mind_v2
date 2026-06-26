@@ -13,17 +13,16 @@ from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver
 from iris.adapters.app_gateway.ports import SpaceResolver
 from iris.adapters.grpc.mappers import (
     GrpcMappingError,
-    GrpcRuntimeMapper,
     RuntimeIngressProfile,
     timestamp_from_datetime,
 )
-from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
 from iris.contracts.spaces import InteractionSpace
 from iris.core.ids import SpaceId
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from iris.runtime.ingress.observation_ingress import ObservationCapability
 from iris.runtime.service import IrisRuntimeService, RuntimeResponse
+from iris.runtime.wiring.grpc import add_iris_runtime_servicer
 from tests.helpers.grpc_test import RecordingRuntimeService, grpc_call
 
 if TYPE_CHECKING:
@@ -378,9 +377,12 @@ async def test_trusted_wiring_creates_authenticated_ingress_with_capabilities() 
 
 
 def test_trusted_wiring_without_capabilities_raises() -> None:
-    """Trusted wiring without explicit capabilities raises at mapper construction."""
+    """Trusted wiring without explicit capabilities raises during service registration."""
+    server = grpc.aio.server()
     with pytest.raises(GrpcMappingError, match="explicit capabilities"):
-        GrpcRuntimeMapper(
+        add_iris_runtime_servicer(
+            server,
+            RecordingRuntimeService("unused"),
             ingress_profile=RuntimeIngressProfile.TRUSTED_ADAPTER,
         )
 
@@ -501,15 +503,13 @@ class _GrpcRuntimeHarness:
             runtime_pb2_grpc.IrisRuntimeServiceAsyncStub: Connected gRPC stub.
         """
         server = grpc.aio.server()
-        mapper = GrpcRuntimeMapper(
+        add_iris_runtime_servicer(
+            server,
+            self._runtime_service,
             identity_resolver=self._identity_resolver,
             space_resolver=self._space_resolver,
             ingress_profile=self._ingress_profile,
             adapter_capabilities=self._adapter_capabilities,
-        )
-        runtime_pb2_grpc.add_IrisRuntimeServiceServicer_to_server(
-            IrisRuntimeGrpcServicer(self._runtime_service, mapper=mapper),
-            server,
         )
         port = server.add_insecure_port("127.0.0.1:0")
         await server.start()

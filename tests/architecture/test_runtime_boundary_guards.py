@@ -73,9 +73,7 @@ def test_runtime_service_constructs_only_no_send_presented_output() -> None:
             )
             # Detect positional first arg that is not None
             if node.args and not _is_none_constant(node.args[0]):
-                violations.append(
-                    f"PresentedOutput positional text at line {node.lineno}"
-                )
+                violations.append(f"PresentedOutput positional text at line {node.lineno}")
         if name_of(node.func) in app_action_names:
             violations.append(f"AppAction construction at line {node.lineno}")
 

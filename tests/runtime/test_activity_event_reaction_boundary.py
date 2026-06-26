@@ -228,7 +228,11 @@ def _ingress(*capabilities: ObservationCapability) -> ObservationIngressContext:
 
 
 def _unauthenticated_ingress(*capabilities: ObservationCapability) -> ObservationIngressContext:
-    """未認証 ingress context（境界テスト用）。"""
+    """未認証 ingress context（境界テスト用）。
+
+    Returns:
+        ObservationIngressContext: 未認証の Ingress Context。
+    """
     return ObservationIngressContext(
         adapter_id="external_client",
         provider=None,
@@ -250,7 +254,11 @@ class _RecordingRunner:
         *,
         situation_context: SituationContextSnapshot,
     ) -> PresentedOutput | None:
-        """呼び出しを記録し固定出力を返す。"""
+        """呼び出しを記録し固定出力を返す。
+
+        Returns:
+            PresentedOutput | None: コンストラクタで指定された出力。
+        """
         _ = observation, situation_context
         self.calls += 1
         return self.output
