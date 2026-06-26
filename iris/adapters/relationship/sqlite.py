@@ -56,7 +56,11 @@ class SQLiteRelationshipStore(RelationshipStore):
                     source_observation_id TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    version INTEGER NOT NULL
+                    version INTEGER NOT NULL,
+                    CHECK (affinity >= -1.0 AND affinity <= 1.0),
+                    CHECK (trust >= 0.0 AND trust <= 1.0),
+                    CHECK (familiarity >= 0.0 AND familiarity <= 1.0),
+                    CHECK (version >= 1)
                 )
                 """,
             )

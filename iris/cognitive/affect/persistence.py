@@ -6,7 +6,11 @@ import asyncio
 from typing import TYPE_CHECKING, override
 
 from iris.cognitive.affect.common import clamp_value
-from iris.cognitive.cycle.models import AffectPersistenceResult, StepStatus
+from iris.cognitive.cycle.models import (
+    AffectBaselineLoadResult,
+    AffectPersistenceResult,
+    StepStatus,
+)
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.contracts.affect import AffectBaselineRecord, AffectStore
 
@@ -17,6 +21,41 @@ if TYPE_CHECKING:
 _OLD_WEIGHT = 0.9
 _NEW_WEIGHT = 0.1
 _ZERO_AFFECT_EPSILON = 0.000001
+
+
+class AffectBaselineLoadStep(PipelineStep[AffectBaselineLoadResult]):
+    """保存済み global affect baseline を WorkspaceFrame に読み込むステップ。"""
+
+    name = "affect_baseline_load"
+
+    def __init__(self, store: AffectStore) -> None:
+        """AffectStore を受け取る。"""
+        self._store = store
+
+    @override
+    async def run(self, frame: WorkspaceFrame) -> AffectBaselineLoadResult:
+        """保存済み baseline がある場合だけ frame 更新用 result を返す。
+
+        Returns:
+            保存済み baseline の値、または skip 理由を持つ結果。
+        """
+        del frame
+        current = await asyncio.to_thread(self._store.get_global)
+        if current is None:
+            return AffectBaselineLoadResult(
+                step_name=self.name,
+                status=StepStatus.SKIPPED,
+                reason="missing_affect_baseline",
+            )
+        return AffectBaselineLoadResult(
+            step_name=self.name,
+            status=StepStatus.OK,
+            mood_label=current.mood_label,
+            valence=current.valence,
+            arousal=current.arousal,
+            dominance=current.dominance,
+            affect_summary=current.affect_summary,
+        )
 
 
 class AffectPersistenceStep(PipelineStep[AffectPersistenceResult]):

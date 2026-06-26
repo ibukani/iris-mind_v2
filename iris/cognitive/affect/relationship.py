@@ -9,6 +9,7 @@ from iris.cognitive.affect.common import clamp_value
 from iris.cognitive.cycle.models import RelationshipResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.workspace.frame import AffectSnapshot, RelationshipSnapshot, WorkspaceFrame
+from iris.contracts.observations import ObservationKind
 from iris.contracts.relationship import RelationshipSnapshotRecord, RelationshipStore
 
 if TYPE_CHECKING:
@@ -36,12 +37,29 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
         Returns:
             更新された関係性を表す RelationshipResult。
         """
+        if frame.observation.kind != ObservationKind.ACTOR_MESSAGE:
+            return RelationshipResult(
+                step_name=self.name,
+                status=StepStatus.SKIPPED,
+                reason="non_actor_message_observation",
+            )
         actor = frame.actor_context.actor
         if actor is None:
             return RelationshipResult(
                 step_name=self.name,
                 status=StepStatus.SKIPPED,
                 reason="missing_actor",
+            )
+        interpreted_input = frame.interpreted_input
+        if (
+            interpreted_input is None
+            or interpreted_input.text is None
+            or not interpreted_input.text.strip()
+        ):
+            return RelationshipResult(
+                step_name=self.name,
+                status=StepStatus.SKIPPED,
+                reason="missing_interpreted_input",
             )
 
         current_record = await asyncio.to_thread(self._store.get, actor.actor_id)

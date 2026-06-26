@@ -113,6 +113,33 @@ async def test_memory_relationship_affect_survive_sqlite_turn_reload(
     assert "jasmine tea" in second_prompt
 
 
+@pytest.mark.anyio
+async def test_reloaded_affect_baseline_is_visible_to_response_prompt(
+    tmp_path: Path,
+) -> None:
+    """SQLite に保存された affect baseline は runtime reload 後の prompt に入る。"""
+    db_path = tmp_path / "state.db"
+
+    await _app(
+        db_path=db_path,
+        llm=FakeLLMClient(responses=("stored",)),
+    ).process_observation(_message("obs-affect-reload-1", "thanks, I am happy"))
+
+    baseline = SQLiteAffectStore(db_path).get_global()
+    assert baseline is not None
+    assert baseline.affect_summary is not None
+
+    reloaded_llm = FakeLLMClient(responses=("reloaded",))
+    await _app(db_path=db_path, llm=reloaded_llm).process_observation(
+        _message("obs-affect-reload-2", "what tea do I like?"),
+    )
+
+    assert reloaded_llm.requests
+    prompt_text = "\n".join(message.content for message in reloaded_llm.requests[-1].messages)
+    assert "Affect context:" in prompt_text
+    assert "VAD" in prompt_text
+
+
 def test_relationship_and_affect_records_are_not_space_owned() -> None:
     """Relationship / affect durable state は space_id を owner field にしない。"""
     relationship_fields = {field.name for field in fields(RelationshipSnapshotRecord)}

@@ -9,7 +9,7 @@ from iris.adapters.affect.memory import InMemoryAffectStore
 from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.cognitive.action.response import ResponseGenerationStep
 from iris.cognitive.affect.appraisal import AppraisalStep
-from iris.cognitive.affect.persistence import AffectPersistenceStep
+from iris.cognitive.affect.persistence import AffectBaselineLoadStep, AffectPersistenceStep
 from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.service import CognitiveCycle
@@ -166,6 +166,7 @@ def wire_affect_memory_aware_text_response_cognitive_cycle(
     """
     stores = stores or CognitiveCycleStores()
     options = response_options or CognitiveResponseOptions()
+    affect_store = stores.affect_store or InMemoryAffectStore()
     response_generator = ResponseGenerationStep(
         wire_response_generator(
             llm_client,
@@ -178,8 +179,9 @@ def wire_affect_memory_aware_text_response_cognitive_cycle(
     steps.extend(_build_memory_steps(stores))
     steps.extend(
         (
+            AffectBaselineLoadStep(affect_store),
             AppraisalStep(),
-            AffectPersistenceStep(stores.affect_store or InMemoryAffectStore()),
+            AffectPersistenceStep(affect_store),
             RelationshipStep(stores.relationship_store or InMemoryRelationshipStore()),
             response_generator,
         ),
@@ -200,6 +202,7 @@ def wire_policy_affect_memory_aware_text_response_cognitive_cycle(
     """
     stores = stores or CognitiveCycleStores()
     options = response_options or CognitiveResponseOptions()
+    affect_store = stores.affect_store or InMemoryAffectStore()
     response_generator = ResponseGenerationStep(
         wire_response_generator(
             llm_client,
@@ -212,8 +215,9 @@ def wire_policy_affect_memory_aware_text_response_cognitive_cycle(
     steps.extend(_build_memory_steps(stores))
     steps.extend(
         (
+            AffectBaselineLoadStep(affect_store),
             AppraisalStep(),
-            AffectPersistenceStep(stores.affect_store or InMemoryAffectStore()),
+            AffectPersistenceStep(affect_store),
             RelationshipStep(stores.relationship_store or InMemoryRelationshipStore()),
             PolicyInhibitionStep(),
             response_generator,

@@ -9,9 +9,10 @@ import pytest
 
 from iris.adapters.affect.memory import InMemoryAffectStore
 from iris.cognitive.affect.appraisal import classify_appraisal
-from iris.cognitive.affect.persistence import AffectPersistenceStep
+from iris.cognitive.affect.persistence import AffectBaselineLoadStep, AffectPersistenceStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import AppraisalResult, PerceptionResult, StepStatus
+from iris.contracts.affect import AffectBaselineRecord
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActorMessageObservation,
@@ -77,6 +78,47 @@ def _frame(
             affect_summary=summary,
         ),
     )
+
+
+@pytest.mark.anyio
+async def test_affect_baseline_load_skips_when_store_empty() -> None:
+    """保存済み baseline がない場合は frame を変更しない。"""
+    store = InMemoryAffectStore()
+    frame = _frame()
+
+    result = await AffectBaselineLoadStep(store).run(frame)
+    updated = FrameBuilder.apply(frame, result)
+
+    assert result.status == StepStatus.SKIPPED
+    assert result.reason == "missing_affect_baseline"
+    assert updated == frame
+
+
+@pytest.mark.anyio
+async def test_affect_baseline_load_populates_frame_affect() -> None:
+    """保存済み global baseline を frame.affect に反映する。"""
+    store = InMemoryAffectStore()
+    store.upsert_global(
+        AffectBaselineRecord(
+            scope="global",
+            mood_label="positive",
+            valence=0.5,
+            arousal=0.2,
+            dominance=0.1,
+            affect_summary="positive VAD(0.50, 0.20, 0.10)",
+        ),
+    )
+    frame = FrameBuilder().build_initial(_message("obs-affect-load"))
+
+    result = await AffectBaselineLoadStep(store).run(frame)
+    updated = FrameBuilder.apply(frame, result)
+
+    assert result.status == StepStatus.OK
+    assert updated.affect.mood_label == "positive"
+    assert updated.affect.valence == approx(0.5)
+    assert updated.affect.arousal == approx(0.2)
+    assert updated.affect.dominance == approx(0.1)
+    assert updated.affect.affect_summary == "positive VAD(0.50, 0.20, 0.10)"
 
 
 @pytest.mark.anyio

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from iris.cognitive.cycle.models import (
     ActionSelectionResult,
+    AffectBaselineLoadResult,
     AffectPersistenceResult,
     AppraisalResult,
     MemoryRetrievalResult,
@@ -16,6 +17,7 @@ from iris.cognitive.cycle.models import (
     PipelineStepResult,
     PolicyResult,
     RelationshipResult,
+    StepStatus,
 )
 from iris.cognitive.workspace.frame import (
     ActorContextSnapshot,
@@ -98,6 +100,24 @@ class FrameBuilder:
         )
 
     @staticmethod
+    def _apply_affect_baseline_load(
+        frame: WorkspaceFrame,
+        result: AffectBaselineLoadResult,
+    ) -> WorkspaceFrame:
+        if result.status is not StepStatus.OK:
+            return frame
+        return replace(
+            frame,
+            affect=AffectSnapshot(
+                mood_label=result.mood_label,
+                valence=result.valence,
+                arousal=result.arousal,
+                dominance=result.dominance,
+                affect_summary=result.affect_summary,
+            ),
+        )
+
+    @staticmethod
     def _apply_relationship(frame: WorkspaceFrame, result: RelationshipResult) -> WorkspaceFrame:
         return replace(
             frame,
@@ -165,6 +185,8 @@ class FrameBuilder:
         Returns:
             更新されたワークスペースフレーム。
         """
+        if isinstance(result, AffectBaselineLoadResult):
+            return FrameBuilder._apply_affect_baseline_load(frame, result)
         if isinstance(result, (AffectPersistenceResult, MemoryWriteResult)):
             return frame
         return FrameBuilder._dispatch(frame, result)

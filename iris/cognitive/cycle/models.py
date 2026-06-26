@@ -58,6 +58,17 @@ class AppraisalResult(PipelineStepResult):
 
 
 @dataclass(frozen=True)
+class AffectBaselineLoadResult(PipelineStepResult):
+    """保存済み感情ベースライン読込ステップの結果。"""
+
+    mood_label: str | None = None
+    valence: float = 0.0
+    arousal: float = 0.0
+    dominance: float = 0.0
+    affect_summary: str | None = None
+
+
+@dataclass(frozen=True)
 class AffectPersistenceResult(PipelineStepResult):
     """感情ベースライン永続化ステップの結果。"""
 

@@ -10,10 +10,11 @@ import pytest
 from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
 from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
-from iris.cognitive.cycle.models import AppraisalResult, StepStatus
+from iris.cognitive.cycle.models import AppraisalResult, PerceptionResult, StepStatus
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActorMessageObservation,
+    IdleTickObservation,
     ObservationContext,
     ObservationKind,
 )
@@ -46,7 +47,61 @@ def _message(observation_id: str) -> ActorMessageObservation:
     )
 
 
+def _idle_tick(observation_id: str) -> IdleTickObservation:
+    return IdleTickObservation(
+        observation_id=ObservationId(observation_id),
+        session_id=SessionId("session-persistent-relationship"),
+        context=ObservationContext(actor=_actor()),
+        occurred_at=datetime(2026, 6, 24, tzinfo=UTC),
+        kind=ObservationKind.IDLE_TICK,
+        reason="test",
+        idle_seconds=30.0,
+    )
+
+
 def _frame(observation_id: str, *, valence: float = 0.7) -> WorkspaceFrame:
+    builder = FrameBuilder()
+    frame = builder.build_initial(_message(observation_id))
+    frame = builder.apply(
+        frame,
+        PerceptionResult(
+            step_name="perception",
+            status=StepStatus.OK,
+            text="thanks, helped",
+        ),
+    )
+    return builder.apply(
+        frame,
+        AppraisalResult(
+            step_name="appraisal",
+            status=StepStatus.OK,
+            mood_label="positive",
+            valence=valence,
+            arousal=0.2,
+            dominance=0.1,
+            affect_summary="positive affect",
+        ),
+    )
+
+
+def _non_message_frame(observation_id: str) -> WorkspaceFrame:
+    builder = FrameBuilder()
+    frame = builder.build_initial(_idle_tick(observation_id))
+    return builder.apply(
+        frame,
+        AppraisalResult(
+            step_name="appraisal",
+            status=StepStatus.OK,
+            mood_label="positive",
+            valence=0.7,
+            arousal=0.2,
+            dominance=0.1,
+            affect_summary="positive affect",
+        ),
+    )
+
+
+def _missing_input_frame(observation_id: str) -> WorkspaceFrame:
     builder = FrameBuilder()
     frame = builder.build_initial(_message(observation_id))
     return builder.apply(
@@ -55,7 +110,7 @@ def _frame(observation_id: str, *, valence: float = 0.7) -> WorkspaceFrame:
             step_name="appraisal",
             status=StepStatus.OK,
             mood_label="positive",
-            valence=valence,
+            valence=0.7,
             arousal=0.2,
             dominance=0.1,
             affect_summary="positive affect",
@@ -74,6 +129,35 @@ async def test_positive_affect_increases_affinity_and_trust(tmp_path: Path) -> N
     assert result.status == StepStatus.OK
     assert result.affinity > 0.0
     assert result.trust > 0.5
+    assert store.get(ActorId("actor-persistent-relationship")) is not None
+
+
+@pytest.mark.anyio
+async def test_non_message_observation_does_not_persist_relationship(
+    tmp_path: Path,
+) -> None:
+    """Actor context 付き非message観測では relationship state を更新しない。"""
+    store = SQLiteRelationshipStore(tmp_path / "non-message.db")
+
+    result = await RelationshipStep(store).run(_non_message_frame("obs-idle"))
+
+    assert result.status == StepStatus.SKIPPED
+    assert result.reason == "non_actor_message_observation"
+    assert store.get(ActorId("actor-persistent-relationship")) is None
+
+
+@pytest.mark.anyio
+async def test_missing_interpreted_input_does_not_persist_relationship(
+    tmp_path: Path,
+) -> None:
+    """Interpreted input がない actor message では relationship state を更新しない。"""
+    store = SQLiteRelationshipStore(tmp_path / "missing-input.db")
+
+    result = await RelationshipStep(store).run(_missing_input_frame("obs-missing-input"))
+
+    assert result.status == StepStatus.SKIPPED
+    assert result.reason == "missing_interpreted_input"
+    assert store.get(ActorId("actor-persistent-relationship")) is None
 
 
 @pytest.mark.anyio

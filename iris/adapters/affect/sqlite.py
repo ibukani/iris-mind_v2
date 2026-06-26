@@ -61,6 +61,10 @@ class SQLiteAffectStore(AffectStore):
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     version INTEGER NOT NULL,
+                    CHECK (valence >= -1.0 AND valence <= 1.0),
+                    CHECK (arousal >= -1.0 AND arousal <= 1.0),
+                    CHECK (dominance >= -1.0 AND dominance <= 1.0),
+                    CHECK (version >= 1),
                     CHECK (
                         (
                             scope = 'global'

@@ -10,7 +10,7 @@ import pytest
 from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
-from iris.cognitive.cycle.models import AppraisalResult, StepStatus
+from iris.cognitive.cycle.models import AppraisalResult, PerceptionResult, StepStatus
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActorMessageObservation,
@@ -54,6 +54,14 @@ def _actor_message(
 def _positive_frame(actor: Identity) -> WorkspaceFrame:
     builder = FrameBuilder()
     frame = builder.build_initial(_actor_message(actor))
+    frame = builder.apply(
+        frame,
+        PerceptionResult(
+            step_name="perception",
+            status=StepStatus.OK,
+            text="thanks",
+        ),
+    )
     return builder.apply(
         frame,
         AppraisalResult(
@@ -116,6 +124,14 @@ async def test_relationship_step_uses_actor_id_not_account_id_as_state_key() -> 
     builder = FrameBuilder()
     frame = builder.build_initial(
         _actor_message(actor, account_id=AccountId("account-different")),
+    )
+    frame = builder.apply(
+        frame,
+        PerceptionResult(
+            step_name="perception",
+            status=StepStatus.OK,
+            text="thanks",
+        ),
     )
     frame = builder.apply(
         frame,
