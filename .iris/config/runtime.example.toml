@@ -14,6 +14,20 @@ port = 50051
 local_only = true
 shutdown_grace_seconds = 5.0
 
+[server.tls]
+enabled = false
+cert_chain_path = ""
+# private_key_path = ""
+client_ca_path = ""
+require_client_cert = false
+
+[auth]
+mode = "local_dev"
+allow_unauthenticated_loopback = true
+# (非推奨) remote bind では TLS が常に要求されます。
+require_tls_for_remote = true
+allow_insecure_remote = false
+
 [state]
 backend = "memory"
 sqlite_path = ".iris/runtime/state.sqlite3"

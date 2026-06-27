@@ -55,6 +55,7 @@ from iris.core.ids import (
 )
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
+from iris.runtime.auth.principals import ClientKind, ClientPrincipal
 from iris.runtime.service import ObservationEnvelope
 
 _ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
@@ -133,22 +134,32 @@ class GrpcRuntimeMapper:
     async def observation_envelope_from_proto(
         self,
         request: runtime_pb2.SubmitObservationRequest,
+        principal: ClientPrincipal | None = None,
     ) -> ObservationEnvelope:
-        """Map SubmitObservationRequest proto to ObservationEnvelope.
+        """Map SubmitObservationRequest proto into ObservationEnvelope.
 
         Returns:
             ObservationEnvelope: Runtime service input envelope.
         """
         if not request.HasField("observation"):
-            _raise_mapping_error("observation is required")
+            _raise_mapping_error("observation required")
         correlation_id = CorrelationId(request.correlation_id) if request.correlation_id else None
         observation = await self.observation_from_proto(request.observation)
+        if principal is not None and principal.client_kind is ClientKind.TRUSTED_ADAPTER:
+            delivery_route = delivery_route_hint_from_context(request.observation.context)
+            return ObservationEnvelope.trusted_adapter(
+                observation=observation,
+                adapter_id=principal.client_id,
+                provider=principal.provider,
+                capabilities=principal.observation_capabilities,
+                correlation_id=correlation_id,
+                delivery_route=delivery_route,
+            )
         if self._ingress_profile is RuntimeIngressProfile.EXTERNAL_CLIENT:
             return ObservationEnvelope.external_client(
                 observation=observation,
                 correlation_id=correlation_id,
             )
-
         delivery_route = delivery_route_hint_from_context(request.observation.context)
         return ObservationEnvelope.trusted_adapter(
             observation=observation,
@@ -554,6 +565,19 @@ def delivery_envelopes_to_poll_response(
     )
 
 
+def delivery_id_from_report_proto(
+    request: runtime_pb2.ReportActionResultRequest,
+) -> DeliveryId:
+    """Extract and validate DeliveryId from ReportActionResultRequest.
+
+    Returns:
+        DeliveryId: 抽出された配送 ID。
+    """
+    if not request.delivery_id:
+        _raise_mapping_error("delivery_id required")
+    return DeliveryId(request.delivery_id)
+
+
 def delivery_report_from_proto(
     request: runtime_pb2.ReportActionResultRequest,
     reported_at: datetime,
@@ -563,15 +587,14 @@ def delivery_report_from_proto(
     Returns:
         DeliveryReport: 配送結果報告。
     """
+    delivery_id = delivery_id_from_report_proto(request)
     status = _action_status_from_report_status(request.status)
-    if not request.delivery_id:
-        _raise_mapping_error("delivery_id required")
     if not request.action_id:
         _raise_mapping_error("action_id required")
     if not request.correlation_id:
         _raise_mapping_error("correlation_id required")
     return DeliveryReport(
-        delivery_id=DeliveryId(request.delivery_id),
+        delivery_id=delivery_id,
         lease_id=LeaseId(request.lease_id) if request.lease_id else None,
         result=ActionResult(
             action_id=ActionId(request.action_id),

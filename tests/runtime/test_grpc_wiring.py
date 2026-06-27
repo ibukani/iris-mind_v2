@@ -12,6 +12,8 @@ from iris.adapters.grpc.mappers import GrpcRuntimeMapper, timestamp_from_datetim
 from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
+from iris.runtime.auth.static_tokens import StaticBearerTokenVerifier
+from iris.runtime.config.auth import RuntimeAuthConfig, RuntimeAuthMode
 from iris.runtime.wiring.grpc import add_iris_runtime_servicer, create_grpc_server
 from tests.helpers.grpc_test import RecordingRuntimeService
 
@@ -73,6 +75,9 @@ def test_create_grpc_server_raises_when_bind_fails(
     """create_grpc_serverがbind失敗をRuntimeErrorにすることを確認する。"""
 
     class _UnboundServer:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            _ = args, kwargs
+
         def add_generic_rpc_handlers(self, handlers: object) -> None:
             """Accept generated service registration."""
             _ = handlers
@@ -157,3 +162,33 @@ def _account_ref_request() -> runtime_pb2.SubmitObservationRequest:
             actor_message=observations_pb2.ActorMessagePayload(text="hello grpc"),
         ),
     )
+
+
+def test_create_grpc_server_fails_closed_without_token_verifier() -> None:
+    """auth_config without token_verifier raises RuntimeError."""
+    with pytest.raises(RuntimeError, match="auth_config provided without token_verifier"):
+        create_grpc_server(
+            RecordingRuntimeService("unused"),
+            auth_config=RuntimeAuthConfig(),
+        )
+
+
+def test_create_grpc_server_fails_closed_without_auth_config() -> None:
+    """token_verifier without auth_config raises RuntimeError."""
+    with pytest.raises(RuntimeError, match="token_verifier provided without auth_config"):
+        create_grpc_server(
+            RecordingRuntimeService("unused"),
+            token_verifier=StaticBearerTokenVerifier(()),
+        )
+
+
+def test_create_grpc_server_fails_closed_with_required_mode_and_empty_tokens() -> None:
+    """auth.mode=required with empty token entries raises RuntimeError."""
+    with pytest.raises(
+        RuntimeError, match="required auth mode requires at least one static token entry"
+    ):
+        create_grpc_server(
+            RecordingRuntimeService("unused"),
+            auth_config=RuntimeAuthConfig(mode=RuntimeAuthMode.REQUIRED),
+            token_verifier=StaticBearerTokenVerifier(()),
+        )

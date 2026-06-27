@@ -12,6 +12,7 @@ from iris.runtime.delivery.outbox import DeliveryOutboxError
 
 if TYPE_CHECKING:
     from iris.contracts.delivery import DeliveryEnvelope, DeliveryReport
+    from iris.core.ids import DeliveryId
     from iris.runtime.delivery.outbox import DeliveryOutbox
 
 
@@ -57,6 +58,24 @@ class RuntimeAppActionBroker(AppActionBroker):
             )
         except DeliveryOutboxError as exc:
             raise AppActionBrokerError(str(exc)) from exc
+
+    @override
+    async def get_delivery_provider(self, delivery_id: DeliveryId) -> str:
+        """delivery_id から provider を read-only で解決する。
+
+        outbox の状態を変更せず、認可判定用の provider 文字列のみ返す。
+
+        Returns:
+            Delivery target provider。
+
+        Raises:
+            AppActionBrokerError: outbox lookup に失敗した場合。
+        """
+        try:
+            existing = await self.outbox.get(delivery_id)
+        except DeliveryOutboxError as exc:
+            raise AppActionBrokerError(str(exc)) from exc
+        return existing.target.provider
 
     @override
     async def report_action_result(self, report: DeliveryReport) -> DeliveryEnvelope:

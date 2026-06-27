@@ -19,6 +19,12 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from iris.runtime.config.auth import (
+    RuntimeAuthConfig,
+    apply_auth_env,
+    apply_auth_toml,
+    validate_auth_config,
+)
 from iris.runtime.config.delivery import (
     RuntimeDeliveryConfig,
     apply_delivery_toml,
@@ -96,6 +102,7 @@ class IrisRuntimeConfig:
     openai: RuntimeOpenAIConfig
     logging: RuntimeLoggingConfig
     safety: RuntimeSafetyConfig
+    auth: RuntimeAuthConfig
     diagnostics: RuntimeDiagnosticsConfig
     scheduler: RuntimeSchedulerConfig
     delivery: RuntimeDeliveryConfig
@@ -143,6 +150,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         openai=RuntimeOpenAIConfig(),
         logging=RuntimeLoggingConfig(),
         safety=RuntimeSafetyConfig(),
+        auth=RuntimeAuthConfig(),
         diagnostics=RuntimeDiagnosticsConfig(),
         scheduler=RuntimeSchedulerConfig(),
         delivery=RuntimeDeliveryConfig(),
@@ -193,6 +201,14 @@ def load_runtime_config(
         config = apply_runtime_overrides(config, overrides)
 
     config = replace(config, server=validate_server_config(config.server))
+    config = replace(
+        config,
+        auth=validate_auth_config(
+            auth=config.auth,
+            server_local_only=config.server.local_only,
+            tls_enabled=config.server.tls.enabled,
+        ),
+    )
     config = replace(config, state=validate_state_config(config.state))
     config = replace(config, scheduler=validate_scheduler_config(config.scheduler))
     return replace(config, delivery=validate_delivery_config(config.delivery))
@@ -369,6 +385,7 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     scheduler = apply_scheduler_toml(config.scheduler, table_or_empty(table, "scheduler"))
     delivery = apply_delivery_toml(config.delivery, table_or_empty(table, "delivery"))
     safety = apply_safety_toml(config.safety, table_or_empty(table, "safety"))
+    auth = apply_auth_toml(config.auth, table_or_empty(table, "auth"))
     diagnostics = apply_diagnostics_toml(
         config.diagnostics,
         table_or_empty(table, "diagnostics"),
@@ -393,6 +410,7 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
         openai=openai,
         logging=logging,
         safety=safety,
+        auth=auth,
         diagnostics=diagnostics,
     )
 
@@ -418,6 +436,7 @@ def _apply_env(
     server = apply_server_env(config.server, env)
     state = apply_state_env(config.state, env)
     safety = apply_safety_env(config.safety, env)
+    auth = apply_auth_env(config.auth, env)
     diagnostics = apply_diagnostics_env(config.diagnostics, env)
 
     models, ollama, openai, logging = apply_env(
@@ -432,5 +451,6 @@ def _apply_env(
         openai=openai,
         logging=logging,
         safety=safety,
+        auth=auth,
         diagnostics=diagnostics,
     )

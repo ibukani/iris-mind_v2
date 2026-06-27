@@ -19,6 +19,8 @@ from iris.contracts.spaces import InteractionSpace
 from iris.core.ids import SpaceId
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
+from iris.runtime.auth.principals import ClientKind, ClientPrincipal
+from iris.runtime.auth.scopes import AuthScope
 from iris.runtime.ingress.observation_ingress import ObservationCapability
 
 if TYPE_CHECKING:
@@ -44,6 +46,34 @@ async def test_default_submit_observation_ingress_is_external_client_safe() -> N
     assert envelope.ingress.delivery_route is None
     assert envelope.observation.context.actor is not None
     assert envelope.observation.context.space_id == "resolved-space-discord-channel-1"
+
+
+@pytest.mark.anyio
+async def test_trusted_adapter_principal_grants_only_token_capabilities() -> None:
+    """Trusted adapter principal capabilities drive authenticated ingress."""
+    mapper = GrpcRuntimeMapper(
+        identity_resolver=FakeIdentityResolver(),
+        space_resolver=_RecordingSpaceResolver(),
+    )
+    principal = ClientPrincipal(
+        client_id="discord-adapter",
+        client_kind=ClientKind.TRUSTED_ADAPTER,
+        provider="discord",
+        allowed_providers=frozenset({"discord"}),
+        scopes=frozenset({AuthScope.OBSERVATION_SUBMIT_TRUSTED}),
+        observation_capabilities=frozenset({ObservationCapability.INTEGRATE_ACTIVITY}),
+        authenticated=True,
+    )
+
+    envelope = await mapper.observation_envelope_from_proto(
+        _request_with_refs(),
+        principal,
+    )
+
+    assert envelope.ingress.authenticated
+    assert envelope.ingress.adapter_id == "discord-adapter"
+    assert envelope.ingress.provider == "discord"
+    assert envelope.ingress.capabilities == frozenset({ObservationCapability.INTEGRATE_ACTIVITY})
 
 
 def test_trusted_adapter_profile_requires_explicit_capabilities() -> None:
