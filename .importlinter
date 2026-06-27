@@ -57,7 +57,10 @@ forbidden_modules =
     iris.runtime.scheduler
     iris.runtime.delivery
     iris.runtime.lifecycle
-    iris.runtime.observability
+    iris.runtime.observability.events
+    iris.runtime.observability.logger
+    iris.runtime.observability.llm
+    iris.runtime.observability.diagnostics
     iris.features
     iris.presentation
     iris.adapters

@@ -1,9 +1,83 @@
 # LLM プロバイダ診断と可観測性
 
-Iris ランタイムは LLM プロバイダの診断 (startup diagnostics) と
-リクエスト単位の可観測性 (request observability) を提供する。
+Iris ランタイムは LLM プロバイダの診断 (startup diagnostics)、
+runtime request lifecycle logs、LLM request observability、read-only runtime doctor
+を提供する。
 このドキュメントでは、運用者が両機能を使ってプロバイダの状態を
 把握し、問題を切り分ける方法を説明する。
+
+## Runtime Trace Context
+
+runtime request は `RuntimeTraceContext` を `contextvars` で束縛する。主キーは `correlation_id`。`ObservationEnvelope.correlation_id` がない場合は `observation_id` を fallback として使う。
+
+trace context の field:
+
+- `correlation_id`
+- `observation_id`
+- `observation_kind`
+- `ingress_kind`
+- `adapter_id`
+- `provider`
+- `actor_id`
+- `space_id`
+
+optional field は値がない場合、log extra から省略される。
+
+## Runtime Lifecycle Logs
+
+`IrisRuntimeService.handle_observation()` は observation lifecycle を safe metadata のみで記録する。通常配線では `LoggingRuntimeObservationObserver` が `RuntimeLogger` に送る。
+
+event names:
+
+- `runtime.observation.start`
+- `runtime.observation.integrate.start`
+- `runtime.observation.integrate.success`
+- `runtime.context.assemble.start`
+- `runtime.context.assemble.success`
+- `runtime.observation.route`
+- `runtime.observation.no_send`
+- `runtime.activity_reaction.start`
+- `runtime.activity_reaction.success`
+- `runtime.cognitive.start`
+- `runtime.cognitive.success`
+- `runtime.observation.success`
+- `runtime.observation.error`
+
+safe fields:
+
+- `correlation_id`
+- `observation_kind`
+- `route`
+- `ingress_kind`
+- `adapter_id`
+- `provider`
+- `actor_id`
+- `space_id`
+- `latency_ms`
+- `output_present`
+- `error_type`
+
+runtime lifecycle logs は観測するだけで、routing、retry、safety、delivery、memory の判断を行わない。
+
+## Sensitive Data Policy
+
+ログに出してはいけないもの:
+
+- user text
+- prompt text
+- memory content
+- raw provider response
+- system instruction
+- API key
+- token
+- secret
+
+safe ID と safe metadata はログに出してよい。`RuntimeLogger` は exact key
+(`text`, `prompt_text`, `user_text`, `raw_response_body`, `api_key`, `token`,
+`secret`, `password` など) と sensitive suffix (`_text`, `_prompt`, `_token`,
+`_secret`, `_password`, `_response_body` など) だけを drop する。`memory_result_count`,
+`context_assembled`, `content_type`, `output_present`, `route` のような safe diagnostic
+field は保持する。
 
 ## 起動時診断 (Startup Diagnostics)
 
@@ -86,18 +160,14 @@ export IRIS_DIAGNOSTICS_WARMUP_MODELS=true
 未インストールのモデル、ネットワーク到達不能などが起動を
 阻止する。
 
-## リクエスト可観測性 (Request Observability)
+## LLM リクエスト可観測性 (Request Observability)
 
-`LLMClientFactory` が構築する LLM クライアントは、生成呼び出し
-ごとに以下を stdlib `logging` のレコードとして出力する。 レコードは
-`iris.adapters.llm.observability` ロガー配下に送出され、 `extra`
-フィールドに構造化ペイロードが紐付く。
+`LLMClientFactory` が構築する LLM クライアントは、生成呼び出しごとに
+`RuntimeLLMRequestObserver` で request lifecycle を記録する。runtime trace context が
+束縛されている場合、`correlation_id` が LLM log に含まれる。
 
-> **Note**: 起動時診断 (`iris.runtime.observability.diagnostics`) は
-> loguru レコードを使う。 リクエスト可観測性のみが stdlib
-> `logging` を採用している。 それぞれ出力先が異なるため、運用側で
-> ログストリームを分けて集約する場合は logger name / loguru sink で
-> 振り分けること。
+adapter-level の `LoggingRequestObserver` は低レベル利用と adapter tests のために残る。
+runtime wiring は correlation-aware な `RuntimeLLMRequestObserver` を使う。
 
 | イベント | レベル | 説明 |
 |----------|--------|------|
@@ -204,6 +274,34 @@ export IRIS_DIAGNOSTICS_WARMUP_MODELS=true
 確認する。`mode = "strict"` の起動に失敗した場合は同じ
 `startup.diagnostics.readiness` イベントで `status = "fail"` が
 ログに残る。
+
+## Runtime Doctor
+
+runtime doctor は read-only / non-mutating な診断コマンドである。
+`diagnostics.warmup_models = true` の設定でも、runtime doctor は provider warmup を
+実行しない。startup diagnostics は readiness check のみを使う。
+
+```bash
+uv run python -m iris.runtime.doctor
+uv run python -m iris.runtime.doctor --json
+make runtime-doctor
+make runtime-doctor-json
+```
+
+check 項目:
+
+- config discovery
+- config parse / validation
+- selected state backend
+- SQLite path permission (`state.backend = "sqlite"` の場合)
+- logging file path parent permission (`logging.file_path` 設定時)
+- server host / port summary
+- model slot summary
+- startup diagnostics readiness check
+- delivery enabled / disabled
+- scheduler enabled / disabled
+
+失敗時は failure class、issue、recommended next action を出す。
 
 ## Ollama diagnostics の内部動作
 

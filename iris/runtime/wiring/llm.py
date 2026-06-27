@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.llm.fake import FakeLLMClient
-from iris.adapters.llm.observability import LoggingRequestObserver, ObservableLLMClient
+from iris.adapters.llm.observability import ObservableLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
@@ -14,6 +14,7 @@ from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
 from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
 from iris.runtime.config.llm import LLMProvider
+from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 
 if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
@@ -297,9 +298,9 @@ def _wrap_with_observer(client: LLMClient) -> LLMClient:
 
     Returns:
         The same client wrapped in :class:`ObservableLLMClient` with
-        a :class:`LoggingRequestObserver`.
+        a :class:`RuntimeLLMRequestObserver`.
     """
-    return ObservableLLMClient(client, LoggingRequestObserver())
+    return ObservableLLMClient(client, RuntimeLLMRequestObserver())
 
 
 def _build_user_content(prompt: ResponsePrompt) -> str:

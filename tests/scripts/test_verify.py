@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 from scripts.verify import (
     CHECKS,
@@ -97,11 +97,60 @@ class TestRunCheckOutput:
         check = Check("lint", ("echo", "hello"), failure_class="lint")
         with patch("scripts.verify._run_command") as mock_run:
             mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+        captured = io.StringIO()
+        with patch("sys.stdout", new=captured):
+            result = run_check(check)
+        assert result == 0
+        assert "passed" in captured.getvalue()
+
+    def test_streaming_check_does_not_capture_output(self) -> None:
+        check = Check(
+            "tests+coverage",
+            ("pytest", "tests"),
+            failure_class="tests+coverage",
+            stream_output=True,
+        )
+        with patch("scripts.verify._run_command") as mock_run:
+            mock_run.return_value = MagicMock(stdout=None, stderr=None, returncode=0)
+
             captured = io.StringIO()
             with patch("sys.stdout", new=captured):
                 result = run_check(check)
-            assert result == 0
-            assert "passed" in captured.getvalue()
+
+        assert result == 0
+        mock_run.assert_called_once_with(
+            check.command,
+            cwd=ANY,
+            check=False,
+            capture_output=False,
+            text=True,
+        )
+        assert "passed" in captured.getvalue()
+
+    def test_streaming_check_failure_with_stdout_none_prints_fallback_hint(self) -> None:
+        """stdout=None (streaming) の失敗時は fallback hint を出力する。"""
+        check = Check(
+            "tests+coverage",
+            ("pytest", "tests"),
+            failure_class="tests+coverage",
+            stream_output=True,
+        )
+        with patch("scripts.verify._run_command") as mock_run:
+            mock_run.return_value = MagicMock(stdout=None, stderr=None, returncode=1)
+
+            captured = io.StringIO()
+            with patch("sys.stdout", new=captured):
+                result = run_check(check)
+
+        assert result == 1
+        output = captured.getvalue()
+        assert "failed with exit code 1" in output
+        assert "class: tests+coverage" in output
+        assert "first failure: unavailable because output was streamed" in output
+        assert "make ai-test-target" in output
+        assert "first failure:" in output
+        # non-streaming "next:" recommendation must NOT appear in streaming path
+        assert "make ai-test-target TARGET=<failing_test>  OR  make coverage" not in output
 
     def test_failure_output(self) -> None:
         check = Check(

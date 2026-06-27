@@ -36,6 +36,7 @@ from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHa
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.lifecycle.scheduler_loop import run_scheduler_loop
 from iris.runtime.observability.diagnostics import run_startup_diagnostics
+from iris.runtime.observability.events import LoggingRuntimeObservationObserver
 from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
 from iris.runtime.service import IntegratingObservationPipeline, IrisRuntimeService
@@ -132,6 +133,7 @@ def build_runtime_service(
         ),
         workspace_context_assembler=workspace_context_assembler,
         activity_event_reaction_handler=activity_event_reaction_handler,
+        observation_observer=LoggingRuntimeObservationObserver(),
     )
 
 
@@ -371,12 +373,10 @@ def main() -> None:
     host: str | None = args.host
     port_val: int | str | None = args.port
     config_path: str | None = args.config
-
     overrides = RuntimeConfigOverrides(
         server_host=host,
         server_port=int(port_val) if port_val is not None else None,
     )
-
     try:
         asyncio.run(
             serve(

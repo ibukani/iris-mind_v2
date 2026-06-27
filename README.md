@@ -72,6 +72,15 @@ LLM プロバイダの起動時診断モード (`off` / `warn` / `strict`)、war
 リクエスト可観測性、gRPC エラーマッピングの詳細については
 [docs/observability.md](docs/observability.md) を参照。
 
+read-only runtime diagnostics は次で実行できる:
+
+```bash
+uv run python -m iris.runtime.doctor
+uv run python -m iris.runtime.doctor --json
+make runtime-doctor
+make runtime-doctor-json
+```
+
 ### 設定ソースの役割分担
 
 各設定ソースには明確な役割がある。変更したい値に応じて適切な手段を選ぶ。
