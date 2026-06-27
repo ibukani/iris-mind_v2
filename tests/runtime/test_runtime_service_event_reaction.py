@@ -166,6 +166,7 @@ def service_setup() -> tuple[IrisRuntimeService, _CaptureFrameStep]:
         app,
         stores,
         now=lambda: _RECEIVED_AT,
+        target_stale_after_seconds=604800.0,
     )
     return service, capture
 

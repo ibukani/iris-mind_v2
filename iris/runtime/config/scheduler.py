@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from iris.runtime.config.errors import ConfigError
-from iris.runtime.config.parsing import TomlTable, parse_bool, parse_float, parse_int
+from iris.runtime.config.parsing import (
+    TomlTable,
+    env_optional_float,
+    parse_bool,
+    parse_float,
+    parse_int,
+)
 
 
 @dataclass(frozen=True)
@@ -16,6 +26,7 @@ class RuntimeSchedulerConfig:
     interval_seconds: float = 30.0
     idle_threshold_seconds: float = 600.0
     min_interval_per_target_seconds: float = 1800.0
+    target_stale_after_seconds: float = 604800.0
     max_due_per_run: int = 10
 
 
@@ -56,11 +67,41 @@ def apply_scheduler_toml(
                 "scheduler.min_interval_per_target_seconds",
             ),
         )
+    if "target_stale_after_seconds" in table:
+        value = replace(
+            value,
+            target_stale_after_seconds=parse_float(
+                table["target_stale_after_seconds"],
+                "scheduler.target_stale_after_seconds",
+            ),
+        )
     if "max_due_per_run" in table:
         value = replace(
             value,
             max_due_per_run=parse_int(table["max_due_per_run"], "scheduler.max_due_per_run"),
         )
+    return validate_scheduler_config(value)
+
+
+def apply_scheduler_env(
+    config: RuntimeSchedulerConfig,
+    env: Mapping[str, str],
+) -> RuntimeSchedulerConfig:
+    """環境変数オーバーライドをスケジューラー設定に適用する。
+
+    Args:
+        config: ベースとなるスケジューラー設定。
+        env: 環境変数のマッピング。
+
+    Returns:
+        更新後のスケジューラー設定。
+    """
+    value = config
+
+    stale_after = env_optional_float(env, "IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS", None)
+    if stale_after is not None:
+        value = replace(value, target_stale_after_seconds=stale_after)
+
     return validate_scheduler_config(value)
 
 
@@ -84,6 +125,9 @@ def validate_scheduler_config(config: RuntimeSchedulerConfig) -> RuntimeSchedule
         raise ConfigError(msg)
     if config.min_interval_per_target_seconds < 0:
         msg = "scheduler.min_interval_per_target_seconds must be >= 0"
+        raise ConfigError(msg)
+    if config.target_stale_after_seconds <= 0:
+        msg = "scheduler.target_stale_after_seconds must be > 0"
         raise ConfigError(msg)
     if config.max_due_per_run <= 0:
         msg = "scheduler.max_due_per_run must be > 0"

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
-from iris.contracts.delivery import DeliveryTarget
+from iris.contracts.delivery import DeliveryTarget, SchedulerTarget
 from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import CorrelationId, ObservationId
 from iris.runtime.scheduler.models import ScheduledObservation
@@ -14,7 +14,7 @@ from iris.runtime.scheduler.ports import RuntimeScheduler
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from iris.runtime.state.proactive_targets import ProactiveTarget, ProactiveTargetStore
+    from iris.runtime.state.scheduler_targets import SchedulerTargetStore
 
 
 @dataclass(frozen=True)
@@ -30,11 +30,11 @@ _DEFAULT_IDLE_POLICY = IdleTickSchedulePolicy()
 
 
 class IdleTickSource(RuntimeScheduler):
-    """ProactiveTargetStore から IdleTickObservation を生成する scheduler。"""
+    """SchedulerTargetStore から IdleTickObservation を生成する scheduler。"""
 
     def __init__(
         self,
-        target_store: ProactiveTargetStore,
+        target_store: SchedulerTargetStore,
         *,
         policy: IdleTickSchedulePolicy = _DEFAULT_IDLE_POLICY,
     ) -> None:
@@ -74,7 +74,7 @@ class IdleTickSource(RuntimeScheduler):
         targets = await self._target_store.list_targets(now=dispatched_at)
         for target in targets:
             if _observation_id_for(target, dispatched_at) == observation_id:
-                await self._target_store.mark_proactive_attempt(
+                await self._target_store.mark_scheduler_attempt(
                     target,
                     attempted_at=dispatched_at,
                 )
@@ -93,7 +93,7 @@ class IdleTickSource(RuntimeScheduler):
 
     @staticmethod
     def _scheduled_observation_for(
-        target: ProactiveTarget,
+        target: SchedulerTarget,
         now: datetime,
     ) -> ScheduledObservation:
         """Build a ScheduledObservation with IdleTickObservation for one target.
@@ -133,18 +133,18 @@ class IdleTickSource(RuntimeScheduler):
             ),
         )
 
-    def _is_due(self, target: ProactiveTarget, now: datetime) -> bool:
+    def _is_due(self, target: SchedulerTarget, now: datetime) -> bool:
         """Return whether one target is idle enough."""
         if (now - target.last_observed_at).total_seconds() < self._policy.idle_threshold_seconds:
             return False
-        last_attempt = target.last_proactive_attempt_at
+        last_attempt = target.last_scheduler_attempt_at
         if last_attempt is None:
             return True
         elapsed = (now - last_attempt).total_seconds()
         return elapsed >= self._policy.min_interval_per_target_seconds
 
 
-def _observation_id_for(target: ProactiveTarget, now: datetime) -> ObservationId:
+def _observation_id_for(target: SchedulerTarget, now: datetime) -> ObservationId:
     """Build deterministic observation id for one scheduler run timestamp.
 
     Returns:

@@ -239,6 +239,13 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "target ごとの proactive tick 最小間隔秒数。",
         ),
         ConfigFieldSpec(
+            "scheduler.target_stale_after_seconds",
+            ConfigValueType.FLOAT,
+            604800.0,
+            "target が stale になるまでの idle 秒数 (デフォルト7日)。",
+            env="IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS",
+        ),
+        ConfigFieldSpec(
             "scheduler.max_due_per_run",
             ConfigValueType.INT,
             10,

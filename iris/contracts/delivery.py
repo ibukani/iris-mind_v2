@@ -42,6 +42,10 @@ TERMINAL_DELIVERY_STATUSES = frozenset(
 )
 
 
+class DeliveryOutboxError(RuntimeError):
+    """Delivery outbox state transition failed."""
+
+
 @dataclass(frozen=True)
 class DeliveryRouteHint:
     """Ingress 境界で保存する外部 provider routing hint。"""
@@ -50,6 +54,21 @@ class DeliveryRouteHint:
     provider_subject: ExternalRef | None
     provider_space_ref: ExternalRef | None
     display_name: str | None = None
+
+
+@dataclass(frozen=True)
+class SchedulerTarget:
+    """Scheduler が IdleTickObservation を作る候補 target。"""
+
+    actor_id: ActorId | None
+    account_id: AccountId | None
+    space_id: SpaceId | None
+    session_id: SessionId
+    route: DeliveryRouteHint
+    display_name: str | None
+    last_observed_at: datetime
+    last_scheduler_attempt_at: datetime | None = None
+    stale_after: datetime | None = None
 
 
 @dataclass(frozen=True)

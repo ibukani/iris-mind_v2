@@ -1,8 +1,8 @@
-"""Proactive target integrator tests."""
+"""Scheduler target integrator tests."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -13,8 +13,8 @@ from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
 )
-from iris.runtime.state.proactive_target_integrator import ProactiveTargetIntegrator
-from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore
+from iris.runtime.state.scheduler_target_integrator import SchedulerTargetIntegrator
+from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 
 pytestmark = pytest.mark.anyio
 
@@ -33,10 +33,12 @@ def _observation() -> ActorMessageObservation:
 
 async def test_target_integrator_updates_from_trusted_route_hint() -> None:
     """Trusted ingress with capability and route hint registers a target."""
-    store = InMemoryProactiveTargetStore()
-    integrator = ProactiveTargetIntegrator(store)
+    store = InMemorySchedulerTargetStore()
+    integrator = SchedulerTargetIntegrator(store, target_stale_after_seconds=60.0)
+
+    obs = _observation()
     await integrator.integrate_observation(
-        _observation(),
+        obs,
         ObservationIngressContext(
             adapter_id="grpc",
             provider="grpc",
@@ -51,12 +53,15 @@ async def test_target_integrator_updates_from_trusted_route_hint() -> None:
     )
     targets = await store.list_targets(now=datetime(2026, 1, 1, tzinfo=UTC))
     assert len(targets) == 1
+    target = targets[0]
+    assert target.stale_after == obs.occurred_at + timedelta(seconds=60.0)
+    assert target.last_observed_at == obs.occurred_at
 
 
 async def test_target_integrator_ignores_missing_hint_or_capability() -> None:
     """Integrator ignores ingress without route hint or capability."""
-    store = InMemoryProactiveTargetStore()
-    integrator = ProactiveTargetIntegrator(store)
+    store = InMemorySchedulerTargetStore()
+    integrator = SchedulerTargetIntegrator(store, target_stale_after_seconds=604800.0)
     await integrator.integrate_observation(
         _observation(),
         ObservationIngressContext(

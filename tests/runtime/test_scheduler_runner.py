@@ -18,7 +18,7 @@ from iris.runtime.scheduler.idle_tick import IdleTickSource
 from iris.runtime.scheduler.models import ScheduledObservation
 from iris.runtime.scheduler.runner import SchedulerRunner
 from iris.runtime.service import ObservationEnvelope, RuntimeResponse
-from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore
+from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.safety.delivery_gate import BasicDeliverySafetyGate, DeliverySafetyDecision
 from tests.runtime.scheduler.test_idle_tick_source import make_target
 
@@ -65,7 +65,7 @@ async def _runner(
         (runner, fake_runtime, outbox) のタプル。
     """
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    store = InMemoryProactiveTargetStore()
+    store = InMemorySchedulerTargetStore()
     await store.upsert_target(make_target(observed_at=now - timedelta(seconds=1000)))
     scheduler = IdleTickSource(store)
     runtime = _FakeRuntimeService(output)

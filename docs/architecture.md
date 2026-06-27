@@ -256,8 +256,8 @@ adapters/app_gateway/ports.py
 - `runtime/wiring/` は constructor injection に限定する。
 - `runtime/wiring/` に業務ロジックや認知ロジックを書かない。
 - `runtime/ingress/` は trust check、観測統合、runtime handler 呼び出し、safety gate などの orchestration に限定する。
-- `runtime/state/` は activity journal/projection、presence、space occupancy、proactive target、availability、workspace context assembly など runtime-owned state とその port を置く。volatile store は process-local、durable backend は `runtime/wiring/state.py` が明示的に adapter を注入する。`ActivityJournal` port は consuming runtime state module の近くに置く。
-- `runtime/state/` は当面 flat に保つ。大きくなった場合だけ state family ごとに `runtime/state/activity/`、`runtime/state/presence/`、`runtime/state/space_occupancy/`、`runtime/state/proactive_targets/` へ分割する。複数ファイルが同じ family に溜まるまで、美観だけで nested package を作らない。
+- `runtime/state/` は activity journal/projection、presence、space occupancy、scheduler target、availability、workspace context assembly など runtime-owned state とその port を置く。volatile store は process-local、durable backend は `runtime/wiring/state.py` が明示的に adapter を注入する。`ActivityJournal` port は consuming runtime state module の近くに置く。
+- `runtime/state/` は当面 flat に保つ。大きくなった場合だけ state family ごとに `runtime/state/activity/`、`runtime/state/presence/`、`runtime/state/space_occupancy/`、`runtime/state/scheduler_targets/` へ分割する。複数ファイルが同じ family に溜まるまで、美観だけで nested package を作らない。
 - feature 固有の policy、planning、scoring、candidate generation、template は `features/` に置く。
 - domain/action/reaction candidate から `PresentedOutput` への変換は `presentation/` に置く。
 

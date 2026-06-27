@@ -4,23 +4,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
+from iris.contracts.delivery import DeliveryEnvelope, DeliveryOutboxError
+
 if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.actions import ActionResult
-    from iris.contracts.delivery import DeliveryEnvelope
     from iris.core.ids import DeliveryId, LeaseId
 
-
-class DeliveryOutboxError(RuntimeError):
-    """Delivery outbox state transition failed."""
+__all__ = ["DeliveryOutbox", "DeliveryOutboxError"]
 
 
 class DeliveryOutbox(Protocol):
     """Durable-compatible port for pull-based external delivery."""
 
     async def enqueue(self, envelope: DeliveryEnvelope) -> DeliveryEnvelope:
-        """Store a pending delivery item idempotently."""
+        """Store pending delivery item idempotently."""
         ...
 
     async def lease_due(
@@ -46,7 +45,7 @@ class DeliveryOutbox(Protocol):
         result: ActionResult,
         completed_at: datetime,
     ) -> DeliveryEnvelope:
-        """Complete a leased item from an ActionResult."""
+        """Complete leased item with ActionResult."""
         ...
 
     async def release(
@@ -58,5 +57,5 @@ class DeliveryOutbox(Protocol):
         result: ActionResult,
         released_at: datetime,
     ) -> DeliveryEnvelope:
-        """Release a leased item for retry or permanent failure."""
+        """Release leased item for retry or permanent failure."""
         ...

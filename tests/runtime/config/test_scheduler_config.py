@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import pytest
@@ -52,3 +53,17 @@ max_due_per_run = 2
     config = load_runtime_config(path, env={})
     assert config.scheduler.enabled is True
     assert config.scheduler.max_due_per_run == 2
+
+
+def test_scheduler_env_stale_after_seconds() -> None:
+    """Env override of target_stale_after_seconds."""
+    env = {"IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS": "123.0"}
+    config = load_runtime_config(None, env=env)
+    assert math.isclose(config.scheduler.target_stale_after_seconds, 123.0)
+
+
+def test_scheduler_env_stale_after_seconds_invalid() -> None:
+    """Env override validation."""
+    env = {"IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS": "-1.0"}
+    with pytest.raises(ConfigError, match=r"scheduler\.target_stale_after_seconds"):
+        load_runtime_config(None, env=env)
