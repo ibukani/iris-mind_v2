@@ -34,6 +34,7 @@ class OllamaConfig:
     temperature: float = 0.0
     max_output_tokens: int | None = None
     keep_alive: str | None = None
+    think: bool | str | None = False
 
 
 class OllamaAdapterError(LLMProviderError):
@@ -113,6 +114,8 @@ class OllamaLLMClient(LLMClient):
             "stream": False,
             "options": options,
         }
+        if self._config.think is not None:
+            payload["think"] = self._config.think
         if self._config.keep_alive is not None:
             payload["keep_alive"] = self._config.keep_alive
         return payload
@@ -211,16 +214,23 @@ def _to_llm_response(body: _JsonObject, *, fallback_model: str) -> LLMResponse:
         raise LLMProviderInvalidResponseError(error_message)
 
     content = message.get("content")
-    if not isinstance(content, str) or not content.strip():
-        content = message.get("thinking")
-    if not isinstance(content, str) or not content.strip():
+    if isinstance(content, str) and content.strip():
+        text = content
+    else:
+        thinking = message.get("thinking")
+        if isinstance(thinking, str) and thinking.strip():
+            error_message = (
+                "Ollama returned thinking without message content; configure "
+                "think=False or use a model/template that emits message.content"
+            )
+            raise LLMProviderInvalidResponseError(error_message)
         error_message = "Ollama response is missing message content"
         raise LLMProviderInvalidResponseError(error_message)
 
     provider_model = body.get("model")
     model = provider_model if isinstance(provider_model, str) else fallback_model
     finish_reason = _finish_reason(body)
-    return LLMResponse(text=content, model=model, finish_reason=finish_reason)
+    return LLMResponse(text=text, model=model, finish_reason=finish_reason)
 
 
 def _finish_reason(body: _JsonObject) -> str:

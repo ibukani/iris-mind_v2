@@ -79,9 +79,50 @@ async def test_ollama_client_posts_chat_payload() -> None:
             {"role": "user", "content": "hello"},
         ],
         "stream": False,
+        "think": False,
         "options": {"temperature": 0.25, "num_predict": 64},
         "keep_alive": "5m",
     }
+
+
+@pytest.mark.anyio
+async def test_ollama_client_omits_think_when_configured_none() -> None:
+    """OllamaLLMClient omits provider thinking flag when configured None."""
+    recorded = _RecordedRequest()
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        recorded.payload = _load_json_object(request)
+        return httpx.Response(200, json={"message": {"content": "ok"}}, request=request)
+
+    client = OllamaLLMClient(
+        OllamaConfig(think=None),
+        transport=httpx.MockTransport(_handler),
+    )
+
+    await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+    assert recorded.payload is not None
+    assert "think" not in recorded.payload
+
+
+@pytest.mark.anyio
+async def test_ollama_client_sends_explicit_think_true() -> None:
+    """OllamaLLMClient sends provider thinking flag when explicitly enabled."""
+    recorded = _RecordedRequest()
+
+    def _handler(request: httpx.Request) -> httpx.Response:
+        recorded.payload = _load_json_object(request)
+        return httpx.Response(200, json={"message": {"content": "ok"}}, request=request)
+
+    client = OllamaLLMClient(
+        OllamaConfig(think=True),
+        transport=httpx.MockTransport(_handler),
+    )
+
+    await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+    assert recorded.payload is not None
+    assert recorded.payload["think"] is True
 
 
 @pytest.mark.anyio
@@ -178,6 +219,52 @@ async def test_ollama_client_raises_on_invalid_json() -> None:
     client = OllamaLLMClient(transport=transport)
 
     with pytest.raises(LLMProviderInvalidResponseError):
+        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+
+@pytest.mark.anyio
+async def test_ollama_client_prefers_content_over_thinking() -> None:
+    """OllamaLLMClient never returns provider thinking as response text."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={
+                "message": {
+                    "content": "provider text",
+                    "thinking": "Thinking Process: private reasoning",
+                },
+            },
+            request=request,
+        )
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    response = await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+    assert response.text == "provider text"
+
+
+@pytest.mark.anyio
+async def test_ollama_client_rejects_thinking_without_content() -> None:
+    """OllamaLLMClient rejects thinking-only chat responses."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200,
+            json={
+                "message": {
+                    "content": "",
+                    "thinking": "Thinking Process: private reasoning",
+                },
+            },
+            request=request,
+        )
+    )
+    client = OllamaLLMClient(transport=transport)
+
+    with pytest.raises(
+        LLMProviderInvalidResponseError,
+        match="thinking without message content",
+    ):
         await client.generate(LLMRequest(model="qwen3:8b", messages=()))
 
 
