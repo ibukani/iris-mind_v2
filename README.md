@@ -29,6 +29,14 @@ config が見つからない場合はエラーにしない。組み込み defaul
 
 Fake LLM がデフォルトであり、外部サービスや API キーは不要。
 
+## Docs
+
+- [`docs/index.md`](docs/index.md): runtime foundation docs の入口。
+- [`docs/architecture.md`](docs/architecture.md): 層構造、runtime flow、現在の実装スコープ。
+- [`docs/runtime-api.md`](docs/runtime-api.md): gRPC Runtime API と pull-based delivery API。
+- [`docs/observability.md`](docs/observability.md): runtime logs、LLM request observability、doctor。
+- [`docs/adr/README.md`](docs/adr/README.md): ADR 一覧と形式。
+
 ## ローカル Ollama
 
 ローカルプロバイダを使う前に、Ollama を別途インストール・起動する。サンプルモデルを取得する:
@@ -168,6 +176,8 @@ from iris.runtime.config import (
 
 - account bindings / actor identity links
 - long-term memory records
+- relationship state
+- affect baseline state
 - activity journal (append-only audit log)
 
 `state.backend = "sqlite"` でも process-local のまま (ephemeral):
@@ -179,8 +189,8 @@ from iris.runtime.config import (
 
 Activity journalは investigation、debugging、provider event dedupe、future replay、
 future projection rebuildのための append-only audit log である。Normal runtime
-contextのhot query pathではない。関係性 baseline と affect / mood baseline は
-将来の永続化対象だが、専用 store が用意されるまで deferred。
+contextのhot query pathではない。relationship と affect は専用 store を持ち、
+activity journal には混ぜない。
 
 詳細は `docs/adr/0002-runtime-state-persistence-policy.md` を参照。
 
