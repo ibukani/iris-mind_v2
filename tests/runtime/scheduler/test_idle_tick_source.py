@@ -7,11 +7,11 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from iris.contracts.delivery import DeliveryRouteHint
+from iris.contracts.delivery import DeliveryRouteHint, SchedulerTarget
 from iris.contracts.observations import IdleTickObservation
 from iris.core.ids import AccountId, ExternalRef, SessionId, SpaceId
 from iris.runtime.scheduler.idle_tick import IdleTickSchedulePolicy, IdleTickSource
-from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore, ProactiveTarget
+from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 
 pytestmark = pytest.mark.anyio
 
@@ -21,13 +21,13 @@ def make_target(
     *,
     observed_at: datetime,
     attempted_at: datetime | None = None,
-) -> ProactiveTarget:
-    """Build a deterministic ProactiveTarget for tests.
+) -> SchedulerTarget:
+    """Build a deterministic SchedulerTarget for tests.
 
     Returns:
-        構築された ProactiveTarget。
+        構築された SchedulerTarget。
     """
-    return ProactiveTarget(
+    return SchedulerTarget(
         actor_id=None,
         account_id=AccountId("account-1"),
         space_id=SpaceId("space-1"),
@@ -39,20 +39,20 @@ def make_target(
         ),
         display_name=subject,
         last_observed_at=observed_at,
-        last_proactive_attempt_at=attempted_at,
+        last_scheduler_attempt_at=attempted_at,
     )
 
 
 async def test_no_registered_targets_no_observations() -> None:
     """Empty target store produces no observations."""
-    source = IdleTickSource(InMemoryProactiveTargetStore())
+    source = IdleTickSource(InMemorySchedulerTargetStore())
     assert await source.due_observations(datetime(2026, 1, 1, tzinfo=UTC)) == ()
 
 
 async def test_idle_threshold_and_context_and_target() -> None:
     """Target over idle threshold emits IdleTickObservation with context and target."""
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    store = InMemoryProactiveTargetStore()
+    store = InMemorySchedulerTargetStore()
     await store.upsert_target(make_target(observed_at=now - timedelta(seconds=601)))
     source = IdleTickSource(store)
     due = await source.due_observations(now)
@@ -65,9 +65,9 @@ async def test_idle_threshold_and_context_and_target() -> None:
 
 
 async def test_below_threshold_and_min_interval_suppress_ticks() -> None:
-    """Recent activity or recent proactive attempt suppresses ticks."""
+    """Recent activity or recent scheduler attempt suppresses ticks."""
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    store = InMemoryProactiveTargetStore()
+    store = InMemorySchedulerTargetStore()
     await store.upsert_target(make_target("recent", observed_at=now - timedelta(seconds=10)))
     await store.upsert_target(
         make_target(
@@ -83,7 +83,7 @@ async def test_below_threshold_and_min_interval_suppress_ticks() -> None:
 async def test_max_due_and_ordering_are_deterministic() -> None:
     """max_due_per_run truncates stable ordered targets."""
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    store = InMemoryProactiveTargetStore()
+    store = InMemorySchedulerTargetStore()
     base = make_target("b", observed_at=now - timedelta(seconds=1000))
     await store.upsert_target(base)
     await store.upsert_target(

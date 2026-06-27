@@ -48,7 +48,7 @@ from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdap
 from iris.runtime.service import IntegratingObservationPipeline, IrisRuntimeService
 from iris.runtime.state.activity_integrator import ActivityIntegrator
 from iris.runtime.state.presence_integrator import PresenceIntegrator
-from iris.runtime.state.proactive_target_integrator import ProactiveTargetIntegrator
+from iris.runtime.state.scheduler_target_integrator import SchedulerTargetIntegrator
 from iris.runtime.state.space_occupancy_integrator import SpaceOccupancyIntegrator
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.availability import wire_availability_resolver
@@ -110,8 +110,8 @@ def build_runtime_service(
         trust_policy=trust_policy,
         now=current_now,
     )
-    proactive_target_integrator = ProactiveTargetIntegrator(
-        target_store=stores.proactive_target_store,
+    scheduler_target_integrator = SchedulerTargetIntegrator(
+        target_store=stores.scheduler_target_store,
     )
     availability_resolver = wire_availability_resolver()
     workspace_context_assembler = wire_workspace_context_assembler(
@@ -134,7 +134,7 @@ def build_runtime_service(
                 activity_integrator,
                 presence_integrator,
                 occupancy_integrator,
-                proactive_target_integrator,
+                scheduler_target_integrator,
             )
         ),
         workspace_context_assembler=workspace_context_assembler,
@@ -173,7 +173,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         else None
     )
     delivery_gate = wire_delivery_safety_gate(config.delivery)
-    scheduler = wire_runtime_scheduler(stores.proactive_target_store, config)
+    scheduler = wire_runtime_scheduler(stores.scheduler_target_store, config)
     availability_resolver = wire_availability_resolver()
     availability_provider = DeliveryAvailabilityResolverAdapter(
         resolver=availability_resolver,

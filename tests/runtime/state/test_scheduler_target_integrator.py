@@ -1,4 +1,4 @@
-"""Proactive target integrator tests."""
+"""Scheduler target integrator tests."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
 )
-from iris.runtime.state.proactive_target_integrator import ProactiveTargetIntegrator
-from iris.runtime.state.proactive_targets import InMemoryProactiveTargetStore
+from iris.runtime.state.scheduler_target_integrator import SchedulerTargetIntegrator
+from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 
 pytestmark = pytest.mark.anyio
 
@@ -33,8 +33,8 @@ def _observation() -> ActorMessageObservation:
 
 async def test_target_integrator_updates_from_trusted_route_hint() -> None:
     """Trusted ingress with capability and route hint registers a target."""
-    store = InMemoryProactiveTargetStore()
-    integrator = ProactiveTargetIntegrator(store)
+    store = InMemorySchedulerTargetStore()
+    integrator = SchedulerTargetIntegrator(store)
     await integrator.integrate_observation(
         _observation(),
         ObservationIngressContext(
@@ -55,8 +55,8 @@ async def test_target_integrator_updates_from_trusted_route_hint() -> None:
 
 async def test_target_integrator_ignores_missing_hint_or_capability() -> None:
     """Integrator ignores ingress without route hint or capability."""
-    store = InMemoryProactiveTargetStore()
-    integrator = ProactiveTargetIntegrator(store)
+    store = InMemorySchedulerTargetStore()
+    integrator = SchedulerTargetIntegrator(store)
     await integrator.integrate_observation(
         _observation(),
         ObservationIngressContext(

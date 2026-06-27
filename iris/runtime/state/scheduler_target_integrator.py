@@ -1,26 +1,27 @@
-"""Ingress delivery route hints を proactive target store へ統合する。"""
+"""Ingress delivery route hints を scheduler target store へ統合する。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
+from iris.contracts.delivery import SchedulerTarget
 from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     ObservationIngressContext,
 )
 from iris.runtime.ingress.observation_integrator import ObservationIntegrator
-from iris.runtime.state.proactive_targets import ProactiveTarget, ProactiveTargetStore
 
 if TYPE_CHECKING:
     from iris.contracts.observations import Observation
+    from iris.runtime.state.scheduler_targets import SchedulerTargetStore
 
 
 @dataclass(frozen=True)
-class ProactiveTargetIntegrator(ObservationIntegrator):
-    """Trusted ingress route hint から proactive target を登録する integrator。"""
+class SchedulerTargetIntegrator(ObservationIntegrator):
+    """Trusted ingress route hint から scheduler target を登録する integrator。"""
 
-    target_store: ProactiveTargetStore
+    target_store: SchedulerTargetStore
 
     @override
     async def integrate_observation(
@@ -36,7 +37,7 @@ class ProactiveTargetIntegrator(ObservationIntegrator):
         if ingress.delivery_route is None:
             return
         context = observation.context
-        target = ProactiveTarget(
+        target = SchedulerTarget(
             actor_id=context.actor_id,
             account_id=context.account_id,
             space_id=context.space_id,
