@@ -230,7 +230,7 @@ adapters/app_gateway/ports.py
 
 ### `runtime/`
 
-アプリケーション起動、構成、ライフサイクル、スケジューリング、配送、観測 ingress、依存配線、可観測性、process-local runtime state を担当する。
+アプリケーション起動、構成、ライフサイクル、スケジューリング、配送、観測 ingress、依存配線、可観測性、runtime state ports / stores を担当する。
 
 主な責務。
 
@@ -242,7 +242,7 @@ adapters/app_gateway/ports.py
 - delivery outbox / delivery lifecycle
 - ingress orchestration
 - observability
-- process-local runtime state
+- runtime state ports / stores
 
 注意点。
 
@@ -251,7 +251,7 @@ adapters/app_gateway/ports.py
 - `runtime/wiring/` は constructor injection に限定する。
 - `runtime/wiring/` に業務ロジックや認知ロジックを書かない。
 - `runtime/ingress/` は trust check、観測統合、runtime handler 呼び出し、safety gate などの orchestration に限定する。
-- `runtime/state/` は activity journal/projection、presence、space occupancy、proactive target、availability、workspace context assembly など process-local state とその port を置く。`ActivityJournal` port は consuming runtime state module の近くに置く。
+- `runtime/state/` は activity journal/projection、presence、space occupancy、proactive target、availability、workspace context assembly など runtime-owned state とその port を置く。volatile store は process-local、durable backend は `runtime/wiring/state.py` が明示的に adapter を注入する。`ActivityJournal` port は consuming runtime state module の近くに置く。
 - `runtime/state/` は当面 flat に保つ。大きくなった場合だけ state family ごとに `runtime/state/activity/`、`runtime/state/presence/`、`runtime/state/space_occupancy/`、`runtime/state/proactive_targets/` へ分割する。複数ファイルが同じ family に溜まるまで、美観だけで nested package を作らない。
 - feature 固有の policy、planning、scoring、candidate generation、template は `features/` に置く。
 - domain/action/reaction candidate から `PresentedOutput` への変換は `presentation/` に置く。
@@ -591,9 +591,9 @@ runtime stateのsource-of-truth:
 - `SpaceOccupancyStore`: live spaceの現在occupants。
 - `InteractionSpace`: 安定したlocation identity/contextのみ。occupantsを保持しない。
 
-`ActivityEventRecord` は受理済みruntime eventであり、長期記憶ではない。デフォルトの `InMemoryActivityJournal` はboundedで、provider-event dedupeも同じwindow内の保証に限る。将来の永続activity logは別adapterとして実装し、memory extractionはraw `ActivityEventRecord` ではなく明示的な `MemoryCandidate` eventから行う。
+`ActivityEventRecord` は受理済みruntime eventであり、長期記憶ではない。`state.backend = "memory"` の `InMemoryActivityJournal` は bounded で、provider-event dedupe も同じ window 内の保証に限る。`state.backend = "sqlite"` では `SQLiteActivityJournal` が append-only audit log を永続化する。memory extraction は raw `ActivityEventRecord` ではなく、明示的な `MemoryCandidate` event から行う。
 
-PR3のstoreはin-memoryのみ。PR4では `AvailabilityResolver` と `WorkspaceContextAssembler` を追加し、`WorkspaceFrame` が `SituationContextSnapshot` を受け取った。PR5では `EventReactionPolicy` / `EventReactionPlanner` / `EventReactionRunner` を追加し、trusted `ActivityEventObservation` に対して決定論的なevent reactionを返す。delivery target、persistenceは未実装。
+現在の runtime state は、activity journal / memory / relationship / affect / account store が SQLite backend に対応する。activity projection、presence、space occupancy、ephemeral space binding、delivery outbox、scheduler target store は process-local のまま。`AvailabilityResolver` と `WorkspaceContextAssembler` は `SituationContextSnapshot` を組み立て、`EventReactionPolicy` / `EventReactionPlanner` / `EventReactionRunner` は trusted `ActivityEventObservation` に対して決定論的な event reaction を返す。
 
 基底 `Observation` は以下を運ぶ。
 
@@ -874,10 +874,13 @@ CLI / main.py / iris.runtime.server
 - FakeLLM デフォルト (OpenAI / Ollama 切替可)
 - 認識・メモリ検索・感情評価・関係性・ポリシー抑制 PipelineStep 実装済み (配線選択可能)
 - proactive_talk feature 実装済み (salience scoring, goal proposal, policy)
-- authenticated ingress capabilityによるtyped activity/presence claimのin-memory runtime integration実装済み
-- trusted voice join/leaveからのin-memory space occupancy integration実装済み
+- authenticated ingress capability による typed activity/presence claim の runtime integration 実装済み
+- trusted voice join/leave からの in-memory space occupancy integration 実装済み
 - `AvailabilityResolver` / `WorkspaceContextAssembler` による `SituationContextSnapshot` の組み立て実装済み
-- 永続ストレージ: SQLiteベースのアカウント永続化を実装済み (`SQLiteAccountStore`)。ただし対話スペースはエフェメラル (`EphemeralSpaceResolver`)。
+- 永続ストレージ: SQLite backend は account、memory、relationship、affect、activity journal を永続化する。activity projection、presence、space occupancy、delivery outbox、scheduler target store、対話スペース解決はエフェメラル。
+- Scheduler lifecycle は config で有効化できる。`SchedulerRunner` は `IdleTickObservation` を発行し、`DeliverySafetyGate` と `DeliveryOutbox` を通した pull-based delivery だけを使う。
+- Delivery は in-memory outbox 実装。`DeliveryEnvelope`、lease、idempotent `ReportActionResult`、`DeliveryStatus` state machine は durable backend へ置換可能な契約として実装済み。
+- Runtime observability は `RuntimeTraceContext`、safe lifecycle logs、LLM request observer、startup diagnostics、read-only runtime doctor を実装済み。
 - `MotivationResult` 型と `FrameBuilder` 対応は既存、step 実装は未着手
 - LearningHook / BackgroundJob は未実装
 - 外部アプリ連携 (Discord, Voice, Twitch) は未実装

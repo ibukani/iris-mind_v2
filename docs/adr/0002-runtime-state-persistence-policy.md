@@ -6,55 +6,57 @@ Accepted
 
 ## Context
 
-Iris Runtime supports two state backends:
+Iris Runtime は二つの state backend を持つ。
 
 - memory
 - sqlite
 
-The backend controls durable companion state, not every runtime cache.
+backend は durable companion state と audit history の範囲を決める。全 runtime cache を SQLite 化する設定ではない。
 
 ## Decision
 
-When `state.backend = "memory"`, all runtime state is process-local.
+`state.backend = "memory"` では全 runtime state が process-local。
 
-When `state.backend = "sqlite"`, Iris persists:
+`state.backend = "sqlite"` では次を永続化する。
 
 - account bindings
 - actor identity links
 - long-term memory records
+- relationship state
+- affect baseline state
 - activity journal records
 
-Iris keeps these process-local even with SQLite backend:
+SQLite backend でも次は process-local のままにする。
 
 - activity projections
 - presence
 - space occupancy
 - ephemeral space bindings
+- delivery outbox
+- scheduler target store
 
-Relationship baseline and affect / mood baseline are durable targets, but remain deferred until dedicated stores exist.
+Activity journal は `state.backend = "sqlite"` で durable になる。investigation、debugging、provider event deduplication、future replay、future projection rebuild のための append-only audit log であり、normal runtime processing の hot query path ではない。runtime context は journal scan ではなく projection と current-state store から組み立てる。
 
-## Activity Journal
+## Non-decisions
 
-Activity journal is durable when `state.backend = "sqlite"`.
-
-It is an append-only audit log for investigation, debugging, provider event deduplication, future replay, and future projection rebuild.
-
-It is not a hot query path for normal runtime processing.
-
-Normal runtime context should use projections and current-state stores instead of scanning the journal.
-
-## Rationale
-
-Actor identity owns long-term memory and relationship semantics.
-
-Space is contextual scope, not the primary owner of memory.
-
-Presence and occupancy are current-state signals and must not survive process restart.
-
-Activity journal is historical evidence and should survive restart.
+- Delivery outbox の durable backend はこの ADR の対象外。
+- Scheduler target store の durable backend はこの ADR の対象外。
+- Activity journal から memory / relationship / affect を暗黙復元する仕様は決めない。
+- Space binding を durable owner にしない。
 
 ## Consequences
 
-`state.backend = "sqlite"` does not mean every runtime store is SQLite.
+`state.backend = "sqlite"` は「すべての runtime store が SQLite」という意味ではない。durable companion state と audit history は SQLite を使い、volatile runtime state は in-memory のままにする。
 
-It means durable companion state and audit history use SQLite while volatile runtime state remains in-memory.
+Actor identity が long-term memory と relationship semantics を所有する。Space は context scope であり、memory の primary owner ではない。Presence と occupancy は current-state signal であり、process restart を越えて残さない。
+
+## Implementation anchors
+
+- `iris/runtime/config/state.py`
+- `iris/runtime/wiring/state.py`
+- `iris/adapters/accounts/sqlite.py`
+- `iris/adapters/memory/sqlite.py`
+- `iris/adapters/relationship/sqlite.py`
+- `iris/adapters/affect/sqlite.py`
+- `iris/adapters/activity/sqlite_journal.py`
+- `iris/runtime/state/`
