@@ -177,13 +177,30 @@ async def test_report_valid_token_unknown_id_not_found() -> None:
 async def test_report_valid_token_wrong_provider_denied() -> None:
     """ReportActionResult requires delivery provider match."""
     outbox = InMemoryDeliveryOutbox()
-    await outbox.enqueue(envelope(provider="cli"))
+    await outbox.enqueue(envelope(provider="cli", delivery_id="delivery-1"))
     broker = RuntimeAppActionBroker(outbox)
     verifier = _verifier(scopes=("delivery.report",), allowed_providers=["slack"])
     async with _AuthGrpcHarness(verifier, app_action_broker=broker) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await stub.ReportActionResult(
-                _report_request(), metadata=(("authorization", "Bearer token-1"),)
+                _report_request(delivery_id="delivery-1"),
+                metadata=(("authorization", "Bearer token-1"),),
+            )
+    assert exc_info.value.code() is grpc.StatusCode.PERMISSION_DENIED
+
+
+@pytest.mark.anyio
+async def test_report_valid_token_wrong_provider_bad_payload_denied() -> None:
+    """ReportActionResult requires delivery provider match even with bad payload."""
+    outbox = InMemoryDeliveryOutbox()
+    await outbox.enqueue(envelope(provider="cli", delivery_id="delivery-1"))
+    broker = RuntimeAppActionBroker(outbox)
+    verifier = _verifier(scopes=("delivery.report",), allowed_providers=["slack"])
+    async with _AuthGrpcHarness(verifier, app_action_broker=broker) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.ReportActionResult(
+                _report_request(delivery_id="delivery-1", status="bad"),
+                metadata=(("authorization", "Bearer token-1"),),
             )
     assert exc_info.value.code() is grpc.StatusCode.PERMISSION_DENIED
 
@@ -298,15 +315,17 @@ def _request() -> runtime_pb2.SubmitObservationRequest:
     )
 
 
-def _report_request() -> runtime_pb2.ReportActionResultRequest:
-    return runtime_pb2.ReportActionResultRequest(
-        delivery_id="delivery-1",
-        lease_id="lease-1",
-        action_id="action-1",
-        correlation_id="corr-1",
-        status="succeeded",
-        external_message_id="msg-1",
-    )
+def _report_request(**kwargs: str) -> runtime_pb2.ReportActionResultRequest:
+    defaults = {
+        "delivery_id": "delivery-1",
+        "lease_id": "lease-1",
+        "action_id": "action-1",
+        "correlation_id": "corr-1",
+        "status": "succeeded",
+        "external_message_id": "msg-1",
+    }
+    defaults.update(kwargs)
+    return runtime_pb2.ReportActionResultRequest(**defaults)
 
 
 def _free_tcp_port() -> int:

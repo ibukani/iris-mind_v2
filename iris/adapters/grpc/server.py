@@ -213,7 +213,6 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
             principal = current_principal()
             self._authorization_policy.require_delivery_report_scope(principal)
             delivery_id = delivery_id_from_report_proto(request)
-            report = delivery_report_from_proto(request, now_utc())
         except RuntimePermissionDeniedError as exc:
             await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
         except GrpcMappingError as exc:
@@ -225,9 +224,12 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
                 principal,
                 delivery_provider,
             )
+            report = delivery_report_from_proto(request, now_utc())
             await self._app_action_broker.report_action_result(report)
         except RuntimePermissionDeniedError as exc:
             await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
+        except GrpcMappingError as exc:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         except AppActionBrokerError as exc:
             await context.abort(_broker_error_status(exc.reason), str(exc.reason))
         return runtime_pb2.ReportActionResultResponse()
