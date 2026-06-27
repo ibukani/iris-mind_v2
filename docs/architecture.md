@@ -159,15 +159,20 @@ iris/
 
 `iris/admin` は現在のアクティブ構成には含めない。過去構想や廃止済み構造は `docs/legacy.md` に隔離し、実装時に再作成しない。
 
-将来の拡張予定（未実装）:
+実装済み / 方針採択済みの runtime foundation:
+
+- `runtime/scheduler/` — `IdleTickSource` と `SchedulerRunner` による typed internal observation 発行。詳細は ADR 0006。
+- `runtime/delivery/` — pull-based delivery outbox、lease、idempotent `ReportActionResult`。詳細は ADR 0006。
+- `runtime/observability/` — runtime trace context、safe lifecycle logs、LLM request observer、startup diagnostics、runtime doctor。詳細は ADR 0008。
+- `runtime/state/` — runtime-owned state ports、activity projection、presence、space occupancy、workspace context assembly。SQLite backend の永続化範囲は ADR 0002。
+- `runtime/lifecycle/` — scheduler lifecycle task の起動・停止境界。
+
+Deferred / future phase:
+
 - `cognitive/motivation/` — MotivationStep の実装（`MotivationResult` 型と `FrameBuilder` 対応は既存）
 - `cognitive/learning/` — LearningHook / BackgroundJob
-- `runtime/scheduler/` — scheduled observation source と scheduler runner
-- `runtime/lifecycle/` — 長時間動く runtime loop
-- `runtime/observability/` — telemetry、diagnostics、logging
-- `runtime/state/` — process-local runtime state と state projection
-- `features/chat/`, `features/memory_consolidation/`, `features/relationship_update/`, `features/persona_patch/`, `features/command_control/`
-- `adapters/tools/`, `adapters/embeddings/`, `adapters/external_clients/`
+- `features/memory_consolidation/`, `features/relationship_update/`, `features/persona_patch/`
+- `adapters/tools/`, `adapters/embeddings/`
 - `safety/policy_engine.py`
 
 ---

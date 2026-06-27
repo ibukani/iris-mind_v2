@@ -24,7 +24,7 @@ Implementation anchors
 | [0007](0007-runtime-boundary-guard.md) | Accepted | `IrisRuntimeService` を薄い coordinator に保ち、境界を architecture tests で守る。 |
 | [0008](0008-runtime-observability-and-diagnostics.md) | Accepted | Runtime observability は typed boundary API と safe metadata に限定する。 |
 
-## Current Drift Notes
+## 現在の横断方針
 
 - `state.backend = "sqlite"` は account、memory、relationship、affect、activity journal を durable にする。
 - activity projection、presence、space occupancy、ephemeral space bindings、delivery outbox、scheduler target store は現 phase では process-local。

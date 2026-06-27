@@ -6,9 +6,9 @@ Accepted
 
 ## Context
 
-Iris は default local MVP と tests で deterministic な fake provider を使い、必要に応じて Ollama / OpenAI を選択する。LLM provider は runtime behavior に強く影響するが、provider SDK、認証、network I/O、model-specific response 形状を cognitive layer へ漏らすと境界が崩れる。
+Iris は default local MVP と tests で deterministic な fake provider を使い、必要に応じて Ollama / OpenAI を選択する。LLM provider は runtime に強く影響するが、provider SDK、認証、network I/O、model-specific response 形状を cognitive layer へ漏らすと境界が崩れる。
 
-設定は TOML、環境変数、CLI override から typed runtime config に集約される。OpenAI API key のような secret は TOML へ書かず、環境変数から adapter boundary で読む。
+設定は TOML、環境変数、CLI override から typed runtime config に集約される。OpenAI API key のような secret は TOML へ書かず、環境変数または将来の secret manager から adapter / config boundary で読む。
 
 ## Decision
 
@@ -20,12 +20,13 @@ LLM provider は `fake`、`ollama`、`openai` の typed provider value として
 
 Fake provider は default と tests の deterministic provider とする。実 provider tests は fake または mocked provider client を使い、通常の検証で実 network へ接続しない。
 
+Secrets は TOML に保存しない。API key、auth token、password は環境変数または将来の secret manager から adapter / config boundary へ供給する。
+
 ## Non-decisions
 
 - Provider SDK の完全な機能差分を Iris contracts に露出しない。
 - Prompt selection、persona policy、memory extraction policy はこの ADR の対象外。
 - Provider-level billing、quota management、organization policy はこの ADR の対象外。
-- OpenAI API key を TOML に保存しない。
 
 ## Consequences
 
@@ -41,4 +42,12 @@ Runtime observability は safe metadata だけを記録する。prompt、user te
 - `iris/runtime/observability/llm.py`
 - `iris/runtime/observability/diagnostics.py`
 - `docs/observability.md`
-- `tests/architecture/`
+- `tests/architecture/test_config_env_ownership.py`
+- `tests/architecture/test_config_spec_integrity.py`
+- `tests/architecture/test_cognitive_runtime_anti_patterns.py`
+- `tests/architecture/test_runtime_boundaries.py`
+- `tests/architecture/test_runtime_boundary_guards.py`
+- `tests/adapters/test_ollama_llm.py`
+- `tests/adapters/test_openai_llm.py`
+- `tests/adapters/test_ollama_diagnostics.py`
+- `tests/adapters/test_openai_diagnostics.py`
