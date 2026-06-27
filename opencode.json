@@ -1,33 +1,34 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "instructions": [
-    ".agents/rules/ai-harness.md",
-    ".agents/rules/verification.md",
-    ".agents/workflows/test-fix.md",
-    ".agents/workflows/architecture.md",
-    ".agents/workflows/ai-harness.md"
-  ],
-  "command": {
-    "ai-check": {
-      "description": "Run the full strict Iris AI harness gate.",
-      "template": "Run `make ai-check`. Keep failures visible. Do not weaken quality gates. Summarize the first failures and next fixes in Japanese."
-    },
-    "ai-quick": {
-      "description": "Run the fast strict Iris AI harness gate.",
-      "template": "Run `make ai-quick`. Fix root causes for lint, format, type, pyright, and architecture failures. Do not relax config."
-    },
-    "ai-arch": {
-      "description": "Run architecture guard tests and analyze boundary failures.",
-      "template": "Read `.agents/workflows/architecture.md`, then run `make ai-arch`. Explain any boundary violation and the smallest safe fix."
-    },
-    "ai-report": {
-      "description": "Generate a compact Japanese completion report skeleton.",
-      "template": "Run `make ai-report`, then fill in the report with actual checks run, failures, and residual risk."
-    },
-    "ai-review": {
-      "description": "Review the current diff without editing files.",
-      "agent": "plan",
-      "template": "Review the current diff against AGENTS.md, `.agents/rules/architecture.md`, `.agents/rules/ai-harness.md`, and `.agents/rules/verification.md`. Do not edit files. Report risks and missing tests in Japanese."
+    "$schema": "https://opencode.ai/config.json",
+    "lsp": true,
+    "instructions": [
+        ".agents/rules/ai-harness.md",
+        ".agents/rules/verification.md",
+        ".agents/workflows/test-fix.md",
+        ".agents/workflows/architecture.md",
+        ".agents/workflows/ai-harness.md"
+    ],
+    "command": {
+        "ai-check": {
+            "description": "Run the full strict Iris AI harness gate.",
+            "template": "Run `make ai-check`. Keep failures visible. Do not weaken quality gates. Summarize the first failures and next fixes in Japanese."
+        },
+        "ai-quick": {
+            "description": "Run the fast strict Iris AI harness gate.",
+            "template": "Run `make ai-quick`. Fix root causes for lint, format, type, pyright, and architecture failures. Do not relax config."
+        },
+        "ai-arch": {
+            "description": "Run architecture guard tests and analyze boundary failures.",
+            "template": "Read `.agents/workflows/architecture.md`, then run `make ai-arch`. Explain any boundary violation and the smallest safe fix."
+        },
+        "ai-report": {
+            "description": "Generate a compact Japanese completion report skeleton.",
+            "template": "Run `make ai-report`, then fill in the report with actual checks run, failures, and residual risk."
+        },
+        "ai-review": {
+            "description": "Review the current diff without editing files.",
+            "agent": "plan",
+            "template": "Review the current diff against AGENTS.md, `.agents/rules/architecture.md`, `.agents/rules/ai-harness.md`, and `.agents/rules/verification.md`. Do not edit files. Report risks and missing tests in Japanese."
+        }
     }
-  }
 }
