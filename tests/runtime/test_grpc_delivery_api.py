@@ -325,11 +325,13 @@ async def test_report_action_result_conflict_returns_already_exists() -> None:
 
 async def test_report_action_result_invalid_proto_returns_invalid_argument() -> None:
     """Invalid report proto maps before broker transition."""
-    broker = RuntimeAppActionBroker(outbox=InMemoryDeliveryOutbox())
+    outbox = InMemoryDeliveryOutbox()
+    await outbox.enqueue(envelope(delivery_id="delivery-1"))
+    broker = RuntimeAppActionBroker(outbox=outbox)
 
     async with _DeliveryGrpcHarness(broker) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await stub.ReportActionResult(_report_request(status="bad"))
+            await stub.ReportActionResult(_report_request(delivery_id="delivery-1", status="bad"))
 
     assert exc_info.value.code() is grpc.StatusCode.INVALID_ARGUMENT
 

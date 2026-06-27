@@ -56,14 +56,26 @@ class RuntimeAuthorizationPolicy:
         self._require_scope(principal, AuthScope.DELIVERY_POLL)
         self._require_provider(principal, provider)
 
+    def require_delivery_report_scope(self, principal: ClientPrincipal) -> None:
+        """ReportActionResult のスコープ権限を検査する。"""
+        self._require_scope(principal, AuthScope.DELIVERY_REPORT)
+
+    def require_delivery_report_provider(
+        self,
+        principal: ClientPrincipal,
+        delivery_provider: str,
+    ) -> None:
+        """ReportActionResult の delivery provider 所有権を検査する。"""
+        self._require_provider(principal, delivery_provider)
+
     def require_report_action_result(
         self,
         principal: ClientPrincipal,
         delivery_provider: str,
     ) -> None:
         """ReportActionResult の権限と delivery provider 所有権を検査する。"""
-        self._require_scope(principal, AuthScope.DELIVERY_REPORT)
-        self._require_provider(principal, delivery_provider)
+        self.require_delivery_report_scope(principal)
+        self.require_delivery_report_provider(principal, delivery_provider)
 
     def validate_observation_provider_claims(
         self,

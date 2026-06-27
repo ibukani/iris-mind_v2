@@ -126,7 +126,55 @@ async def test_report_action_result_valid_token_missing_scope_is_permission_deni
 
 
 @pytest.mark.anyio
-async def test_report_action_result_valid_token_wrong_provider_is_permission_denied() -> None:
+async def test_report_valid_token_missing_scope_bad_payload_denied() -> None:
+    """Without scope, invalid payload still returns PERMISSION_DENIED (not INVALID_ARGUMENT)."""
+    outbox = InMemoryDeliveryOutbox()
+    broker = RuntimeAppActionBroker(outbox)
+    async with _AuthGrpcHarness(
+        _verifier(scopes=("observation.submit",)), app_action_broker=broker
+    ) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.ReportActionResult(
+                runtime_pb2.ReportActionResultRequest(
+                    delivery_id="delivery-1"
+                ),  # missing action_id, correlation_id
+                metadata=(("authorization", "Bearer token-1"),),
+            )
+    assert exc_info.value.code() is grpc.StatusCode.PERMISSION_DENIED
+
+
+@pytest.mark.anyio
+async def test_report_valid_token_missing_scope_unknown_id_denied() -> None:
+    """Without scope, unknown delivery_id returns PERMISSION_DENIED (not NOT_FOUND)."""
+    outbox = InMemoryDeliveryOutbox()
+    broker = RuntimeAppActionBroker(outbox)
+    async with _AuthGrpcHarness(
+        _verifier(scopes=("observation.submit",)), app_action_broker=broker
+    ) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.ReportActionResult(
+                _report_request(), metadata=(("authorization", "Bearer token-1"),)
+            )
+    assert exc_info.value.code() is grpc.StatusCode.PERMISSION_DENIED
+
+
+@pytest.mark.anyio
+async def test_report_valid_token_unknown_id_not_found() -> None:
+    """With delivery.report scope, unknown delivery_id returns NOT_FOUND."""
+    outbox = InMemoryDeliveryOutbox()
+    broker = RuntimeAppActionBroker(outbox)
+    async with _AuthGrpcHarness(
+        _verifier(scopes=("delivery.report",)), app_action_broker=broker
+    ) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.ReportActionResult(
+                _report_request(), metadata=(("authorization", "Bearer token-1"),)
+            )
+    assert exc_info.value.code() is grpc.StatusCode.NOT_FOUND
+
+
+@pytest.mark.anyio
+async def test_report_valid_token_wrong_provider_denied() -> None:
     """ReportActionResult requires delivery provider match."""
     outbox = InMemoryDeliveryOutbox()
     await outbox.enqueue(envelope(provider="cli"))
@@ -141,20 +189,31 @@ async def test_report_action_result_valid_token_wrong_provider_is_permission_den
 
 
 @pytest.mark.anyio
-async def test_report_action_result_valid_token_matching_provider_succeeds() -> None:
+async def test_report_valid_token_matching_provider_succeeds() -> None:
     """ReportActionResult succeeds if scope and provider match."""
     outbox = InMemoryDeliveryOutbox()
-    await outbox.enqueue(envelope(provider="cli"))
+    await outbox.enqueue(envelope(provider="cli", delivery_id="delivery-1"))
     broker = RuntimeAppActionBroker(outbox)
-    # Report fails with FAILED_PRECONDITION (mismatched lease) but passes auth.
+
+    envelopes = await broker.poll_actions(provider="cli", now=_OCCURRED_AT, max_items=1)
+    leased = envelopes[0]
+
+    request = runtime_pb2.ReportActionResultRequest(
+        delivery_id=str(leased.delivery_id),
+        lease_id=str(leased.lease_id),
+        action_id=str(leased.action.action_id),
+        correlation_id=str(leased.action.correlation_id),
+        status="succeeded",
+        external_message_id="msg-1",
+    )
+
     async with _AuthGrpcHarness(
         _verifier(scopes=("delivery.report",)), app_action_broker=broker
     ) as stub:
-        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await stub.ReportActionResult(
-                _report_request(), metadata=(("authorization", "Bearer token-1"),)
-            )
-    assert exc_info.value.code() is grpc.StatusCode.FAILED_PRECONDITION
+        response = await stub.ReportActionResult(
+            request, metadata=(("authorization", "Bearer token-1"),)
+        )
+    assert response == runtime_pb2.ReportActionResultResponse()
 
 
 class _AuthGrpcHarness:

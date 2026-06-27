@@ -565,6 +565,19 @@ def delivery_envelopes_to_poll_response(
     )
 
 
+def delivery_id_from_report_proto(
+    request: runtime_pb2.ReportActionResultRequest,
+) -> DeliveryId:
+    """Extract and validate DeliveryId from ReportActionResultRequest.
+
+    Returns:
+        DeliveryId: 抽出された配送 ID。
+    """
+    if not request.delivery_id:
+        _raise_mapping_error("delivery_id required")
+    return DeliveryId(request.delivery_id)
+
+
 def delivery_report_from_proto(
     request: runtime_pb2.ReportActionResultRequest,
     reported_at: datetime,
@@ -574,15 +587,14 @@ def delivery_report_from_proto(
     Returns:
         DeliveryReport: 配送結果報告。
     """
+    delivery_id = delivery_id_from_report_proto(request)
     status = _action_status_from_report_status(request.status)
-    if not request.delivery_id:
-        _raise_mapping_error("delivery_id required")
     if not request.action_id:
         _raise_mapping_error("action_id required")
     if not request.correlation_id:
         _raise_mapping_error("correlation_id required")
     return DeliveryReport(
-        delivery_id=DeliveryId(request.delivery_id),
+        delivery_id=delivery_id,
         lease_id=LeaseId(request.lease_id) if request.lease_id else None,
         result=ActionResult(
             action_id=ActionId(request.action_id),

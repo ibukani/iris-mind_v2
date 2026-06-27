@@ -14,6 +14,7 @@ from iris.adapters.grpc.mappers import (
     GrpcMappingError,
     GrpcRuntimeMapper,
     delivery_envelopes_to_poll_response,
+    delivery_id_from_report_proto,
     delivery_report_from_proto,
     map_exception_to_grpc,
     runtime_response_to_proto,
@@ -209,19 +210,24 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         if self._app_action_broker is None:
             await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "app action broker disabled")
         try:
+            principal = current_principal()
+            self._authorization_policy.require_delivery_report_scope(principal)
+            delivery_id = delivery_id_from_report_proto(request)
             report = delivery_report_from_proto(request, now_utc())
-            delivery_provider = await self._app_action_broker.get_delivery_provider(
-                report.delivery_id,
-            )
-            self._authorization_policy.require_report_action_result(
-                current_principal(),
+        except RuntimePermissionDeniedError as exc:
+            await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
+        except GrpcMappingError as exc:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
+
+        try:
+            delivery_provider = await self._app_action_broker.get_delivery_provider(delivery_id)
+            self._authorization_policy.require_delivery_report_provider(
+                principal,
                 delivery_provider,
             )
             await self._app_action_broker.report_action_result(report)
         except RuntimePermissionDeniedError as exc:
             await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
-        except GrpcMappingError as exc:
-            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         except AppActionBrokerError as exc:
             await context.abort(_broker_error_status(exc.reason), str(exc.reason))
         return runtime_pb2.ReportActionResultResponse()
