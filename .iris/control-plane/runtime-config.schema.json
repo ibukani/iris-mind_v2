@@ -52,6 +52,109 @@
       "description": "gRPCサーバー停止時の猶予秒数。"
     },
     {
+      "path": "server.tls.enabled",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "gRPC server TLS を有効化する。"
+    },
+    {
+      "path": "server.tls.cert_chain_path",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "TLS certificate chain path。"
+    },
+    {
+      "path": "server.tls.private_key_path",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": null,
+      "secret": true,
+      "editable": false,
+      "description": "TLS private key path。"
+    },
+    {
+      "path": "server.tls.client_ca_path",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Optional mTLS client CA path。"
+    },
+    {
+      "path": "server.tls.require_client_cert",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "gRPC TLS client certificate を要求する。"
+    },
+    {
+      "path": "auth.mode",
+      "type": "enum",
+      "default": "local_dev",
+      "allowedValues": [
+        "local_dev",
+        "required"
+      ],
+      "env": "IRIS_RUNTIME_AUTH_MODE",
+      "secret": false,
+      "editable": true,
+      "description": "Runtime RPC auth mode。"
+    },
+    {
+      "path": "auth.allow_unauthenticated_loopback",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_dev loopback の unauthenticated RPC を許可する。"
+    },
+    {
+      "path": "auth.require_tls_for_remote",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "remote bind で TLS を要求する。"
+    },
+    {
+      "path": "auth.allow_insecure_remote",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": false,
+      "description": "開発用に remote insecure bind を明示許可する。"
+    },
+    {
+      "path": "auth.static_tokens_env",
+      "type": "str",
+      "default": "IRIS_RUNTIME_TOKENS",
+      "allowedValues": [],
+      "env": null,
+      "secret": true,
+      "editable": false,
+      "description": "Static bearer token hashes を読む環境変数名。"
+    },
+    {
       "path": "state.backend",
       "type": "enum",
       "default": "memory",

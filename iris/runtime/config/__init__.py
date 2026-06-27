@@ -7,6 +7,7 @@ implementation details and should not be imported directly by consumers.
 
 from __future__ import annotations
 
+from iris.runtime.config.auth import RuntimeAuthConfig, RuntimeAuthMode
 from iris.runtime.config.delivery import RuntimeDeliveryConfig, RuntimeQuietHoursConfig
 from iris.runtime.config.diagnostics import (
     DiagnosticsMode,
@@ -54,6 +55,8 @@ __all__ = [
     "IrisRuntimeConfig",
     "LLMProvider",
     "ModelSlotName",
+    "RuntimeAuthConfig",
+    "RuntimeAuthMode",
     "RuntimeConfigMetadata",
     "RuntimeConfigOverrides",
     "RuntimeDeliveryConfig",

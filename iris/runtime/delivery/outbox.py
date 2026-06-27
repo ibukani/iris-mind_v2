@@ -34,6 +34,10 @@ class DeliveryOutbox(Protocol):
         """Lease due items for one provider."""
         ...
 
+    async def get(self, delivery_id: DeliveryId) -> DeliveryEnvelope:
+        """Return delivery envelope without mutating state."""
+        ...
+
     async def complete(
         self,
         *,

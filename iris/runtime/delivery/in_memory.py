@@ -96,6 +96,12 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         return tuple(due)
 
     @override
+    @override
+    async def get(self, delivery_id: DeliveryId) -> DeliveryEnvelope:
+        """Return delivery envelope without mutating state."""
+        return self._get(delivery_id)
+
+    @override
     async def complete(
         self,
         *,

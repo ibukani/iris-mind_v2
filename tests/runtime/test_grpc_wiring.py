@@ -73,6 +73,9 @@ def test_create_grpc_server_raises_when_bind_fails(
     """create_grpc_serverがbind失敗をRuntimeErrorにすることを確認する。"""
 
     class _UnboundServer:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            _ = args, kwargs
+
         def add_generic_rpc_handlers(self, handlers: object) -> None:
             """Accept generated service registration."""
             _ = handlers

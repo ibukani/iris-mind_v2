@@ -806,7 +806,7 @@ async def test_envelope_without_observation_raises_mapping_error() -> None:
     """observationがないrequestがGrpcMappingErrorになることを確認する。"""
     request = runtime_pb2.SubmitObservationRequest(correlation_id="corr-1")
 
-    with pytest.raises(GrpcMappingError, match="observation is required"):
+    with pytest.raises(GrpcMappingError, match="observation required"):
         await _mapper().observation_envelope_from_proto(request)
 
 

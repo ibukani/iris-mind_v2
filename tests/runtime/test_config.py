@@ -661,6 +661,8 @@ def test_config_package_exposes_stable_public_api() -> None:
         "DiagnosticsMode",
         "apply_diagnostics_env",
         "apply_diagnostics_toml",
+        "RuntimeAuthConfig",
+        "RuntimeAuthMode",
         "all_model_slots_are_fake",
     }
     assert set(config_pkg.__all__) == expected

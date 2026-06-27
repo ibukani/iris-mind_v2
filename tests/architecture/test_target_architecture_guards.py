@@ -155,9 +155,63 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
     ),
     (
         "iris/adapters",
+        "iris/adapters/grpc/mappers.py",
+        "iris.runtime.auth.principals",
+        "gRPC mapper reads ClientPrincipal to select trusted/external ingress path",
+    ),
+    (
+        "iris/adapters",
         "iris/adapters/grpc/server.py",
         "iris.runtime.service",
         "gRPC transport adapter delegates to IrisRuntimeService boundary",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/server.py",
+        "iris.runtime.auth.context",
+        "gRPC servicer reads current_principal from contextvars for authz",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/server.py",
+        "iris.runtime.auth.errors",
+        "gRPC servicer maps RuntimePermissionDeniedError to PERMISSION_DENIED status",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/server.py",
+        "iris.runtime.auth.policy",
+        "gRPC servicer holds RuntimeAuthorizationPolicy for per-RPC scope checks",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/auth_interceptor.py",
+        "iris.runtime.auth.context",
+        "gRPC auth interceptor binds/resets ClientPrincipal via contextvars",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/auth_interceptor.py",
+        "iris.runtime.auth.errors",
+        "gRPC auth interceptor catches RuntimeUnauthenticatedError to abort with UNAUTHENTICATED",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/auth_interceptor.py",
+        "iris.runtime.auth.principals",
+        "gRPC auth interceptor constructs local_dev_principal for unauthenticated loopback",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/auth_interceptor.py",
+        "iris.runtime.auth.static_tokens",
+        "gRPC auth interceptor holds StaticBearerTokenVerifier to verify bearer tokens",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/grpc/auth_interceptor.py",
+        "iris.runtime.config.auth",
+        "gRPC auth interceptor reads RuntimeAuthConfig to select auth mode",
     ),
     (
         "iris/adapters",

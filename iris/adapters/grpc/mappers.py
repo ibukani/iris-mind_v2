@@ -55,6 +55,7 @@ from iris.core.ids import (
 )
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
+from iris.runtime.auth.principals import ClientKind, ClientPrincipal
 from iris.runtime.service import ObservationEnvelope
 
 _ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
@@ -133,22 +134,32 @@ class GrpcRuntimeMapper:
     async def observation_envelope_from_proto(
         self,
         request: runtime_pb2.SubmitObservationRequest,
+        principal: ClientPrincipal | None = None,
     ) -> ObservationEnvelope:
-        """Map SubmitObservationRequest proto to ObservationEnvelope.
+        """Map SubmitObservationRequest proto into ObservationEnvelope.
 
         Returns:
             ObservationEnvelope: Runtime service input envelope.
         """
         if not request.HasField("observation"):
-            _raise_mapping_error("observation is required")
+            _raise_mapping_error("observation required")
         correlation_id = CorrelationId(request.correlation_id) if request.correlation_id else None
         observation = await self.observation_from_proto(request.observation)
+        if principal is not None and principal.client_kind is ClientKind.TRUSTED_ADAPTER:
+            delivery_route = delivery_route_hint_from_context(request.observation.context)
+            return ObservationEnvelope.trusted_adapter(
+                observation=observation,
+                adapter_id=principal.client_id,
+                provider=principal.provider,
+                capabilities=principal.observation_capabilities,
+                correlation_id=correlation_id,
+                delivery_route=delivery_route,
+            )
         if self._ingress_profile is RuntimeIngressProfile.EXTERNAL_CLIENT:
             return ObservationEnvelope.external_client(
                 observation=observation,
                 correlation_id=correlation_id,
             )
-
         delivery_route = delivery_route_hint_from_context(request.observation.context)
         return ObservationEnvelope.trusted_adapter(
             observation=observation,

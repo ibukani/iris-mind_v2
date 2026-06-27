@@ -21,10 +21,16 @@ from iris.adapters.grpc.mappers import (
 from iris.adapters.llm.diagnostics import LLMProviderError
 from iris.core.datetime_utils import now_utc
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
+from iris.runtime.auth.context import current_principal
+from iris.runtime.auth.errors import RuntimePermissionDeniedError
+from iris.runtime.auth.policy import (
+    ObservationRequestClaims,
+    RuntimeAuthorizationPolicy,
+)
 
 if TYPE_CHECKING:
     from iris.adapters.app_gateway.ports import AppActionBroker
-    from iris.runtime.service import IrisRuntimeService
+    from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
 
 
 class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
@@ -40,11 +46,13 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         *,
         app_action_broker: AppActionBroker | None = None,
         mapper: GrpcRuntimeMapper | None = None,
+        authorization_policy: RuntimeAuthorizationPolicy | None = None,
     ) -> None:
-        """Create servicer with explicit runtime service mapper."""
+        """Create servicer with explicit runtime service and mapper."""
         self._runtime_service = runtime_service
         self._app_action_broker = app_action_broker
         self._mapper = mapper or GrpcRuntimeMapper()
+        self._authorization_policy = authorization_policy or RuntimeAuthorizationPolicy()
 
     @override
     async def GetRuntimeInfo(
@@ -61,6 +69,10 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
             runtime_pb2.GetRuntimeInfoResponse: Proto runtime info response.
         """
         logger.info("GetRuntimeInfo: received")
+        try:
+            self._authorization_policy.require_runtime_info(current_principal())
+        except RuntimePermissionDeniedError as exc:
+            await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
         supported_features = [
             "submit_observation",
             "persistent_account",
@@ -97,15 +109,14 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
             runtime_pb2.SubmitObservationResponse: Proto runtime response.
 
         Raises:
-            asyncio.CancelledError: Propagated when the client cancels the RPC.
+            asyncio.CancelledError: Propagated when client cancels RPC.
         """
         logger.info("SubmitObservation: received")
         start_time = time.monotonic()
         try:
-            envelope = await self._mapper.observation_envelope_from_proto(request)
+            envelope = await self._authorized_observation_envelope(request)
             response = await self._runtime_service.handle_observation(envelope)
             latency_ms = (time.monotonic() - start_time) * 1000
-
             logger.bind(
                 correlation_id=str(envelope.correlation_id),
                 observation_id=str(envelope.observation.observation_id),
@@ -117,6 +128,9 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
                 latency_ms=round(latency_ms, 2),
             ).info("SubmitObservation: completed")
             return runtime_response_to_proto(response)
+        except RuntimePermissionDeniedError as exc:
+            logger.warning("SubmitObservation: permission_denied - {}", exc)
+            await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
         except GrpcMappingError as exc:
             logger.warning("SubmitObservation: invalid_argument - {}", exc)
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
@@ -131,6 +145,17 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
             logger.exception("SubmitObservation: ingress_runtime_error - {}", exc)
             await context.abort(grpc.StatusCode.INTERNAL, "runtime service failed")
+
+    async def _authorized_observation_envelope(
+        self,
+        request: runtime_pb2.SubmitObservationRequest,
+    ) -> ObservationEnvelope:
+        principal = current_principal()
+        self._authorization_policy.require_submit_observation(
+            principal,
+            _observation_claims_from_request(request),
+        )
+        return await self._mapper.observation_envelope_from_proto(request, principal)
 
     @override
     async def PollAppActions(
@@ -152,11 +177,17 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "provider required")
         max_items = request.max_items if request.max_items > 0 else 10
         try:
+            self._authorization_policy.require_poll_app_actions(
+                current_principal(),
+                request.provider,
+            )
             envelopes = await self._app_action_broker.poll_actions(
                 provider=request.provider,
                 now=now_utc(),
                 max_items=max_items,
             )
+        except RuntimePermissionDeniedError as exc:
+            await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
         except AppActionBrokerError as exc:
             await context.abort(_broker_error_status(exc.reason), str(exc.reason))
         return delivery_envelopes_to_poll_response(envelopes)
@@ -185,6 +216,23 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
         except AppActionBrokerError as exc:
             await context.abort(_broker_error_status(exc.reason), str(exc.reason))
         return runtime_pb2.ReportActionResultResponse()
+
+
+def _observation_claims_from_request(
+    request: runtime_pb2.SubmitObservationRequest,
+) -> ObservationRequestClaims:
+    if not request.HasField("observation") or not request.observation.HasField("context"):
+        return ObservationRequestClaims()
+    context = request.observation.context
+    account_provider = context.account_ref.provider if context.HasField("account_ref") else None
+    space_provider = context.space_ref.provider if context.HasField("space_ref") else None
+    return ObservationRequestClaims(
+        account_ref_provider=account_provider or None,
+        space_ref_provider=space_provider or None,
+        has_actor=context.HasField("actor"),
+        has_account_id=bool(context.account_id),
+        has_space_id=bool(context.space_id),
+    )
 
 
 def _broker_error_status(reason: AppActionBrokerErrorReason | str) -> grpc.StatusCode:

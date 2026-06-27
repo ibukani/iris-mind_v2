@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING
@@ -24,15 +25,20 @@ if TYPE_CHECKING:
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.core.datetime_utils import now_utc
+from iris.runtime.auth.principals import ClientKind
+from iris.runtime.auth.scopes import AuthScope
+from iris.runtime.auth.static_tokens import create_static_token
 from iris.runtime.config import (
     IrisRuntimeConfig,
     RuntimeConfigOverrides,
     load_runtime_config,
     resolve_runtime_config_path,
 )
+from iris.runtime.config.auth import load_token_verifier_from_runtime_env
 from iris.runtime.config.init import init_runtime_config, runtime_config_template
 from iris.runtime.config.root import all_model_slots_are_fake
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
+from iris.runtime.ingress.observation_ingress import ObservationCapability
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.lifecycle.scheduler_loop import run_scheduler_loop
 from iris.runtime.observability.diagnostics import run_startup_diagnostics
@@ -307,6 +313,9 @@ async def serve(
         app_action_broker=components.app_action_broker,
         identity_resolver=components.identity_resolver,
         space_resolver=components.space_resolver,
+        auth_config=config.auth,
+        token_verifier=load_token_verifier_from_runtime_env(config.auth),
+        tls_config=config.server.tls,
     )
 
     await server.start()
@@ -322,52 +331,16 @@ async def serve(
 
 def main() -> None:
     """ランタイムサーバーの CLI エントリポイント。"""
-    parser = argparse.ArgumentParser(description="Iris gRPC Runtime Server")
-    parser.add_argument(
-        "--config",
-        type=str,
-        help="Use this TOML configuration file instead of default discovery",
-    )
-    parser.add_argument(
-        "--host",
-        type=str,
-        help="Server host address",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        help="Server port",
-    )
-
-    parser.set_defaults(init_config=False)
-    subparsers = parser.add_subparsers()
-    init_parser = subparsers.add_parser(
-        "init-config",
-        help="Create a local runtime config from the example template",
-    )
-    init_parser.add_argument(
-        "--path",
-        type=Path,
-        help="Target TOML configuration path",
-    )
-    init_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite the target configuration file if it already exists",
-    )
-    init_parser.add_argument(
-        "--print",
-        action="store_true",
-        dest="print_only",
-        help="Print the configuration template without writing a file",
-    )
-    init_parser.set_defaults(init_config=True)
-
+    parser = _runtime_arg_parser()
     args = parser.parse_args()
 
     init_config: bool = args.init_config
     if init_config:
         _run_init_config_command(args)
+        return
+    auth_command: str | None = args.auth_command
+    if auth_command == "create-token":
+        _run_auth_create_token_command(args)
         return
 
     host: str | None = args.host
@@ -386,6 +359,122 @@ def main() -> None:
         )
     except KeyboardInterrupt:
         return
+
+
+def _runtime_arg_parser() -> argparse.ArgumentParser:
+    """Runtime server CLI parser を構築する。
+
+    Returns:
+        構築済み parser。
+    """
+    parser = argparse.ArgumentParser(description="Iris gRPC Runtime Server")
+    parser.add_argument(
+        "--config",
+        type=str,
+        help="Use TOML configuration file instead of default discovery",
+    )
+    parser.add_argument("--host", type=str, help="Server host address")
+    parser.add_argument("--port", type=int, help="Server port")
+    parser.set_defaults(init_config=False, auth_command=None)
+
+    subparsers = parser.add_subparsers()
+
+    # init-config
+    init_parser: argparse.ArgumentParser = subparsers.add_parser(
+        "init-config",
+        help="Create local runtime config example template",
+    )
+    init_parser.add_argument("--path", type=Path, help="Target TOML configuration path")
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite target configuration file if it already exists",
+    )
+    init_parser.add_argument(
+        "--print",
+        action="store_true",
+        dest="print_only",
+        help="Print configuration template without writing file",
+    )
+    init_parser.set_defaults(init_config=True)
+
+    # auth
+    auth_parser: argparse.ArgumentParser = subparsers.add_parser(
+        "auth",
+        help="Runtime auth utilities",
+    )
+    auth_subparsers = auth_parser.add_subparsers(dest="auth_command")
+    create_token_parser: argparse.ArgumentParser = auth_subparsers.add_parser(
+        "create-token",
+        help="Create static bearer token env entry",
+    )
+    create_token_parser.add_argument("--client-id", required=True)
+    client_kind_choices: list[str] = [kind.value for kind in ClientKind]
+    create_token_parser.add_argument(
+        "--client-kind",
+        choices=client_kind_choices,
+        default=ClientKind.EXTERNAL_CLIENT.value,
+    )
+    create_token_parser.add_argument("--provider")
+    empty_str_list: list[str] = []
+    create_token_parser.add_argument(
+        "--allowed-provider",
+        action="append",
+        dest="allowed_providers",
+        default=empty_str_list,
+    )
+    create_token_parser.add_argument(
+        "--scope",
+        action="append",
+        dest="scopes",
+        default=empty_str_list,
+    )
+    create_token_parser.add_argument(
+        "--observation-capability",
+        action="append",
+        dest="observation_capabilities",
+        default=empty_str_list,
+    )
+
+    return parser
+
+
+def _run_auth_create_token_command(args: argparse.Namespace) -> None:
+    client_id: str = args.client_id
+    client_kind: str = args.client_kind
+    provider: str | None = args.provider
+    generated = create_static_token(
+        client_id=client_id,
+        client_kind=ClientKind(client_kind),
+        provider=provider,
+        allowed_providers=_auth_allowed_providers(args),
+        scopes=_auth_scopes(args),
+        observation_capabilities=_auth_capabilities(args),
+    )
+    sys.stdout.write(f"{generated.raw_token}\n")
+    sys.stdout.write(f"{generated.token_sha256}\n")
+    sys.stdout.write(f"{generated.entry_json}\n")
+    json.loads(generated.entry_json)
+
+
+def _auth_allowed_providers(args: argparse.Namespace) -> frozenset[str]:
+    values: list[str] = args.allowed_providers
+    provider: str | None = args.provider
+    if values:
+        return frozenset(values)
+    if provider is not None:
+        return frozenset({provider})
+    return frozenset()
+
+
+def _auth_scopes(args: argparse.Namespace) -> frozenset[AuthScope]:
+    values: list[str] = args.scopes
+    return frozenset(AuthScope(value) for value in values)
+
+
+def _auth_capabilities(args: argparse.Namespace) -> frozenset[ObservationCapability]:
+    values: list[str] = args.observation_capabilities
+    return frozenset(ObservationCapability(value) for value in values)
 
 
 def _run_init_config_command(args: argparse.Namespace) -> None:
