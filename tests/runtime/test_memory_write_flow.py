@@ -6,10 +6,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.adapters.affect.memory import InMemoryAffectStore
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryQuery
 from iris.contracts.observations import (
@@ -19,6 +17,8 @@ from iris.contracts.observations import (
 )
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from iris.runtime.app import IrisApp
+from iris.runtime.state.affect.memory import InMemoryAffectStore
+from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
     wire_policy_affect_memory_aware_text_response_cognitive_cycle,

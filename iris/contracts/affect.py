@@ -72,18 +72,18 @@ class AffectBaselineRecord:
 class AffectStore(Protocol):
     """Iris affect baseline を保存するストア。"""
 
-    def get_global(self) -> AffectBaselineRecord | None:
+    async def get_global(self) -> AffectBaselineRecord | None:
         """Global affect baseline を取得する。"""
         ...
 
-    def upsert_global(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
+    async def upsert_global(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
         """Global affect baseline を保存し、保存後の値を返す。"""
         ...
 
-    def get_for_actor(self, actor_id: ActorId) -> AffectBaselineRecord | None:
+    async def get_for_actor(self, actor_id: ActorId) -> AffectBaselineRecord | None:
         """actor-scoped affect baseline を取得する。"""
         ...
 
-    def upsert_for_actor(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
+    async def upsert_for_actor(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
         """actor-scoped affect baseline を保存し、保存後の値を返す。"""
         ...

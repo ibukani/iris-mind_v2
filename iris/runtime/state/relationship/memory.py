@@ -20,7 +20,7 @@ class InMemoryRelationshipStore(RelationshipStore):
         self._records: dict[ActorId, RelationshipSnapshotRecord] = {}
 
     @override
-    def get(self, actor_id: ActorId) -> RelationshipSnapshotRecord | None:
+    async def get(self, actor_id: ActorId) -> RelationshipSnapshotRecord | None:
         """ActorId に対応する関係性 state を返す。
 
         Returns:
@@ -29,7 +29,7 @@ class InMemoryRelationshipStore(RelationshipStore):
         return self._records.get(actor_id)
 
     @override
-    def upsert(
+    async def upsert(
         self,
         record: RelationshipSnapshotRecord,
     ) -> RelationshipSnapshotRecord:

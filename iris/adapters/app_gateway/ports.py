@@ -8,14 +8,13 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from iris.contracts.accounts import AccountProfile
     from iris.contracts.actions import ActionResult, AppAction
     from iris.contracts.delivery import DeliveryEnvelope, DeliveryReport
     from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
     from iris.contracts.identity import Identity
     from iris.contracts.observations import Observation
     from iris.contracts.spaces import InteractionSpace
-    from iris.core.ids import AccountId, ActorId, DeliveryId, DeviceId, ExternalRef
+    from iris.core.ids import DeliveryId, DeviceId
 
 
 class AppActionBrokerErrorReason(StrEnum):
@@ -127,47 +126,4 @@ class SpaceResolver(Protocol):
         space_ref: ExternalSpaceRef,
     ) -> InteractionSpace:
         """外部provider space refから型付きInteractionSpaceを返す。"""
-        ...
-
-
-class AccountStore(Protocol):
-    """External account profile storage and linking protocol."""
-
-    async def get_by_external_ref(
-        self,
-        *,
-        provider: str,
-        provider_subject: ExternalRef,
-    ) -> AccountProfile | None:
-        """Get an account profile by provider and subject."""
-        ...
-
-    async def get_by_account_id(
-        self,
-        account_id: AccountId,
-    ) -> AccountProfile | None:
-        """Get an account profile by its internal AccountId."""
-        ...
-
-    async def put(
-        self,
-        account: AccountProfile,
-    ) -> AccountProfile:
-        """Create or update an account profile."""
-        ...
-
-    async def link_account_to_actor(
-        self,
-        *,
-        account_id: AccountId,
-        actor_id: ActorId,
-    ) -> AccountProfile:
-        """Link an account to an internal ActorId."""
-        ...
-
-    async def unlink_account(
-        self,
-        account_id: AccountId,
-    ) -> AccountProfile:
-        """Remove any actor linking from an account."""
         ...

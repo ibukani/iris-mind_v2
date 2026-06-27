@@ -215,7 +215,7 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
     ),
     (
         "iris/adapters",
-        "iris/adapters/activity/sqlite_journal.py",
+        "iris/adapters/sqlite/activity_journal.py",
         "iris.runtime.state.activity_journal",
         "SQLite activity adapter implements the runtime-owned ActivityJournal port",
     ),
@@ -229,7 +229,19 @@ ENTRYPOINT_FILES: set[str] = {
 
 WIRING_FILES: set[str] = {
     "iris/runtime/wiring/app.py",
+    "iris/runtime/wiring/availability.py",
     "iris/runtime/wiring/cognitive.py",
+    "iris/runtime/wiring/context.py",
+    "iris/runtime/wiring/delivery.py",
+    "iris/runtime/wiring/event_reaction.py",
+    "iris/runtime/wiring/features.py",
+    "iris/runtime/wiring/grpc.py",
+    "iris/runtime/wiring/llm.py",
+    "iris/runtime/wiring/memory.py",
+    "iris/runtime/wiring/presentation.py",
+    "iris/runtime/wiring/scheduler.py",
+    "iris/runtime/wiring/state.py",
+    "iris/runtime/wiring/state_policy.py",
 }
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -645,12 +657,7 @@ def test_contracts_has_no_ports_file() -> None:
 # ═══════════════════════════════════════════════════════════════════
 
 
-WIRING_FILES_EXPECTED: set[str] = {
-    "iris/runtime/wiring/app.py",
-    "iris/runtime/wiring/cognitive.py",
-    "iris/runtime/wiring/features.py",
-    "iris/runtime/wiring/presentation.py",
-}
+WIRING_FILES_EXPECTED: set[str] = WIRING_FILES
 
 
 def test_required_wiring_files_exist() -> None:

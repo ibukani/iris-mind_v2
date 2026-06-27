@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING, override
 
-from iris.adapters.app_gateway.ports import AccountStore
-from iris.contracts.accounts import AccountStoreError
+from iris.contracts.accounts import AccountProfile, AccountStore, AccountStoreError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from iris.contracts.accounts import AccountProfile
-    from iris.core.ids import AccountId, ActorId, ExternalRef
+    from iris.core.ids import AccountId, ExternalRef
 
 
 class InMemoryAccountStore(AccountStore):
@@ -92,49 +89,3 @@ class InMemoryAccountStore(AccountStore):
 
         self._insert_account(account)
         return account
-
-    @override
-    async def link_account_to_actor(
-        self,
-        *,
-        account_id: AccountId,
-        actor_id: ActorId,
-    ) -> AccountProfile:
-        """Link an account to an internal ActorId.
-
-        Returns:
-            AccountProfile: The updated account profile.
-
-        Raises:
-            AccountStoreError: If the account_id does not exist.
-        """
-        account = self._accounts_by_id.get(account_id)
-        if not account:
-            msg = f"Account not found: {account_id}"
-            raise AccountStoreError(msg)
-
-        updated = dataclasses.replace(account, linked_actor_id=actor_id)
-        self._insert_account(updated)
-        return updated
-
-    @override
-    async def unlink_account(
-        self,
-        account_id: AccountId,
-    ) -> AccountProfile:
-        """Remove any actor linking from an account.
-
-        Returns:
-            AccountProfile: The updated account profile.
-
-        Raises:
-            AccountStoreError: If the account_id does not exist.
-        """
-        account = self._accounts_by_id.get(account_id)
-        if not account:
-            msg = f"Account not found: {account_id}"
-            raise AccountStoreError(msg)
-
-        updated = dataclasses.replace(account, linked_actor_id=None)
-        self._insert_account(updated)
-        return updated

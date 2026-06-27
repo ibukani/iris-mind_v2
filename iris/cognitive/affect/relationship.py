@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, override
 
 from iris.cognitive.affect.common import clamp_value
@@ -62,7 +61,7 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
                 reason="missing_interpreted_input",
             )
 
-        current_record = await asyncio.to_thread(self._store.get, actor.actor_id)
+        current_record = await self._store.get(actor.actor_id)
         current_snapshot = (
             _record_to_snapshot(current_record)
             if current_record is not None
@@ -74,7 +73,7 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
             snapshot=updated_snapshot,
             source_observation_id=frame.observation.observation_id,
         )
-        stored = await asyncio.to_thread(self._store.upsert, record)
+        stored = await self._store.upsert(record)
         return _result_from_record(stored)
 
 

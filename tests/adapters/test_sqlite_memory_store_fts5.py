@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.adapters.sqlite.memory_store import SQLiteMemoryStore
 
 if TYPE_CHECKING:
     from pathlib import Path

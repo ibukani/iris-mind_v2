@@ -5,20 +5,23 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from iris.adapters.accounts.memory import InMemoryAccountStore
-from iris.adapters.accounts.sqlite import SQLiteAccountStore
-from iris.adapters.activity.sqlite_journal import SQLiteActivityJournal
-from iris.adapters.affect.memory import InMemoryAffectStore
-from iris.adapters.affect.sqlite import SQLiteAffectStore
+import pytest
+
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
-from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
+from iris.adapters.sqlite.account_store import SQLiteAccountStore
+from iris.adapters.sqlite.activity_journal import SQLiteActivityJournal
+from iris.adapters.sqlite.affect_store import SQLiteAffectStore
+from iris.adapters.sqlite.memory_store import SQLiteMemoryStore
+from iris.adapters.sqlite.relationship_store import SQLiteRelationshipStore
+from iris.adapters.sqlite.scheduler_target_store import SQLiteSchedulerTargetStore
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
+from iris.runtime.state.accounts.memory import InMemoryAccountStore
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
+from iris.runtime.state.affect.memory import InMemoryAffectStore
 from iris.runtime.state.presence import InMemoryPresenceStore
+from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 from iris.runtime.wiring.state import wire_runtime_state
 
@@ -40,7 +43,8 @@ def test_wire_runtime_state_uses_in_memory_runtime_context_stores_by_default() -
     assert isinstance(stores.space_occupancy_store, InMemorySpaceOccupancyStore)
 
 
-def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqlite(
+@pytest.mark.anyio
+async def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqlite(
     tmp_path: Path,
 ) -> None:
     """SQLite バックエンド選択時、activity journal は durable な SQLite 実装になる。
@@ -67,3 +71,16 @@ def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqlite(
     assert isinstance(stores.activity_projection_store, InMemoryActivityProjectionStore)
     assert isinstance(stores.presence_store, InMemoryPresenceStore)
     assert isinstance(stores.space_occupancy_store, InMemorySpaceOccupancyStore)
+    assert isinstance(stores.account_store, SQLiteAccountStore)
+    assert isinstance(stores.memory_store, SQLiteMemoryStore)
+    assert isinstance(stores.relationship_store, SQLiteRelationshipStore)
+    assert isinstance(stores.affect_store, SQLiteAffectStore)
+    assert isinstance(stores.activity_journal, SQLiteActivityJournal)
+    assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
+
+    await stores.account_store.close()
+    stores.memory_store.close()
+    await stores.relationship_store.close()
+    await stores.affect_store.close()
+    await stores.activity_journal.close()
+    await stores.scheduler_target_store.close()

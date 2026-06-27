@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 
 import pytest
 
-from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.contracts.accounts import AccountProfile, AccountStoreError
 from iris.core.ids import AccountId, ActorId, ExternalRef
+from iris.runtime.state.accounts.memory import InMemoryAccountStore
 
 
 def test_in_memory_account_store_put_and_get() -> None:
@@ -78,8 +79,8 @@ def test_duplicate_external_ref_conflict_is_rejected() -> None:
         asyncio.run(store.put(profile2))
 
 
-def test_link_account_to_actor() -> None:
-    """link_account_to_actor should update linked_actor_id."""
+def test_update_linked_actor_id() -> None:
+    """Updating linked_actor_id should work."""
     store = InMemoryAccountStore()
 
     profile = AccountProfile(
@@ -90,9 +91,8 @@ def test_link_account_to_actor() -> None:
     )
     asyncio.run(store.put(profile))
 
-    linked = asyncio.run(
-        store.link_account_to_actor(account_id=AccountId("acct-1"), actor_id=ActorId("actor-mina"))
-    )
+    updated = dataclasses.replace(profile, linked_actor_id=ActorId("actor-mina"))
+    linked = asyncio.run(store.put(updated))
     assert linked.linked_actor_id == ActorId("actor-mina")
 
     # Verify persistence
@@ -100,27 +100,15 @@ def test_link_account_to_actor() -> None:
     assert fetched is not None
     assert fetched.linked_actor_id == ActorId("actor-mina")
 
-
-def test_unlink_account() -> None:
-    """unlink_account should clear linked_actor_id."""
-    store = InMemoryAccountStore()
-
-    profile = AccountProfile(
-        account_id=AccountId("acct-1"),
-        provider="discord",
-        provider_subject=ExternalRef("123"),
-        display_name="Mina",
-        linked_actor_id=ActorId("actor-mina"),
-    )
-    asyncio.run(store.put(profile))
-
-    unlinked = asyncio.run(store.unlink_account(AccountId("acct-1")))
+    # Unlink
+    unlinked_profile = dataclasses.replace(fetched, linked_actor_id=None)
+    unlinked = asyncio.run(store.put(unlinked_profile))
     assert unlinked.linked_actor_id is None
 
     # Verify persistence
-    fetched = asyncio.run(store.get_by_account_id(AccountId("acct-1")))
-    assert fetched is not None
-    assert fetched.linked_actor_id is None
+    fetched_unlinked = asyncio.run(store.get_by_account_id(AccountId("acct-1")))
+    assert fetched_unlinked is not None
+    assert fetched_unlinked.linked_actor_id is None
 
 
 def test_account_metadata_is_preserved() -> None:

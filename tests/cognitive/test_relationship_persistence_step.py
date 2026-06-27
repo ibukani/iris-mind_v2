@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
+from iris.adapters.sqlite.relationship_store import SQLiteRelationshipStore
 from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import AppraisalResult, PerceptionResult, StepStatus
@@ -129,7 +129,9 @@ async def test_positive_affect_increases_affinity_and_trust(tmp_path: Path) -> N
     assert result.status == StepStatus.OK
     assert result.affinity > 0.0
     assert result.trust > 0.5
-    assert store.get(ActorId("actor-persistent-relationship")) is not None
+    loaded = await store.get(ActorId("actor-persistent-relationship"))
+    assert loaded is not None
+    await store.close()
 
 
 @pytest.mark.anyio
@@ -143,7 +145,9 @@ async def test_non_message_observation_does_not_persist_relationship(
 
     assert result.status == StepStatus.SKIPPED
     assert result.reason == "non_actor_message_observation"
-    assert store.get(ActorId("actor-persistent-relationship")) is None
+    loaded = await store.get(ActorId("actor-persistent-relationship"))
+    assert loaded is None
+    await store.close()
 
 
 @pytest.mark.anyio
@@ -157,7 +161,9 @@ async def test_missing_interpreted_input_does_not_persist_relationship(
 
     assert result.status == StepStatus.SKIPPED
     assert result.reason == "missing_interpreted_input"
-    assert store.get(ActorId("actor-persistent-relationship")) is None
+    loaded = await store.get(ActorId("actor-persistent-relationship"))
+    assert loaded is None
+    await store.close()
 
 
 @pytest.mark.anyio
@@ -172,6 +178,7 @@ async def test_repeated_turns_increase_familiarity(tmp_path: Path) -> None:
     assert first.status == StepStatus.OK
     assert second.status == StepStatus.OK
     assert second.familiarity > first.familiarity
+    await store.close()
 
 
 @pytest.mark.anyio
@@ -180,10 +187,14 @@ async def test_relationship_survives_sqlite_store_reload(tmp_path: Path) -> None
     db_path = tmp_path / "state.db"
     actor = _actor()
 
-    await RelationshipStep(SQLiteRelationshipStore(db_path)).run(_frame("obs-reload"))
+    store1 = SQLiteRelationshipStore(db_path)
+    await RelationshipStep(store1).run(_frame("obs-reload"))
+    await store1.close()
 
-    reloaded = SQLiteRelationshipStore(db_path).get(actor.actor_id)
+    store2 = SQLiteRelationshipStore(db_path)
+    reloaded = await store2.get(actor.actor_id)
     assert reloaded is not None
     assert reloaded.actor_id == actor.actor_id
     assert reloaded.source_observation_id == ObservationId("obs-reload")
     assert reloaded.familiarity > 0.0
+    await store2.close()

@@ -12,8 +12,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from iris.adapters.memory.ports import MemoryStore
-    from iris.adapters.memory.sqlite import SQLiteMemoryStore
     from iris.adapters.memory.vector_index import EmbeddingFunction
+    from iris.adapters.sqlite.memory_store import SQLiteMemoryStore
     from iris.cognitive.memory.retrieval import MemoryRetriever
     from iris.contracts.memory import (
         MemoryQuery,

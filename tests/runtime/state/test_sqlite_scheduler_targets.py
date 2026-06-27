@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.runtime_state.scheduler_targets import SQLiteSchedulerTargetStore
+from iris.adapters.sqlite.scheduler_target_store import SQLiteSchedulerTargetStore
 from iris.contracts.delivery import DeliveryRouteHint, SchedulerTarget
 from iris.core.ids import ExternalRef, SessionId
 
@@ -55,6 +55,9 @@ async def test_sqlite_scheduler_target_upsert_preserves_attempt_after_reopen(
     assert listed[0].display_name == "new-name"
     assert listed[0].last_scheduler_attempt_at == attempted_at
 
+    await store.close()
+    await reopened.close()
+
 
 async def test_sqlite_scheduler_target_stale_after_persists_after_reopen(
     tmp_path: Path,
@@ -71,6 +74,9 @@ async def test_sqlite_scheduler_target_stale_after_persists_after_reopen(
     assert len(listed) == 1
     assert listed[0].stale_after == target.stale_after
 
+    await store.close()
+    await reopened.close()
+
 
 async def test_sqlite_scheduler_target_ordering_is_deterministic(tmp_path: Path) -> None:
     """SQLite target store orders targets by stable storage key."""
@@ -84,6 +90,8 @@ async def test_sqlite_scheduler_target_ordering_is_deterministic(tmp_path: Path)
         ExternalRef("subject-a"),
         ExternalRef("subject-b"),
     ]
+
+    await store.close()
 
 
 async def test_sqlite_scheduler_target_stale_after_filters_old_routes(
@@ -102,3 +110,5 @@ async def test_sqlite_scheduler_target_stale_after_filters_old_routes(
         ExternalRef("active"),
         ExternalRef("open"),
     ]
+
+    await store.close()

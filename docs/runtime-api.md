@@ -1,6 +1,6 @@
 # Iris Runtime API
 
-このドキュメントは `iris-mind_v2` の外部 gRPC 契約を記述する。`iris-cli_v2` のようなクライアントは、この API を通じて Cognitive Runtime とやり取りする。
+このドキュメントは `iris-mind` の外部 gRPC 契約を記述する。`iris-cli` のようなクライアントは、この API を通じて Cognitive Runtime とやり取りする。
 
 ## Runtime Service エンドポイント
 

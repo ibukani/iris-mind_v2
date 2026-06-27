@@ -62,11 +62,11 @@ class RelationshipSnapshotRecord:
 class RelationshipStore(Protocol):
     """ActorId ごとの現在の関係性スナップショットを保存するストア。"""
 
-    def get(self, actor_id: ActorId) -> RelationshipSnapshotRecord | None:
+    async def get(self, actor_id: ActorId) -> RelationshipSnapshotRecord | None:
         """ActorId に対応する関係性スナップショットを取得する。"""
         ...
 
-    def upsert(
+    async def upsert(
         self,
         record: RelationshipSnapshotRecord,
     ) -> RelationshipSnapshotRecord:

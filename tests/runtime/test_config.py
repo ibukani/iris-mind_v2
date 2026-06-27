@@ -10,10 +10,8 @@ from typing import TYPE_CHECKING, TypeGuard, override
 
 import pytest
 
-from iris.adapters.affect.memory import InMemoryAffectStore
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
 from iris.adapters.memory.fake import FakeMemoryStore
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
@@ -34,6 +32,8 @@ from iris.runtime.config import (
     parse_llm_provider,
 )
 from iris.runtime.config.llm import LLMProvider
+from iris.runtime.state.affect.memory import InMemoryAffectStore
+from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.llm import LLMClientFactory
 

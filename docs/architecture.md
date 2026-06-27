@@ -219,8 +219,9 @@ Deferred / future phase:
 
 注意点。
 
-- `contracts/ports.py` は原則作らない。
-- Port は利用側モジュールの近くに置く。
+- 全体をまとめた巨大な `contracts/ports.py` は作らない。
+- 安定したドメインレコードと、それに直結する安定したドメインストアのプロトコル（例: MemoryStore, RelationshipStore, AffectStore）は `contracts/<domain>.py` または `contracts/<domain>/` に配置してよい。
+- 特定のユースケースに特化した Runtime / Application port は、それを利用するモジュールの近く（consuming layer）に置く。
 - EventBus 的な逃げ道は作らない。
 
 Port の配置例。
@@ -404,8 +405,10 @@ class FeatureDefinition:
 
 現在実装済みの feature: `proactive_talk/`（salience scoring, goal proposal, proactive policy, expression抑制）と `event_reaction/`（activity event reaction policy、planning、template）。
 
-`runtime/wiring/features.py` は `FeatureDefinition` を集めて登録するだけにする。
-feature は `runtime/`、`adapters/`、`presentation/`、`safety/` に依存しない。runtime が feature を配線・実行する。
+`FeatureDefinition` は現在のところ内部拡張の型契約であり、自動検出（auto-discovery）や汎用レジストリによる動的ロードは実装されていない。
+各 feature の有効化は `runtime/wiring/features.py` などの配線層で、明示的な関数呼び出しとパイプラインステップへのマニュアル追加によって行われる。
+
+feature は `runtime/`、`adapters/`、`presentation/`、`safety/` に依存しない。runtime が feature を明示的に配線・実行する。
 
 `event_reaction` は名前が同じでも層ごとに責務を分ける。
 

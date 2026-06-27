@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
+from iris.adapters.sqlite.memory_store import SQLiteMemoryStore
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.memory.write import MemoryWriteStep
 from iris.contracts.memory import (

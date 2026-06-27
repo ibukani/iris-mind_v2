@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "iris-mind"
 version = "0.1.0"
 description = "AI companion — Cognitive Runtime Architecture v0.1 target MVP"
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.13"
 dependencies = [
     "openai>=2.0",
@@ -15,6 +17,8 @@ dependencies = [
     "grpcio-tools>=1.81.0",
     "protobuf>=6.33.6",
     "loguru>=0.7.0",
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.22.1",
 ]
 
 [tool.setuptools.packages.find]

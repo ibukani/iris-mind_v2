@@ -11,7 +11,7 @@ from iris.contracts.accounts import AccountProfile
 from iris.contracts.identity import Identity
 
 if TYPE_CHECKING:
-    from iris.adapters.app_gateway.ports import AccountStore
+    from iris.contracts.accounts import AccountStore
     from iris.contracts.external_refs import ExternalAccountRef
     from iris.core.ids import DeviceId
 

@@ -9,7 +9,7 @@ from typing import Any
 
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.adapters.sqlite.memory_store import SQLiteMemoryStore
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig

@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import AppraisalResult, PerceptionResult, StepStatus
@@ -19,6 +18,7 @@ from iris.contracts.observations import (
 )
 from iris.contracts.relationship import RelationshipSnapshotRecord
 from iris.core.ids import AccountId, ActorId, ExternalRef, ObservationId, SessionId
+from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
@@ -84,7 +84,7 @@ async def test_relationship_step_updates_actor_scoped_store() -> None:
 
     result = await RelationshipStep(store).run(_positive_frame(actor))
 
-    stored = store.get(actor.actor_id)
+    stored = await store.get(actor.actor_id)
     assert result.status == StepStatus.OK
     assert result.actor_label == "Mina"
     assert result.affinity > 0.0
@@ -112,7 +112,7 @@ async def test_relationship_step_uses_actor_id_not_account_id_as_state_key() -> 
     """RelationshipStep は AccountId ではなく ActorId で既存 state を読む。"""
     actor = _actor()
     store = InMemoryRelationshipStore()
-    store.upsert(
+    await store.upsert(
         RelationshipSnapshotRecord(
             actor_id=actor.actor_id,
             actor_label="Existing Mina",

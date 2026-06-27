@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.adapters.affect.memory import InMemoryAffectStore
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.cognitive.action.response import ResponseGenerationStep
 from iris.cognitive.affect.appraisal import AppraisalStep
 from iris.cognitive.affect.persistence import AffectBaselineLoadStep, AffectPersistenceStep
@@ -19,6 +17,8 @@ from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
 from iris.contracts.actions import ActionPlan
 from iris.contracts.memory import MemoryStore, MutableMemoryStore, VectorMemoryIndex
+from iris.runtime.state.affect.memory import InMemoryAffectStore
+from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
 from iris.runtime.wiring.llm import wire_response_generator
 
 if TYPE_CHECKING:

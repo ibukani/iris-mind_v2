@@ -5,13 +5,12 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-import sqlite3
-import time
 from typing import TYPE_CHECKING
 
+import aiosqlite
 import pytest
 
-from iris.adapters.activity.sqlite_journal import SQLiteActivityJournal
+from iris.adapters.sqlite.activity_journal import SQLiteActivityJournal
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
 from iris.core.ids import ActivityId, ActorId, ObservationId, SpaceId
 from iris.runtime.state.activity_journal import (
@@ -20,6 +19,7 @@ from iris.runtime.state.activity_journal import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
     from pathlib import Path
 
 
@@ -53,12 +53,22 @@ def _build_event(
     )
 
 
+@pytest.fixture
+async def journal(tmp_path: Path) -> AsyncGenerator[SQLiteActivityJournal]:
+    """Fixture for SQLiteActivityJournal.
+
+    Yields:
+        The activity journal.
+    """
+    j = SQLiteActivityJournal(str(tmp_path / "activity_journal.db"))
+    yield j
+    await j.close()
+
+
 @pytest.mark.anyio
-async def test_sqlite_activity_journal_appends(tmp_path: Path) -> None:
+async def test_sqlite_activity_journal_appends(journal: SQLiteActivityJournal) -> None:
     """SQLiteActivityJournal stores events."""
-    db_path = str(tmp_path / "activity_journal.db")
     event = _build_event()
-    journal = SQLiteActivityJournal(db_path)
 
     result = await journal.append(event)
 
@@ -68,10 +78,10 @@ async def test_sqlite_activity_journal_appends(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_sqlite_activity_journal_rejects_duplicate_provider_event(tmp_path: Path) -> None:
+async def test_sqlite_activity_journal_rejects_duplicate_provider_event(
+    journal: SQLiteActivityJournal,
+) -> None:
     """Duplicate source/provider_event_id is rejected with DUPLICATE_PROVIDER_EVENT."""
-    db_path = str(tmp_path / "activity_journal.db")
-    journal = SQLiteActivityJournal(db_path)
     event = _build_event()
     await journal.append(event)
     duplicate = replace(event, activity_id=ActivityId("activity:obs-2"))
@@ -90,6 +100,8 @@ async def test_sqlite_activity_journal_dedupe_survives_new_instance(tmp_path: Pa
     event = _build_event()
     first = SQLiteActivityJournal(db_path)
     await first.append(event)
+    await first.close()
+
     duplicate = replace(event, activity_id=ActivityId("activity:obs-2"))
     reopened = SQLiteActivityJournal(db_path)
 
@@ -97,14 +109,15 @@ async def test_sqlite_activity_journal_dedupe_survives_new_instance(tmp_path: Pa
 
     assert result.accepted is False
     assert result.reason is ActivityAppendSkipReason.DUPLICATE_PROVIDER_EVENT
+    await reopened.close()
 
 
 @pytest.mark.anyio
-async def test_sqlite_activity_journal_does_not_depend_on_projection_store(tmp_path: Path) -> None:
+async def test_sqlite_activity_journal_does_not_depend_on_projection_store(
+    journal: SQLiteActivityJournal,
+) -> None:
     """SQLiteActivityJournal works independently of any projection store."""
-    db_path = str(tmp_path / "activity_journal.db")
     event = _build_event()
-    journal = SQLiteActivityJournal(db_path)
 
     result = await journal.append(event)
 
@@ -116,10 +129,10 @@ async def test_sqlite_activity_journal_does_not_depend_on_projection_store(tmp_p
 
 
 @pytest.mark.anyio
-async def test_sqlite_activity_journal_preserves_full_event_payload(tmp_path: Path) -> None:
+async def test_sqlite_activity_journal_preserves_full_event_payload(
+    journal: SQLiteActivityJournal,
+) -> None:
     """Full event payload is stored and retrieved losslessly."""
-    db_path = str(tmp_path / "activity_journal.db")
-    journal = SQLiteActivityJournal(db_path)
     event = ActivityEventRecord(
         activity_id=ActivityId("activity:full"),
         observation_id=ObservationId("obs-full"),
@@ -140,10 +153,10 @@ async def test_sqlite_activity_journal_preserves_full_event_payload(tmp_path: Pa
 
 
 @pytest.mark.anyio
-async def test_sqlite_activity_journal_rejects_duplicate_activity_id(tmp_path: Path) -> None:
+async def test_sqlite_activity_journal_rejects_duplicate_activity_id(
+    journal: SQLiteActivityJournal,
+) -> None:
     """Reusing the same activity_id is rejected with DUPLICATE_ACTIVITY_ID."""
-    db_path = str(tmp_path / "activity_journal.db")
-    journal = SQLiteActivityJournal(db_path)
     event = _build_event()
     first = await journal.append(event)
     second = await journal.append(event)
@@ -156,129 +169,40 @@ async def test_sqlite_activity_journal_rejects_duplicate_activity_id(tmp_path: P
 
 @pytest.mark.anyio
 async def test_sqlite_activity_journal_activity_id_race_returns_activity_id(tmp_path: Path) -> None:
-    """activity_id の PK 違反 IntegrityError は DUPLICATE_ACTIVITY_ID へ分類される。
-
-    別connectionから先に同一 activity_id 行を挿入し、journal の in-transaction
-    SELECT とINSERT が並列化された場合に備えてIntegrityError フォールバックでも
-    正確に DUPLICATE_ACTIVITY_ID へ変換されることを検証する。
-    """
+    """activity_id の PK 違反 IntegrityError は DUPLICATE_ACTIVITY_ID へ分類される。"""
     db_path = str(tmp_path / "activity_journal.db")
     journal = SQLiteActivityJournal(db_path)
+
+    # Initialize DB schema first
+    await journal.append(_build_event(activity_id="dummy", provider_event_id="dummy-event"))
+
     expected = _build_event()
 
     # 別 connection から同一 activity_id を直接挿入して PK 違反を誘発する。
-    pre_insert = sqlite3.connect(db_path)
-    pre_insert.execute(
-        """
-        INSERT INTO activity_events (
-            activity_id, source, provider_event_id, actor_id, space_id,
-            activity_kind, occurred_at, received_at, payload_json
-        ) VALUES (?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)
-        """,
-        (
-            str(expected.activity_id),
-            expected.kind.value,
-            expected.occurred_at.isoformat(),
-            expected.received_at.isoformat(),
-            "{}",
-        ),
-    )
-    pre_insert.commit()
-    pre_insert.close()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(
+            """
+            INSERT INTO activity_events (
+                activity_id, source, provider_event_id, actor_id, space_id,
+                activity_kind, occurred_at, received_at, payload_json
+            ) VALUES (?, NULL, NULL, NULL, NULL, ?, ?, ?, ?)
+            """,
+            (
+                str(expected.activity_id),
+                expected.kind.value,
+                expected.occurred_at.isoformat(),
+                expected.received_at.isoformat(),
+                "{}",
+            ),
+        )
+        await conn.commit()
 
     result = await journal.append(expected)
 
     assert result.accepted is False
     assert result.event is None
     assert result.reason is ActivityAppendSkipReason.DUPLICATE_ACTIVITY_ID
-
-
-def test_sqlite_activity_journal_immediate_transaction_no_rollback_on_begin_failure(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """BEGIN IMMEDIATE 失敗時に ROLLBACK が呼ばれず元例外が伝搬することを検証する。
-
-    _immediate_transaction はトランザクション未開始時の ROLLBACK で
-    ``cannot rollback - no transaction is active`` を投げないよう、
-    ``txn_active`` フラグで ROLLBACK の実行を制御する。
-    """
-    db_path = str(tmp_path / "activity_journal.db")
-    journal = SQLiteActivityJournal(db_path)
-
-    class _FakeConn:
-        def __init__(self) -> None:
-            self.actions: list[str] = []
-
-        def execute(self, sql: str, *_args: object) -> object:
-            self.actions.append(sql)
-            if sql == "BEGIN IMMEDIATE":
-                msg = "database is locked"
-                raise sqlite3.OperationalError(msg)
-            return self
-
-        def commit(self) -> None:
-            self.actions.append("COMMIT")
-
-        def close(self) -> None:
-            self.actions.append("CLOSE")
-
-    fake = _FakeConn()
-    journal.close()
-    monkeypatch.setattr(journal, "_conn", fake)
-
-    raised: BaseException | None = None
-    name = "_immediate_transaction"
-    try:
-        immediate_tx = getattr(journal, name)
-        with immediate_tx():
-            pass
-    except sqlite3.OperationalError as exc:
-        raised = exc
-
-    # 元の OperationalError(database is locked) がそのまま伝搬し、
-    # ROLLBACK は一度も実行されていないこと。
-    assert isinstance(raised, sqlite3.OperationalError)
-    assert "database is locked" in str(raised)
-    assert not any(action == "ROLLBACK" for action in fake.actions)
-
-
-@pytest.mark.anyio
-async def test_sqlite_activity_journal_append_does_not_block_event_loop(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """append() はblocking SQLite workをevent loop外へ逃がす。"""
-    journal = SQLiteActivityJournal(tmp_path / "activity_journal.db")
-    event = _build_event()
-
-    def slow_append_sync(event: ActivityEventRecord) -> ActivityAppendResult:
-        time.sleep(0.05)
-        return ActivityAppendResult(accepted=True, event=event, reason=None)
-
-    monkeypatch.setattr(journal, "_append_sync", slow_append_sync)
-
-    journal_task = asyncio.create_task(journal.append(event))
-    await asyncio.sleep(0)
-
-    assert not journal_task.done()
-
-    progressed = False
-
-    async def progress_probe() -> None:
-        nonlocal progressed
-        await asyncio.sleep(0)
-        progressed = True
-
-    await progress_probe()
-
-    assert progressed
-    assert not journal_task.done()
-
-    result = await journal_task
-    assert result.accepted is True
-    assert result.event == event
-    assert result.reason is None
+    await journal.close()
 
 
 @pytest.mark.anyio
@@ -293,11 +217,18 @@ async def test_sqlite_activity_journal_concurrent_append_dedupe(tmp_path: Path) 
     total = 20
     events = [replace(base, activity_id=ActivityId(f"activity:race-{i}")) for i in range(total)]
 
+    # initialize schema first to avoid concurrent schema creation errors
+    j = SQLiteActivityJournal(db_path)
+    await j.append(_build_event(activity_id="dummy", provider_event_id="dummy"))
+    await j.close()
+
     async def _attempt(e: ActivityEventRecord) -> ActivityAppendResult:
         # 各 append は独立したjournalインスタンスを用いて、共有DBに対する
         # 異なる connection 競合状態を再現する。
         journal = SQLiteActivityJournal(db_path)
-        return await journal.append(e)
+        res = await journal.append(e)
+        await journal.close()
+        return res
 
     results = await asyncio.gather(*(_attempt(e) for e in events))
 

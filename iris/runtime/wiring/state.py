@@ -5,28 +5,28 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.adapters.accounts.memory import InMemoryAccountStore
-from iris.adapters.accounts.sqlite import SQLiteAccountStore
-from iris.adapters.activity.sqlite_journal import SQLiteActivityJournal
-from iris.adapters.affect.memory import InMemoryAffectStore
-from iris.adapters.affect.sqlite import SQLiteAffectStore
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
-from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
-from iris.adapters.runtime_state.scheduler_targets import SQLiteSchedulerTargetStore
+from iris.adapters.sqlite.account_store import SQLiteAccountStore
+from iris.adapters.sqlite.activity_journal import SQLiteActivityJournal
+from iris.adapters.sqlite.affect_store import SQLiteAffectStore
+from iris.adapters.sqlite.delivery_outbox import SQLiteDeliveryOutbox
+from iris.adapters.sqlite.memory_store import SQLiteMemoryStore
+from iris.adapters.sqlite.relationship_store import SQLiteRelationshipStore
+from iris.adapters.sqlite.scheduler_target_store import SQLiteSchedulerTargetStore
 from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
-from iris.runtime.delivery.sqlite import SQLiteDeliveryOutbox
+from iris.runtime.state.accounts.memory import InMemoryAccountStore
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
+from iris.runtime.state.affect.memory import InMemoryAffectStore
 from iris.runtime.state.presence import InMemoryPresenceStore
+from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 
 if TYPE_CHECKING:
-    from iris.adapters.app_gateway.ports import AccountStore
     from iris.adapters.memory.ports import MutableMemoryStore
+    from iris.contracts.accounts import AccountStore
     from iris.contracts.affect import AffectStore
     from iris.contracts.relationship import RelationshipStore
     from iris.runtime.config import IrisRuntimeConfig

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.cognitive.affect.appraisal import AppraisalStep
 from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
 from iris.features.proactive_talk import define_proactive_talk_feature
+from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import wire_cognitive_cycle
 
 if TYPE_CHECKING:

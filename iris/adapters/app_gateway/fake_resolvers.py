@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING, override
 
-from iris.adapters.accounts.memory import InMemoryAccountStore
-from iris.adapters.app_gateway.ports import AccountStore, IdentityResolver, SpaceResolver
+from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
 from iris.adapters.app_gateway.stable_ids import stable_account_id, stable_actor_id, stable_space_id
-from iris.contracts.accounts import AccountProfile
+from iris.contracts.accounts import AccountProfile, AccountStore
 from iris.contracts.identity import Identity
 from iris.contracts.spaces import InteractionSpace
 
@@ -29,7 +29,8 @@ class FakeIdentityResolver(IdentityResolver):
     ) -> None:
         """テスト用のリンクリストを使ってresolverを初期化する。"""
         self._linked_actor_ids = dict(linked_actor_ids or {})
-        self._account_store = account_store or InMemoryAccountStore()
+        self._account_store = account_store
+        self._local_accounts_by_ref: dict[tuple[str, str], AccountProfile] = {}
 
     @override
     async def resolve_identity(
@@ -43,11 +44,15 @@ class FakeIdentityResolver(IdentityResolver):
         Returns:
             Identity: 外部refから決定論的に解決されたIdentity。
         """
-        # Look up AccountProfile
-        profile = await self._account_store.get_by_external_ref(
-            provider=account_ref.provider,
-            provider_subject=account_ref.provider_subject,
-        )
+        # Look up AccountProfile.
+        link_key = (account_ref.provider, str(account_ref.provider_subject))
+        if self._account_store is None:
+            profile = self._local_accounts_by_ref.get(link_key)
+        else:
+            profile = await self._account_store.get_by_external_ref(
+                provider=account_ref.provider,
+                provider_subject=account_ref.provider_subject,
+            )
 
         if not profile:
             # Create a deterministic AccountProfile
@@ -61,16 +66,19 @@ class FakeIdentityResolver(IdentityResolver):
                 display_name=account_ref.display_name,
                 metadata=dict(account_ref.metadata),
             )
-            profile = await self._account_store.put(profile)
+            if self._account_store is None:
+                self._local_accounts_by_ref[link_key] = profile
+            else:
+                profile = await self._account_store.put(profile)
 
         # Check explicit links from constructor mapping
-        link_key = (account_ref.provider, str(account_ref.provider_subject))
         link_target = self._linked_actor_ids.get(link_key)
         if link_target and profile.linked_actor_id != link_target:
-            profile = await self._account_store.link_account_to_actor(
-                account_id=profile.account_id,
-                actor_id=link_target,
-            )
+            profile = dataclasses.replace(profile, linked_actor_id=link_target)
+            if self._account_store is None:
+                self._local_accounts_by_ref[link_key] = profile
+            else:
+                profile = await self._account_store.put(profile)
 
         # Determine actor_id
         actor_id = profile.linked_actor_id or stable_actor_id(profile.account_id)

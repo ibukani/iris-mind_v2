@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import json
-from pathlib import Path
-import sqlite3
-import threading
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.memory.ports import MutableMemoryStore
 from iris.adapters.memory.utils import matches_query, rank_text_matches
+from iris.adapters.sqlite.database import SQLiteDatabase
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,
@@ -23,8 +20,10 @@ from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.core.ids import ActorId, ObservationId, SpaceId
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Sequence
     from datetime import datetime
+    from pathlib import Path
+    import sqlite3
 
 
 class SQLiteMemoryStore(MutableMemoryStore):
@@ -37,15 +36,12 @@ class SQLiteMemoryStore(MutableMemoryStore):
 
     def __init__(self, db_path: str | Path) -> None:
         """Initialize the store and create tables if missing."""
-        self._db_path = Path(db_path)
-        self._lock = threading.RLock()
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = self._connect()
+        self._db = SQLiteDatabase(db_path, synchronous="NORMAL")
         self._init_db()
 
     def _init_db(self) -> None:
         """Create the memories table, filter indexes, and FTS5 virtual table if missing."""
-        with self._transaction() as conn:
+        with self._db.transaction() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             conn.execute(
                 """
@@ -78,38 +74,9 @@ class SQLiteMemoryStore(MutableMemoryStore):
                 """
             )
 
-    def _connect(self) -> sqlite3.Connection:
-        """Get a configured sqlite3 connection with runtime pragmas.
-
-        Returns:
-            sqlite3.Connection: A new configured connection.
-        """
-        conn = sqlite3.connect(self._db_path, timeout=5.0, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
-        conn.execute("PRAGMA busy_timeout = 5000;")
-        conn.execute("PRAGMA synchronous = NORMAL;")
-        return conn
-
-    @contextlib.contextmanager
-    def _transaction(self) -> Generator[sqlite3.Connection]:
-        """Provide a transactional sqlite connection that closes when done.
-
-        Yields:
-            sqlite3.Connection: An open, managed connection.
-        """
-        with self._lock, self._conn:
-            yield self._conn
-
     def close(self) -> None:
         """永続connectionを閉じる。"""
-        with self._lock:
-            self._conn.close()
-
-    def __del__(self) -> None:
-        """未closeのconnectionを解放する。"""
-        if hasattr(self, "_conn"):
-            self.close()
+        self._db.close()
 
     def search_fts5(self, query: MemoryQuery) -> Sequence[MemorySearchResult]:
         """FTS5 全文検索でメモリレコードを返す。
@@ -126,7 +93,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         if query.limit <= 0:
             return ()
 
-        with self._transaction() as conn:
+        with self._db.transaction() as conn:
             cursor = conn.execute(
                 """
                 SELECT memory_id, rank
@@ -178,7 +145,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         if conn is not None:
             _sync(conn)
             return
-        with self._transaction() as c:
+        with self._db.transaction() as c:
             _sync(c)
 
     @override
@@ -189,7 +156,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         未指定なら ``created_at`` と同じ値を補う。
         """
         normalized = _normalize_for_put(record)
-        with self._transaction() as conn:
+        with self._db.transaction() as conn:
             conn.execute(
                 """
                 INSERT INTO memories (
@@ -205,7 +172,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
     @override
     def get(self, memory_id: MemoryId) -> MemoryRecord | None:
         """Return the record with the given id, or None."""
-        with self._transaction() as conn:
+        with self._db.transaction() as conn:
             cursor = conn.execute(
                 "SELECT * FROM memories WHERE memory_id = ?",
                 (str(memory_id),),
@@ -227,7 +194,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
             MemoryRecord: 永続化された正規化済みレコード。
         """
         normalized = _normalize_for_update(self, record)
-        with self._transaction() as conn:
+        with self._db.transaction() as conn:
             conn.execute(
                 """
                 INSERT INTO memories (
@@ -262,7 +229,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
             MemoryRecord | None: 更新後レコード。存在しない ID の場合は None。
         """
         now_iso = now_utc().isoformat()
-        with self._transaction() as conn:
+        with self._db.transaction() as conn:
             cursor = conn.execute(
                 "SELECT memory_id FROM memories WHERE memory_id = ?",
                 (str(memory_id),),
@@ -310,7 +277,7 @@ class SQLiteMemoryStore(MutableMemoryStore):
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
 
-        with self._transaction() as conn:
+        with self._db.transaction() as conn:
             cursor = conn.execute(sql, tuple(params))
             return tuple(_row_to_record(row) for row in cursor.fetchall())
 

@@ -21,7 +21,7 @@ class InMemoryAffectStore(AffectStore):
         self._actor_records: dict[ActorId, AffectBaselineRecord] = {}
 
     @override
-    def get_global(self) -> AffectBaselineRecord | None:
+    async def get_global(self) -> AffectBaselineRecord | None:
         """Global affect baseline を返す。
 
         Returns:
@@ -30,7 +30,7 @@ class InMemoryAffectStore(AffectStore):
         return self._global
 
     @override
-    def upsert_global(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
+    async def upsert_global(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
         """Global affect baseline を保存して返す。
 
         Returns:
@@ -52,7 +52,7 @@ class InMemoryAffectStore(AffectStore):
         return stored
 
     @override
-    def get_for_actor(self, actor_id: ActorId) -> AffectBaselineRecord | None:
+    async def get_for_actor(self, actor_id: ActorId) -> AffectBaselineRecord | None:
         """Actor-scoped affect baseline を返す。
 
         Returns:
@@ -61,7 +61,7 @@ class InMemoryAffectStore(AffectStore):
         return self._actor_records.get(actor_id)
 
     @override
-    def upsert_for_actor(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
+    async def upsert_for_actor(self, record: AffectBaselineRecord) -> AffectBaselineRecord:
         """Actor-scoped affect baseline を保存して返す。
 
         Returns:
