@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -33,15 +34,30 @@ def _target(subject: str, session: str = "session-1") -> SchedulerTarget:
 async def test_target_store_upserts_by_stable_key() -> None:
     """Upsert replaces existing target with same provider route and session."""
     store = InMemorySchedulerTargetStore()
-    await store.upsert_target(_target("user-1"))
-    await store.mark_scheduler_attempt(
+    t1 = replace(
         _target("user-1"),
+        last_observed_at=datetime(2026, 1, 1, tzinfo=UTC),
+        stale_after=datetime(2026, 1, 1, 1, tzinfo=UTC),
+    )
+
+    await store.upsert_target(t1)
+    await store.mark_scheduler_attempt(
+        t1,
         attempted_at=datetime(2026, 1, 2, tzinfo=UTC),
     )
-    await store.upsert_target(_target("user-1"))
-    targets = await store.list_targets(now=datetime(2026, 1, 3, tzinfo=UTC))
+
+    t2 = replace(
+        _target("user-1"),
+        last_observed_at=datetime(2026, 1, 2, 1, tzinfo=UTC),
+        stale_after=datetime(2026, 1, 2, 2, tzinfo=UTC),
+    )
+    await store.upsert_target(t2)
+
+    targets = await store.list_targets(now=datetime(2026, 1, 1, tzinfo=UTC))
     assert len(targets) == 1
     assert targets[0].last_scheduler_attempt_at == datetime(2026, 1, 2, tzinfo=UTC)
+    assert targets[0].last_observed_at == t2.last_observed_at
+    assert targets[0].stale_after == t2.stale_after
 
 
 async def test_target_store_ordering_is_deterministic() -> None:
@@ -54,3 +70,21 @@ async def test_target_store_ordering_is_deterministic() -> None:
         ExternalRef("user-a"),
         ExternalRef("user-b"),
     ]
+
+
+async def test_target_store_filters_stale_targets() -> None:
+    """InMemorySchedulerTargetStore filters out stale targets."""
+    store = InMemorySchedulerTargetStore()
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+
+    stale = replace(_target("stale"), stale_after=now - timedelta(seconds=1))
+    active = replace(_target("active"), stale_after=now + timedelta(seconds=1))
+    open_target = replace(_target("open"), stale_after=None)
+
+    await store.upsert_target(stale)
+    await store.upsert_target(active)
+    await store.upsert_target(open_target)
+
+    targets = await store.list_targets(now=now)
+    assert len(targets) == 2
+    assert {t.display_name for t in targets} == {"active", "open"}

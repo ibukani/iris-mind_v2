@@ -293,6 +293,27 @@ async def test_sqlite_stale_failed_report_after_release_is_idempotent(
     assert duplicate != released
 
 
+async def test_sqlite_concurrent_lease_due_single_item(tmp_path: Path) -> None:
+    """Two outbox instances polling concurrently for a single item lease exactly one."""
+    db_path = tmp_path / "state.sqlite3"
+    outbox = SQLiteDeliveryOutbox(str(db_path))
+    await outbox.enqueue(_envelope("1"))
+
+    outbox1 = SQLiteDeliveryOutbox(str(db_path))
+    outbox2 = SQLiteDeliveryOutbox(str(db_path))
+
+    now = datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC)
+    results = await asyncio.gather(
+        outbox1.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30.0),
+        outbox2.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30.0),
+    )
+
+    assert sorted(len(result) for result in results) == [0, 1]
+    leased = next(result[0] for result in results if result)
+    assert leased.status is DeliveryStatus.LEASED
+    assert leased.attempts == 1
+
+
 async def test_sqlite_concurrent_lease_due_from_two_instances(tmp_path: Path) -> None:
     """Two outbox instances polling concurrently do not lease the same item."""
     db_path = tmp_path / "state.sqlite3"

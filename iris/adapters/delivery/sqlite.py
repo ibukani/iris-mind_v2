@@ -423,14 +423,21 @@ class SQLiteDeliveryOutbox:
                 txn_active = True
                 yield self._conn
                 self._conn.commit()
+            except DeliveryOutboxError:
+                if txn_active:
+                    with contextlib.suppress(sqlite3.OperationalError):
+                        self._conn.execute("ROLLBACK")
+                raise
             except sqlite3.OperationalError as exc:
                 if txn_active:
                     with contextlib.suppress(sqlite3.OperationalError):
                         self._conn.execute("ROLLBACK")
-                if not txn_active and ("database is locked" in str(exc) or "busy" in str(exc)):
-                    msg = "delivery_backend_unavailable"
-                    raise DeliveryOutboxError(msg) from exc
-                raise
+                reason = (
+                    "delivery_backend_unavailable"
+                    if "database is locked" in str(exc).lower() or "busy" in str(exc).lower()
+                    else "delivery_backend_error"
+                )
+                raise DeliveryOutboxError(reason) from exc
             except Exception:
                 if txn_active:
                     with contextlib.suppress(sqlite3.OperationalError):

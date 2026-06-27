@@ -49,6 +49,21 @@ async def test_no_registered_targets_no_observations() -> None:
     assert await source.due_observations(datetime(2026, 1, 1, tzinfo=UTC)) == ()
 
 
+async def test_idle_tick_ignores_stale_targets() -> None:
+    """IdleTickSource does not emit due observations for stale targets."""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    store = InMemorySchedulerTargetStore()
+    target = replace(
+        make_target(observed_at=now - timedelta(seconds=601)),
+        stale_after=now - timedelta(seconds=1),
+    )
+    await store.upsert_target(target)
+
+    source = IdleTickSource(store)
+    due = await source.due_observations(now)
+    assert due == ()
+
+
 async def test_idle_threshold_and_context_and_target() -> None:
     """Target over idle threshold emits IdleTickObservation with context and target."""
     now = datetime(2026, 1, 1, tzinfo=UTC)

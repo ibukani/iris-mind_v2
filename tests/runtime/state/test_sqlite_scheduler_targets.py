@@ -56,6 +56,22 @@ async def test_sqlite_scheduler_target_upsert_preserves_attempt_after_reopen(
     assert listed[0].last_scheduler_attempt_at == attempted_at
 
 
+async def test_sqlite_scheduler_target_stale_after_persists_after_reopen(
+    tmp_path: Path,
+) -> None:
+    """SQLite target store persists stale_after after reopen."""
+    db_path = tmp_path / "state.sqlite3"
+    store = SQLiteSchedulerTargetStore(str(db_path))
+    target = replace(_target("subject-1"), stale_after=datetime(2026, 1, 2, tzinfo=UTC))
+    await store.upsert_target(target)
+
+    reopened = SQLiteSchedulerTargetStore(str(db_path))
+    listed = await reopened.list_targets(now=datetime(2026, 1, 1, 0, 20, tzinfo=UTC))
+
+    assert len(listed) == 1
+    assert listed[0].stale_after == target.stale_after
+
+
 async def test_sqlite_scheduler_target_ordering_is_deterministic(tmp_path: Path) -> None:
     """SQLite target store orders targets by stable storage key."""
     store = SQLiteSchedulerTargetStore(str(tmp_path / "state.sqlite3"))
