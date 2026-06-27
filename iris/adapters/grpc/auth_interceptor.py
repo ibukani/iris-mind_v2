@@ -88,10 +88,7 @@ class RuntimeGrpcAuthInterceptor(grpc.aio.ServerInterceptor):
         if self.auth_config.mode is RuntimeAuthMode.REQUIRED:
             return self.verifier.verify_authorization(authorization)
         if authorization is not None:
-            try:
-                return self.verifier.verify_authorization(authorization)
-            except RuntimeUnauthenticatedError:
-                return local_dev_principal()
+            return self.verifier.verify_authorization(authorization)
         if self.auth_config.allow_unauthenticated_loopback:
             return local_dev_principal()
         message = "missing bearer token"

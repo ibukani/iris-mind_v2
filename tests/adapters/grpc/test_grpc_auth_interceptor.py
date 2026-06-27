@@ -11,9 +11,14 @@ import grpc
 import pytest
 
 from iris.adapters.grpc.mappers import timestamp_from_datetime
+from iris.runtime.delivery.broker import RuntimeAppActionBroker
+from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
+from tests.runtime.delivery.test_in_memory_delivery_outbox import envelope
 
 if TYPE_CHECKING:
     from types import TracebackType
+
+    from iris.adapters.app_gateway.ports import AppActionBroker
 from iris.generated.iris.api.v1 import observations_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from iris.runtime.auth.static_tokens import StaticBearerTokenVerifier, hash_token
@@ -63,6 +68,95 @@ async def test_valid_submit_observation_external_token_succeeds() -> None:
     assert not service.envelope.ingress.authenticated
 
 
+@pytest.mark.anyio
+async def test_local_dev_invalid_authorization_is_unauthenticated() -> None:
+    """local_dev mode rejects invalid bearer token."""
+    port = _free_tcp_port()
+    server = create_grpc_server(
+        RecordingRuntimeService("unused"),
+        port=port,
+        auth_config=RuntimeAuthConfig(
+            mode=RuntimeAuthMode.LOCAL_DEV,
+            allow_unauthenticated_loopback=True,
+        ),
+        token_verifier=_verifier(scopes=()),
+    )
+    await server.start()
+    try:
+        async with grpc.aio.insecure_channel(f"127.0.0.1:{port}") as channel:
+            stub = runtime_pb2_grpc.IrisRuntimeServiceStub(channel)
+            with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+                await stub.SubmitObservation(
+                    _request(),
+                    metadata=(("authorization", "Bearer invalid-token"),),
+                )
+            assert exc_info.value.code() is grpc.StatusCode.UNAUTHENTICATED
+    finally:
+        await server.stop(grace=None)
+
+
+@pytest.mark.anyio
+async def test_report_action_result_without_token_in_required_mode_is_unauthenticated() -> None:
+    """ReportActionResult requires token in required mode."""
+    outbox = InMemoryDeliveryOutbox()
+    await outbox.enqueue(envelope(provider="cli"))
+    broker = RuntimeAppActionBroker(outbox)
+    async with _AuthGrpcHarness(
+        _verifier(scopes=("delivery.report",)), app_action_broker=broker
+    ) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.ReportActionResult(_report_request())
+    assert exc_info.value.code() is grpc.StatusCode.UNAUTHENTICATED
+
+
+@pytest.mark.anyio
+async def test_report_action_result_valid_token_missing_scope_is_permission_denied() -> None:
+    """ReportActionResult requires delivery.report scope."""
+    outbox = InMemoryDeliveryOutbox()
+    await outbox.enqueue(envelope(provider="cli"))
+    broker = RuntimeAppActionBroker(outbox)
+    async with _AuthGrpcHarness(
+        _verifier(scopes=("observation.submit",)), app_action_broker=broker
+    ) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.ReportActionResult(
+                _report_request(), metadata=(("authorization", "Bearer token-1"),)
+            )
+    assert exc_info.value.code() is grpc.StatusCode.PERMISSION_DENIED
+
+
+@pytest.mark.anyio
+async def test_report_action_result_valid_token_wrong_provider_is_permission_denied() -> None:
+    """ReportActionResult requires delivery provider match."""
+    outbox = InMemoryDeliveryOutbox()
+    await outbox.enqueue(envelope(provider="cli"))
+    broker = RuntimeAppActionBroker(outbox)
+    verifier = _verifier(scopes=("delivery.report",), allowed_providers=["slack"])
+    async with _AuthGrpcHarness(verifier, app_action_broker=broker) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.ReportActionResult(
+                _report_request(), metadata=(("authorization", "Bearer token-1"),)
+            )
+    assert exc_info.value.code() is grpc.StatusCode.PERMISSION_DENIED
+
+
+@pytest.mark.anyio
+async def test_report_action_result_valid_token_matching_provider_succeeds() -> None:
+    """ReportActionResult succeeds if scope and provider match."""
+    outbox = InMemoryDeliveryOutbox()
+    await outbox.enqueue(envelope(provider="cli"))
+    broker = RuntimeAppActionBroker(outbox)
+    # Report fails with FAILED_PRECONDITION (mismatched lease) but passes auth.
+    async with _AuthGrpcHarness(
+        _verifier(scopes=("delivery.report",)), app_action_broker=broker
+    ) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.ReportActionResult(
+                _report_request(), metadata=(("authorization", "Bearer token-1"),)
+            )
+    assert exc_info.value.code() is grpc.StatusCode.FAILED_PRECONDITION
+
+
 class _AuthGrpcHarness:
     """In-process gRPC server with required auth."""
 
@@ -71,9 +165,11 @@ class _AuthGrpcHarness:
         verifier: StaticBearerTokenVerifier,
         *,
         runtime_service: RecordingRuntimeService | None = None,
+        app_action_broker: AppActionBroker | None = None,
     ) -> None:
         self._verifier = verifier
         self._runtime_service = runtime_service or RecordingRuntimeService("unused")
+        self._app_action_broker = app_action_broker
         self._server: grpc.aio.Server | None = None
         self._channel: grpc.aio.Channel | None = None
 
@@ -87,6 +183,7 @@ class _AuthGrpcHarness:
                 allow_insecure_remote=True,
             ),
             token_verifier=self._verifier,
+            app_action_broker=self._app_action_broker,
         )
         self._server = server
         await server.start()
@@ -107,7 +204,11 @@ class _AuthGrpcHarness:
             await self._server.stop(grace=None)
 
 
-def _verifier(*, scopes: tuple[str, ...]) -> StaticBearerTokenVerifier:
+def _verifier(
+    *, scopes: tuple[str, ...], allowed_providers: list[str] | None = None
+) -> StaticBearerTokenVerifier:
+    if allowed_providers is None:
+        allowed_providers = ["cli"]
     payload = json.dumps(
         [
             {
@@ -115,7 +216,7 @@ def _verifier(*, scopes: tuple[str, ...]) -> StaticBearerTokenVerifier:
                 "token_sha256": hash_token("token-1"),
                 "client_kind": "external_client",
                 "provider": "cli",
-                "allowed_providers": ["cli"],
+                "allowed_providers": allowed_providers,
                 "scopes": list(scopes),
                 "observation_capabilities": [],
             }
@@ -135,6 +236,17 @@ def _request() -> runtime_pb2.SubmitObservationRequest:
             context=observations_pb2.ObservationContext(source="cli"),
             actor_message=observations_pb2.ActorMessagePayload(text="hello"),
         ),
+    )
+
+
+def _report_request() -> runtime_pb2.ReportActionResultRequest:
+    return runtime_pb2.ReportActionResultRequest(
+        delivery_id="delivery-1",
+        lease_id="lease-1",
+        action_id="action-1",
+        correlation_id="corr-1",
+        status="succeeded",
+        external_message_id="msg-1",
     )
 
 

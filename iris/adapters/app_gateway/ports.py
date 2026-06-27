@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from iris.contracts.identity import Identity
     from iris.contracts.observations import Observation
     from iris.contracts.spaces import InteractionSpace
-    from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
+    from iris.core.ids import AccountId, ActorId, DeliveryId, DeviceId, ExternalRef
 
 
 class AppActionBrokerErrorReason(StrEnum):
@@ -87,6 +87,19 @@ class AppActionBroker(Protocol):
         report: DeliveryReport,
     ) -> DeliveryEnvelope:
         """ActionResult 報告を配送状態へ反映する。"""
+        ...
+
+    async def get_delivery_provider(
+        self,
+        delivery_id: DeliveryId,
+    ) -> str:
+        """delivery_id に紐づく provider を read-only で解決する。
+
+        outbox 内部を変更せず、認可判定用の provider 文字列のみ返す。
+
+        Raises:
+            AppActionBrokerError: delivery_id が不明な場合。
+        """
         ...
 
 

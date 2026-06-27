@@ -48,6 +48,11 @@ class StaticBearerTokenVerifier:
         """Verifier を token entry 群で初期化する。"""
         self._entries = entries
 
+    @property
+    def entry_count(self) -> int:
+        """登録済み token entry 数を返す。"""
+        return len(self._entries)
+
     @classmethod
     def from_env(
         cls,

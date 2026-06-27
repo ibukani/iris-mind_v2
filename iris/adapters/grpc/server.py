@@ -210,7 +210,16 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
             await context.abort(grpc.StatusCode.FAILED_PRECONDITION, "app action broker disabled")
         try:
             report = delivery_report_from_proto(request, now_utc())
+            delivery_provider = await self._app_action_broker.get_delivery_provider(
+                report.delivery_id,
+            )
+            self._authorization_policy.require_report_action_result(
+                current_principal(),
+                delivery_provider,
+            )
             await self._app_action_broker.report_action_result(report)
+        except RuntimePermissionDeniedError as exc:
+            await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
         except GrpcMappingError as exc:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
         except AppActionBrokerError as exc:

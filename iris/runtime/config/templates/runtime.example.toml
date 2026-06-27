@@ -17,6 +17,7 @@ shutdown_grace_seconds = 5.0
 [server.tls]
 enabled = false
 cert_chain_path = ""
+# private_key_path = ""
 client_ca_path = ""
 require_client_cert = false
 

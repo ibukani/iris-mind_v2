@@ -6,11 +6,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict, Unpack
 
 import grpc
+from loguru import logger
 
 from iris.adapters.grpc.auth_interceptor import RuntimeGrpcAuthInterceptor
 from iris.adapters.grpc.mappers import GrpcRuntimeMapper, RuntimeIngressProfile
 from iris.adapters.grpc.server import IrisRuntimeGrpcServicer
 from iris.generated.iris.runtime.v1 import runtime_pb2_grpc
+from iris.runtime.config.auth import RuntimeAuthMode
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -76,8 +78,29 @@ def create_grpc_server(
     Raises:
         RuntimeError: gRPC port bind に失敗した場合。
     """
+    if auth_config is not None and token_verifier is None:
+        message = "auth_config provided without token_verifier"
+        raise RuntimeError(message)
+    if token_verifier is not None and auth_config is None:
+        message = "token_verifier provided without auth_config"
+        raise RuntimeError(message)
+
+    if (
+        host not in {"127.0.0.1", "localhost", "::1"}
+        and auth_config is not None
+        and auth_config.allow_insecure_remote
+    ):
+        logger.warning(
+            "%s %s",
+            "server.local_only=false and auth.allow_insecure_remote=true is enabled;",
+            "external traffic is allowed insecurely.",
+        )
+
     interceptors: list[grpc.aio.ServerInterceptor] = []
     if auth_config is not None and token_verifier is not None:
+        if auth_config.mode is RuntimeAuthMode.REQUIRED and token_verifier.entry_count == 0:
+            message = "required auth mode requires at least one static token entry"
+            raise RuntimeError(message)
         interceptors.append(RuntimeGrpcAuthInterceptor(auth_config, token_verifier))
     server = grpc.aio.server(interceptors=interceptors)
     add_iris_runtime_servicer(
