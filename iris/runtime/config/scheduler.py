@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from iris.runtime.config.errors import ConfigError
-from iris.runtime.config.parsing import TomlTable, parse_bool, parse_float, parse_int
+from iris.runtime.config.parsing import (
+    TomlTable,
+    env_optional_float,
+    parse_bool,
+    parse_float,
+    parse_int,
+)
 
 
 @dataclass(frozen=True)
@@ -70,6 +80,28 @@ def apply_scheduler_toml(
             value,
             max_due_per_run=parse_int(table["max_due_per_run"], "scheduler.max_due_per_run"),
         )
+    return validate_scheduler_config(value)
+
+
+def apply_scheduler_env(
+    config: RuntimeSchedulerConfig,
+    env: Mapping[str, str],
+) -> RuntimeSchedulerConfig:
+    """環境変数オーバーライドをスケジューラー設定に適用する。
+
+    Args:
+        config: ベースとなるスケジューラー設定。
+        env: 環境変数のマッピング。
+
+    Returns:
+        更新後のスケジューラー設定。
+    """
+    value = config
+
+    stale_after = env_optional_float(env, "IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS", None)
+    if stale_after is not None:
+        value = replace(value, target_stale_after_seconds=stale_after)
+
     return validate_scheduler_config(value)
 
 

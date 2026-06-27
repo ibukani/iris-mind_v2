@@ -53,6 +53,7 @@ from iris.runtime.config.parsing import (
 from iris.runtime.config.safety import RuntimeSafetyConfig, apply_safety_env, apply_safety_toml
 from iris.runtime.config.scheduler import (
     RuntimeSchedulerConfig,
+    apply_scheduler_env,
     apply_scheduler_toml,
     validate_scheduler_config,
 )
@@ -435,6 +436,7 @@ def _apply_env(
     """
     server = apply_server_env(config.server, env)
     state = apply_state_env(config.state, env)
+    scheduler = apply_scheduler_env(config.scheduler, env)
     safety = apply_safety_env(config.safety, env)
     auth = apply_auth_env(config.auth, env)
     diagnostics = apply_diagnostics_env(config.diagnostics, env)
@@ -446,6 +448,7 @@ def _apply_env(
         config,
         server=server,
         state=state,
+        scheduler=scheduler,
         models=models,
         ollama=ollama,
         openai=openai,
