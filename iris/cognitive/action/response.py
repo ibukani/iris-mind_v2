@@ -54,7 +54,7 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
         return None
 
     return ResponsePrompt(
-        system_instruction="Generate a concise text response for Iris.",
+        system_instruction="Generate a concise text response for Iris. Respond directly without showing your thinking or reasoning process.",
         actor_text=text,
         memory_snippets=tuple(
             result.record.text for result in frame.memory_summary.retrieved_memories

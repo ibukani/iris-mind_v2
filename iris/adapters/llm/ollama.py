@@ -211,7 +211,9 @@ def _to_llm_response(body: _JsonObject, *, fallback_model: str) -> LLMResponse:
         raise LLMProviderInvalidResponseError(error_message)
 
     content = message.get("content")
-    if not isinstance(content, str):
+    if not isinstance(content, str) or not content.strip():
+        content = message.get("thinking")
+    if not isinstance(content, str) or not content.strip():
         error_message = "Ollama response is missing message content"
         raise LLMProviderInvalidResponseError(error_message)
 
