@@ -181,6 +181,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             ConfigValueType.BOOL,
             default=True,
             description="(非推奨) remote bind では TLS が常に要求されます。",
+            control_plane_editable=False,
         ),
         ConfigFieldSpec(
             "auth.allow_insecure_remote",

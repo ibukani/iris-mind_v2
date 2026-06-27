@@ -131,7 +131,7 @@
       "allowedValues": [],
       "env": null,
       "secret": false,
-      "editable": true,
+      "editable": false,
       "description": "(非推奨) remote bind では TLS が常に要求されます。"
     },
     {
