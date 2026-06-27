@@ -245,15 +245,16 @@ async def test_ollama_client_prefers_content_over_thinking() -> None:
 
 
 @pytest.mark.anyio
-async def test_ollama_client_rejects_thinking_without_content() -> None:
-    """OllamaLLMClient rejects thinking-only chat responses."""
+async def test_ollama_client_uses_thinking_without_content() -> None:
+    """OllamaLLMClient falls back to thinking-only chat responses."""
+    thinking = "Thinking Process: private reasoning"
     transport = httpx.MockTransport(
         lambda request: httpx.Response(
             200,
             json={
                 "message": {
                     "content": "",
-                    "thinking": "Thinking Process: private reasoning",
+                    "thinking": thinking,
                 },
             },
             request=request,
@@ -261,11 +262,9 @@ async def test_ollama_client_rejects_thinking_without_content() -> None:
     )
     client = OllamaLLMClient(transport=transport)
 
-    with pytest.raises(
-        LLMProviderInvalidResponseError,
-        match="thinking without message content",
-    ):
-        await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+    response = await client.generate(LLMRequest(model="qwen3:8b", messages=()))
+
+    assert response.text == thinking
 
 
 @pytest.mark.anyio

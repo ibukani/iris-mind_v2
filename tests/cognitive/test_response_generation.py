@@ -70,7 +70,10 @@ async def test_response_generation_step_converts_frame_text_into_action_plan() -
     assert result.status == StepStatus.OK
     assert generator.prompts == [
         ResponsePrompt(
-            system_instruction="Generate a concise text response for Iris.",
+            system_instruction=(
+                "Generate a concise text response for Iris. "
+                "Respond directly without showing your thinking or reasoning process."
+            ),
             actor_text="what is new?",
         ),
     ]

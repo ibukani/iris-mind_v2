@@ -219,13 +219,10 @@ def _to_llm_response(body: _JsonObject, *, fallback_model: str) -> LLMResponse:
     else:
         thinking = message.get("thinking")
         if isinstance(thinking, str) and thinking.strip():
-            error_message = (
-                "Ollama returned thinking without message content; configure "
-                "think=False or use a model/template that emits message.content"
-            )
+            text = thinking
+        else:
+            error_message = "Ollama response is missing message content"
             raise LLMProviderInvalidResponseError(error_message)
-        error_message = "Ollama response is missing message content"
-        raise LLMProviderInvalidResponseError(error_message)
 
     provider_model = body.get("model")
     model = provider_model if isinstance(provider_model, str) else fallback_model
