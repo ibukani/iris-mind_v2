@@ -77,6 +77,7 @@ def build_runtime_service(
     app: IrisApp,
     stores: RuntimeStateStores,
     *,
+    target_stale_after_seconds: float,
     now: Callable[[], datetime] | None = None,
 ) -> IrisRuntimeService:
     """IrisApp とランタイムstateストアからサービス境界を組み立てる。
@@ -85,9 +86,10 @@ def build_runtime_service(
     workspace context assembly を同一ストアインスタンスで配線する。
 
     Args:
-        app: 観測処理を委譲する IrisApp。
-        stores: ランタイムstateストア群。
-        now: 現在時刻を返す callable。省略時は UTC now。
+        app: アプリケーション定義。
+        stores: ランタイムstateストア。
+        target_stale_after_seconds: target が stale になるまでの idle 秒数。
+        now: 現在時刻を返す関数。省略時は `datetime.now(UTC)`。
 
     Returns:
         構成済みの IrisRuntimeService。
@@ -112,6 +114,7 @@ def build_runtime_service(
     )
     scheduler_target_integrator = SchedulerTargetIntegrator(
         target_store=stores.scheduler_target_store,
+        target_stale_after_seconds=target_stale_after_seconds,
     )
     availability_resolver = wire_availability_resolver()
     workspace_context_assembler = wire_workspace_context_assembler(
@@ -164,7 +167,11 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         relationship_store=stores.relationship_store,
         affect_store=stores.affect_store,
     )
-    runtime_service = build_runtime_service(app, stores)
+    runtime_service = build_runtime_service(
+        app,
+        stores,
+        target_stale_after_seconds=config.scheduler.target_stale_after_seconds,
+    )
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
     space_resolver = EphemeralSpaceResolver()
     app_action_broker = (

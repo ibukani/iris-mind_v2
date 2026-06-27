@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING, override
 
 from iris.contracts.delivery import SchedulerTarget
@@ -22,6 +23,7 @@ class SchedulerTargetIntegrator(ObservationIntegrator):
     """Trusted ingress route hint から scheduler target を登録する integrator。"""
 
     target_store: SchedulerTargetStore
+    target_stale_after_seconds: float
 
     @override
     async def integrate_observation(
@@ -45,5 +47,7 @@ class SchedulerTargetIntegrator(ObservationIntegrator):
             route=ingress.delivery_route,
             display_name=ingress.delivery_route.display_name,
             last_observed_at=observation.occurred_at,
+            stale_after=observation.occurred_at
+            + timedelta(seconds=self.target_stale_after_seconds),
         )
         await self.target_store.upsert_target(target)

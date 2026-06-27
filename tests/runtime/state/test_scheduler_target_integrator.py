@@ -34,7 +34,7 @@ def _observation() -> ActorMessageObservation:
 async def test_target_integrator_updates_from_trusted_route_hint() -> None:
     """Trusted ingress with capability and route hint registers a target."""
     store = InMemorySchedulerTargetStore()
-    integrator = SchedulerTargetIntegrator(store)
+    integrator = SchedulerTargetIntegrator(store, target_stale_after_seconds=604800.0)
     await integrator.integrate_observation(
         _observation(),
         ObservationIngressContext(
@@ -56,7 +56,7 @@ async def test_target_integrator_updates_from_trusted_route_hint() -> None:
 async def test_target_integrator_ignores_missing_hint_or_capability() -> None:
     """Integrator ignores ingress without route hint or capability."""
     store = InMemorySchedulerTargetStore()
-    integrator = SchedulerTargetIntegrator(store)
+    integrator = SchedulerTargetIntegrator(store, target_stale_after_seconds=604800.0)
     await integrator.integrate_observation(
         _observation(),
         ObservationIngressContext(

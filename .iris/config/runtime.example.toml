@@ -37,6 +37,7 @@ enabled = false
 interval_seconds = 30.0
 idle_threshold_seconds = 600.0
 min_interval_per_target_seconds = 1800.0
+target_stale_after_seconds = 604800.0
 max_due_per_run = 10
 
 [delivery]

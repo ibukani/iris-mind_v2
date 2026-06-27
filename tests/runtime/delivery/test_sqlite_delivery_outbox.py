@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -212,7 +213,7 @@ async def test_sqlite_depth_limit_and_no_action_match_contract(tmp_path: Path) -
     outbox = SQLiteDeliveryOutbox(str(tmp_path / "state.sqlite3"), max_depth_per_provider=1)
     await outbox.enqueue(_envelope("1"))
 
-    with pytest.raises(DeliveryOutboxError, match="delivery_outbox_depth_exceeded"):
+    with pytest.raises(DeliveryOutboxError, match="outbox_depth_exceeded"):
         await outbox.enqueue(_envelope("2"))
 
     no_action = replace(
@@ -290,3 +291,170 @@ async def test_sqlite_stale_failed_report_after_release_is_idempotent(
 
     assert duplicate.status is DeliveryStatus.LEASED
     assert duplicate != released
+
+
+async def test_sqlite_concurrent_lease_due_from_two_instances(tmp_path: Path) -> None:
+    """Two outbox instances polling concurrently do not lease the same item."""
+    db_path = tmp_path / "state.sqlite3"
+    outbox = SQLiteDeliveryOutbox(str(db_path))
+    await outbox.enqueue(_envelope("1"))
+    await outbox.enqueue(_envelope("2"))
+
+    outbox1 = SQLiteDeliveryOutbox(str(db_path))
+    outbox2 = SQLiteDeliveryOutbox(str(db_path))
+
+    now = datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC)
+    results = await asyncio.gather(
+        outbox1.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30.0),
+        outbox2.lease_due(provider="discord", now=now, max_items=1, lease_seconds=30.0),
+    )
+
+    leased1 = results[0]
+    leased2 = results[1]
+
+    # Each should get 1 item, and they must be different
+    assert len(leased1) == 1
+    assert len(leased2) == 1
+    assert leased1[0].delivery_id != leased2[0].delivery_id
+
+
+async def test_sqlite_lease_expiry_and_re_lease_by_another_instance(tmp_path: Path) -> None:
+    """Another instance can re-lease an expired item with incremented attempts."""
+    db_path = tmp_path / "state.sqlite3"
+    outbox1 = SQLiteDeliveryOutbox(str(db_path))
+    outbox2 = SQLiteDeliveryOutbox(str(db_path))
+
+    await outbox1.enqueue(_envelope())
+
+    first = await outbox1.lease_due(
+        provider="discord",
+        now=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
+        max_items=1,
+        lease_seconds=1.0,
+    )
+
+    assert len(first) == 1
+    assert first[0].attempts == 1
+
+    empty = await outbox2.lease_due(
+        provider="discord",
+        now=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
+        max_items=1,
+        lease_seconds=1.0,
+    )
+    assert len(empty) == 0
+
+    second = await outbox2.lease_due(
+        provider="discord",
+        now=datetime(2026, 1, 1, 0, 0, 3, tzinfo=UTC),
+        max_items=1,
+        lease_seconds=1.0,
+    )
+
+    assert len(second) == 1
+    assert second[0].delivery_id == first[0].delivery_id
+    assert second[0].attempts == 2
+
+
+async def test_sqlite_completed_report_visible_to_another_instance(tmp_path: Path) -> None:
+    """One instance completes, another instance does not poll the terminal item."""
+    db_path = tmp_path / "state.sqlite3"
+    outbox1 = SQLiteDeliveryOutbox(str(db_path))
+    outbox2 = SQLiteDeliveryOutbox(str(db_path))
+
+    await outbox1.enqueue(_envelope())
+
+    first = (
+        await outbox1.lease_due(
+            provider="discord",
+            now=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
+            max_items=1,
+            lease_seconds=30.0,
+        )
+    )[0]
+
+    await outbox1.complete(
+        delivery_id=first.delivery_id,
+        lease_id=first.lease_id,
+        result=_result(ActionStatus.SUCCEEDED),
+        completed_at=datetime(2026, 1, 1, 0, 0, 2, tzinfo=UTC),
+    )
+
+    empty = await outbox2.lease_due(
+        provider="discord",
+        now=datetime(2026, 1, 1, 0, 0, 3, tzinfo=UTC),
+        max_items=1,
+        lease_seconds=30.0,
+    )
+
+    assert len(empty) == 0
+
+
+async def test_sqlite_conflicting_report_from_another_instance(tmp_path: Path) -> None:
+    """Conflicting report from another instance raises error."""
+    db_path = tmp_path / "state.sqlite3"
+    outbox1 = SQLiteDeliveryOutbox(str(db_path))
+    outbox2 = SQLiteDeliveryOutbox(str(db_path))
+
+    await outbox1.enqueue(_envelope())
+
+    first = (
+        await outbox1.lease_due(
+            provider="discord",
+            now=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
+            max_items=1,
+            lease_seconds=30.0,
+        )
+    )[0]
+
+    await outbox1.complete(
+        delivery_id=first.delivery_id,
+        lease_id=first.lease_id,
+        result=_result(ActionStatus.SUCCEEDED, external_message_id="ext-1"),
+        completed_at=datetime(2026, 1, 1, 0, 0, 2, tzinfo=UTC),
+    )
+
+    with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
+        await outbox2.complete(
+            delivery_id=first.delivery_id,
+            lease_id=first.lease_id,
+            result=_result(ActionStatus.SUCCEEDED, external_message_id="ext-2"),
+            completed_at=datetime(2026, 1, 1, 0, 0, 3, tzinfo=UTC),
+        )
+
+
+async def test_sqlite_repeated_identical_report_from_another_instance_idempotent(
+    tmp_path: Path,
+) -> None:
+    """Repeated identical report from another instance is idempotent."""
+    db_path = tmp_path / "state.sqlite3"
+    outbox1 = SQLiteDeliveryOutbox(str(db_path))
+    outbox2 = SQLiteDeliveryOutbox(str(db_path))
+
+    await outbox1.enqueue(_envelope())
+
+    first = (
+        await outbox1.lease_due(
+            provider="discord",
+            now=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
+            max_items=1,
+            lease_seconds=30.0,
+        )
+    )[0]
+
+    result = _result(ActionStatus.SUCCEEDED)
+    completed1 = await outbox1.complete(
+        delivery_id=first.delivery_id,
+        lease_id=first.lease_id,
+        result=result,
+        completed_at=datetime(2026, 1, 1, 0, 0, 2, tzinfo=UTC),
+    )
+
+    completed2 = await outbox2.complete(
+        delivery_id=first.delivery_id,
+        lease_id=first.lease_id,
+        result=result,
+        completed_at=datetime(2026, 1, 1, 0, 0, 3, tzinfo=UTC),
+    )
+
+    assert completed1 == completed2

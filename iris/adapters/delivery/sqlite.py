@@ -7,6 +7,7 @@ import contextlib
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
+import json
 from pathlib import Path
 import sqlite3
 import threading
@@ -141,6 +142,7 @@ class SQLiteDeliveryOutbox:
         conn = sqlite3.connect(self._db_path, timeout=5.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 5000")
         return conn
 
     def _init_schema(self) -> None:
@@ -178,6 +180,7 @@ class SQLiteDeliveryOutbox:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS delivery_report_fingerprints (
+                    fingerprint_key TEXT PRIMARY KEY,
                     delivery_id TEXT NOT NULL,
                     lease_id TEXT,
                     action_id TEXT NOT NULL,
@@ -185,15 +188,6 @@ class SQLiteDeliveryOutbox:
                     status TEXT NOT NULL,
                     external_message_id TEXT,
                     error_reason TEXT,
-                    PRIMARY KEY (
-                        delivery_id,
-                        lease_id,
-                        action_id,
-                        correlation_id,
-                        status,
-                        external_message_id,
-                        error_reason
-                    ),
                     FOREIGN KEY (delivery_id)
                         REFERENCES delivery_outbox(delivery_id)
                         ON DELETE CASCADE
@@ -225,7 +219,7 @@ class SQLiteDeliveryOutbox:
         if not envelope.idempotency_key:
             msg = "idempotency_key_required"
             raise DeliveryOutboxError(msg)
-        with self._locked_connection() as conn:
+        with self._immediate_transaction() as conn:
             existing = conn.execute(
                 """
                 SELECT *
@@ -237,7 +231,7 @@ class SQLiteDeliveryOutbox:
             if existing is not None:
                 return _row_to_envelope(existing)
             if self._depth_exceeded(conn, envelope.target.provider):
-                msg = "delivery_outbox_depth_exceeded"
+                msg = "outbox_depth_exceeded"
                 raise DeliveryOutboxError(msg)
             conn.execute(
                 """
@@ -295,7 +289,7 @@ class SQLiteDeliveryOutbox:
         lease_seconds: float,
     ) -> tuple[DeliveryEnvelope, ...]:
         due: list[DeliveryEnvelope] = []
-        with self._locked_connection() as conn:
+        with self._immediate_transaction() as conn:
             rows = conn.execute(
                 """
                 SELECT *
@@ -340,7 +334,7 @@ class SQLiteDeliveryOutbox:
         result: ActionResult,
         completed_at: datetime,
     ) -> DeliveryEnvelope:
-        with self._locked_connection() as conn:
+        with self._immediate_transaction() as conn:
             item = _get_for_update(conn, delivery_id)
             current = _result_fingerprint(delivery_id, lease_id, result)
             outcome = _classify_report(conn, current)
@@ -373,7 +367,7 @@ class SQLiteDeliveryOutbox:
         result: ActionResult,
         released_at: datetime,
     ) -> DeliveryEnvelope:
-        with self._locked_connection() as conn:
+        with self._immediate_transaction() as conn:
             item = _get_for_update(conn, delivery_id)
             current = _result_fingerprint(delivery_id, lease_id, result)
             outcome = _classify_report(conn, current)
@@ -419,6 +413,29 @@ class SQLiteDeliveryOutbox:
                 raise
             else:
                 self._conn.commit()
+
+    @contextlib.contextmanager
+    def _immediate_transaction(self) -> Generator[sqlite3.Connection]:
+        txn_active = False
+        with self._lock:
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                txn_active = True
+                yield self._conn
+                self._conn.commit()
+            except sqlite3.OperationalError as exc:
+                if txn_active:
+                    with contextlib.suppress(sqlite3.OperationalError):
+                        self._conn.execute("ROLLBACK")
+                if not txn_active and ("database is locked" in str(exc) or "busy" in str(exc)):
+                    msg = "delivery_backend_unavailable"
+                    raise DeliveryOutboxError(msg) from exc
+                raise
+            except Exception:
+                if txn_active:
+                    with contextlib.suppress(sqlite3.OperationalError):
+                        self._conn.execute("ROLLBACK")
+                raise
 
 
 class _ReportOutcome(StrEnum):
@@ -516,24 +533,49 @@ class _ReportFingerprint:
     error_reason: str | None
 
 
+def _build_fingerprint_key(fingerprint: _ReportFingerprint) -> str:
+    return json.dumps(
+        {
+            "delivery_id": str(fingerprint.delivery_id),
+            "lease_id": str(fingerprint.lease_id) if fingerprint.lease_id else None,
+            "action_id": str(fingerprint.action_id),
+            "correlation_id": str(fingerprint.correlation_id),
+            "status": fingerprint.status,
+            "external_message_id": (
+                str(fingerprint.external_message_id) if fingerprint.external_message_id else None
+            ),
+            "error_reason": fingerprint.error_reason,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
 def _classify_report(
     conn: sqlite3.Connection,
     current: _ReportFingerprint,
 ) -> _ReportOutcome:
-    rows = conn.execute(
+    fingerprint_key = _build_fingerprint_key(current)
+    exact = conn.execute(
         """
-        SELECT *
+        SELECT 1
+        FROM delivery_report_fingerprints
+        WHERE fingerprint_key = ?
+        """,
+        (fingerprint_key,),
+    ).fetchone()
+    if exact is not None:
+        return _ReportOutcome.IDEMPOTENT
+    conflict = conn.execute(
+        """
+        SELECT 1
         FROM delivery_report_fingerprints
         WHERE delivery_id = ?
           AND lease_id IS ?
         """,
         (str(current.delivery_id), _optional_text(current.lease_id)),
-    ).fetchall()
-    for row in rows:
-        existing = _row_to_fingerprint(row)
-        if existing == current:
-            return _ReportOutcome.IDEMPOTENT
-    if rows:
+    ).fetchone()
+    if conflict is not None:
         return _ReportOutcome.CONFLICT
     return _ReportOutcome.NEW
 
@@ -542,6 +584,7 @@ def _insert_fingerprint(conn: sqlite3.Connection, fingerprint: _ReportFingerprin
     conn.execute(
         """
         INSERT INTO delivery_report_fingerprints (
+            fingerprint_key,
             delivery_id,
             lease_id,
             action_id,
@@ -549,9 +592,10 @@ def _insert_fingerprint(conn: sqlite3.Connection, fingerprint: _ReportFingerprin
             status,
             external_message_id,
             error_reason
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
+            _build_fingerprint_key(fingerprint),
             str(fingerprint.delivery_id),
             _optional_text(fingerprint.lease_id),
             str(fingerprint.action_id),
@@ -560,18 +604,6 @@ def _insert_fingerprint(conn: sqlite3.Connection, fingerprint: _ReportFingerprin
             _optional_text(fingerprint.external_message_id),
             fingerprint.error_reason,
         ),
-    )
-
-
-def _row_to_fingerprint(row: sqlite3.Row) -> _ReportFingerprint:
-    return _ReportFingerprint(
-        delivery_id=DeliveryId(str(row["delivery_id"])),
-        lease_id=_optional_new_type(LeaseId, row["lease_id"]),
-        action_id=ActionId(str(row["action_id"])),
-        correlation_id=CorrelationId(str(row["correlation_id"])),
-        status=str(row["status"]),
-        external_message_id=_optional_new_type(ExternalRef, row["external_message_id"]),
-        error_reason=row["error_reason"],
     )
 
 
@@ -604,7 +636,7 @@ def _require_matching_lease(item: DeliveryEnvelope, lease_id: LeaseId | None) ->
         msg = "delivery_not_leased"
         raise DeliveryOutboxError(msg)
     if item.lease_id != lease_id:
-        msg = "delivery_lease_mismatch"
+        msg = "lease_mismatch"
         raise DeliveryOutboxError(msg)
 
 

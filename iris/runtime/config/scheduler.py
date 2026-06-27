@@ -16,6 +16,7 @@ class RuntimeSchedulerConfig:
     interval_seconds: float = 30.0
     idle_threshold_seconds: float = 600.0
     min_interval_per_target_seconds: float = 1800.0
+    target_stale_after_seconds: float = 604800.0
     max_due_per_run: int = 10
 
 
@@ -56,6 +57,14 @@ def apply_scheduler_toml(
                 "scheduler.min_interval_per_target_seconds",
             ),
         )
+    if "target_stale_after_seconds" in table:
+        value = replace(
+            value,
+            target_stale_after_seconds=parse_float(
+                table["target_stale_after_seconds"],
+                "scheduler.target_stale_after_seconds",
+            ),
+        )
     if "max_due_per_run" in table:
         value = replace(
             value,
@@ -84,6 +93,9 @@ def validate_scheduler_config(config: RuntimeSchedulerConfig) -> RuntimeSchedule
         raise ConfigError(msg)
     if config.min_interval_per_target_seconds < 0:
         msg = "scheduler.min_interval_per_target_seconds must be >= 0"
+        raise ConfigError(msg)
+    if config.target_stale_after_seconds <= 0:
+        msg = "scheduler.target_stale_after_seconds must be > 0"
         raise ConfigError(msg)
     if config.max_due_per_run <= 0:
         msg = "scheduler.max_due_per_run must be > 0"
