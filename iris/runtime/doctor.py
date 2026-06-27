@@ -179,6 +179,14 @@ def _sqlite_state_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
 
 
 def _existing_sqlite_check(path: Path) -> RuntimeDoctorCheck:
+    if path.is_dir():
+        return RuntimeDoctorCheck(
+            name="sqlite-state",
+            status="fail",
+            summary=f"configured sqlite path is a directory: {path}",
+            issue="sqlite path must be a file path, not a directory",
+            next_action="change state.sqlite_path / IRIS_STATE_SQLITE_PATH to a file path",
+        )
     if os.access(path, os.R_OK) and os.access(path, os.W_OK):
         return RuntimeDoctorCheck(name="sqlite-state", status="ok", summary=str(path))
     return RuntimeDoctorCheck(
@@ -215,7 +223,16 @@ def _logging_path_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
             status="skipped",
             summary="logging.file_path is not set",
         )
-    parent = Path(file_path).parent
+    resolved = Path(file_path)
+    if resolved.is_dir():
+        return RuntimeDoctorCheck(
+            name="logging-file",
+            status="fail",
+            summary=f"configured logging file path is a directory: {resolved}",
+            issue="logging file path must be a file path, not a directory",
+            next_action="change logging.file_path or delete/replace the directory",
+        )
+    parent = resolved.parent
     if parent.exists() and os.access(parent, os.W_OK | os.X_OK):
         return RuntimeDoctorCheck(name="logging-file", status="ok", summary=str(file_path))
     return RuntimeDoctorCheck(

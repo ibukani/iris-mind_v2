@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, override
 
-from iris.runtime.observability.logger import LoguruRuntimeLogger, RuntimeLogger
-from iris.runtime.observability.ports import RuntimeObservationObserver
+from iris.runtime.observability.logger import LoguruRuntimeLogger
+from iris.runtime.observability.ports import RuntimeLogger, RuntimeObservationObserver
 
 if TYPE_CHECKING:
     from iris.runtime.observability.context import RuntimeLogValue

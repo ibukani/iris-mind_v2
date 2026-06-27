@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Protocol
-
 from loguru import logger
 
 from iris.runtime.observability.context import RuntimeLogFields, RuntimeLogValue, trace_extra
+from iris.runtime.observability.ports import RuntimeLogger
+
+__all__ = ["LoguruRuntimeLogger", "RuntimeLogger"]
 
 _SENSITIVE_FIELD_KEYS = frozenset(
     {
@@ -35,22 +36,6 @@ _SENSITIVE_FIELD_SUFFIXES = (
     "_text",
     "_token",
 )
-
-
-class RuntimeLogger(Protocol):
-    """Runtime code が依存する構造化ログ port。"""
-
-    def debug(self, event: str, **fields: RuntimeLogValue) -> None:
-        """DEBUG level の runtime event を記録する。"""
-
-    def info(self, event: str, **fields: RuntimeLogValue) -> None:
-        """INFO level の runtime event を記録する。"""
-
-    def warning(self, event: str, **fields: RuntimeLogValue) -> None:
-        """WARNING level の runtime event を記録する。"""
-
-    def error(self, event: str, **fields: RuntimeLogValue) -> None:
-        """ERROR level の runtime event を記録する。"""
 
 
 class LoguruRuntimeLogger:

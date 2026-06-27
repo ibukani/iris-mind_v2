@@ -61,6 +61,11 @@ RECOMMENDATIONS: dict[str, str] = {
     ),
 }
 
+_STREAMING_FALLBACK_HINT = (
+    "    next: make ai-test-target TARGET=<failing_test>"
+    " OR rerun pytest with the failing node from the streamed output\n"
+)
+
 
 @dataclass(frozen=True)
 class Check:
@@ -208,14 +213,18 @@ def run_check(check: Check) -> int:
             sys.stdout.write(stdout)
         if stderr:
             sys.stdout.write(stderr)
-        location = _first_failing_location(stdout)
         recommendation = RECOMMENDATIONS.get(check.failure_class, "")
         sys.stdout.write(f"\n==> {check.name}: failed with exit code {completed.returncode}\n")
         sys.stdout.write(f"    class: {check.failure_class}\n")
-        if location:
-            sys.stdout.write(f"    first failure: {location}\n")
-        if recommendation:
-            sys.stdout.write(f"    next: {recommendation}\n")
+        if check.stream_output:
+            sys.stdout.write("    first failure: unavailable because output was streamed\n")
+            sys.stdout.write(_STREAMING_FALLBACK_HINT)
+        else:
+            location = _first_failing_location(stdout)
+            if location:
+                sys.stdout.write(f"    first failure: {location}\n")
+            if recommendation:
+                sys.stdout.write(f"    next: {recommendation}\n")
         sys.stdout.write("    note: do not relax config to pass; fix code or tests instead.\n")
     sys.stdout.flush()
     return completed.returncode

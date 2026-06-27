@@ -18,6 +18,7 @@ from iris.adapters.llm.diagnostics import (
 from iris.runtime import doctor
 from iris.runtime.config import IrisRuntimeConfig, default_runtime_config
 from iris.runtime.config.llm import LLMProvider, ModelSlotName
+from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.doctor import main, run_runtime_doctor
 from iris.runtime.observability.diagnostics import DiagnosticsCheckOutcome, StartupDiagnosticsReport
 
@@ -246,3 +247,118 @@ def _result(
         capabilities=ProviderCapability(warmup=True),
         issues=issues,
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 1 regression tests: path false-positive fixes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_sqlite_path_is_directory_reports_fail(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """sqlite_path が directory なら sqlite-state check は fail。"""
+    sqlite_dir = tmp_path / "iris_state_dir"
+    sqlite_dir.mkdir()
+
+    config = default_runtime_config()
+    sqlite_config = replace(
+        config,
+        state=replace(
+            config.state,
+            backend=RuntimeStateBackend.SQLITE,
+            sqlite_path=str(sqlite_dir),
+        ),
+    )
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(sqlite_config))
+
+    report = await run_runtime_doctor()
+
+    sqlite_check = next(c for c in report.checks if c.name == "sqlite-state")
+    assert sqlite_check.status == "fail"
+    assert "directory" in sqlite_check.summary
+    assert sqlite_check.issue is not None
+    assert "file path" in sqlite_check.issue
+    assert sqlite_check.next_action is not None
+    assert "IRIS_STATE_SQLITE_PATH" in sqlite_check.next_action
+
+
+@pytest.mark.anyio
+async def test_sqlite_existing_file_reports_ok(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """既存の readable/writable sqlite file は OK になる。"""
+    sqlite_file = tmp_path / "iris.db"
+    sqlite_file.write_bytes(b"")
+
+    config = default_runtime_config()
+    sqlite_config = replace(
+        config,
+        state=replace(
+            config.state,
+            backend=RuntimeStateBackend.SQLITE,
+            sqlite_path=str(sqlite_file),
+        ),
+    )
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(sqlite_config))
+
+    report = await run_runtime_doctor()
+
+    sqlite_check = next(c for c in report.checks if c.name == "sqlite-state")
+    assert sqlite_check.status == "ok"
+
+
+@pytest.mark.anyio
+async def test_sqlite_missing_path_with_writable_parent_reports_ok(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """sqlite_path が存在しないが親 directory が writable なら OK。"""
+    sqlite_file = tmp_path / "iris.db"  # does not exist yet
+
+    config = default_runtime_config()
+    sqlite_config = replace(
+        config,
+        state=replace(
+            config.state,
+            backend=RuntimeStateBackend.SQLITE,
+            sqlite_path=str(sqlite_file),
+        ),
+    )
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(sqlite_config))
+
+    report = await run_runtime_doctor()
+
+    sqlite_check = next(c for c in report.checks if c.name == "sqlite-state")
+    assert sqlite_check.status == "ok"
+    assert "can be created" in sqlite_check.summary
+
+
+@pytest.mark.anyio
+async def test_logging_file_path_is_directory_reports_fail(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """logging.file_path が directory なら logging-file check は fail。"""
+    log_dir = tmp_path / "iris_log_dir"
+    log_dir.mkdir()
+
+    config = default_runtime_config()
+    logging_config = replace(
+        config,
+        logging=replace(config.logging, file_path=str(log_dir)),
+    )
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(logging_config))
+
+    report = await run_runtime_doctor()
+
+    logging_check = next(c for c in report.checks if c.name == "logging-file")
+    assert logging_check.status == "fail"
+    assert "directory" in logging_check.summary
+    assert logging_check.issue is not None
+    assert "file path" in logging_check.issue
+    assert logging_check.next_action is not None
+    assert "directory" in logging_check.next_action

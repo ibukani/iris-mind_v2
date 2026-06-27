@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from iris.adapters.llm.observability import LLMRequestObserver
-from iris.runtime.observability.logger import LoguruRuntimeLogger, RuntimeLogger
+from iris.runtime.observability.logger import LoguruRuntimeLogger
+
+if TYPE_CHECKING:
+    from iris.runtime.observability.ports import RuntimeLogger
 
 
 class RuntimeLLMRequestObserver(LLMRequestObserver):
