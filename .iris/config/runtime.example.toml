@@ -24,6 +24,7 @@ require_client_cert = false
 [auth]
 mode = "local_dev"
 allow_unauthenticated_loopback = true
+# (非推奨) remote bind では TLS が常に要求されます。
 require_tls_for_remote = true
 allow_insecure_remote = false
 

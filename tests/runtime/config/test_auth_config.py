@@ -75,6 +75,54 @@ def test_remote_required_auth_allows_explicit_insecure_override(tmp_path: Path) 
     assert config.auth.allow_insecure_remote
 
 
+def test_remote_required_auth_rejects_tls_disabled_even_if_require_tls_is_false(
+    tmp_path: Path,
+) -> None:
+    """require_tls_for_remote=false does not bypass the remote TLS requirement."""
+    with pytest.raises(ConfigError, match="requires TLS"):
+        load_runtime_config(
+            _write(
+                tmp_path,
+                """
+                [server]
+                local_only = false
+
+                [auth]
+                mode = "required"
+                require_tls_for_remote = false
+                allow_insecure_remote = false
+                """,
+            ),
+            env={},
+        )
+
+
+def test_remote_required_auth_accepts_tls(tmp_path: Path) -> None:
+    """Remote bind is accepted if TLS is enabled."""
+    config = load_runtime_config(
+        _write(
+            tmp_path,
+            """
+            [server]
+            local_only = false
+
+            [server.tls]
+            enabled = true
+            cert_chain_path = "dummy.crt"
+            private_key_path = "dummy.key"
+
+            [auth]
+            mode = "required"
+            """,
+        ),
+        env={},
+    )
+
+    assert not config.server.local_only
+    assert config.auth.mode == "required"
+    assert config.server.tls.enabled
+
+
 def _write(tmp_path: Path, content: str) -> str:
     path = tmp_path / "runtime.toml"
     path.write_text(content)

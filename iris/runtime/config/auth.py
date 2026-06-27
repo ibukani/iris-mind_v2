@@ -30,7 +30,7 @@ class RuntimeAuthConfig:
 
     mode: RuntimeAuthMode = RuntimeAuthMode.LOCAL_DEV
     allow_unauthenticated_loopback: bool = True
-    require_tls_for_remote: bool = True
+    require_tls_for_remote: bool = True  # Deprecated: TLS is now required for remote bind.
     allow_insecure_remote: bool = False
     static_tokens_env: str = "IRIS_RUNTIME_TOKENS"
 
@@ -119,7 +119,7 @@ def validate_auth_config(
     if auth.mode is RuntimeAuthMode.LOCAL_DEV:
         msg = "server.local_only=false requires auth.mode='required'"
         raise ConfigError(msg)
-    if auth.require_tls_for_remote and not tls_enabled and not auth.allow_insecure_remote:
+    if not tls_enabled and not auth.allow_insecure_remote:
         msg = (
             "server.local_only=false auth.mode='required' requires TLS "
             "or auth.allow_insecure_remote=true"

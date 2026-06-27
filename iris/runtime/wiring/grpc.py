@@ -113,11 +113,23 @@ def create_grpc_server(
         credentials = _server_credentials(tls_config)
         bound_port = server.add_secure_port(address, credentials)
     else:
+        _require_secure_remote_bind(host, auth_config)
         bound_port = server.add_insecure_port(address)
     if bound_port == 0:
         message = f"failed to bind gRPC port {host}:{port}"
         raise RuntimeError(message)
     return server
+
+
+def _require_secure_remote_bind(host: str, auth_config: RuntimeAuthConfig | None) -> None:
+    if (
+        host not in {"127.0.0.1", "localhost", "::1"}
+        and auth_config is not None
+        and auth_config.mode is RuntimeAuthMode.REQUIRED
+        and not auth_config.allow_insecure_remote
+    ):
+        message = "refusing to bind insecure remote gRPC port without allow_insecure_remote=true"
+        raise RuntimeError(message)
 
 
 def _server_credentials(tls_config: RuntimeServerTlsConfig) -> grpc.ServerCredentials:

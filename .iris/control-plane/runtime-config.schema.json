@@ -132,7 +132,7 @@
       "env": null,
       "secret": false,
       "editable": true,
-      "description": "remote bind で TLS を要求する。"
+      "description": "(非推奨) remote bind では TLS が常に要求されます。"
     },
     {
       "path": "auth.allow_insecure_remote",
