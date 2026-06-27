@@ -16,6 +16,7 @@ from iris.generated.iris.api.v1 import identity_pb2, observations_pb2
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
+    from pathlib import Path
 
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from iris.runtime.config import RuntimeConfigOverrides
@@ -49,8 +50,14 @@ def _free_tcp_port() -> int:
 
 
 @pytest.mark.anyio
-async def test_server_starts_and_handles_observation() -> None:
+async def test_server_starts_and_handles_observation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     """Test the server starts and handles a basic gRPC observation submission."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("IRIS_MIND_CONFIG", raising=False)
+
     port = _free_tcp_port()
     async with background_server(port):
         channel = grpc.aio.insecure_channel(f"127.0.0.1:{port}")

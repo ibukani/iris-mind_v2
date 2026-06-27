@@ -28,8 +28,14 @@ if TYPE_CHECKING:
 
 
 @pytest.mark.anyio
-async def test_runtime_doctor_default_config_reports_ok() -> None:
+async def test_runtime_doctor_default_config_reports_ok(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     """Default fake-provider config passes runtime doctor."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("IRIS_MIND_CONFIG", raising=False)
+
     report = await run_runtime_doctor()
 
     assert report.ok
@@ -61,8 +67,11 @@ async def test_runtime_doctor_missing_explicit_config_reports_failure(tmp_path: 
 def test_runtime_doctor_json_cli_outputs_json(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
 ) -> None:
     """--json CLI emits a JSON report."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("IRIS_MIND_CONFIG", raising=False)
     monkeypatch.setattr("sys.argv", ["iris.runtime.doctor", "--json"])
 
     with pytest.raises(SystemExit) as exc_info:
