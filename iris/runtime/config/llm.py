@@ -127,6 +127,10 @@ class RuntimeModelsConfig:
     reasoning: RuntimeModelConfig
 
 
+type RuntimeOllamaThink = bool | str | None
+_VALID_OLLAMA_THINK_LEVELS: frozenset[str] = frozenset({"low", "medium", "high"})
+
+
 @dataclass(frozen=True)
 class RuntimeOllamaConfig:
     """Ollama モデルスロットで共有するランタイム設定。"""
@@ -134,6 +138,7 @@ class RuntimeOllamaConfig:
     base_url: str = "http://localhost:11434"
     timeout_seconds: float = 120.0
     keep_alive: str | None = None
+    think: RuntimeOllamaThink = False
 
 
 @dataclass(frozen=True)
@@ -170,6 +175,55 @@ def apply_toml(config: RuntimeModelsConfig, models_table: TomlTable) -> RuntimeM
     return updated_models
 
 
+def parse_ollama_think(value: object, path: str) -> RuntimeOllamaThink:
+    """Parse Ollama think setting from TOML-compatible values.
+
+    Args:
+        value: The value to parse.
+        path: Configuration path for error messages.
+
+    Returns:
+        The parsed think setting.
+
+    Raises:
+        ConfigError: If the value is invalid.
+    """
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        if value in _VALID_OLLAMA_THINK_LEVELS:
+            return value
+        lowered = value.strip().lower()
+        if lowered in {"true", "false"}:
+            return lowered == "true"
+        if lowered in {"none", "null"}:
+            return None
+    allowed = "true, false, low, medium, high, null"
+    message = f"Invalid {path}: {value}. Allowed values: {allowed}"
+    raise ConfigError(message)
+
+
+def env_ollama_think(
+    env: Mapping[str, str],
+    key: str,
+    default: RuntimeOllamaThink,
+) -> RuntimeOllamaThink:
+    """環境変数からの Ollama think オーバーライドを読む。
+
+    Args:
+        env: The environment dictionary.
+        key: The environment variable key.
+        default: The default think setting to return if key is unset.
+
+    Returns:
+        The parsed think setting, or the default if not provided.
+    """
+    value = env.get(key)
+    if value is None:
+        return default
+    return parse_ollama_think(value, key)
+
+
 def apply_ollama_toml(
     config: RuntimeOllamaConfig,
     ollama_table: TomlTable,
@@ -186,6 +240,7 @@ def apply_ollama_toml(
     base_url = config.base_url
     timeout_seconds = config.timeout_seconds
     keep_alive = config.keep_alive
+    think = config.think
 
     if "base_url" in ollama_table:
         base_url = parse_string(ollama_table["base_url"], "ollama.base_url")
@@ -193,10 +248,13 @@ def apply_ollama_toml(
         timeout_seconds = parse_float(ollama_table["timeout_seconds"], "ollama.timeout_seconds")
     if "keep_alive" in ollama_table:
         keep_alive = parse_optional_string(ollama_table["keep_alive"], "ollama.keep_alive")
+    if "think" in ollama_table:
+        think = parse_ollama_think(ollama_table["think"], "ollama.think")
     return RuntimeOllamaConfig(
         base_url=base_url,
         timeout_seconds=timeout_seconds,
         keep_alive=keep_alive,
+        think=think,
     )
 
 
@@ -363,6 +421,7 @@ def _apply_ollama_env(
             config.timeout_seconds,
         ),
         keep_alive=env.get("IRIS_OLLAMA_KEEP_ALIVE", config.keep_alive),
+        think=env_ollama_think(env, "IRIS_OLLAMA_THINK", config.think),
     )
 
 

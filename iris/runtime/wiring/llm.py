@@ -254,6 +254,7 @@ def ollama_adapter_config(
         temperature=model_config.temperature,
         max_output_tokens=model_config.max_output_tokens,
         keep_alive=runtime_config.ollama.keep_alive,
+        think=runtime_config.ollama.think,
     )
 
 

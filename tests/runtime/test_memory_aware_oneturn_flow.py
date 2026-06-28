@@ -49,5 +49,7 @@ async def test_memory_aware_one_turn_flow_includes_memory_in_llm_prompt() -> Non
     output = await app.process_observation(actor_message("tea recommendation"))
 
     assert output.text == "memory-backed reply"
-    assert "User likes jasmine tea." in llm.requests[0].messages[-1].content
-    assert "tea recommendation" in llm.requests[0].messages[-1].content
+    system_prompt = llm.requests[0].messages[0].content
+    user_prompt = llm.requests[0].messages[-1].content
+    assert "User likes jasmine tea." in system_prompt
+    assert "tea recommendation" in user_prompt

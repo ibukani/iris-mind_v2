@@ -331,6 +331,13 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             env="IRIS_OLLAMA_KEEP_ALIVE",
         ),
         ConfigFieldSpec(
+            "ollama.think",
+            ConfigValueType.OPTIONAL_STR,
+            default=False,
+            description="Ollamaの推論思考設定 (true/false/low/highなど)。",
+            env="IRIS_OLLAMA_THINK",
+        ),
+        ConfigFieldSpec(
             "openai.model",
             ConfigValueType.STR,
             "gpt-5-mini",
@@ -416,6 +423,20 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             5.0,
             "診断チェック 1 件あたりのタイムアウト秒数。",
             env="IRIS_DIAGNOSTICS_TIMEOUT_SECONDS",
+        ),
+        ConfigFieldSpec(
+            "diagnostics.readiness_timeout_seconds",
+            ConfigValueType.FLOAT,
+            5.0,
+            "readiness 診断チェックのタイムアウト秒数。",
+            env="IRIS_DIAGNOSTICS_READINESS_TIMEOUT_SECONDS",
+        ),
+        ConfigFieldSpec(
+            "diagnostics.warmup_timeout_seconds",
+            ConfigValueType.FLOAT,
+            120.0,
+            "warmup 診断チェックのタイムアウト秒数。",
+            env="IRIS_DIAGNOSTICS_WARMUP_TIMEOUT_SECONDS",
         ),
         ConfigFieldSpec(
             "diagnostics.warmup_models",

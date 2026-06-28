@@ -137,7 +137,8 @@ async def run_startup_diagnostics(
     outcomes = await _probe_all_slots(
         runtime_config,
         warmup_models=diagnostics_config.warmup_models,
-        timeout_seconds=diagnostics_config.timeout_seconds,
+        readiness_timeout_seconds=diagnostics_config.readiness_timeout_seconds,
+        warmup_timeout_seconds=diagnostics_config.warmup_timeout_seconds,
     )
     report = StartupDiagnosticsReport(outcomes=tuple(outcomes), enabled=True)
     failure_count = sum(1 for outcome in report.outcomes if _outcome_has_failure(outcome))
@@ -156,7 +157,8 @@ async def _probe_all_slots(
     runtime_config: IrisRuntimeConfig,
     *,
     warmup_models: bool,
-    timeout_seconds: float,
+    readiness_timeout_seconds: float,
+    warmup_timeout_seconds: float,
 ) -> list[DiagnosticsCheckOutcome]:
     """Probe every configured model slot and collect outcomes.
 
@@ -164,7 +166,8 @@ async def _probe_all_slots(
         runtime_config: The runtime configuration to probe.
         warmup_models: Whether warmup should run when the provider
             capability allows it.
-        timeout_seconds: Per-probe timeout in seconds.
+        readiness_timeout_seconds: Timeout for readiness checks.
+        warmup_timeout_seconds: Timeout for warmup checks.
 
     Returns:
         List of outcomes, one per probed slot (skipped fake slots are omitted).
@@ -175,7 +178,8 @@ async def _probe_all_slots(
             runtime_config,
             slot,
             warmup_models=warmup_models,
-            timeout_seconds=timeout_seconds,
+            readiness_timeout_seconds=readiness_timeout_seconds,
+            warmup_timeout_seconds=warmup_timeout_seconds,
         )
         if outcome is not None:
             outcomes.append(outcome)
@@ -187,7 +191,8 @@ async def _probe_slot(
     slot: ModelSlotName,
     *,
     warmup_models: bool,
-    timeout_seconds: float,
+    readiness_timeout_seconds: float,
+    warmup_timeout_seconds: float,
 ) -> DiagnosticsCheckOutcome | None:
     """Probe a single slot and return the outcome (or None for fake slots).
 
@@ -196,7 +201,8 @@ async def _probe_slot(
         slot: Slot name to probe.
         warmup_models: Whether warmup should run when the provider
             capability allows it.
-        timeout_seconds: Per-probe timeout in seconds. Each of
+        readiness_timeout_seconds: Readiness probe timeout in seconds.
+        warmup_timeout_seconds: Warmup probe timeout in seconds. Each of
             ``check_readiness`` and ``warmup`` is wrapped in
             :func:`asyncio.timeout`; a timeout is converted to a
             :class:`ProviderReadinessResult` with status ``FAIL`` and a
@@ -218,7 +224,8 @@ async def _probe_slot(
         return None
     readiness = await _run_with_timeout(
         provider_diag.check_readiness(model_config.model),
-        timeout_seconds=timeout_seconds,
+        timeout_seconds=readiness_timeout_seconds,
+        config_key="diagnostics.readiness_timeout_seconds",
         model_config=model_config,
         stage="readiness",
     )
@@ -234,7 +241,8 @@ async def _probe_slot(
     if warmup_models and provider_diag.capabilities.warmup:
         warmup = await _run_with_timeout(
             provider_diag.warmup(model_config.model),
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=warmup_timeout_seconds,
+            config_key="diagnostics.warmup_timeout_seconds",
             model_config=model_config,
             stage="warmup",
         )
@@ -259,6 +267,7 @@ async def _run_with_timeout(
     awaitable: Awaitable[ProviderReadinessResult],
     *,
     timeout_seconds: float,
+    config_key: str,
     model_config: RuntimeModelConfig,
     stage: str,
 ) -> ProviderReadinessResult:
@@ -268,6 +277,7 @@ async def _run_with_timeout(
         awaitable: A coroutine returned by ``provider_diag.check_readiness``
             or ``provider_diag.warmup``.
         timeout_seconds: Per-call timeout in seconds.
+        config_key: Configuration key path for the error message.
         model_config: The model config being probed (used for metadata
             on the synthetic FAIL result).
         stage: ``"readiness"`` or ``"warmup"`` (used for the issue code
@@ -286,7 +296,7 @@ async def _run_with_timeout(
         issue_code = f"{stage}_timeout"
         message = "".join(
             (
-                f"{stage.capitalize()} probe exceeded diagnostics.timeout_seconds=",
+                f"{stage.capitalize()} probe exceeded {config_key}=",
                 f"{timeout_seconds}s for model '{model_config.model}'",
             )
         )
@@ -294,6 +304,7 @@ async def _run_with_timeout(
             provider=model_config.provider,
             model=model_config.model,
             stage=stage,
+            config_key=config_key,
             timeout_seconds=timeout_seconds,
         ).warning("startup.diagnostics.timeout")
         return ProviderReadinessResult(
@@ -306,7 +317,7 @@ async def _run_with_timeout(
                     code=issue_code,
                     message=message,
                     severity=ReadinessStatus.FAIL,
-                    remediation="Raise diagnostics.timeout_seconds or fix provider endpoint",
+                    remediation=f"Raise {config_key} or fix provider endpoint",
                 ),
             ),
         )

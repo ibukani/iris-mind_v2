@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -102,6 +103,26 @@ def test_ollama_adapter_config_replaces_fake_llm_model() -> None:
     model_config = RuntimeModelConfig(provider=LLMProvider.OLLAMA, model="fake-llm")
     result = ollama_adapter_config(model_config, config)
     assert result.model == OllamaConfig().model
+
+
+def test_ollama_adapter_config_passes_runtime_think_false() -> None:
+    """ollama_adapter_config passes the default think=False to OllamaConfig."""
+    config = default_runtime_config()
+    model_config = RuntimeModelConfig(provider=LLMProvider.OLLAMA, model="qwen3.5:9b")
+    result = ollama_adapter_config(model_config, config)
+    assert result.think is False
+
+
+def test_ollama_adapter_config_passes_runtime_think_level() -> None:
+    """ollama_adapter_config passes a configured think level to OllamaConfig."""
+    config = default_runtime_config()
+    config = replace(
+        config,
+        ollama=replace(config.ollama, think="low"),
+    )
+    model_config = RuntimeModelConfig(provider=LLMProvider.OLLAMA, model="qwen3.5:9b")
+    result = ollama_adapter_config(model_config, config)
+    assert result.think == "low"
 
 
 def test_openai_adapter_config_replaces_fake_llm_model() -> None:

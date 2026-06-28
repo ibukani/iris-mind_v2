@@ -76,6 +76,7 @@ max_output_tokens = 1024
 base_url = "http://localhost:11434"
 timeout_seconds = 120.0
 keep_alive = "5m"
+think = false
 
 [openai]
 model = "gpt-5-mini"
@@ -96,4 +97,6 @@ max_output_chars = 4000
 [diagnostics]
 mode = "warn"
 timeout_seconds = 5.0
+readiness_timeout_seconds = 5.0
+warmup_timeout_seconds = 120.0
 warmup_models = false

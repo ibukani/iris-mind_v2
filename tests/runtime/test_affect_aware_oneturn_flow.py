@@ -76,11 +76,11 @@ async def test_affect_aware_one_turn_flow_includes_affect_relationship_and_memor
     output = await app.process_observation(
         actor_message("jasmine tea ありがとう、急ぎで助かった"),
     )
-    prompt = llm.requests[0].messages[-1].content
+    system_prompt = llm.requests[0].messages[0].content
 
     assert output.text == "affect-aware reply"
-    assert "Mina likes jasmine tea." in prompt
-    assert "Affect context:" in prompt
-    assert "positive VAD" in prompt
-    assert "Relationship context:" in prompt
-    assert "Mina: neutral relationship" in prompt
+    assert "Mina likes jasmine tea." in system_prompt
+    assert "Affect context:" in system_prompt
+    assert "positive VAD" in system_prompt
+    assert "Relationship context:" in system_prompt
+    assert "Mina: neutral relationship" in system_prompt

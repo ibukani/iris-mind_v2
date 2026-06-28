@@ -69,9 +69,9 @@ async def test_two_turn_memory_write_then_retrieval_flow() -> None:
     output2 = await app.process_observation(_actor_message("what tea do I like?"))
 
     records = memory_store.filter(MemoryQuery(text="", include_archived=True))
-    second_prompt = llm.requests[1].messages[-1].content
+    second_system_prompt = llm.requests[1].messages[0].content
 
     assert output1.text == "saved"
     assert output2.text == "how about jasmine tea?"
     assert any("jasmine tea" in record.text for record in records)
-    assert "jasmine tea" in second_prompt
+    assert "jasmine tea" in second_system_prompt

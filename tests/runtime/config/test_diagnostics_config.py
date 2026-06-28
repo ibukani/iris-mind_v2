@@ -26,6 +26,8 @@ def test_default_diagnostics_config() -> None:
     assert config.diagnostics == RuntimeDiagnosticsConfig()
     assert config.diagnostics.mode == DiagnosticsMode.WARN
     assert config.diagnostics.timeout_seconds == approx(5.0)
+    assert config.diagnostics.readiness_timeout_seconds == approx(5.0)
+    assert config.diagnostics.warmup_timeout_seconds == approx(120.0)
     assert config.diagnostics.warmup_models is False
 
 
@@ -149,6 +151,72 @@ def test_diagnostics_unknown_key_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match=r"diagnostics\.unexpected"):
         load_runtime_config(
             _write(tmp_path, "[diagnostics]\nunexpected = 1\n"),
+            env={},
+        )
+
+
+def test_diagnostics_toml_legacy_timeout_sets_both(tmp_path: Path) -> None:
+    """Legacy timeout_seconds TOML setting configures both timeouts."""
+    config = load_runtime_config(
+        _write(tmp_path, "[diagnostics]\ntimeout_seconds = 60.0\n"),
+        env={},
+    )
+    assert config.diagnostics.timeout_seconds == approx(60.0)
+    assert config.diagnostics.readiness_timeout_seconds == approx(60.0)
+    assert config.diagnostics.warmup_timeout_seconds == approx(60.0)
+
+
+def test_diagnostics_toml_stage_specific_timeouts(tmp_path: Path) -> None:
+    """Stage specific timeout TOML settings override defaults."""
+    config = load_runtime_config(
+        _write(
+            tmp_path,
+            "[diagnostics]\nreadiness_timeout_seconds = 2.0\nwarmup_timeout_seconds = 300.0\n",
+        ),
+        env={},
+    )
+    assert config.diagnostics.readiness_timeout_seconds == approx(2.0)
+    assert config.diagnostics.warmup_timeout_seconds == approx(300.0)
+
+
+def test_diagnostics_env_legacy_timeout_sets_both() -> None:
+    """Legacy timeout_seconds ENV setting configures both timeouts."""
+    config = load_runtime_config(
+        None,
+        env={"IRIS_DIAGNOSTICS_TIMEOUT_SECONDS": "60.0"},
+    )
+    assert config.diagnostics.timeout_seconds == approx(60.0)
+    assert config.diagnostics.readiness_timeout_seconds == approx(60.0)
+    assert config.diagnostics.warmup_timeout_seconds == approx(60.0)
+
+
+def test_diagnostics_env_stage_specific_timeouts() -> None:
+    """Stage specific timeout ENV settings override defaults."""
+    config = load_runtime_config(
+        None,
+        env={
+            "IRIS_DIAGNOSTICS_READINESS_TIMEOUT_SECONDS": "2.0",
+            "IRIS_DIAGNOSTICS_WARMUP_TIMEOUT_SECONDS": "300.0",
+        },
+    )
+    assert config.diagnostics.readiness_timeout_seconds == approx(2.0)
+    assert config.diagnostics.warmup_timeout_seconds == approx(300.0)
+
+
+def test_diagnostics_timeout_must_be_positive_all(tmp_path: Path) -> None:
+    """Stage specific timeouts must be positive."""
+    with pytest.raises(
+        ConfigError, match=r"diagnostics\.readiness_timeout_seconds must be greater than zero"
+    ):
+        load_runtime_config(
+            _write(tmp_path, "[diagnostics]\nreadiness_timeout_seconds = 0.0\n"),
+            env={},
+        )
+    with pytest.raises(
+        ConfigError, match=r"diagnostics\.warmup_timeout_seconds must be greater than zero"
+    ):
+        load_runtime_config(
+            _write(tmp_path, "[diagnostics]\nwarmup_timeout_seconds = 0.0\n"),
             env={},
         )
 

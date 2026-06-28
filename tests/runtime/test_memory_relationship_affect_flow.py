@@ -115,7 +115,7 @@ async def test_memory_relationship_affect_survive_sqlite_turn_reload(
             _message("obs-durable-2", "what tea do I like?"),
         )
 
-    second_prompt = llm.requests[1].messages[-1].content
+    second_system_prompt = llm.requests[1].messages[0].content
 
     assert output1.text == "stored"
     assert output2.text == "retrieved"
@@ -129,7 +129,7 @@ async def test_memory_relationship_affect_survive_sqlite_turn_reload(
     assert affect.scope == "global"
     assert affect.actor_id is None
     assert affect.source_observation_id == ObservationId("obs-durable-1")
-    assert "jasmine tea" in second_prompt
+    assert "jasmine tea" in second_system_prompt
 
     reloaded_memory.close()
     await reloaded_relationship.close()

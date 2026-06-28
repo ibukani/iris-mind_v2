@@ -500,6 +500,16 @@
       "description": "Ollamaモデルのkeep-alive指定。"
     },
     {
+      "path": "ollama.think",
+      "type": "optional_str",
+      "default": false,
+      "allowedValues": [],
+      "env": "IRIS_OLLAMA_THINK",
+      "secret": false,
+      "editable": true,
+      "description": "Ollamaの推論思考設定 (true/false/low/highなど)。"
+    },
+    {
       "path": "openai.model",
       "type": "str",
       "default": "gpt-5-mini",
@@ -635,6 +645,26 @@
       "secret": false,
       "editable": true,
       "description": "診断チェック 1 件あたりのタイムアウト秒数。"
+    },
+    {
+      "path": "diagnostics.readiness_timeout_seconds",
+      "type": "float",
+      "default": 5.0,
+      "allowedValues": [],
+      "env": "IRIS_DIAGNOSTICS_READINESS_TIMEOUT_SECONDS",
+      "secret": false,
+      "editable": true,
+      "description": "readiness 診断チェックのタイムアウト秒数。"
+    },
+    {
+      "path": "diagnostics.warmup_timeout_seconds",
+      "type": "float",
+      "default": 120.0,
+      "allowedValues": [],
+      "env": "IRIS_DIAGNOSTICS_WARMUP_TIMEOUT_SECONDS",
+      "secret": false,
+      "editable": true,
+      "description": "warmup 診断チェックのタイムアウト秒数。"
     },
     {
       "path": "diagnostics.warmup_models",
