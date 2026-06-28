@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from datetime import datetime
+from pydantic import BaseModel, ConfigDict, model_validator
 
-    from iris.core.ids import ActorId
+from iris.core.ids import ActorId
 
 
 class AvailabilityStatus(StrEnum):
@@ -23,9 +21,10 @@ class AvailabilityStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
-@dataclass(frozen=True)
-class AvailabilitySnapshot:
+class AvailabilitySnapshot(BaseModel):
     """アクターの availability を表す、ランタイムから導出されたスナップショット。"""
+
+    model_config = ConfigDict(frozen=True)
 
     actor_id: ActorId | None
     status: AvailabilityStatus
@@ -34,12 +33,10 @@ class AvailabilitySnapshot:
     computed_at: datetime
     confidence: float = 1.0
 
-    def __post_init__(self) -> None:
-        """Confidence が有効範囲内にあることを検証する。
-
-        Raises:
-            ValueError: confidence が 0.0 未満または 1.0 を超える場合。
-        """
+    @model_validator(mode="after")
+    def _validate_confidence(self) -> AvailabilitySnapshot:
+        """Confidence が有効範囲内にあることを検証する。"""
         if not 0.0 <= self.confidence <= 1.0:
             message = "confidence must be between 0.0 and 1.0"
             raise ValueError(message)
+        return self

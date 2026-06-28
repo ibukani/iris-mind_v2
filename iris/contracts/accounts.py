@@ -2,23 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from collections.abc import Mapping
+from typing import Protocol
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from iris.core.ids import AccountId, ActorId, ExternalRef
 from iris.core.metadata import EMPTY_METADATA, immutable_metadata
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from iris.core.ids import AccountId, ActorId, ExternalRef
 
 
 class AccountStoreError(ValueError):
     """Account ストレージまたはリンクのエラー。"""
 
 
-@dataclass(frozen=True)
-class AccountProfile:
+class AccountProfile(BaseModel):
     """外部プロバイダのアカウントバインディング。
 
     AccountProfile は外部プロバイダのアカウントバインディングを表す。
@@ -33,16 +30,19 @@ class AccountProfile:
     metadata: プロバイダから渡された追加コンテキスト。
     """
 
+    model_config = ConfigDict(frozen=True)
+
     account_id: AccountId
     provider: str
     provider_subject: ExternalRef
     display_name: str
     linked_actor_id: ActorId | None = None
-    metadata: Mapping[str, str] = EMPTY_METADATA
+    metadata: Mapping[str, str] = Field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    def model_post_init(self, __context: object) -> None:
         """メタデータを不変な mapping proxy として防御的にコピーする。"""
-        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+        if self.metadata is not EMPTY_METADATA:
+            object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
 
 
 class AccountStore(Protocol):

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 from iris.core.metadata import EMPTY_METADATA, immutable_metadata
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from iris.core.ids import AccountId, ActorId, DeviceId, ExternalRef
 
 
 class ActorKind(StrEnum):
@@ -24,9 +21,10 @@ class ActorKind(StrEnum):
     IRIS = "iris"
 
 
-@dataclass(frozen=True)
-class Identity:
+class Identity(BaseModel):
     """アクター中心のアイデンティティ表現。"""
+
+    model_config = ConfigDict(frozen=True)
 
     actor_id: ActorId
     actor_kind: ActorKind
@@ -35,8 +33,9 @@ class Identity:
     provider_subject: ExternalRef | None = None
     account_id: AccountId | None = None
     device_id: DeviceId | None = None
-    metadata: Mapping[str, str] = EMPTY_METADATA
+    metadata: Mapping[str, str] = Field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    def model_post_init(self, __context: object) -> None:
         """メタデータを不変な mapping proxy として防御的にコピーする。"""
-        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+        if self.metadata is not EMPTY_METADATA:
+            object.__setattr__(self, "metadata", immutable_metadata(self.metadata))

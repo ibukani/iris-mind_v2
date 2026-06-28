@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
-if TYPE_CHECKING:
-    from datetime import datetime
+from pydantic import BaseModel, ConfigDict, model_validator
 
-    from iris.core.ids import ActorId, ObservationId
+from iris.core.ids import ActorId, ObservationId
 
 
 class AffectScope(StrEnum):
@@ -30,9 +29,10 @@ def _validate_vad(value: float, *, field_name: str) -> None:
         raise ValueError(msg)
 
 
-@dataclass(frozen=True)
-class AffectBaselineRecord:
+class AffectBaselineRecord(BaseModel):
     """Iris の感情ベースラインまたは actor 別 affect state。"""
+
+    model_config = ConfigDict(frozen=True)
 
     scope: AffectScope
     actor_id: ActorId | None = None
@@ -46,12 +46,9 @@ class AffectBaselineRecord:
     updated_at: datetime | None = None
     version: int = 1
 
-    def __post_init__(self) -> None:
-        """Scope と actor_id の整合性、および VAD 値を検証する。
-
-        Raises:
-            ValueError: scope と actor_id の組み合わせまたは VAD 値が不正な場合。
-        """
+    @model_validator(mode="after")
+    def _validate_record(self) -> AffectBaselineRecord:
+        """Scope と actor_id の整合性、および VAD 値を検証する。"""
         if self.scope not in AffectScope:
             msg = f"unknown affect scope: {self.scope}"
             raise ValueError(msg)
@@ -67,6 +64,7 @@ class AffectBaselineRecord:
         if self.version < 1:
             msg = "version must be greater than or equal to 1"
             raise ValueError(msg)
+        return self
 
 
 class AffectStore(Protocol):

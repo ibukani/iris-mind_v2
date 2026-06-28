@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from datetime import datetime
+from pydantic import BaseModel, ConfigDict, model_validator
 
-    from iris.core.ids import ActionId, CorrelationId, ExternalRef, SessionId
+from iris.core.ids import ActionId, CorrelationId, ExternalRef, SessionId
 
 
 class ActionStatus(StrEnum):
@@ -24,9 +22,10 @@ class ActionStatus(StrEnum):
 _ERR_INVALID_NO_ACTION = "no_action plan must not include candidate text or response intent"
 
 
-@dataclass(frozen=True)
-class ActionPlan:
+class ActionPlan(BaseModel):
     """ターンレベルのアクション決定のための計画。"""
+
+    model_config = ConfigDict(frozen=True)
 
     turn_intent: str
     candidate_text: str | None
@@ -34,16 +33,14 @@ class ActionPlan:
     priority: int
     interruptible: bool = True
 
-    def __post_init__(self) -> None:
-        """no_actionプランの不変条件を検証する。
-
-        Raises:
-            ValueError: no_actionプランが応答テキストまたは応答意図を含む場合。
-        """
+    @model_validator(mode="after")
+    def _validate_no_action(self) -> ActionPlan:
+        """no_actionプランの不変条件を検証する。"""
         if self.turn_intent == "no_action" and (
             self.candidate_text is not None or self.should_respond
         ):
             raise ValueError(_ERR_INVALID_NO_ACTION)
+        return self
 
     @property
     def is_no_action(self) -> bool:
@@ -55,9 +52,10 @@ class ActionPlan:
         )
 
 
-@dataclass(frozen=True)
-class PresentedOutput:
+class PresentedOutput(BaseModel):
     """セーフティゲートと外部配送の準備ができた出力。"""
+
+    model_config = ConfigDict(frozen=True)
 
     text: str | None
     style_hint: str | None = None
@@ -73,32 +71,32 @@ class PresentedOutput:
         return self.text is not None and bool(self.text.strip())
 
 
-@dataclass(frozen=True)
-class AppAction:
+class AppAction(BaseModel):
     """外部アプリアクションの基本型。"""
+
+    model_config = ConfigDict(frozen=True)
 
     action_id: ActionId
     session_id: SessionId
     correlation_id: CorrelationId
 
 
-@dataclass(frozen=True)
 class SendMessageAction(AppAction):
     """テキストメッセージ送信用のアプリアクション。"""
 
     text: str
 
 
-@dataclass(frozen=True)
 class NoAction(AppAction):
     """意図的な無操作を表すアプリアクション。"""
 
     reason: str
 
 
-@dataclass(frozen=True)
-class ActionResult:
+class ActionResult(BaseModel):
     """アプリアクション実行の結果。"""
+
+    model_config = ConfigDict(frozen=True)
 
     action_id: ActionId
     correlation_id: CorrelationId

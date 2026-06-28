@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
 from enum import Enum, auto
-from typing import TYPE_CHECKING
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from iris.core.metadata import EMPTY_METADATA, immutable_metadata
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 
 class EventReactionKind(Enum):
@@ -20,25 +18,28 @@ class EventReactionKind(Enum):
     SILENT = auto()
 
 
-@dataclass(frozen=True)
-class ReactionCandidate:
+class ReactionCandidate(BaseModel):
     """生成候補となる1つのイベント反応。"""
+
+    model_config = ConfigDict(frozen=True)
 
     kind: EventReactionKind
     text: str
     reason: str
     priority: int = 0
     interruptible: bool = True
-    metadata: Mapping[str, str] = EMPTY_METADATA
+    metadata: Mapping[str, str] = Field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    def model_post_init(self, __context: object) -> None:
         """補助metadataを不変なmapping proxyとして防御的にコピーする。"""
-        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+        if self.metadata is not EMPTY_METADATA:
+            object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
 
 
-@dataclass(frozen=True)
-class EventReactionDecision:
+class EventReactionDecision(BaseModel):
     """イベント反応を行うかどうかの決定。"""
+
+    model_config = ConfigDict(frozen=True)
 
     should_react: bool
     reason: str

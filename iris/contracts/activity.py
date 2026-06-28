@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from iris.core.ids import (
+    AccountId,
+    ActivityId,
+    ActorId,
+    DeviceId,
+    ObservationId,
+    SpaceId,
+)
 from iris.core.metadata import EMPTY_METADATA, immutable_metadata
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-    from datetime import datetime
-
-    from iris.core.ids import (
-        AccountId,
-        ActivityId,
-        ActorId,
-        DeviceId,
-        ObservationId,
-        SpaceId,
-    )
 
 
 class ActivityKind(StrEnum):
@@ -34,9 +31,10 @@ class ActivityKind(StrEnum):
     SYSTEM_INTERACTION = "system_interaction"
 
 
-@dataclass(frozen=True)
-class ActivityEventRecord:
+class ActivityEventRecord(BaseModel):
     """受理済みの非message activity eventを表す内部runtime記録。"""
+
+    model_config = ConfigDict(frozen=True)
 
     activity_id: ActivityId
     observation_id: ObservationId | None
@@ -50,8 +48,9 @@ class ActivityEventRecord:
     kind: ActivityKind
     occurred_at: datetime
     received_at: datetime
-    metadata: Mapping[str, str] = EMPTY_METADATA
+    metadata: Mapping[str, str] = Field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    def model_post_init(self, __context: object) -> None:
         """補助metadataを不変なmapping proxyとして防御的にコピーする。"""
-        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+        if self.metadata is not EMPTY_METADATA:
+            object.__setattr__(self, "metadata", immutable_metadata(self.metadata))

@@ -32,15 +32,13 @@ SQLite backend でも次は process-local のままにする。
 - presence
 - space occupancy
 - ephemeral space bindings
-- delivery outbox
-- scheduler target store
+
+Delivery outbox と Scheduler target store は `state.backend = "sqlite"` の場合、SQLite バックエンドを利用して永続化される（再起動時の送信漏れやスケジュール喪失を防ぐため）。
 
 Activity journal は `state.backend = "sqlite"` で durable になる。investigation、debugging、provider event deduplication、future replay、future projection rebuild のための append-only audit log であり、normal runtime processing の hot query path ではない。runtime context は journal scan ではなく projection と current-state store から組み立てる。
 
 ## Non-decisions
 
-- Delivery outbox の durable backend はこの ADR の対象外。
-- Scheduler target store の durable backend はこの ADR の対象外。
 - Activity journal から memory / relationship / affect を暗黙復元する仕様は決めない。
 - Space binding を durable owner にしない。
 
