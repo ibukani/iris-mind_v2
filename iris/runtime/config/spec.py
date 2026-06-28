@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.model_slots import model_slot_specs
 
 
 class ConfigValueType(StrEnum):
@@ -56,40 +57,36 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
     """
     model_specs = tuple(
         spec
-        for slot, max_tokens in (
-            ("default_chat", 512),
-            ("fast_judge", 128),
-            ("reasoning", 1024),
-        )
+        for slot in model_slot_specs()
         for spec in (
             ConfigFieldSpec(
-                f"models.{slot}.provider",
+                f"models.{slot.name}.provider",
                 ConfigValueType.ENUM,
                 "fake",
-                f"{slot}モデルスロットのプロバイダ。",
-                env=f"IRIS_{slot.upper()}_PROVIDER",
+                f"{slot.name}モデルスロットのプロバイダ。",
+                env=f"IRIS_{slot.name.upper()}_PROVIDER",
                 allowed_values=("fake", "ollama", "openai"),
             ),
             ConfigFieldSpec(
-                f"models.{slot}.model",
+                f"models.{slot.name}.model",
                 ConfigValueType.STR,
                 "fake-llm",
-                f"{slot}モデルスロットのモデル名。",
-                env=f"IRIS_{slot.upper()}_MODEL",
+                f"{slot.name}モデルスロットのモデル名。",
+                env=f"IRIS_{slot.name.upper()}_MODEL",
             ),
             ConfigFieldSpec(
-                f"models.{slot}.temperature",
+                f"models.{slot.name}.temperature",
                 ConfigValueType.FLOAT,
                 0.0,
-                f"{slot}モデルスロットのtemperature。",
-                env=f"IRIS_{slot.upper()}_TEMPERATURE",
+                f"{slot.name}モデルスロットのtemperature。",
+                env=f"IRIS_{slot.name.upper()}_TEMPERATURE",
             ),
             ConfigFieldSpec(
-                f"models.{slot}.max_output_tokens",
+                f"models.{slot.name}.max_output_tokens",
                 ConfigValueType.OPTIONAL_INT,
-                max_tokens,
-                f"{slot}モデルスロットの最大出力トークン数。",
-                env=f"IRIS_{slot.upper()}_MAX_OUTPUT_TOKENS",
+                slot.default_max_output_tokens,
+                f"{slot.name}モデルスロットの最大出力トークン数。",
+                env=f"IRIS_{slot.name.upper()}_MAX_OUTPUT_TOKENS",
             ),
         )
     )

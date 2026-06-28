@@ -2,19 +2,27 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import override
+from typing import TYPE_CHECKING, override
 
-from iris.contracts.actions import ActionResult, ActionStatus, NoAction
+from iris.contracts.actions import ActionResult, NoAction
 from iris.contracts.delivery import (
     TERMINAL_DELIVERY_STATUSES,
     DeliveryEnvelope,
     DeliveryStatus,
 )
+from iris.contracts.delivery_transitions import (
+    complete_delivery,
+    fail_exhausted_delivery,
+    is_delivery_due,
+    lease_delivery,
+    release_delivery,
+)
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, LeaseId
 from iris.runtime.delivery.outbox import DeliveryOutbox, DeliveryOutboxError
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 __all__ = ["DeliveryOutboxError", "InMemoryDeliveryOutbox"]
 
@@ -87,7 +95,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         for item in sorted(self._items.values(), key=_envelope_sort_key):
             if len(due) >= max_items:
                 break
-            if item.target.provider != provider or not _is_due(item, now):
+            if item.target.provider != provider or not is_delivery_due(item, now):
                 continue
             leased = self._lease_item(item, now=now, lease_seconds=lease_seconds)
             self._items[leased.delivery_id] = leased
@@ -127,20 +135,12 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         if outcome is _ReportOutcome.CONFLICT:
             msg = "delivery_report_conflict"
             raise DeliveryOutboxError(msg)
-        if item.status in TERMINAL_DELIVERY_STATUSES:
-            msg = "delivery_already_terminal"
-            raise DeliveryOutboxError(msg)
-        _require_matching_lease(item, lease_id)
-        status = _delivery_status_from_action_status(result.status)
-        updates = replace(
-            _current_updates(item),
-            status=status,
-            updated_at=completed_at,
-            lease_id=None,
-            lease_expires_at=None,
-            last_error_reason=result.error_reason,
+        completed = complete_delivery(
+            item,
+            lease_id=lease_id,
+            result=result,
+            completed_at=completed_at,
         )
-        completed = _rebuild_envelope(item, updates)
         self._items[delivery_id] = completed
         self._report_index[delivery_id] = history | {current}
         return completed
@@ -175,25 +175,13 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
         if outcome is _ReportOutcome.CONFLICT:
             msg = "delivery_report_conflict"
             raise DeliveryOutboxError(msg)
-        if item.status in TERMINAL_DELIVERY_STATUSES:
-            msg = "delivery_already_terminal"
-            raise DeliveryOutboxError(msg)
-        _require_matching_lease(item, lease_id)
-        status = (
-            DeliveryStatus.FAILED_PERMANENT
-            if item.attempts >= item.max_attempts
-            else DeliveryStatus.PENDING
+        released = release_delivery(
+            item,
+            lease_id=lease_id,
+            retry_after=retry_after,
+            result=result,
+            released_at=released_at,
         )
-        updates = replace(
-            _current_updates(item),
-            status=status,
-            updated_at=released_at,
-            not_before=retry_after if status is DeliveryStatus.PENDING else item.not_before,
-            lease_id=None,
-            lease_expires_at=None,
-            last_error_reason=result.error_reason,
-        )
-        released = _rebuild_envelope(item, updates)
         self._items[delivery_id] = released
         self._report_index[delivery_id] = history | {current}
         return released
@@ -211,28 +199,22 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             A LEASED copy, or a FAILED_PERMANENT copy when max attempts is exceeded.
         """
         if item.attempts >= item.max_attempts:
-            updates = replace(
-                _current_updates(item),
-                status=DeliveryStatus.FAILED_PERMANENT,
-                updated_at=now,
-                lease_id=None,
-                lease_expires_at=None,
-                last_error_reason="max_attempts_exceeded",
+            failed = fail_exhausted_delivery(
+                item,
+                failed_at=now,
+                error_reason="max_attempts_exceeded",
             )
-            failed = _rebuild_envelope(item, updates)
             self._items[item.delivery_id] = failed
             return failed
         self._lease_counter += 1
         lease_id = LeaseId(f"lease-{self._lease_counter}")
-        updates = replace(
-            _current_updates(item),
-            status=DeliveryStatus.LEASED,
-            updated_at=now,
-            attempts=item.attempts + 1,
+        return lease_delivery(
+            item,
             lease_id=lease_id,
-            lease_expires_at=now + timedelta(seconds=lease_seconds),
+            leased_at=now,
+            lease_seconds=lease_seconds,
+            not_before=item.not_before,
         )
-        return _rebuild_envelope(item, updates)
 
     def _get(self, delivery_id: DeliveryId) -> DeliveryEnvelope:
         """Return item or raise a transition error.
@@ -257,60 +239,6 @@ def _envelope_sort_key(item: DeliveryEnvelope) -> tuple[datetime, DeliveryId]:
         Tuple of created_at and delivery_id for stable ordering.
     """
     return (item.created_at, item.delivery_id)
-
-
-@dataclass(frozen=True)
-class _EnvelopeUpdates:
-    """Delivery state transitionで更新可能な型付き差分。"""
-
-    status: DeliveryStatus
-    updated_at: datetime
-    not_before: datetime | None
-    attempts: int
-    lease_id: LeaseId | None
-    lease_expires_at: datetime | None
-    blocked_reason: str | None
-    last_error_reason: str | None
-
-
-def _current_updates(item: DeliveryEnvelope) -> _EnvelopeUpdates:
-    return _EnvelopeUpdates(
-        status=item.status,
-        updated_at=item.updated_at,
-        not_before=item.not_before,
-        attempts=item.attempts,
-        lease_id=item.lease_id,
-        lease_expires_at=item.lease_expires_at,
-        blocked_reason=item.blocked_reason,
-        last_error_reason=item.last_error_reason,
-    )
-
-
-def _rebuild_envelope(
-    item: DeliveryEnvelope,
-    updates: _EnvelopeUpdates,
-) -> DeliveryEnvelope:
-    """型付きstate差分から配送envelopeを再検証する。
-
-    Returns:
-        再構築したenvelope。
-    """
-    return DeliveryEnvelope(
-        delivery_id=item.delivery_id,
-        action=item.action,
-        target=item.target,
-        status=updates.status,
-        created_at=item.created_at,
-        updated_at=updates.updated_at,
-        not_before=updates.not_before,
-        attempts=updates.attempts,
-        max_attempts=item.max_attempts,
-        idempotency_key=item.idempotency_key,
-        lease_id=updates.lease_id,
-        lease_expires_at=updates.lease_expires_at,
-        blocked_reason=updates.blocked_reason,
-        last_error_reason=updates.last_error_reason,
-    )
 
 
 type _ReportFingerprint = tuple[
@@ -371,51 +299,3 @@ def _result_fingerprint(
         result.external_message_id,
         result.error_reason,
     )
-
-
-def _is_due(item: DeliveryEnvelope, now: datetime) -> bool:
-    """Return True when an item can be leased now.
-
-    Returns:
-        True if the item is PENDING and due, or LEASED with an expired lease.
-    """
-    if item.status in TERMINAL_DELIVERY_STATUSES:
-        return False
-    if item.not_before is not None and item.not_before > now:
-        return False
-    if item.status is DeliveryStatus.PENDING:
-        return True
-    return (
-        item.status is DeliveryStatus.LEASED
-        and item.lease_expires_at is not None
-        and item.lease_expires_at <= now
-    )
-
-
-def _require_matching_lease(item: DeliveryEnvelope, lease_id: LeaseId | None) -> None:
-    """Validate leased completion/release ownership.
-
-    Raises:
-        DeliveryOutboxError: If the item is not leased or the lease id mismatches.
-    """
-    if item.status is not DeliveryStatus.LEASED:
-        msg = "delivery_not_leased"
-        raise DeliveryOutboxError(msg)
-    if item.lease_id != lease_id:
-        msg = "lease_mismatch"
-        raise DeliveryOutboxError(msg)
-
-
-def _delivery_status_from_action_status(status: ActionStatus) -> DeliveryStatus:
-    """Map ActionResult status to terminal delivery status.
-
-    Returns:
-        The matching terminal DeliveryStatus.
-    """
-    if status is ActionStatus.SUCCEEDED:
-        return DeliveryStatus.SUCCEEDED
-    if status is ActionStatus.CANCELLED:
-        return DeliveryStatus.CANCELLED
-    if status is ActionStatus.BLOCKED:
-        return DeliveryStatus.BLOCKED
-    return DeliveryStatus.FAILED_PERMANENT

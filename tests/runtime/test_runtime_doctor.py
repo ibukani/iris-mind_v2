@@ -371,3 +371,25 @@ async def test_logging_file_path_is_directory_reports_fail(
     assert "file path" in logging_check.issue
     assert logging_check.next_action is not None
     assert "directory" in logging_check.next_action
+
+
+@pytest.mark.anyio
+async def test_logging_existing_file_reports_ok(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """既存の writable logging file は OK になる。"""
+    log_file = tmp_path / "iris.log"
+    log_file.write_bytes(b"")
+
+    config = default_runtime_config()
+    logging_config = replace(
+        config,
+        logging=replace(config.logging, file_path=str(log_file)),
+    )
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(logging_config))
+
+    report = await run_runtime_doctor()
+
+    logging_check = next(c for c in report.checks if c.name == "logging-file")
+    assert logging_check.status == "ok"

@@ -13,12 +13,14 @@ from iris.adapters.grpc.mappers.errors import map_exception_to_grpc, map_provide
 from iris.adapters.grpc.mappers.observations import (
     GrpcRuntimeMapper,
     RuntimeIngressProfile,
-    delivery_route_hint_from_context,
+)
+from iris.adapters.grpc.mappers.outputs import presented_output_to_proto
+from iris.adapters.grpc.mappers.references import (
     external_account_ref_from_proto,
     external_space_ref_from_proto,
     identity_from_proto,
 )
-from iris.adapters.grpc.mappers.outputs import presented_output_to_proto
+from iris.adapters.grpc.mappers.routing import delivery_route_hint_from_context
 
 __all__ = (
     "GrpcMappingError",

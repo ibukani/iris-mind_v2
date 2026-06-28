@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from enum import StrEnum
 import json
 from typing import TYPE_CHECKING
@@ -28,13 +27,20 @@ from iris.adapters.persistence.sqlite.serialization import (
     required_datetime_to_text,
     text_to_datetime,
 )
-from iris.contracts.actions import ActionResult, ActionStatus, NoAction, SendMessageAction
+from iris.contracts.actions import ActionResult, NoAction, SendMessageAction
 from iris.contracts.delivery import (
     TERMINAL_DELIVERY_STATUSES,
     DeliveryEnvelope,
     DeliveryOutboxError,
     DeliveryStatus,
     DeliveryTarget,
+)
+from iris.contracts.delivery_transitions import (
+    complete_delivery,
+    fail_exhausted_delivery,
+    is_delivery_due,
+    lease_delivery,
+    release_delivery,
 )
 from iris.core.ids import (
     AccountId,
@@ -50,6 +56,7 @@ from iris.core.ids import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
+    from datetime import datetime
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -147,7 +154,7 @@ class SQLiteDeliveryOutbox:
                     if len(due) >= max_items:
                         break
                     item = _model_to_envelope(row)
-                    if not _is_due(item, now):
+                    if not is_delivery_due(item, now):
                         continue
                     leased = _lease_item(item, now=now, lease_seconds=lease_seconds)
                     _update_model(row, leased)
@@ -206,18 +213,11 @@ class SQLiteDeliveryOutbox:
             if outcome is _ReportOutcome.CONFLICT:
                 msg = "delivery_report_conflict"
                 raise DeliveryOutboxError(msg)
-            if item.status in TERMINAL_DELIVERY_STATUSES:
-                msg = "delivery_already_terminal"
-                raise DeliveryOutboxError(msg)
-            _require_matching_lease(item, lease_id)
-            completed = item.model_copy(
-                update={
-                    "status": _delivery_status_from_action_status(result.status),
-                    "updated_at": completed_at,
-                    "lease_id": None,
-                    "lease_expires_at": None,
-                    "last_error_reason": result.error_reason,
-                }
+            completed = complete_delivery(
+                item,
+                lease_id=lease_id,
+                result=result,
+                completed_at=completed_at,
             )
             _update_model(row, completed)
             _insert_fingerprint(session, current)
@@ -257,31 +257,13 @@ class SQLiteDeliveryOutbox:
             if outcome is _ReportOutcome.CONFLICT:
                 msg = "delivery_report_conflict"
                 raise DeliveryOutboxError(msg)
-            if item.status in TERMINAL_DELIVERY_STATUSES:
-                msg = "delivery_already_terminal"
-                raise DeliveryOutboxError(msg)
-            _require_matching_lease(item, lease_id)
-            if item.attempts >= item.max_attempts:
-                released = item.model_copy(
-                    update={
-                        "status": DeliveryStatus.FAILED_PERMANENT,
-                        "updated_at": released_at,
-                        "lease_id": None,
-                        "lease_expires_at": None,
-                        "last_error_reason": result.error_reason,
-                    }
-                )
-            else:
-                released = item.model_copy(
-                    update={
-                        "status": DeliveryStatus.PENDING,
-                        "updated_at": released_at,
-                        "not_before": retry_after,
-                        "lease_id": None,
-                        "lease_expires_at": None,
-                        "last_error_reason": result.error_reason,
-                    }
-                )
+            released = release_delivery(
+                item,
+                lease_id=lease_id,
+                retry_after=retry_after,
+                result=result,
+                released_at=released_at,
+            )
             _update_model(row, released)
             _insert_fingerprint(session, current)
             return released
@@ -317,25 +299,18 @@ def _lease_item(
     lease_seconds: float,
 ) -> DeliveryEnvelope:
     if item.attempts >= item.max_attempts:
-        return item.model_copy(
-            update={
-                "status": DeliveryStatus.FAILED_PERMANENT,
-                "updated_at": now,
-                "lease_id": None,
-                "lease_expires_at": None,
-                "last_error_reason": item.last_error_reason or "max_attempts_exceeded",
-            }
+        return fail_exhausted_delivery(
+            item,
+            failed_at=now,
+            error_reason=item.last_error_reason or "max_attempts_exceeded",
         )
     attempt = item.attempts + 1
-    return item.model_copy(
-        update={
-            "status": DeliveryStatus.LEASED,
-            "updated_at": now,
-            "not_before": None,
-            "attempts": attempt,
-            "lease_id": LeaseId(f"{item.delivery_id}:lease:{attempt}"),
-            "lease_expires_at": now + timedelta(seconds=lease_seconds),
-        }
+    return lease_delivery(
+        item,
+        lease_id=LeaseId(f"{item.delivery_id}:lease:{attempt}"),
+        leased_at=now,
+        lease_seconds=lease_seconds,
+        not_before=None,
     )
 
 
@@ -431,33 +406,6 @@ def _result_fingerprint(
         external_message_id=result.external_message_id,
         error_reason=result.error_reason,
     )
-
-
-def _is_due(item: DeliveryEnvelope, now: datetime) -> bool:
-    if item.status is DeliveryStatus.PENDING:
-        return item.not_before is None or item.not_before <= now
-    if item.status is DeliveryStatus.LEASED:
-        return item.lease_expires_at is not None and item.lease_expires_at <= now
-    return False
-
-
-def _require_matching_lease(item: DeliveryEnvelope, lease_id: LeaseId | None) -> None:
-    if item.status is not DeliveryStatus.LEASED:
-        msg = "delivery_not_leased"
-        raise DeliveryOutboxError(msg)
-    if item.lease_id != lease_id:
-        msg = "lease_mismatch"
-        raise DeliveryOutboxError(msg)
-
-
-def _delivery_status_from_action_status(status: ActionStatus) -> DeliveryStatus:
-    if status is ActionStatus.SUCCEEDED:
-        return DeliveryStatus.SUCCEEDED
-    if status is ActionStatus.CANCELLED:
-        return DeliveryStatus.CANCELLED
-    if status is ActionStatus.BLOCKED:
-        return DeliveryStatus.BLOCKED
-    return DeliveryStatus.FAILED_PERMANENT
 
 
 def _envelope_to_model(envelope: DeliveryEnvelope) -> DeliveryOutboxModel:

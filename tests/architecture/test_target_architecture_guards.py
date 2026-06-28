@@ -223,6 +223,7 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
 
 ENTRYPOINT_FILES: set[str] = {
     "main.py",
+    "iris/runtime/cli.py",
     "iris/runtime/server.py",
     "iris/runtime/app.py",
 }
@@ -239,6 +240,7 @@ WIRING_FILES: set[str] = {
     "iris/runtime/wiring/llm.py",
     "iris/runtime/wiring/memory.py",
     "iris/runtime/wiring/presentation.py",
+    "iris/runtime/wiring/runtime.py",
     "iris/runtime/wiring/scheduler.py",
     "iris/runtime/wiring/state.py",
     "iris/runtime/wiring/state_policy.py",

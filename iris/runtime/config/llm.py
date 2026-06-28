@@ -155,23 +155,19 @@ def apply_toml(config: RuntimeModelsConfig, models_table: TomlTable) -> RuntimeM
     Returns:
         TOML 値を反映した models config。
     """
-    return RuntimeModelsConfig(
-        default_chat=_apply_model_table(
-            config.default_chat,
-            table_or_empty(models_table, "default_chat"),
-            "models.default_chat",
-        ),
-        fast_judge=_apply_model_table(
-            config.fast_judge,
-            table_or_empty(models_table, "fast_judge"),
-            "models.fast_judge",
-        ),
-        reasoning=_apply_model_table(
-            config.reasoning,
-            table_or_empty(models_table, "reasoning"),
-            "models.reasoning",
-        ),
-    )
+    updated_models = config
+    for slot in _MODEL_SLOTS:
+        slot_config = _slot_config(updated_models, slot)
+        updated_models = _replace_slot(
+            updated_models,
+            slot,
+            _apply_model_table(
+                slot_config,
+                table_or_empty(models_table, slot.value),
+                f"models.{slot.value}",
+            ),
+        )
+    return updated_models
 
 
 def apply_ollama_toml(

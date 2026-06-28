@@ -83,6 +83,61 @@ class ProviderReadinessResult:
     metadata: dict[str, str] | None = None
 
 
+def aggregate_issue_severity(
+    issues: tuple[ProviderDiagnosticIssue, ...],
+) -> ReadinessStatus:
+    """Aggregate issue severities into a single readiness status.
+
+    Args:
+        issues: Ordered diagnostic issues collected for a provider probe.
+
+    Returns:
+        ``FAIL`` if any issue failed, ``WARN`` if at least one issue warned,
+        ``SKIPPED`` if all issues were skipped, otherwise ``OK``.
+    """
+    if not issues:
+        return ReadinessStatus.OK
+    severities = {issue.severity for issue in issues}
+    if ReadinessStatus.FAIL in severities:
+        return ReadinessStatus.FAIL
+    if ReadinessStatus.WARN in severities:
+        return ReadinessStatus.WARN
+    return ReadinessStatus.SKIPPED
+
+
+def build_provider_readiness_result(
+    *,
+    provider: str,
+    model: str,
+    capabilities: ProviderCapability,
+    issues: tuple[ProviderDiagnosticIssue, ...],
+    latency_ms: float | None = None,
+    metadata: dict[str, str] | None = None,
+) -> ProviderReadinessResult:
+    """Build a typed readiness result from provider diagnostics input.
+
+    Args:
+        provider: Provider name reported in the result.
+        model: Model name that was probed.
+        capabilities: Provider capability declaration.
+        issues: Ordered diagnostic issues found during the probe.
+        latency_ms: Optional measured latency in milliseconds.
+        metadata: Optional safe metadata from the probe.
+
+    Returns:
+        A frozen provider readiness result with aggregate status.
+    """
+    return ProviderReadinessResult(
+        provider=provider,
+        model=model,
+        status=aggregate_issue_severity(issues),
+        capabilities=capabilities,
+        latency_ms=latency_ms,
+        issues=issues,
+        metadata=metadata,
+    )
+
+
 @runtime_checkable
 class LLMProviderDiagnostics(Protocol):
     """Provider-neutral diagnostics interface for a single LLM provider.

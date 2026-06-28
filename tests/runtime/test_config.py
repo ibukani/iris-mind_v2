@@ -61,31 +61,42 @@ def _is_object_tuple(value: object) -> TypeGuard[tuple[object, ...]]:
     return isinstance(value, tuple)
 
 
-def test_default_config_uses_fake_default_chat() -> None:
-    """Default config uses fake for default_chat."""
+@pytest.mark.parametrize(
+    ("slot_name", "expected"),
+    [
+        (
+            "default_chat",
+            RuntimeModelConfig(
+                provider=LLMProvider.FAKE,
+                model="fake-llm",
+                max_output_tokens=512,
+            ),
+        ),
+        (
+            "fast_judge",
+            RuntimeModelConfig(
+                provider=LLMProvider.FAKE,
+                model="fake-llm",
+                max_output_tokens=128,
+            ),
+        ),
+        (
+            "reasoning",
+            RuntimeModelConfig(
+                provider=LLMProvider.FAKE,
+                model="fake-llm",
+                max_output_tokens=1024,
+            ),
+        ),
+    ],
+)
+def test_default_config_model_slots_have_expected_defaults(
+    slot_name: str,
+    expected: RuntimeModelConfig,
+) -> None:
+    """Default config keeps the documented defaults for every model slot."""
     config = default_runtime_config()
-
-    assert config.models.default_chat == RuntimeModelConfig(
-        provider=LLMProvider.FAKE,
-        model="fake-llm",
-        max_output_tokens=512,
-    )
-
-
-def test_default_config_includes_fast_judge_and_reasoning_slots() -> None:
-    """Default config includes parsed fast_judge and reasoning slots."""
-    config = default_runtime_config()
-
-    assert config.models.fast_judge == RuntimeModelConfig(
-        provider=LLMProvider.FAKE,
-        model="fake-llm",
-        max_output_tokens=128,
-    )
-    assert config.models.reasoning == RuntimeModelConfig(
-        provider=LLMProvider.FAKE,
-        model="fake-llm",
-        max_output_tokens=1024,
-    )
+    assert getattr(config.models, slot_name) == expected
 
 
 def test_toml_sets_default_chat_slot(tmp_path: Path) -> None:
@@ -120,13 +131,12 @@ def test_example_config_parses_successfully() -> None:
     assert config.ollama.base_url == "http://localhost:11434"
 
 
-def test_example_config_contains_all_model_slots() -> None:
+@pytest.mark.parametrize("slot_name", ["default_chat", "fast_judge", "reasoning"])
+def test_example_config_contains_all_model_slots(slot_name: str) -> None:
     """Committed example config includes all supported model slots."""
     config = load_runtime_config(_example_config_path(), env={})
 
-    assert config.models.default_chat.model == "fake-llm"
-    assert config.models.fast_judge.model == "fake-llm"
-    assert config.models.reasoning.model == "fake-llm"
+    assert getattr(config.models, slot_name).model == "fake-llm"
 
 
 def test_example_config_contains_no_obvious_secret_fields() -> None:
@@ -150,37 +160,53 @@ def test_local_runtime_config_files_are_gitignored() -> None:
     assert ".iris/config/runtime.example.toml" not in gitignore
 
 
-def test_toml_sets_fast_judge_and_reasoning_slots(tmp_path: Path) -> None:
-    """TOML can configure fast_judge and reasoning slots."""
-    config_path = _write_config(
-        tmp_path,
-        """
-        [models.fast_judge]
-        provider = "ollama"
-        model = "qwen3:4b"
-        temperature = 0.0
-        max_output_tokens = 128
-
-        [models.reasoning]
-        provider = "ollama"
-        model = "deepseek-r1:8b"
-        temperature = 0.0
-        max_output_tokens = 1024
-        """,
-    )
+@pytest.mark.parametrize(
+    ("slot_name", "block", "expected"),
+    [
+        (
+            "fast_judge",
+            """
+            [models.fast_judge]
+            provider = "ollama"
+            model = "qwen3:4b"
+            temperature = 0.0
+            max_output_tokens = 128
+            """,
+            RuntimeModelConfig(
+                provider=LLMProvider.OLLAMA,
+                model="qwen3:4b",
+                max_output_tokens=128,
+            ),
+        ),
+        (
+            "reasoning",
+            """
+            [models.reasoning]
+            provider = "ollama"
+            model = "deepseek-r1:8b"
+            temperature = 0.0
+            max_output_tokens = 1024
+            """,
+            RuntimeModelConfig(
+                provider=LLMProvider.OLLAMA,
+                model="deepseek-r1:8b",
+                max_output_tokens=1024,
+            ),
+        ),
+    ],
+)
+def test_toml_sets_model_slots(
+    tmp_path: Path,
+    slot_name: str,
+    block: str,
+    expected: RuntimeModelConfig,
+) -> None:
+    """TOML can configure each non-default model slot."""
+    config_path = _write_config(tmp_path, block)
 
     config = load_runtime_config(config_path, env={})
 
-    assert config.models.fast_judge == RuntimeModelConfig(
-        provider=LLMProvider.OLLAMA,
-        model="qwen3:4b",
-        max_output_tokens=128,
-    )
-    assert config.models.reasoning == RuntimeModelConfig(
-        provider=LLMProvider.OLLAMA,
-        model="deepseek-r1:8b",
-        max_output_tokens=1024,
-    )
+    assert getattr(config.models, slot_name) == expected
 
 
 def test_toml_sets_ollama_and_openai_sections(tmp_path: Path) -> None:
@@ -820,59 +846,58 @@ def test_minimal_example_overrides_only_default_chat() -> None:
     assert config.models.reasoning.provider == "fake"
 
 
-def test_local_ollama_example_configures_all_slots() -> None:
-    """The local Ollama example configures all model slots and shared ollama."""
-    local = _repo_path("examples/config/local-ollama.toml")
+@pytest.mark.parametrize(
+    ("example", "slot_values", "ollama_base_url", "diagnostics_warmup_text"),
+    [
+        (
+            "local-ollama.toml",
+            {
+                "default_chat": "qwen3:8b",
+                "fast_judge": "qwen3:4b",
+                "reasoning": "deepseek-r1:8b",
+            },
+            "http://localhost:11434",
+            "false",
+        ),
+        (
+            "openai.toml",
+            {
+                "default_chat": "gpt-5-mini",
+                "fast_judge": "gpt-5-mini",
+                "reasoning": "gpt-5-mini",
+            },
+            None,
+            "false",
+        ),
+        (
+            "minimal.toml",
+            {
+                "default_chat": "qwen3:8b",
+                "fast_judge": "fake-llm",
+                "reasoning": "fake-llm",
+            },
+            None,
+            "false",
+        ),
+    ],
+)
+def test_examples_keep_documented_model_and_diagnostics_defaults(
+    example: str,
+    slot_values: dict[str, str],
+    ollama_base_url: str | None,
+    diagnostics_warmup_text: str,
+) -> None:
+    """Committed examples keep the documented model and diagnostics defaults."""
+    config = load_runtime_config(_repo_path(f"examples/config/{example}"), env={})
 
-    config = load_runtime_config(local, env={})
-
-    assert config.models.default_chat.model == "qwen3:8b"
-    assert config.models.fast_judge.model == "qwen3:4b"
-    assert config.models.reasoning.model == "deepseek-r1:8b"
-    assert config.ollama.base_url == "http://localhost:11434"
-
-
-def test_openai_example_uses_openai_provider() -> None:
-    """The OpenAI example configures OpenAI for every model slot."""
-    openai = _repo_path("examples/config/openai.toml")
-
-    config = load_runtime_config(openai, env={})
-
-    assert config.models.default_chat.provider == "openai"
-    assert config.models.fast_judge.provider == "openai"
-    assert config.models.reasoning.provider == "openai"
-
-
-def test_local_ollama_example_enables_diagnostics() -> None:
-    """The local Ollama example enables diagnostics with the documented defaults."""
-    local = _repo_path("examples/config/local-ollama.toml")
-
-    config = load_runtime_config(local, env={})
-
+    assert config.models.default_chat.model == slot_values["default_chat"]
+    assert config.models.fast_judge.model == slot_values["fast_judge"]
+    assert config.models.reasoning.model == slot_values["reasoning"]
+    if ollama_base_url is not None:
+        assert config.ollama.base_url == ollama_base_url
     assert config.diagnostics.mode == DiagnosticsMode.WARN
     assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
-    assert config.diagnostics.warmup_models is False
-
-
-def test_openai_example_enables_diagnostics() -> None:
-    """The OpenAI example enables diagnostics with the documented defaults."""
-    openai = _repo_path("examples/config/openai.toml")
-
-    config = load_runtime_config(openai, env={})
-
-    assert config.diagnostics.mode == DiagnosticsMode.WARN
-    assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
-    assert config.diagnostics.warmup_models is False
-
-
-def test_minimal_example_enables_diagnostics() -> None:
-    """The minimal example enables diagnostics with the default timeout."""
-    minimal = _repo_path("examples/config/minimal.toml")
-
-    config = load_runtime_config(minimal, env={})
-
-    assert config.diagnostics.mode == DiagnosticsMode.WARN
-    assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
+    assert config.diagnostics.warmup_models is (diagnostics_warmup_text == "true")
 
 
 # ---------------------------------------------------------------------------

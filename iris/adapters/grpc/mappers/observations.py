@@ -10,10 +10,13 @@ from iris.adapters.grpc.mappers.common import (
     metadata_dict,
     raise_mapping_error,
 )
+from iris.adapters.grpc.mappers.references import (
+    external_account_ref_from_proto,
+    external_space_ref_from_proto,
+    identity_from_proto,
+)
+from iris.adapters.grpc.mappers.routing import delivery_route_hint_from_context
 from iris.contracts.activity import ActivityKind
-from iris.contracts.delivery import DeliveryRouteHint
-from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
-from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActivityEventObservation,
     ActorMessageObservation,
@@ -24,10 +27,8 @@ from iris.contracts.observations import (
     PresenceSignalObservation,
 )
 from iris.contracts.presence import PresenceStatus
-from iris.contracts.spaces import SpaceKind
 from iris.core.ids import (
     AccountId,
-    ActorId,
     CorrelationId,
     DeviceId,
     ExternalRef,
@@ -56,6 +57,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
+    from iris.contracts.identity import Identity
     from iris.contracts.spaces import InteractionSpace
     from iris.generated.iris.runtime.v1 import runtime_pb2
     from iris.runtime.ingress.observation_ingress import ObservationCapability
@@ -367,132 +369,6 @@ class GrpcRuntimeMapper:
         return await self._space_resolver.resolve_space(dto)
 
 
-def external_account_ref_from_proto(
-    account_ref: identity_pb2.ExternalAccountRef,
-) -> ExternalAccountRef:
-    """Map ExternalAccountRef proto to DTO.
-
-    Returns:
-        ExternalAccountRef: Mapped DTO.
-    """
-    if not account_ref.provider:
-        raise_mapping_error("account_ref.provider is required")
-    if not account_ref.provider_subject:
-        raise_mapping_error("account_ref.provider_subject is required")
-    if not account_ref.display_name:
-        raise_mapping_error("account_ref.display_name is required")
-    actor_kind = _account_ref_kind_to_contract(account_ref.actor_kind)
-    return ExternalAccountRef(
-        provider=account_ref.provider,
-        provider_subject=ExternalRef(account_ref.provider_subject),
-        display_name=account_ref.display_name,
-        actor_kind=actor_kind,
-        account_id=None,
-        metadata=metadata_dict(account_ref.metadata),
-    )
-
-
-def external_space_ref_from_proto(
-    space_ref: spaces_pb2.ExternalSpaceRef,
-) -> ExternalSpaceRef:
-    """Map ExternalSpaceRef proto to DTO.
-
-    Returns:
-        ExternalSpaceRef: Mapped DTO.
-    """
-    if not space_ref.provider:
-        raise_mapping_error("space_ref.provider is required")
-    if not space_ref.provider_space_ref:
-        raise_mapping_error("space_ref.provider_space_ref is required")
-    if not space_ref.display_name:
-        raise_mapping_error("space_ref.display_name is required")
-    if space_ref.space_kind == spaces_pb2.SPACE_KIND_UNSPECIFIED:
-        raise_mapping_error("space_ref.space_kind must not be unspecified")
-
-    space_kind = _space_kind_from_proto(space_ref.space_kind)
-
-    return ExternalSpaceRef(
-        provider=space_ref.provider,
-        provider_space_ref=ExternalRef(space_ref.provider_space_ref),
-        display_name=space_ref.display_name,
-        space_kind=space_kind,
-        metadata=metadata_dict(space_ref.metadata),
-    )
-
-
-def delivery_route_hint_from_context(
-    context: observations_pb2.ObservationContext,
-) -> DeliveryRouteHint | None:
-    """Preserve provider routing fields outside ObservationContext.
-
-    Returns:
-        DeliveryRouteHint: provider routing hint。refs がない場合は None。
-    """
-    provider = _route_provider_from_context(context)
-    if provider is None:
-        return None
-    provider_subject = (
-        ExternalRef(context.account_ref.provider_subject)
-        if context.HasField("account_ref") and context.account_ref.provider_subject
-        else None
-    )
-    provider_space_ref = (
-        ExternalRef(context.space_ref.provider_space_ref)
-        if context.HasField("space_ref") and context.space_ref.provider_space_ref
-        else None
-    )
-    display_name = None
-    if context.HasField("account_ref") and context.account_ref.display_name:
-        display_name = context.account_ref.display_name
-    elif context.HasField("space_ref") and context.space_ref.display_name:
-        display_name = context.space_ref.display_name
-    return DeliveryRouteHint(
-        provider=provider,
-        provider_subject=provider_subject,
-        provider_space_ref=provider_space_ref,
-        display_name=display_name,
-    )
-
-
-def _route_provider_from_context(
-    context: observations_pb2.ObservationContext,
-) -> str | None:
-    """Return provider for a delivery route hint when refs are present."""
-    account_provider = context.account_ref.provider if context.HasField("account_ref") else ""
-    space_provider = context.space_ref.provider if context.HasField("space_ref") else ""
-    if account_provider and space_provider and account_provider != space_provider:
-        raise_mapping_error("account_ref.provider space_ref.provider mismatch")
-    return account_provider or space_provider or None
-
-
-def identity_from_proto(identity: identity_pb2.Identity) -> Identity:
-    """Map Identity proto to Iris Identity.
-
-    Returns:
-        Identity: Typed actor identity.
-    """
-    actor_kind = _actor_kind_from_proto(identity.actor_kind)
-    if not identity.actor_id:
-        raise_mapping_error("identity.actor_id is required")
-    provider = identity.provider or None
-    provider_subject = ExternalRef(identity.provider_subject) if identity.provider_subject else None
-
-    # Require provider_subject for external actors
-    if actor_kind not in {ActorKind.SYSTEM, ActorKind.IRIS} and not provider_subject:
-        raise_mapping_error("identity.provider_subject is required for external actors")
-
-    return Identity(
-        actor_id=ActorId(identity.actor_id),
-        actor_kind=actor_kind,
-        display_name=identity.display_name,
-        provider=provider,
-        provider_subject=provider_subject,
-        account_id=AccountId(identity.account_id) if identity.account_id else None,
-        device_id=DeviceId(identity.device_id) if identity.device_id else None,
-        metadata=metadata_dict(identity.metadata),
-    )
-
-
 def _datetime_from_timestamp(observation: observations_pb2.Observation) -> datetime:
     if not observation.HasField("occurred_at"):
         raise_mapping_error("occurred_at is required")
@@ -589,43 +465,3 @@ def _presence_status_from_proto(
         return mapping[status]
     except KeyError:
         raise_mapping_error(f"unsupported or unspecified presence status: {status}")
-
-
-def _actor_kind_from_proto(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
-    mapping = {
-        identity_pb2.ACTOR_KIND_HUMAN: ActorKind.HUMAN,
-        identity_pb2.ACTOR_KIND_DEVICE: ActorKind.DEVICE,
-        identity_pb2.ACTOR_KIND_SERVICE: ActorKind.SERVICE,
-        identity_pb2.ACTOR_KIND_SYSTEM: ActorKind.SYSTEM,
-        identity_pb2.ACTOR_KIND_IRIS: ActorKind.IRIS,
-    }
-    try:
-        return mapping[kind]
-    except KeyError:
-        raise_mapping_error(f"unsupported or unspecified actor kind: {kind}")
-
-
-def _space_kind_from_proto(kind: spaces_pb2.SpaceKind.ValueType) -> SpaceKind:
-    mapping = {
-        spaces_pb2.SPACE_KIND_DIRECT_MESSAGE: SpaceKind.DIRECT_MESSAGE,
-        spaces_pb2.SPACE_KIND_TEXT_CHANNEL: SpaceKind.TEXT_CHANNEL,
-        spaces_pb2.SPACE_KIND_THREAD: SpaceKind.THREAD,
-        spaces_pb2.SPACE_KIND_VOICE_CHANNEL: SpaceKind.VOICE_CHANNEL,
-        spaces_pb2.SPACE_KIND_ROOM: SpaceKind.ROOM,
-        spaces_pb2.SPACE_KIND_BROADCAST: SpaceKind.BROADCAST,
-    }
-    try:
-        return mapping[kind]
-    except KeyError:
-        raise_mapping_error(f"unsupported or unspecified space kind: {kind}")
-
-
-def _account_ref_kind_to_contract(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
-    """Map account_ref actor_kind to contract, defaulting UNSPECIFIED to HUMAN.
-
-    Returns:
-        ActorKind: Contract actor kind (HUMAN for UNSPECIFIED, otherwise mapped).
-    """
-    if kind == identity_pb2.ACTOR_KIND_UNSPECIFIED:
-        return ActorKind.HUMAN
-    return _actor_kind_from_proto(kind)

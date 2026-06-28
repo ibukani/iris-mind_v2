@@ -23,6 +23,7 @@ from iris.adapters.llm.diagnostics import (
     ProviderDiagnosticIssue,
     ProviderReadinessResult,
     ReadinessStatus,
+    build_provider_readiness_result,
 )
 from iris.adapters.llm.ollama import OllamaConfig
 
@@ -477,28 +478,15 @@ def _build_result(
     started: float,
     metadata: dict[str, str],
 ) -> ProviderReadinessResult:
-    severity = _aggregate_severity(issues)
     latency_ms = (_now() - started) * 1000.0
-    return ProviderReadinessResult(
+    return build_provider_readiness_result(
         provider=_OLLAMA_DIAGNOSTICS_PROVIDER,
         model=model,
-        status=severity,
         capabilities=_OLLAMA_DIAGNOSTICS_CAPABILITIES,
         latency_ms=latency_ms,
         issues=issues,
         metadata=metadata,
     )
-
-
-def _aggregate_severity(issues: tuple[ProviderDiagnosticIssue, ...]) -> ReadinessStatus:
-    if not issues:
-        return ReadinessStatus.OK
-    severities = {issue.severity for issue in issues}
-    if ReadinessStatus.FAIL in severities:
-        return ReadinessStatus.FAIL
-    if ReadinessStatus.WARN in severities:
-        return ReadinessStatus.WARN
-    return ReadinessStatus.SKIPPED
 
 
 def _safe_json(response: httpx.Response) -> _JsonObject:

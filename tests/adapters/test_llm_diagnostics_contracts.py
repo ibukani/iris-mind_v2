@@ -18,6 +18,8 @@ from iris.adapters.llm.diagnostics import (
     ProviderDiagnosticIssue,
     ProviderReadinessResult,
     ReadinessStatus,
+    aggregate_issue_severity,
+    build_provider_readiness_result,
 )
 from tests.helpers.immutability import assert_frozen_field
 
@@ -83,6 +85,83 @@ def test_provider_readiness_result_defaults_issues_and_metadata() -> None:
     assert result.issues == ()
     assert result.latency_ms is None
     assert result.metadata is None
+
+
+def test_aggregate_issue_severity_prefers_fail_then_warn() -> None:
+    """aggregate_issue_severity collapses issue severities deterministically."""
+    assert aggregate_issue_severity(()) is ReadinessStatus.OK
+    assert (
+        aggregate_issue_severity(
+            (
+                ProviderDiagnosticIssue(
+                    code="x",
+                    message="x",
+                    severity=ReadinessStatus.SKIPPED,
+                ),
+            ),
+        )
+        is ReadinessStatus.SKIPPED
+    )
+    assert (
+        aggregate_issue_severity(
+            (
+                ProviderDiagnosticIssue(
+                    code="x",
+                    message="x",
+                    severity=ReadinessStatus.WARN,
+                ),
+                ProviderDiagnosticIssue(
+                    code="y",
+                    message="y",
+                    severity=ReadinessStatus.SKIPPED,
+                ),
+            ),
+        )
+        is ReadinessStatus.WARN
+    )
+    assert (
+        aggregate_issue_severity(
+            (
+                ProviderDiagnosticIssue(
+                    code="x",
+                    message="x",
+                    severity=ReadinessStatus.FAIL,
+                ),
+                ProviderDiagnosticIssue(
+                    code="y",
+                    message="y",
+                    severity=ReadinessStatus.WARN,
+                ),
+            ),
+        )
+        is ReadinessStatus.FAIL
+    )
+
+
+def test_build_provider_readiness_result_sets_status_and_metadata() -> None:
+    """build_provider_readiness_result preserves provider metadata."""
+    result = build_provider_readiness_result(
+        provider="demo",
+        model="m",
+        capabilities=ProviderCapability(warmup=True),
+        issues=(
+            ProviderDiagnosticIssue(
+                code="issue",
+                message="issue",
+                severity=ReadinessStatus.WARN,
+            ),
+        ),
+        latency_ms=12.5,
+        metadata={"k": "v"},
+    )
+
+    assert result.provider == "demo"
+    assert result.model == "m"
+    assert result.capabilities.warmup is True
+    assert result.status is ReadinessStatus.WARN
+    assert result.latency_ms is not None
+    assert abs(result.latency_ms - 12.5) < 1e-9
+    assert result.metadata == {"k": "v"}
 
 
 @pytest.mark.parametrize(

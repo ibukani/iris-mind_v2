@@ -112,6 +112,22 @@ class _LoadedConfig:
     config: IrisRuntimeConfig | None
 
 
+@dataclass(frozen=True)
+class _FilePathCheckSpec:
+    name: str
+    directory_summary: str
+    directory_issue: str
+    directory_next_action: str
+    existing_ok_summary: str
+    existing_fail_summary: str
+    existing_fail_issue: str
+    existing_fail_next_action: str
+    missing_ok_summary: str
+    missing_fail_summary: str
+    missing_fail_issue: str
+    missing_fail_next_action: str
+
+
 def _resolve_config_path(config_path: str | None) -> _ResolvedConfigPath:
     try:
         path = resolve_runtime_config_path(config_path)
@@ -172,46 +188,24 @@ def _sqlite_state_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
             status="skipped",
             summary="state.backend is not sqlite",
         )
-    path = Path(config.state.sqlite_path)
-    if path.exists():
-        return _existing_sqlite_check(path)
-    return _missing_sqlite_check(path)
-
-
-def _existing_sqlite_check(path: Path) -> RuntimeDoctorCheck:
-    if path.is_dir():
-        return RuntimeDoctorCheck(
+    return _check_file_path(
+        Path(config.state.sqlite_path),
+        spec=_FilePathCheckSpec(
             name="sqlite-state",
-            status="fail",
-            summary=f"configured sqlite path is a directory: {path}",
-            issue="sqlite path must be a file path, not a directory",
-            next_action="change state.sqlite_path / IRIS_STATE_SQLITE_PATH to a file path",
-        )
-    if os.access(path, os.R_OK) and os.access(path, os.W_OK):
-        return RuntimeDoctorCheck(name="sqlite-state", status="ok", summary=str(path))
-    return RuntimeDoctorCheck(
-        name="sqlite-state",
-        status="fail",
-        summary=f"cannot access {path}",
-        issue="sqlite path is not readable and writable",
-        next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
-    )
-
-
-def _missing_sqlite_check(path: Path) -> RuntimeDoctorCheck:
-    parent = path.parent
-    if parent.exists() and os.access(parent, os.W_OK | os.X_OK):
-        return RuntimeDoctorCheck(
-            name="sqlite-state",
-            status="ok",
-            summary=f"{path} can be created",
-        )
-    return RuntimeDoctorCheck(
-        name="sqlite-state",
-        status="fail",
-        summary=f"cannot open {path}",
-        issue="sqlite parent directory is not writable",
-        next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
+            directory_summary="configured sqlite path is a directory: {path}",
+            directory_issue="sqlite path must be a file path, not a directory",
+            directory_next_action=(
+                "change state.sqlite_path / IRIS_STATE_SQLITE_PATH to a file path"
+            ),
+            existing_ok_summary="{path}",
+            existing_fail_summary="cannot access {path}",
+            existing_fail_issue="sqlite path is not readable and writable",
+            existing_fail_next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
+            missing_ok_summary="{path} can be created",
+            missing_fail_summary="cannot open {path}",
+            missing_fail_issue="sqlite parent directory is not writable",
+            missing_fail_next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
+        ),
     )
 
 
@@ -223,24 +217,22 @@ def _logging_path_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
             status="skipped",
             summary="logging.file_path is not set",
         )
-    resolved = Path(file_path)
-    if resolved.is_dir():
-        return RuntimeDoctorCheck(
+    return _check_file_path(
+        Path(file_path),
+        spec=_FilePathCheckSpec(
             name="logging-file",
-            status="fail",
-            summary=f"configured logging file path is a directory: {resolved}",
-            issue="logging file path must be a file path, not a directory",
-            next_action="change logging.file_path or delete/replace the directory",
-        )
-    parent = resolved.parent
-    if parent.exists() and os.access(parent, os.W_OK | os.X_OK):
-        return RuntimeDoctorCheck(name="logging-file", status="ok", summary=str(file_path))
-    return RuntimeDoctorCheck(
-        name="logging-file",
-        status="fail",
-        summary=f"logging parent is not writable: {parent}",
-        issue="log file parent cannot be written",
-        next_action="create directory or change logging.file_path",
+            directory_summary="configured logging file path is a directory: {path}",
+            directory_issue="logging file path must be a file path, not a directory",
+            directory_next_action="change logging.file_path or delete/replace the directory",
+            existing_ok_summary="{path}",
+            existing_fail_summary="logging parent is not writable: {parent}",
+            existing_fail_issue="log file parent cannot be written",
+            existing_fail_next_action="create directory or change logging.file_path",
+            missing_ok_summary="{path} can be created",
+            missing_fail_summary="logging parent is not writable: {parent}",
+            missing_fail_issue="log file parent cannot be written",
+            missing_fail_next_action="create directory or change logging.file_path",
+        ),
     )
 
 
@@ -316,6 +308,42 @@ def _read_only_diagnostics_config(config: IrisRuntimeConfig) -> IrisRuntimeConfi
     return replace(
         config,
         diagnostics=replace(config.diagnostics, warmup_models=False),
+    )
+
+
+def _check_file_path(path: Path, *, spec: _FilePathCheckSpec) -> RuntimeDoctorCheck:
+    status = "ok"
+    summary = ""
+    issue: str | None = None
+    next_action: str | None = None
+    if path.is_dir():
+        status = "fail"
+        summary = spec.directory_summary.format(path=path)
+        issue = spec.directory_issue
+        next_action = spec.directory_next_action
+    elif path.exists():
+        if os.access(path, os.R_OK) and os.access(path, os.W_OK):
+            summary = spec.existing_ok_summary.format(path=path, parent=path.parent)
+        else:
+            status = "fail"
+            summary = spec.existing_fail_summary.format(path=path, parent=path.parent)
+            issue = spec.existing_fail_issue
+            next_action = spec.existing_fail_next_action
+    else:
+        parent = path.parent
+        if parent.exists() and os.access(parent, os.W_OK | os.X_OK):
+            summary = spec.missing_ok_summary.format(path=path, parent=parent)
+        else:
+            status = "fail"
+            summary = spec.missing_fail_summary.format(path=path, parent=parent)
+            issue = spec.missing_fail_issue
+            next_action = spec.missing_fail_next_action
+    return RuntimeDoctorCheck(
+        name=spec.name,
+        status=status,
+        summary=summary,
+        issue=issue,
+        next_action=next_action,
     )
 
 
