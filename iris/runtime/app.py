@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.service import CognitiveCycle
 from iris.contracts.actions import ActionPlan, PresentedOutput
-from iris.presentation.presenter import Presenter, SimplePresenter
-from iris.safety.action_gate import ActionSafetyGate, AllowAllActionGate, GateDecision
-from iris.safety.output_filter import AllowAllOutputGate, OutputSafetyGate
+from iris.presentation.suite import PresentationSuite
+from iris.runtime.output_pipeline import RuntimeOutputPipeline
+from iris.runtime.wiring.presentation import wire_output_pipeline
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -31,9 +31,7 @@ class IrisApp:
         self,
         steps: Sequence[PipelineStep[PipelineStepResult]] | None = None,
         fallback_plan: ActionPlan | None = None,
-        presenter: Presenter | None = None,
-        action_safety_gate: ActionSafetyGate | None = None,
-        output_safety_gate: OutputSafetyGate | None = None,
+        output_pipeline: RuntimeOutputPipeline | None = None,
         cycle: CognitiveCycle | None = None,
     ) -> None:
         """オプションの依存関係オーバーライドでアプリケーションを初期化する.
@@ -41,9 +39,7 @@ class IrisApp:
         Args:
             steps: Pipeline steps used when no cycle is provided.
             fallback_plan: Default plan returned on cycle failure.
-            presenter: Output presenter override.
-            action_safety_gate: Action gate override.
-            output_safety_gate: Output gate override.
+            output_pipeline: Pipeline for action presentation and safety.
             cycle: Pre-wired cognitive cycle; if provided, steps is ignored.
 
         Raises:
@@ -67,9 +63,7 @@ class IrisApp:
                 frame_builder=FrameBuilder(),
                 fallback_plan=fallback_plan,
             )
-        self._presenter = presenter or SimplePresenter()
-        self._action_safety_gate = action_safety_gate or AllowAllActionGate()
-        self._output_safety_gate = output_safety_gate or AllowAllOutputGate()
+        self._output_pipeline = output_pipeline or wire_output_pipeline()
 
     async def process_observation(
         self,
@@ -93,11 +87,5 @@ class IrisApp:
         plan: ActionPlan = cycle_result.selected_plan
         if plan.is_no_action:
             return PresentedOutput(text=None)
-        safety_decision = await self._action_safety_gate.check_plan(plan)
-        if safety_decision.decision is GateDecision.BLOCK:
-            return PresentedOutput(text=None)
-        output: PresentedOutput = await self._presenter.present(plan)
-        output_decision = await self._output_safety_gate.check_output(output)
-        if output_decision.decision is GateDecision.BLOCK:
-            return PresentedOutput(text=None)
-        return output
+        
+        return await self._output_pipeline.present_action_plan(plan)

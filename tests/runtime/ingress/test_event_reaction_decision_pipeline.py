@@ -1,4 +1,4 @@
-"""EventReactionRunner tests。"""
+"""EventReactionDecisionPipeline tests。"""
 
 from __future__ import annotations
 
@@ -19,24 +19,24 @@ from iris.core.ids import ActorId, ObservationId, SessionId
 from iris.features.event_reaction.planner import EventReactionPlanner
 from iris.features.event_reaction.policy import default_event_reaction_policy
 from iris.features.event_reaction.templates import EventReactionTemplateProvider
-from iris.presentation.event_reaction import EventReactionPresenter
-from iris.runtime.ingress.activity_event_reaction_runner import EventReactionRunner
+from iris.runtime.ingress.event_reaction_decision_pipeline import EventReactionDecisionPipeline
 
 
 @pytest.fixture
-def runner() -> EventReactionRunner:
-    """デフォルトポリシーのEventReactionRunnerを提供する。
+def pipeline() -> EventReactionDecisionPipeline:
+    """デフォルトポリシーのEventReactionDecisionPipelineを提供する。
 
     Returns:
-        EventReactionRunner: テスト用runner。
+        EventReactionDecisionPipeline: テスト用pipeline。
     """
     template_provider = EventReactionTemplateProvider()
-    return EventReactionRunner(
-        planner=EventReactionPlanner(
-            policy=default_event_reaction_policy(),
-            template_provider=template_provider,
+    return EventReactionDecisionPipeline(
+        planners=(
+            EventReactionPlanner(
+                policy=default_event_reaction_policy(),
+                template_provider=template_provider,
+            ),
         ),
-        presenter=EventReactionPresenter(),
     )
 
 
@@ -95,51 +95,49 @@ def _activity(kind: ActivityKind, *, actor_id: ActorId, now: datetime) -> Activi
 
 
 @pytest.mark.anyio
-async def test_voice_joined_returns_presented_output(
-    runner: EventReactionRunner,
+async def test_voice_joined_returns_reaction_candidate(
+    pipeline: EventReactionDecisionPipeline,
     actor_id: ActorId,
     now: datetime,
 ) -> None:
-    """VOICE_JOINEDが条件を満たせばevent_reactionなPresentedOutputを返す。"""
-    output = await runner.react(
+    """VOICE_JOINEDが条件を満たせばReactionCandidateを返す。"""
+    candidate = await pipeline.decide(
         _activity(ActivityKind.VOICE_JOINED, actor_id=actor_id, now=now),
         situation_context=_situation(AvailabilityStatus.AVAILABLE, now=now),
     )
 
-    assert output is not None
-    assert output.text == "Welcome back."
-    assert output.style_hint == "event_reaction"
-    assert output.priority == 10
-    assert output.is_sendable
+    assert candidate is not None
+    assert candidate.text == "Welcome back."
+    assert candidate.priority == 10
 
 
 @pytest.mark.anyio
-async def test_app_opened_returns_presented_output(
-    runner: EventReactionRunner,
+async def test_app_opened_returns_reaction_candidate(
+    pipeline: EventReactionDecisionPipeline,
     actor_id: ActorId,
     now: datetime,
 ) -> None:
-    """APP_OPENEDが条件を満たせば対応するPresentedOutputを返す。"""
-    output = await runner.react(
+    """APP_OPENEDが条件を満たせば対応するReactionCandidateを返す。"""
+    candidate = await pipeline.decide(
         _activity(ActivityKind.APP_OPENED, actor_id=actor_id, now=now),
         situation_context=_situation(AvailabilityStatus.AVAILABLE, now=now),
     )
 
-    assert output is not None
-    assert output.text == "Welcome back. I am here if you want to talk."
-    assert output.priority == 5
+    assert candidate is not None
+    assert candidate.text == "Welcome back. I am here if you want to talk."
+    assert candidate.priority == 5
 
 
 @pytest.mark.anyio
 async def test_voice_left_returns_none(
-    runner: EventReactionRunner,
+    pipeline: EventReactionDecisionPipeline,
     actor_id: ActorId,
     now: datetime,
 ) -> None:
     """VOICE_LEFTは反応を生成しない。"""
-    output = await runner.react(
+    candidate = await pipeline.decide(
         _activity(ActivityKind.VOICE_LEFT, actor_id=actor_id, now=now),
         situation_context=_situation(AvailabilityStatus.AVAILABLE, now=now),
     )
 
-    assert output is None
+    assert candidate is None

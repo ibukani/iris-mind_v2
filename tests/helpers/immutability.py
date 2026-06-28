@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError
 
 import pytest
+from pydantic import ValidationError
 
 
 def assert_frozen_field(instance: object, field_name: str, value: object) -> None:
@@ -15,5 +16,5 @@ def assert_frozen_field(instance: object, field_name: str, value: object) -> Non
         field_name: Field name to mutate through the runtime setattr path.
         value: Replacement value attempted by the test.
     """
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises((FrozenInstanceError, ValidationError)):
         setattr(instance, field_name, value)

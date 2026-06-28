@@ -6,36 +6,36 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from iris.contracts.actions import PresentedOutput
-from iris.safety.action_gate import GateDecision
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import SituationContextSnapshot
+    from iris.contracts.event_reaction import ReactionCandidate
     from iris.contracts.observations import ActivityEventObservation
     from iris.runtime.ingress.observation_ingress import ObservationIngressContext
     from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
-    from iris.safety.output_filter import OutputSafetyGate
+    from iris.runtime.output_pipeline import RuntimeOutputPipeline
 
 
-class EventReactionRunnerPort(Protocol):
-    """EventReactionRunner の runtime 境界 port。"""
+class EventReactionDecisionPipelinePort(Protocol):
+    """EventReactionDecisionPipeline の runtime 境界 port。"""
 
-    async def react(
+    async def decide(
         self,
         observation: ActivityEventObservation,
         *,
         situation_context: SituationContextSnapshot,
-    ) -> PresentedOutput | None:
-        """反応条件を満たせばPresentedOutputを返す。"""
+    ) -> ReactionCandidate | None:
+        """反応条件を満たせばReactionCandidateを返す。"""
         ...
 
 
 @dataclass(frozen=True)
 class ActivityEventReactionHandler:
-    """ActivityEventObservation に対する trust check → reaction → output gate パイプライン。"""
+    """ActivityEventObservation に対する trust check → reaction decision → output pipeline パイプライン。"""
 
     trust_policy: ObservationTrustPolicy
-    runner: EventReactionRunnerPort
-    output_gate: OutputSafetyGate
+    decision_pipeline: EventReactionDecisionPipelinePort
+    output_pipeline: RuntimeOutputPipeline
 
     async def handle(
         self,
@@ -43,7 +43,7 @@ class ActivityEventReactionHandler:
         situation_context: SituationContextSnapshot | None,
         ingress: ObservationIngressContext,
     ) -> PresentedOutput:
-        """Trust check → reaction → output gate → fallback。
+        """Trust check → reaction decision → output pipeline → fallback。
 
         Args:
             observation: 処理対象の activity event observation。
@@ -53,25 +53,14 @@ class ActivityEventReactionHandler:
         Returns:
             PresentedOutput: reaction 出力、または no-send。
         """
-        output: PresentedOutput | None = None
+        candidate: ReactionCandidate | None = None
         if situation_context is not None and self.trust_policy.can_react_to_activity_event(ingress):
-            output = await self.runner.react(
+            candidate = await self.decision_pipeline.decide(
                 observation,
                 situation_context=situation_context,
             )
 
-        if output is not None and output.is_sendable:
-            output = await self._filter_output(output)
+        if candidate is not None:
+            return await self.output_pipeline.present_reaction_candidate(candidate)
 
-        return output or PresentedOutput(text=None)
-
-    async def _filter_output(self, output: PresentedOutput) -> PresentedOutput:
-        """Event reaction 出力を output safety gate で検査する。
-
-        Returns:
-            PresentedOutput: gate 通過後の output、またはブロック時は no-send。
-        """
-        decision = await self.output_gate.check_output(output)
-        if decision.decision is GateDecision.BLOCK:
-            return PresentedOutput(text=None)
-        return output
+        return PresentedOutput(text=None)

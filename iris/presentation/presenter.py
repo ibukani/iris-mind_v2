@@ -2,17 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
-
 from iris.contracts.actions import ActionPlan, PresentedOutput
-
-
-class Presenter(Protocol):
-    """アクションプランを出力として提示するプロトコル."""
-
-    async def present(self, plan: ActionPlan) -> PresentedOutput:
-        """アクションプランを提示し、整形された出力を返す."""
-        ...
 
 
 class SimplePresenter:

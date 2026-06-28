@@ -11,7 +11,9 @@ if TYPE_CHECKING:
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.contracts.actions import ActionResult
-    from iris.contracts.observations import Observation
+    from iris.contracts.availability import AvailabilitySnapshot
+    from iris.contracts.event_reaction import EventReactionDecision
+    from iris.contracts.observations import ActivityEventObservation, Observation
 
 
 class ObservationSource(Protocol):
@@ -37,12 +39,25 @@ class BackgroundJob(Protocol):
         """バックグラウンドジョブの1イテレーションを実行する。"""
 
 
+class ActivityReactionPlanner(Protocol):
+    """アクティビティに対するリアクションを計画するプロトコル。"""
+
+    def plan(
+        self,
+        observation: ActivityEventObservation,
+        *,
+        availability: AvailabilitySnapshot | None,
+    ) -> EventReactionDecision:
+        """リアクションを計画する。"""
+
+
 @dataclass(frozen=True)
 class FeatureDefinition:
     """パイプラインステップ、観測ソース、フックを持つ垂直フィーチャースライス。"""
 
     name: str
-    pipeline_steps: Sequence[PipelineStep[PipelineStepResult]] = ()
+    cognitive_steps: Sequence[PipelineStep[PipelineStepResult]] = ()
+    activity_reaction_planners: Sequence[ActivityReactionPlanner] = ()
     observation_sources: Sequence[ObservationSource] = ()
     learning_hooks: Sequence[LearningHook] = ()
     background_jobs: Sequence[BackgroundJob] = ()

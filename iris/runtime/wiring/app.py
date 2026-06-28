@@ -17,7 +17,7 @@ from iris.runtime.wiring.memory import (
     SQLiteFTS5MemoryRetriever,
     wire_sqlite_hybrid_memory_retriever,
 )
-from iris.runtime.wiring.presentation import wire_action_safety_gate, wire_output_safety_gate
+from iris.runtime.wiring.presentation import wire_output_pipeline
 
 if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
@@ -100,6 +100,5 @@ def build_app_from_config(
     )
     return IrisApp(
         cycle=cycle,
-        action_safety_gate=wire_action_safety_gate(),
-        output_safety_gate=wire_output_safety_gate(safety_config=config.safety),
+        output_pipeline=wire_output_pipeline(safety_config=config.safety),
     )

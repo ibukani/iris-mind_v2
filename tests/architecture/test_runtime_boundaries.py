@@ -87,3 +87,27 @@ def test_runtime_entrypoints_do_not_import_features_directly() -> None:
     assert not violations, "runtime entrypoints import features directly:\n" + "\n".join(
         violations,
     )
+
+
+def test_runtime_wiring_does_not_import_feature_internals() -> None:
+    """Runtime wiring must compose features using FeatureDefinition, not feature internals."""
+    violations: list[str] = []
+
+    # Features expose definition via their package __init__ or definition.py
+    # Importing internals like planner, policy, templates, scoring is a violation.
+    forbidden_internals = {"planner", "policy", "templates", "scoring"}
+
+    for path in _python_files(WIRING_ROOT):
+        rel_path = path.relative_to(PROJECT_ROOT)
+        for imported in _imports(path):
+            if not imported.startswith("iris.features."):
+                continue
+            
+            parts = imported.split(".")
+            # iris.features.<feature_name>.<internal>
+            if len(parts) > 3 and parts[-1] in forbidden_internals:
+                violations.append(f"{rel_path}: imports feature internal {imported}")
+
+    assert not violations, "runtime wiring imports feature internals directly:\n" + "\n".join(
+        violations,
+    )

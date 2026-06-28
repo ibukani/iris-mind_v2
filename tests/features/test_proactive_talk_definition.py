@@ -19,7 +19,7 @@ def test_proactive_talk_feature_definition_is_explicit_and_provider_neutral() ->
 
     assert isinstance(feature, FeatureDefinition)
     assert feature.name == "proactive_talk"
-    assert [step.name for step in feature.pipeline_steps] == [
+    assert [step.name for step in feature.cognitive_steps] == [
         "proactive_policy",
         "proactive_action_selection",
     ]

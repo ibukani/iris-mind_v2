@@ -54,7 +54,7 @@ from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.delivery import wire_app_action_broker, wire_delivery_safety_gate
-from iris.runtime.wiring.event_reaction import wire_event_reaction_runner
+from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipeline
 from iris.runtime.wiring.grpc import create_grpc_server
 from iris.runtime.wiring.scheduler import wire_runtime_scheduler, wire_scheduler_runner
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
@@ -124,11 +124,12 @@ def build_runtime_service(
         availability_resolver=availability_resolver,
         now=current_now,
     )
-    event_reaction_runner = wire_event_reaction_runner()
+    decision_pipeline = wire_event_reaction_decision_pipeline([])
+    # Note: we need to pass features from app config later, but for now empty sequence
     activity_event_reaction_handler = ActivityEventReactionHandler(
         trust_policy=trust_policy,
-        runner=event_reaction_runner,
-        output_gate=AllowAllOutputGate(),
+        decision_pipeline=decision_pipeline,
+        output_pipeline=app._output_pipeline, # temporary access
     )
     return IrisRuntimeService(
         app,

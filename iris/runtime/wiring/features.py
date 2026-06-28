@@ -58,7 +58,7 @@ def wire_proactive_talk_cognitive_cycle(
             AppraisalStep(),
             RelationshipStep(relationship_store or InMemoryRelationshipStore()),
             PolicyInhibitionStep(),
-            *feature.pipeline_steps,
+            *feature.cognitive_steps,
         )
     )
     return wire_cognitive_cycle(steps=tuple(steps))

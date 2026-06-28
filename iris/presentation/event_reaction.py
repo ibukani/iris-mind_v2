@@ -15,8 +15,7 @@ if TYPE_CHECKING:
 class EventReactionPresenter:
     """ReactionCandidateをPresentedOutputに変換する。"""
 
-    @staticmethod
-    def present(candidate: ReactionCandidate) -> PresentedOutput:
+    def present(self, candidate: ReactionCandidate) -> PresentedOutput:
         """候補からPresentedOutputを生成する。
 
         Returns:

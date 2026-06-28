@@ -541,7 +541,7 @@ TARGET_FEATURE_DEF_FILE: Path = PROJECT_ROOT / "iris" / "features" / "definition
 
 REQUIRED_FEATURE_DEFINITION_FIELDS: set[str] = {
     "name",
-    "pipeline_steps",
+    "cognitive_steps",
     "observation_sources",
     "learning_hooks",
     "background_jobs",
