@@ -28,6 +28,7 @@ __all__ = [
     "build_cli_activity_event_request",
     "build_cli_presence_signal_request",
     "build_cli_submit_observation_request",
+    "build_external_submit_observation_request",
     "create_runtime_channel",
     "create_runtime_stub",
     "find_free_port",
@@ -158,6 +159,62 @@ def build_cli_submit_observation_request(
             actor_message=observations_pb2.ActorMessagePayload(
                 text=text,
                 external_message_id=external_message_id,
+            ),
+        ),
+    )
+
+
+def build_external_submit_observation_request(
+    *,
+    provider: str,
+    provider_subject: str = "local-user",
+    display_name: str = "Local User",
+    correlation_id: str = "e2e-corr-1",
+    session_id: str = "e2e-session-1",
+    text: str = "hello from process e2e",
+) -> runtime_pb2.SubmitObservationRequest:
+    """Build a provider-consistent actor_message SubmitObservation request.
+
+    All provider-derived fields (``account_ref.provider``,
+    ``space_ref.provider``, ``context.source``) are set from the single
+    ``provider`` parameter.  The caller supplies one provider assertion, and
+    the builder guarantees internal consistency.
+
+    ``observation_id`` is derived from ``correlation_id`` as
+    ``"obs-{correlation_id}"`` and ``external_message_id`` as
+    ``"msg-{correlation_id}"``.
+
+    Returns:
+        SubmitObservation request with internally consistent provider fields.
+    """
+    occurred_at = Timestamp()
+    occurred_at.FromDatetime(datetime(2026, 6, 10, 12, 0, tzinfo=UTC))
+
+    return runtime_pb2.SubmitObservationRequest(
+        correlation_id=correlation_id,
+        observation=observations_pb2.Observation(
+            observation_id=f"obs-{correlation_id}",
+            session_id=session_id,
+            kind=observations_pb2.OBSERVATION_KIND_ACTOR_MESSAGE,
+            occurred_at=occurred_at,
+            context=observations_pb2.ObservationContext(
+                source=provider,
+                account_ref=identity_pb2.ExternalAccountRef(
+                    provider=provider,
+                    provider_subject=provider_subject,
+                    display_name=display_name,
+                    actor_kind=identity_pb2.ACTOR_KIND_HUMAN,
+                ),
+                space_ref=spaces_pb2.ExternalSpaceRef(
+                    provider=provider,
+                    provider_space_ref=f"{provider}-session-1",
+                    display_name=f"{provider.title()} Session",
+                    space_kind=spaces_pb2.SPACE_KIND_DIRECT_MESSAGE,
+                ),
+            ),
+            actor_message=observations_pb2.ActorMessagePayload(
+                text=text,
+                external_message_id=f"msg-{correlation_id}",
             ),
         ),
     )
