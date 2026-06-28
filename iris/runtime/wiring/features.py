@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.features.event_reaction import define_event_reaction_feature
-from iris.features.proactive_talk import define_proactive_talk_feature
+from iris.features.basic_action.definition import define_basic_action_feature
+from iris.features.event_reaction.definition import define_event_reaction_feature
+from iris.features.proactive_talk.definition import define_proactive_talk_feature
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
-    wire_policy_affect_memory_aware_text_response_cognitive_cycle,
+    wire_core_cognitive_cycle,
 )
 
 if TYPE_CHECKING:
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.cognitive.cycle.service import CognitiveCycle
     from iris.contracts.memory import MemoryStore
+    from iris.contracts.presentation import ActionPlanPresenter
     from iris.contracts.relationship import RelationshipStore
     from iris.features.definition import FeatureDefinition
 
@@ -37,7 +39,10 @@ def wire_runtime_features() -> RuntimeFeatureCatalog:
         明示注入するフィーチャー定義の集合。
     """
     return RuntimeFeatureCatalog(
-        features=(define_event_reaction_feature(),),
+        features=(
+            define_basic_action_feature(),
+            define_event_reaction_feature(),
+        ),
     )
 
 
@@ -53,6 +58,20 @@ def collect_cognitive_steps(
         CognitiveCycle の拡張位置へ注入する認知ステップ。
     """
     return tuple(step for feature in features for step in feature.cognitive_steps)
+
+
+def collect_action_plan_presenters(
+    features: Sequence[FeatureDefinition],
+) -> tuple[ActionPlanPresenter, ...]:
+    """有効なフィーチャーのプレゼンターを登録順に収集する。
+
+    Args:
+        features: composition root で有効化されたフィーチャー定義。
+
+    Returns:
+        PresentationSuite へ注入するプレゼンター。
+    """
+    return tuple(p for feature in features for p in feature.action_plan_presenters)
 
 
 def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefinition:
@@ -83,7 +102,7 @@ def wire_proactive_talk_cognitive_cycle(
         知覚・メモリ・感情・ポリシー・proactive talk パイプラインステップを含む CognitiveCycle。
     """
     feature = wire_proactive_talk_feature(salience_threshold=salience_threshold)
-    return wire_policy_affect_memory_aware_text_response_cognitive_cycle(
+    return wire_core_cognitive_cycle(
         stores=CognitiveCycleStores(
             memory_store=memory_store,
             relationship_store=relationship_store,

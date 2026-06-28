@@ -10,8 +10,10 @@ import pytest
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
+from iris.features.chat.definition import ResponseGenerationStep
 from iris.runtime.app import IrisApp
-from iris.runtime.wiring.cognitive import wire_text_response_cognitive_cycle
+from iris.runtime.wiring.cognitive import wire_core_cognitive_cycle
+from iris.runtime.wiring.llm import wire_response_generator
 from iris.safety.action_gate import GateDecision, SafetyDecision
 from tests.helpers.output_pipeline import make_output_pipeline
 
@@ -53,13 +55,18 @@ def actor_message(text: str = "hello") -> ActorMessageObservation:
 async def test_one_turn_flow_uses_fake_llm_and_returns_presented_output() -> None:
     """Verify LLM-backed one-turn flow returns a PresentedOutput with LLM text."""
     llm = FakeLLMClient(responses=("llm-backed reply",))
-    app = IrisApp(cycle=wire_text_response_cognitive_cycle(llm))
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_core_cognitive_cycle(
+            extension_steps=(ResponseGenerationStep(wire_response_generator(llm)),)
+        ),
+    )
 
     output = await app.process_observation(actor_message("hello Iris"))
 
     assert output.text == "llm-backed reply"
     assert output.priority == 10
-    assert llm.requests[0].messages[-1].content == "hello Iris"
+    assert "hello Iris" in llm.requests[0].messages[-1].content
 
 
 @pytest.mark.anyio
@@ -67,8 +74,10 @@ async def test_action_safety_gate_blocks_llm_action_plan() -> None:
     """Verify a blocking action safety gate prevents LLM action from being presented."""
     llm = FakeLLMClient(responses=("unsafe reply",))
     app = IrisApp(
-        cycle=wire_text_response_cognitive_cycle(llm),
         output_pipeline=make_output_pipeline(action_gate=BlockingActionGate()),
+        cycle=wire_core_cognitive_cycle(
+            extension_steps=(ResponseGenerationStep(wire_response_generator(llm)),)
+        ),
     )
 
     output = await app.process_observation(actor_message())
@@ -81,8 +90,10 @@ async def test_output_safety_gate_blocks_llm_presented_output() -> None:
     """Verify a blocking output safety gate prevents LLM output from being sent."""
     llm = FakeLLMClient(responses=("blocked presented output",))
     app = IrisApp(
-        cycle=wire_text_response_cognitive_cycle(llm),
         output_pipeline=make_output_pipeline(output_gate=BlockingOutputGate()),
+        cycle=wire_core_cognitive_cycle(
+            extension_steps=(ResponseGenerationStep(wire_response_generator(llm)),)
+        ),
     )
 
     output = await app.process_observation(actor_message())

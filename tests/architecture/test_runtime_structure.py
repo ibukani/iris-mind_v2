@@ -8,7 +8,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 RUNTIME_ROOT = PROJECT_ROOT / "iris" / "runtime"
 EVENT_REACTION_FEATURE_ROOT = PROJECT_ROOT / "iris" / "features" / "event_reaction"
-EVENT_REACTION_PRESENTATION = PROJECT_ROOT / "iris" / "presentation" / "event_reaction.py"
+EVENT_REACTION_PRESENTATION = PROJECT_ROOT / "iris" / "features" / "event_reaction" / "presenter.py"
 EVENT_REACTION_RUNNER = PROJECT_ROOT / "iris" / "runtime" / "ingress" / "activity_event_reaction.py"
 
 ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
@@ -28,7 +28,6 @@ ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
 EVENT_REACTION_FEATURE_FORBIDDEN_IMPORTS: frozenset[str] = frozenset(
     {
         "iris.adapters",
-        "iris.presentation",
         "iris.runtime",
         "iris.safety",
     },
@@ -36,8 +35,9 @@ EVENT_REACTION_FEATURE_FORBIDDEN_IMPORTS: frozenset[str] = frozenset(
 
 EVENT_REACTION_PRESENTATION_FORBIDDEN_IMPORTS: frozenset[str] = frozenset(
     {
-        "iris.adapters",
-        "iris.features",
+        "iris.features.event_reaction.planner",
+        "iris.features.event_reaction.policy",
+        "iris.features.event_reaction.templates",
         "iris.runtime",
         "iris.safety",
     },

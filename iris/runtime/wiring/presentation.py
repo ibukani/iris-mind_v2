@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.presentation.event_reaction import EventReactionPresenter
-from iris.presentation.presenter import SimplePresenter
 from iris.presentation.suite import PresentationSuite
 from iris.runtime.output_pipeline import RuntimeOutputPipeline
 from iris.safety.action_gate import ActionSafetyGate, AllowAllActionGate
@@ -16,19 +14,22 @@ from iris.safety.basic_output_filter import BasicOutputSafetyGate
 from iris.safety.output_filter import AllowAllOutputGate, OutputSafetyGate
 
 if TYPE_CHECKING:
-    from iris.presentation.ports import ActionPlanPresenter
+    from collections.abc import Sequence
+
+    from iris.contracts.presentation import ActionPlanPresenter
     from iris.runtime.config.safety import RuntimeSafetyConfig
 
 
-def wire_presentation_suite() -> PresentationSuite:
+def wire_presentation_suite(
+    extension_presenters: Sequence[ActionPlanPresenter] = (),
+) -> PresentationSuite:
     """PresentationSuite を組み立てる。
 
     Returns:
         標準presenter群。
     """
     presenters: list[ActionPlanPresenter] = [
-        EventReactionPresenter(),
-        SimplePresenter(),
+        *extension_presenters,
     ]
 
     return PresentationSuite(presenters=tuple(presenters))
@@ -58,6 +59,7 @@ def wire_output_safety_gate(
 
 def wire_output_pipeline(
     safety_config: RuntimeSafetyConfig | None = None,
+    extension_presenters: Sequence[ActionPlanPresenter] = (),
 ) -> RuntimeOutputPipeline:
     """RuntimeOutputPipeline を組み立てる。
 
@@ -65,7 +67,7 @@ def wire_output_pipeline(
         presentationとsafetyを統合した出力境界。
     """
     return RuntimeOutputPipeline(
-        presentation=wire_presentation_suite(),
+        presentation=wire_presentation_suite(extension_presenters),
         action_safety_gate=wire_action_safety_gate(),
         output_safety_gate=wire_output_safety_gate(safety_config=safety_config),
     )

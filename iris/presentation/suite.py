@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from iris.contracts.actions import ActionPlan
-    from iris.presentation.ports import ActionPlanPresenter
+    from iris.contracts.presentation import ActionPlanPresenter
 
 
 @dataclass(frozen=True)

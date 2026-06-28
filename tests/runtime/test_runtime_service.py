@@ -21,6 +21,7 @@ from iris.runtime.ingress.observation_ingress import unauthenticated_external_in
 from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeResponse
 from iris.runtime.wiring.app import wire_default_app
 from tests.helpers.immutability import assert_frozen_field
+from tests.helpers.output_pipeline import make_output_pipeline
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
@@ -48,7 +49,7 @@ async def test_runtime_service_handles_actor_message_envelope() -> None:
 @pytest.mark.anyio
 async def test_runtime_service_preserves_no_action_output() -> None:
     """no_action planがsendable outputを生成しないことを確認する。"""
-    app = IrisApp(steps=(_NoActionStep(),))
+    app = IrisApp(output_pipeline=make_output_pipeline(), steps=(_NoActionStep(),))
     service = IrisRuntimeService(app)
 
     response = await service.handle_observation(

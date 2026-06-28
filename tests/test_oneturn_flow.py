@@ -34,6 +34,7 @@ def app() -> IrisApp:
     """
     return IrisApp(
         steps=[SimplePerceptionStep(), SimpleActionSelectionStep()],
+        output_pipeline=make_output_pipeline(),
     )
 
 

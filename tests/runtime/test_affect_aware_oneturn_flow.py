@@ -16,13 +16,16 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+from iris.features.chat.definition import ResponseGenerationStep
 from iris.runtime.app import IrisApp
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
-    wire_affect_memory_aware_text_response_cognitive_cycle,
+    wire_affect_memory_aware_cognitive_cycle,
 )
+from iris.runtime.wiring.llm import wire_response_generator
+from tests.helpers.output_pipeline import make_output_pipeline
 
 
 def actor_message(text: str) -> ActorMessageObservation:
@@ -59,13 +62,14 @@ async def test_affect_aware_one_turn_flow_includes_affect_relationship_and_memor
     )
     llm = FakeLLMClient(responses=("affect-aware reply",))
     app = IrisApp(
-        cycle=wire_affect_memory_aware_text_response_cognitive_cycle(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_affect_memory_aware_cognitive_cycle(
             stores=CognitiveCycleStores(
                 memory_store=memory_store,
                 relationship_store=InMemoryRelationshipStore(),
                 affect_store=InMemoryAffectStore(),
             ),
-            llm_client=llm,
+            extension_steps=(ResponseGenerationStep(wire_response_generator(llm)),),
         ),
     )
 

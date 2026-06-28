@@ -5,6 +5,7 @@ from __future__ import annotations
 from iris.features.definition import FeatureDefinition
 from iris.features.event_reaction.planner import EventReactionPlanner
 from iris.features.event_reaction.policy import default_event_reaction_policy
+from iris.features.event_reaction.presenter import EventReactionPresenter
 from iris.features.event_reaction.templates import EventReactionTemplateProvider
 
 
@@ -22,4 +23,5 @@ def define_event_reaction_feature() -> FeatureDefinition:
                 template_provider=EventReactionTemplateProvider(),
             ),
         ),
+        action_plan_presenters=(EventReactionPresenter(),),
     )

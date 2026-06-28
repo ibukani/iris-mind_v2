@@ -1,1 +1,1 @@
-"""Event reaction feature tests."""
+"""Event reaction tests."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import override
 
 from iris.contracts.actions import ActionPlan, PresentedOutput
-from iris.presentation.ports import ActionPlanPresenter
+from iris.contracts.presentation import ActionPlanPresenter
 
 
 class SimplePresenter(ActionPlanPresenter):
@@ -13,13 +13,12 @@ class SimplePresenter(ActionPlanPresenter):
 
     @override
     def can_present(self, plan: ActionPlan) -> bool:
-        """常にTrueを返すフォールバックプレゼンター.
+        """event_reactionなど専用Presenterがあるものを除きTrueを返す.
 
         Returns:
-            bool: 常にTrue.
+            bool: event_reaction以外であればTrue.
         """
-        _ = plan
-        return True
+        return plan.turn_intent != "event_reaction"
 
     @override
     async def present(self, plan: ActionPlan) -> PresentedOutput:

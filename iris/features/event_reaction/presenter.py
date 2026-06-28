@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import override
 
 from iris.contracts.actions import ActionPlan, PresentedOutput
-from iris.presentation.ports import ActionPlanPresenter
+from iris.contracts.presentation import ActionPlanPresenter
 
 
 @dataclass(frozen=True)

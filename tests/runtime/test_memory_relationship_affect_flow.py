@@ -22,11 +22,15 @@ from iris.contracts.observations import (
 )
 from iris.contracts.relationship import RelationshipSnapshotRecord
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
-    wire_policy_affect_memory_aware_text_response_cognitive_cycle,
+    wire_core_cognitive_cycle,
 )
+from iris.runtime.wiring.features import collect_cognitive_steps
+from iris.runtime.wiring.llm import wire_response_generator
+from tests.helpers.output_pipeline import make_output_pipeline
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -68,13 +72,16 @@ async def _app_with_stores(
     affect_store = SQLiteAffectStore(db_path)
     try:
         yield IrisApp(
-            cycle=wire_policy_affect_memory_aware_text_response_cognitive_cycle(
+            output_pipeline=make_output_pipeline(),
+            cycle=wire_core_cognitive_cycle(
                 stores=CognitiveCycleStores(
                     memory_store=memory_store,
                     relationship_store=relationship_store,
                     affect_store=affect_store,
                 ),
-                llm_client=llm,
+                extension_steps=collect_cognitive_steps(
+                    [define_chat_feature(wire_response_generator(llm))]
+                ),
             ),
         )
     finally:

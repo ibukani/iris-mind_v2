@@ -30,6 +30,7 @@ from iris.core.ids import (
     SessionId,
     SpaceId,
 )
+from tests.helpers.output_pipeline import make_output_pipeline
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
@@ -114,7 +115,7 @@ async def test_runtime_service_passes_assembled_situation_context_to_app() -> No
     )
 
     capture = _CaptureFrameStep()
-    app = IrisApp(steps=[capture])
+    app = IrisApp(output_pipeline=make_output_pipeline(), steps=[capture])
     assembler = WorkspaceContextAssembler(
         activity_projection_store=projections,
         presence_store=presence_store,
@@ -165,7 +166,7 @@ async def test_runtime_service_passes_assembled_situation_context_to_app() -> No
 async def test_runtime_service_without_assembler_does_not_pass_context() -> None:
     """Assembler が未設定なら app に situation_context は渡されない。"""
     capture = _CaptureFrameStep()
-    app = IrisApp(steps=[capture])
+    app = IrisApp(output_pipeline=make_output_pipeline(), steps=[capture])
     service = IrisRuntimeService(app)
 
     observation = ActorMessageObservation(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from iris.contracts.actions import ActionPlan
-from iris.presentation.presenter import SimplePresenter
+from iris.features.basic_action.presenter import SimplePresenter
 
 
 @pytest.mark.anyio

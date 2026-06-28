@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, override
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.contracts.actions import ActionPlan
+from iris.features.basic_action.presenter import SimplePresenter
+from iris.features.definition import FeatureDefinition
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
@@ -36,3 +38,16 @@ class SimpleActionSelectionStep(PipelineStep[ActionSelectionResult]):
             status=StepStatus.OK,
             action_plans=(plan,),
         )
+
+
+def define_basic_action_feature() -> FeatureDefinition:
+    """基本アクション機能の定義を組み立てる。
+
+    Returns:
+        Basic action feature vertical sliceの定義。
+    """
+    return FeatureDefinition(
+        name="basic_action",
+        cognitive_steps=(SimpleActionSelectionStep(),),
+        action_plan_presenters=(SimplePresenter(),),
+    )

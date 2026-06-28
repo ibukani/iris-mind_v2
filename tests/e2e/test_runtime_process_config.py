@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING
 
 import pytest
@@ -52,6 +53,11 @@ def test_runtime_process_fails_with_missing_explicit_config(
         runtime_home=tmp_path,
         config_path=tmp_path / "missing.toml",
     )
+    # uv に python 起動の時間を与え、プロセスが異常終了するのを待つ
+    for _ in range(50):
+        if not runtime.is_alive():
+            break
+        time.sleep(0.1)
     stdout, stderr = _communicate_or_kill(runtime)
     output = f"{stdout}\n{stderr}".lower()
 

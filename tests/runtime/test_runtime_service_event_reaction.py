@@ -40,7 +40,7 @@ from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipeline
-from iris.runtime.wiring.features import wire_runtime_features
+from iris.runtime.wiring.features import collect_action_plan_presenters, wire_runtime_features
 from iris.runtime.wiring.presentation import wire_output_pipeline
 from iris.runtime.wiring.state import wire_runtime_state
 from iris.safety.action_gate import GateDecision, SafetyDecision
@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from iris.contracts.actions import PresentedOutput
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.output_pipeline import RuntimeOutputPipeline
+    from iris.runtime.wiring.features import RuntimeFeatureCatalog
 
 
 _OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
@@ -113,8 +114,13 @@ class _BlockAllOutputGate:
         )
 
 
-def _blocked_output_pipeline(config: IrisRuntimeConfig) -> RuntimeOutputPipeline:
-    default = wire_output_pipeline(safety_config=config.safety)
+def _blocked_output_pipeline(
+    config: IrisRuntimeConfig, feature_catalog: RuntimeFeatureCatalog
+) -> RuntimeOutputPipeline:
+    default = wire_output_pipeline(
+        safety_config=config.safety,
+        extension_presenters=collect_action_plan_presenters(feature_catalog.features),
+    )
     return type(default)(
         presentation=default.presentation,
         action_safety_gate=default.action_safety_gate,
@@ -180,7 +186,10 @@ def service_setup() -> tuple[IrisRuntimeService, _CaptureFrameStep]:
     stores = wire_runtime_state(config)
     capture = _CaptureFrameStep()
     feature_catalog = wire_runtime_features()
-    output_pipeline = wire_output_pipeline(safety_config=config.safety)
+    output_pipeline = wire_output_pipeline(
+        safety_config=config.safety,
+        extension_presenters=collect_action_plan_presenters(feature_catalog.features),
+    )
     app = IrisApp(
         steps=[capture],
         output_pipeline=output_pipeline,
@@ -398,37 +407,36 @@ async def test_blocking_output_gate_prevents_sendable_reaction() -> None:
     """Output safety gateがBLOCKするとevent reaction出力は送信されない。"""
     config = default_runtime_config()
     stores = wire_runtime_state(config)
-    output_pipeline = _blocked_output_pipeline(config)
+    feature_catalog = wire_runtime_features()
+    output_pipeline = _blocked_output_pipeline(config, feature_catalog)
     app = IrisApp(steps=[_CaptureFrameStep()], output_pipeline=output_pipeline)
 
     trust_policy = ObservationTrustPolicy()
-
-    presence_integrator = PresenceIntegrator(
-        store=stores.presence_store,
-        trust_policy=trust_policy,
-        now=_received_at,
-    )
-    availability_resolver = wire_availability_resolver()
-    workspace_context_assembler = wire_workspace_context_assembler(
-        activity_projection_store=stores.activity_projection_store,
-        presence_store=stores.presence_store,
-        occupancy_store=stores.space_occupancy_store,
-        availability_resolver=availability_resolver,
-        now=_received_at,
-    )
     decision_pipeline = wire_event_reaction_decision_pipeline([define_event_reaction_feature()])
-
-    handler = ActivityEventReactionHandler(
-        trust_policy=trust_policy,
-        decision_pipeline=decision_pipeline,
-        output_pipeline=output_pipeline,
-    )
 
     service = IrisRuntimeService(
         app,
-        observation_pipeline=IntegratingObservationPipeline((presence_integrator,)),
-        workspace_context_assembler=workspace_context_assembler,
-        activity_event_reaction_handler=handler,
+        observation_pipeline=IntegratingObservationPipeline(
+            (
+                PresenceIntegrator(
+                    store=stores.presence_store,
+                    trust_policy=trust_policy,
+                    now=_received_at,
+                ),
+            )
+        ),
+        workspace_context_assembler=wire_workspace_context_assembler(
+            activity_projection_store=stores.activity_projection_store,
+            presence_store=stores.presence_store,
+            occupancy_store=stores.space_occupancy_store,
+            availability_resolver=wire_availability_resolver(),
+            now=_received_at,
+        ),
+        activity_event_reaction_handler=ActivityEventReactionHandler(
+            trust_policy=trust_policy,
+            decision_pipeline=decision_pipeline,
+            output_pipeline=output_pipeline,
+        ),
     )
 
     await service.handle_observation(

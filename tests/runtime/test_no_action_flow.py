@@ -83,7 +83,10 @@ async def test_no_action_skips_presenter() -> None:
 @pytest.mark.anyio
 async def test_no_action_returns_non_sendable_output() -> None:
     """Verify a no_action flow returns a non-sendable PresentedOutput."""
-    app = IrisApp(cycle=wire_proactive_talk_cognitive_cycle())
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_proactive_talk_cognitive_cycle(),
+    )
     output = await app.process_observation(_idle_tick(10.0))
     assert output.is_sendable is False
     assert output.text is None
@@ -107,7 +110,10 @@ async def test_proactive_speak_calls_presenter() -> None:
 @pytest.mark.anyio
 async def test_no_action_does_not_produce_actor_visible_text() -> None:
     """Verify no_action produces PresentedOutput with text=None and is_sendable=False."""
-    app = IrisApp(cycle=wire_proactive_talk_cognitive_cycle())
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_proactive_talk_cognitive_cycle(),
+    )
     output = await app.process_observation(_idle_tick(10.0))
     assert output.text is None
     assert output.is_sendable is False

@@ -12,8 +12,11 @@ from iris.adapters.memory.fake import FakeMemoryStore
 from iris.contracts.memory import MemoryId, MemoryRecord
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
+from iris.features.chat.definition import ResponseGenerationStep
 from iris.runtime.app import IrisApp
-from iris.runtime.wiring.cognitive import wire_memory_aware_text_response_cognitive_cycle
+from iris.runtime.wiring.cognitive import wire_memory_aware_cognitive_cycle
+from iris.runtime.wiring.llm import wire_response_generator
+from tests.helpers.output_pipeline import make_output_pipeline
 
 
 def actor_message(text: str = "tea") -> ActorMessageObservation:
@@ -35,7 +38,13 @@ async def test_memory_aware_one_turn_flow_includes_memory_in_llm_prompt() -> Non
         records=(MemoryRecord(id=MemoryId("m1"), text="User likes jasmine tea."),)
     )
     llm = FakeLLMClient(responses=("memory-backed reply",))
-    app = IrisApp(cycle=wire_memory_aware_text_response_cognitive_cycle(memory_store, llm))
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_memory_aware_cognitive_cycle(
+            memory_store,
+            extension_steps=(ResponseGenerationStep(wire_response_generator(llm)),),
+        ),
+    )
 
     output = await app.process_observation(actor_message("tea recommendation"))
 

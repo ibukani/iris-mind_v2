@@ -6,16 +6,21 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.features.basic_action.definition import define_basic_action_feature
+from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
-    CognitiveResponseOptions,
-    wire_policy_affect_memory_aware_text_response_cognitive_cycle,
-    wire_text_response_cognitive_cycle,
+    wire_basic_cognitive_cycle,
+    wire_core_cognitive_cycle,
 )
-from iris.runtime.wiring.features import collect_cognitive_steps
-from iris.runtime.wiring.llm import LLMClientFactory
+from iris.runtime.wiring.features import (
+    collect_action_plan_presenters,
+    collect_cognitive_steps,
+)
+from iris.runtime.wiring.llm import LLMClientFactory, wire_response_generator
 from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
+from iris.runtime.wiring.presentation import wire_output_pipeline
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -51,13 +56,21 @@ def wire_default_app(
     Returns:
         完全に組み立てられた IrisApp。
     """
-    cycle = wire_text_response_cognitive_cycle(
-        llm_client,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
+    chat_feature = define_chat_feature(
+        wire_response_generator(
+            llm_client,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
     )
-    return IrisApp(cycle=cycle)
+    basic_action_feature = define_basic_action_feature()
+    features = [chat_feature, basic_action_feature]
+    cycle = wire_basic_cognitive_cycle(extension_steps=collect_cognitive_steps(features))
+    output_pipeline = wire_output_pipeline(
+        extension_presenters=collect_action_plan_presenters(features),
+    )
+    return IrisApp(cycle=cycle, output_pipeline=output_pipeline)
 
 
 def build_app_from_config(
@@ -85,7 +98,17 @@ def build_app_from_config(
     if isinstance(state.memory_store, SQLiteMemoryStore):
         memory_retriever = SQLiteFTS5MemoryRetriever(state.memory_store)
 
-    cycle = wire_policy_affect_memory_aware_text_response_cognitive_cycle(
+    chat_feature = define_chat_feature(
+        wire_response_generator(
+            client,
+            model=model,
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_output_tokens,
+        )
+    )
+    all_features = [*list(features), chat_feature]
+
+    cycle = wire_core_cognitive_cycle(
         stores=CognitiveCycleStores(
             memory_store=state.memory_store,
             relationship_store=state.relationship_store,
@@ -93,13 +116,7 @@ def build_app_from_config(
             memory_retriever=memory_retriever,
             vector_index=None,
         ),
-        llm_client=client,
-        response_options=CognitiveResponseOptions(
-            model=model,
-            temperature=model_config.temperature,
-            max_tokens=model_config.max_output_tokens,
-        ),
-        extension_steps=collect_cognitive_steps(features),
+        extension_steps=collect_cognitive_steps(all_features),
     )
     return IrisApp(
         cycle=cycle,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from iris.features.basic_action.presenter import SimplePresenter
 from iris.runtime.wiring.presentation import (
     wire_action_safety_gate,
     wire_output_pipeline,
@@ -14,7 +15,7 @@ from iris.safety.output_filter import AllowAllOutputGate
 
 def test_wire_presentation_suite_returns_suite() -> None:
     """標準presenter群をsuiteとして構成する。"""
-    suite = wire_presentation_suite()
+    suite = wire_presentation_suite([SimplePresenter()])
     assert suite is not None
     assert len(suite.presenters) >= 1
 

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot
     from iris.contracts.event_reaction import EventReactionDecision
     from iris.contracts.observations import ActivityEventObservation, Observation
+    from iris.contracts.presentation import ActionPlanPresenter
 
 
 class ObservationSource(Protocol):
@@ -62,3 +63,4 @@ class FeatureDefinition:
     observation_sources: Sequence[ObservationSource] = ()
     learning_hooks: Sequence[LearningHook] = ()
     background_jobs: Sequence[BackgroundJob] = ()
+    action_plan_presenters: Sequence[ActionPlanPresenter] = ()

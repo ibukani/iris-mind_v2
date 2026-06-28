@@ -56,7 +56,11 @@ from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.delivery import wire_app_action_broker, wire_delivery_safety_gate
 from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipeline
-from iris.runtime.wiring.features import RuntimeFeatureCatalog, wire_runtime_features
+from iris.runtime.wiring.features import (
+    RuntimeFeatureCatalog,
+    collect_action_plan_presenters,
+    wire_runtime_features,
+)
 from iris.runtime.wiring.grpc import create_grpc_server
 from iris.runtime.wiring.presentation import wire_output_pipeline
 from iris.runtime.wiring.scheduler import wire_runtime_scheduler, wire_scheduler_runner
@@ -168,7 +172,10 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     """
     stores = wire_runtime_state(config)
     feature_catalog = wire_runtime_features()
-    output_pipeline = wire_output_pipeline(safety_config=config.safety)
+    output_pipeline = wire_output_pipeline(
+        safety_config=config.safety,
+        extension_presenters=collect_action_plan_presenters(feature_catalog.features),
+    )
     runtime_service = build_runtime_service(
         build_app_from_config(
             config,

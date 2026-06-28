@@ -10,6 +10,7 @@ from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.workspace.frame import WorkspaceFrame, interpreted_input_text
 from iris.contracts.actions import ActionPlan
 from iris.contracts.observations import ActorMessageObservation
+from iris.features.definition import FeatureDefinition
 
 if TYPE_CHECKING:
     from iris.contracts.policy import PolicyConstraint
@@ -120,3 +121,19 @@ class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):
             status=StepStatus.OK,
             action_plans=(plan,),
         )
+
+
+def define_chat_feature(generator: ResponseGenerator, *, priority: int = 10) -> FeatureDefinition:
+    """LLMテキスト応答機能の定義を組み立てる。
+
+    Args:
+        generator: 使用する応答生成器。
+        priority: アクションプランの優先度。
+
+    Returns:
+        Chat feature vertical sliceの定義。
+    """
+    return FeatureDefinition(
+        name="chat",
+        cognitive_steps=(ResponseGenerationStep(generator=generator, priority=priority),),
+    )

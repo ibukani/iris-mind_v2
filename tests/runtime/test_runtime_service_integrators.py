@@ -35,6 +35,7 @@ from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 from iris.runtime.state.space_occupancy_integrator import SpaceOccupancyIntegrator
+from tests.helpers.output_pipeline import make_output_pipeline
 
 if TYPE_CHECKING:
     from iris.cognitive.cycle.models import ActionSelectionResult
@@ -153,7 +154,7 @@ def _service(
     if occupancy_store is not None:
         integrators.append(SpaceOccupancyIntegrator(occupancy_store, trust_policy, _now))
     return IrisRuntimeService(
-        IrisApp(steps=(_UnexpectedCognitiveStep(),)),
+        IrisApp(output_pipeline=make_output_pipeline(), steps=(_UnexpectedCognitiveStep(),)),
         observation_pipeline=IntegratingObservationPipeline(tuple(integrators)),
     )
 

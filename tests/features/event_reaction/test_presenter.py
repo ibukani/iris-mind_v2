@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from iris.contracts.actions import ActionPlan
-from iris.presentation.event_reaction import EventReactionPresenter
+from iris.features.event_reaction.presenter import EventReactionPresenter
 
 
 @pytest.mark.asyncio

@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.presentation.event_reaction import EventReactionPresenter
-from iris.presentation.presenter import SimplePresenter
+from iris.features.basic_action.presenter import SimplePresenter
+from iris.features.event_reaction.presenter import EventReactionPresenter
 from iris.presentation.suite import PresentationSuite
 from iris.runtime.output_pipeline import RuntimeOutputPipeline
 from iris.safety.action_gate import AllowAllActionGate
 from iris.safety.output_filter import AllowAllOutputGate
 
 if TYPE_CHECKING:
-    from iris.presentation.ports import ActionPlanPresenter
+    from iris.contracts.presentation import ActionPlanPresenter
     from iris.safety.action_gate import ActionSafetyGate
     from iris.safety.output_filter import OutputSafetyGate
 
