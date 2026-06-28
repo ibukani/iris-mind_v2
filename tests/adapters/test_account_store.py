@@ -9,7 +9,7 @@ import pytest
 
 from iris.contracts.accounts import AccountProfile, AccountStoreError
 from iris.core.ids import AccountId, ActorId, ExternalRef
-from iris.runtime.state.accounts.memory import InMemoryAccountStore
+from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
 
 
 def test_in_memory_account_store_put_and_get() -> None:

@@ -12,8 +12,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 
-from iris.adapters.sqlite.engine import AsyncDatabaseManager
-from iris.adapters.sqlite.models.delivery import DeliveryOutboxModel, DeliveryReportFingerprintModel
+from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
+from iris.adapters.persistence.sqlite.schema.delivery import (
+    DeliveryOutboxModel,
+    DeliveryReportFingerprintModel,
+)
 from iris.contracts.actions import ActionResult, ActionStatus, NoAction, SendMessageAction
 from iris.contracts.delivery import (
     TERMINAL_DELIVERY_STATUSES,

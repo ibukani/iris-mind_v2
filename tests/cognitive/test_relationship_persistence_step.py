@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.sqlite.relationship_store import SQLiteRelationshipStore
+from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
 from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import AppraisalResult, PerceptionResult, StepStatus

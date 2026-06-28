@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.sqlite.account_store import SQLiteAccountStore
+from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
 from iris.contracts.accounts import AccountProfile
 from iris.core.ids import AccountId, ActorId, ExternalRef
 

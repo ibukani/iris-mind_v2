@@ -10,7 +10,7 @@ from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
 from iris.features.proactive_talk import define_proactive_talk_feature
-from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
+from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import wire_cognitive_cycle
 
 if TYPE_CHECKING:

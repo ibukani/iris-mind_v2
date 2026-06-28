@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.sqlite.affect_store import SQLiteAffectStore
+from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
 from iris.contracts.affect import AffectBaselineRecord, AffectScope
 from iris.core.ids import ActorId, ObservationId
 from tests.helpers.approx import approx

@@ -17,8 +17,8 @@ from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
 from iris.contracts.actions import ActionPlan
 from iris.contracts.memory import MemoryStore, MutableMemoryStore, VectorMemoryIndex
-from iris.runtime.state.affect.memory import InMemoryAffectStore
-from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
+from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
+from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.llm import wire_response_generator
 
 if TYPE_CHECKING:

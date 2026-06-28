@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Mapped, mapped_column
 
-from iris.adapters.sqlite.models.base import Base
+from iris.adapters.persistence.sqlite.schema.base import Base
 
 
 class SchedulerTargetModel(Base):

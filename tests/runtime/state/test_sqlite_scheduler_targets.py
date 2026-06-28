@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.sqlite.scheduler_target_store import SQLiteSchedulerTargetStore
+from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.contracts.delivery import DeliveryRouteHint, SchedulerTarget
 from iris.core.ids import ExternalRef, SessionId
 

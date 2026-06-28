@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Connection, create_engine, event
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
-from iris.adapters.sqlite.models.base import Base
+from iris.adapters.persistence.sqlite.schema.base import Base
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

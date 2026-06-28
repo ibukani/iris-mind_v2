@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from iris.adapters.sqlite.delivery_outbox import SQLiteDeliveryOutbox
-from iris.adapters.sqlite.scheduler_target_store import SQLiteSchedulerTargetStore
+from iris.adapters.persistence.sqlite.stores.delivery_outbox import SQLiteDeliveryOutbox
+from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox

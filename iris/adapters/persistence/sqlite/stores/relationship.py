@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, override
 
 from sqlalchemy import select
 
-from iris.adapters.sqlite.engine import AsyncDatabaseManager
-from iris.adapters.sqlite.models.relationship import RelationshipModel
+from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
+from iris.adapters.persistence.sqlite.schema.relationship import RelationshipModel
 from iris.contracts.relationship import RelationshipSnapshotRecord, RelationshipStore
 from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.core.ids import ActorId, ObservationId

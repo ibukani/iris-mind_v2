@@ -32,8 +32,8 @@ from iris.runtime.config import (
     parse_llm_provider,
 )
 from iris.runtime.config.llm import LLMProvider
-from iris.runtime.state.affect.memory import InMemoryAffectStore
-from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
+from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
+from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.llm import LLMClientFactory
 

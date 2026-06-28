@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, override
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.future import select
 
-from iris.adapters.sqlite.engine import AsyncDatabaseManager
-from iris.adapters.sqlite.models.activity import ActivityEventModel
+from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
+from iris.adapters.persistence.sqlite.schema.activity import ActivityEventModel
 from iris.runtime.state.activity_journal import (
     ActivityAppendResult,
     ActivityAppendSkipReason,

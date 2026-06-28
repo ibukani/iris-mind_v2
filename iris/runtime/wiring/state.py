@@ -6,21 +6,21 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.sqlite.account_store import SQLiteAccountStore
-from iris.adapters.sqlite.activity_journal import SQLiteActivityJournal
-from iris.adapters.sqlite.affect_store import SQLiteAffectStore
-from iris.adapters.sqlite.delivery_outbox import SQLiteDeliveryOutbox
-from iris.adapters.sqlite.memory_store import SQLiteMemoryStore
-from iris.adapters.sqlite.relationship_store import SQLiteRelationshipStore
-from iris.adapters.sqlite.scheduler_target_store import SQLiteSchedulerTargetStore
+from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
+from iris.adapters.persistence.sqlite.stores.activity_journal import SQLiteActivityJournal
+from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
+from iris.adapters.persistence.sqlite.stores.delivery_outbox import SQLiteDeliveryOutbox
+from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
+from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
-from iris.runtime.state.accounts.memory import InMemoryAccountStore
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
-from iris.runtime.state.affect.memory import InMemoryAffectStore
+from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
+from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
+from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.state.presence import InMemoryPresenceStore
-from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 

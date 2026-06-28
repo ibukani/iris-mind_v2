@@ -215,7 +215,7 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
     ),
     (
         "iris/adapters",
-        "iris/adapters/sqlite/activity_journal.py",
+        "iris/adapters/persistence/sqlite/stores/activity_journal.py",
         "iris.runtime.state.activity_journal",
         "SQLite activity adapter implements the runtime-owned ActivityJournal port",
     ),

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import aiosqlite
 import pytest
 
-from iris.adapters.sqlite.activity_journal import SQLiteActivityJournal
+from iris.adapters.persistence.sqlite.stores.activity_journal import SQLiteActivityJournal
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
 from iris.core.ids import ActivityId, ActorId, ObservationId, SpaceId
 from iris.runtime.state.activity_journal import (

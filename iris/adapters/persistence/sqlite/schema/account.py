@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from iris.adapters.sqlite.models.base import Base
+from iris.adapters.persistence.sqlite.schema.base import Base
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

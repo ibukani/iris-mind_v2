@@ -14,12 +14,12 @@ def _read(relative_path: str) -> str:
 def test_relationship_and_affect_store_implementations_follow_state_boundary() -> None:
     """Relationship / affect store 実装を永続化境界ごとの配置に保つ。"""
     expected_adapter_paths = (
-        "iris/adapters/sqlite/relationship_store.py",
-        "iris/adapters/sqlite/affect_store.py",
+        "iris/adapters/persistence/sqlite/stores/relationship.py",
+        "iris/adapters/persistence/sqlite/stores/affect.py",
     )
     expected_runtime_paths = (
-        "iris/runtime/state/relationship/memory.py",
-        "iris/runtime/state/affect/memory.py",
+        "iris/runtime/state/ephemeral/relationship.py",
+        "iris/runtime/state/ephemeral/affect.py",
     )
     forbidden_runtime_paths = (
         "iris/runtime/relationship",
@@ -64,10 +64,10 @@ def test_space_id_is_not_relationship_or_affect_owner() -> None:
     checked_paths = (
         "iris/contracts/relationship.py",
         "iris/contracts/affect.py",
-        "iris/runtime/state/relationship/memory.py",
-        "iris/adapters/sqlite/relationship_store.py",
-        "iris/runtime/state/affect/memory.py",
-        "iris/adapters/sqlite/affect_store.py",
+        "iris/runtime/state/ephemeral/relationship.py",
+        "iris/adapters/persistence/sqlite/stores/relationship.py",
+        "iris/runtime/state/ephemeral/affect.py",
+        "iris/adapters/persistence/sqlite/stores/affect.py",
         "iris/cognitive/affect/relationship.py",
         "iris/cognitive/affect/persistence.py",
     )

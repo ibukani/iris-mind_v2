@@ -19,7 +19,7 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
-from iris.runtime.state.affect.memory import InMemoryAffectStore
+from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from tests.helpers.approx import approx
 
 if TYPE_CHECKING:

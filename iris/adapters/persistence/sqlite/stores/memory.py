@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, override
 
 from iris.adapters.memory.ports import MutableMemoryStore
 from iris.adapters.memory.utils import matches_query, rank_text_matches
-from iris.adapters.sqlite.database import SQLiteDatabase
+from iris.adapters.persistence.sqlite.database import SQLiteDatabase
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,

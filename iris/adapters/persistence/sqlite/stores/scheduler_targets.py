@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 
-from iris.adapters.sqlite.engine import AsyncDatabaseManager
-from iris.adapters.sqlite.models.scheduler_target import SchedulerTargetModel
+from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
+from iris.adapters.persistence.sqlite.schema.scheduler_target import SchedulerTargetModel
 from iris.contracts.delivery import DeliveryRouteHint, SchedulerTarget
 from iris.core.ids import AccountId, ActorId, ExternalRef, SessionId, SpaceId
 

@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, override
 
 from sqlalchemy import select
 
-from iris.adapters.sqlite.engine import AsyncDatabaseManager
-from iris.adapters.sqlite.models.account import AccountModel
+from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
+from iris.adapters.persistence.sqlite.schema.account import AccountModel
 from iris.contracts.accounts import AccountProfile, AccountStore, AccountStoreError
 from iris.core.ids import AccountId, ActorId, ExternalRef
 

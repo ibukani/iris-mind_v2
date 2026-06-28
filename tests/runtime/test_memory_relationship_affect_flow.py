@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
-from iris.adapters.sqlite.affect_store import SQLiteAffectStore
-from iris.adapters.sqlite.memory_store import SQLiteMemoryStore
-from iris.adapters.sqlite.relationship_store import SQLiteRelationshipStore
+from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
+from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
 from iris.contracts.affect import AffectBaselineRecord
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryQuery

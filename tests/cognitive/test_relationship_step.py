@@ -18,7 +18,7 @@ from iris.contracts.observations import (
 )
 from iris.contracts.relationship import RelationshipSnapshotRecord
 from iris.core.ids import AccountId, ActorId, ExternalRef, ObservationId, SessionId
-from iris.runtime.state.relationship.memory import InMemoryRelationshipStore
+from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame

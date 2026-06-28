@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
     from iris.adapters.memory.ports import MemoryStore
     from iris.adapters.memory.vector_index import EmbeddingFunction
-    from iris.adapters.sqlite.memory_store import SQLiteMemoryStore
+    from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
     from iris.cognitive.memory.retrieval import MemoryRetriever
     from iris.contracts.memory import (
         MemoryQuery,

@@ -159,23 +159,24 @@ class FrameBuilder:
     @staticmethod
     def _dispatch(frame: WorkspaceFrame, result: PipelineStepResult) -> WorkspaceFrame:
         updated: WorkspaceFrame | None = None
-        if isinstance(result, PerceptionResult):
-            updated = FrameBuilder._apply_perception(frame, result)
-        elif isinstance(result, MemoryRetrievalResult):
-            updated = FrameBuilder._apply_memory_retrieval(frame, result)
-        elif isinstance(result, AppraisalResult):
-            updated = FrameBuilder._apply_appraisal(frame, result)
-        elif isinstance(result, RelationshipResult):
-            updated = FrameBuilder._apply_relationship(frame, result)
-        elif isinstance(result, MotivationResult):
-            updated = FrameBuilder._apply_motivation(frame, result)
-        elif isinstance(result, PolicyResult):
-            updated = FrameBuilder._apply_policy(frame, result)
-        elif isinstance(result, ActionSelectionResult):
-            updated = FrameBuilder._apply_action_selection(frame, result)
-        else:
-            msg = f"Unsupported pipeline step result: {type(result).__name__}"
-            raise TypeError(msg)
+        match result:
+            case PerceptionResult():
+                updated = FrameBuilder._apply_perception(frame, result)
+            case MemoryRetrievalResult():
+                updated = FrameBuilder._apply_memory_retrieval(frame, result)
+            case AppraisalResult():
+                updated = FrameBuilder._apply_appraisal(frame, result)
+            case RelationshipResult():
+                updated = FrameBuilder._apply_relationship(frame, result)
+            case MotivationResult():
+                updated = FrameBuilder._apply_motivation(frame, result)
+            case PolicyResult():
+                updated = FrameBuilder._apply_policy(frame, result)
+            case ActionSelectionResult():
+                updated = FrameBuilder._apply_action_selection(frame, result)
+            case _:
+                msg = f"Unsupported pipeline step result: {type(result).__name__}"
+                raise TypeError(msg)
         return updated
 
     @staticmethod
@@ -185,8 +186,10 @@ class FrameBuilder:
         Returns:
             更新されたワークスペースフレーム。
         """
-        if isinstance(result, AffectBaselineLoadResult):
-            return FrameBuilder._apply_affect_baseline_load(frame, result)
-        if isinstance(result, (AffectPersistenceResult, MemoryWriteResult)):
-            return frame
-        return FrameBuilder._dispatch(frame, result)
+        match result:
+            case AffectBaselineLoadResult():
+                return FrameBuilder._apply_affect_baseline_load(frame, result)
+            case AffectPersistenceResult() | MemoryWriteResult():
+                return frame
+            case _:
+                return FrameBuilder._dispatch(frame, result)

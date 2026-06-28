@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.sqlite.delivery_outbox import SQLiteDeliveryOutbox
+from iris.adapters.persistence.sqlite.stores.delivery_outbox import SQLiteDeliveryOutbox
 from iris.contracts.actions import ActionResult, ActionStatus, NoAction, SendMessageAction
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTarget
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, SessionId
