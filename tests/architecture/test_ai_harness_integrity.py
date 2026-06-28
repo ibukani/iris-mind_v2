@@ -41,8 +41,10 @@ EXPECTED_VERIFY_CHECKS: frozenset[str] = frozenset(
         "format",
         "type",
         "pyright",
+        "debt-registry",
         "architecture",
         "tests+coverage",
+        "e2e",
     }
 )
 

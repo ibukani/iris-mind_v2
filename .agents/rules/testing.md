@@ -14,14 +14,18 @@ make check
 
 The full check runs, in order:
 
-```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy iris tests scripts main.py
-uv run pyright .
-uv run pytest tests/architecture -q
-uv run pytest tests/
-```
+1. `ruff check .`
+2. `ruff format --check .`
+3. `mypy iris tests scripts main.py`
+4. `pyright .`
+5. `scripts/check_suppression_debt_changes.py` (debt-registry)
+6. `make static-arch` (architecture tests via imports, semgrep, debt-registry, arch)
+7. `pytest` default targets with coverage (non-E2E tests)
+8. `pytest tests/e2e -m "e2e and not llm_live"` (process-level E2E, separately from coverage targets)
+
+Default test targets exclude `tests/e2e` — normal coverage runs non-E2E tests only.
+E2E tests run separately as part of the full `make check` gate.
+Live LLM tests (`llm_live` marker) are excluded from the default gate entirely.
 
 Use this while iterating:
 
@@ -29,7 +33,7 @@ Use this while iterating:
 make quick
 ```
 
-`make quick` skips the full test suite, but still runs lint, format check, mypy, pyright, and architecture tests.
+`make quick` skips the full test suite, coverage gate, and E2E tests, but still runs lint, format check, mypy, pyright, debt-registry, and architecture tests.
 
 ## Targeted test selection
 
