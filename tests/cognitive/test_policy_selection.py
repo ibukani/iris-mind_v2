@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from iris.cognitive.action.response import build_response_prompt
 from iris.cognitive.workspace.frame import InterpretedInput, WorkspaceFrame
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.contracts.policy import PolicyConstraint
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+from iris.features.chat.definition import build_response_prompt
 
 
 def _frame(constraints: tuple[PolicyConstraint, ...] = ()) -> WorkspaceFrame:

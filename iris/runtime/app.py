@@ -45,12 +45,7 @@ class IrisApp:
             ValueError: If neither steps nor cycle is provided.
         """
         if fallback_plan is None:
-            fallback_plan = ActionPlan(
-                turn_intent="no_action",
-                candidate_text=None,
-                should_respond=False,
-                priority=-1,
-            )
+            fallback_plan = ActionPlan.no_action()
         if cycle is not None:
             self._cycle = cycle
         else:

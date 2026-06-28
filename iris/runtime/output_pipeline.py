@@ -10,7 +10,6 @@ from iris.safety.action_gate import GateDecision
 
 if TYPE_CHECKING:
     from iris.contracts.actions import ActionPlan
-    from iris.contracts.event_reaction import ReactionCandidate
     from iris.presentation.suite import PresentationSuite
     from iris.safety.action_gate import ActionSafetyGate
     from iris.safety.output_filter import OutputSafetyGate
@@ -39,33 +38,9 @@ class RuntimeOutputPipeline:
             return PresentedOutput(text=None)
 
         # 2. Presentation
-        output = await self.presentation.action_plan_presenter.present(plan)
+        output = await self.presentation.present_action_plan(plan)
 
         # 3. Output Safety
-        if output.is_sendable:
-            out_decision = await self.output_safety_gate.check_output(output)
-            if out_decision.decision is GateDecision.BLOCK:
-                return PresentedOutput(text=None)
-
-        return output
-
-    async def present_reaction_candidate(
-        self,
-        candidate: ReactionCandidate,
-    ) -> PresentedOutput:
-        """ReactionCandidateを検証・フォーマットし、PresentedOutputとして返す。
-
-        Args:
-            candidate: 提案されたリアクション候補。
-
-        Returns:
-            PresentedOutput: 出力、またはブロック時はno-send。
-        """
-        # ReactionCandidate does not pass through ActionSafetyGate (it's not an ActionPlan)
-        # 1. Presentation
-        output = self.presentation.event_reaction_presenter.present(candidate)
-
-        # 2. Output Safety
         if output.is_sendable:
             out_decision = await self.output_safety_gate.check_output(output)
             if out_decision.decision is GateDecision.BLOCK:

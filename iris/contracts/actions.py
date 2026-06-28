@@ -32,6 +32,21 @@ class ActionPlan(BaseModel):
     should_respond: bool
     priority: int
     interruptible: bool = True
+    delay_ms: int = 0
+
+    @classmethod
+    def no_action(cls) -> ActionPlan:
+        """何もアクションを行わないプランを生成して返す。
+
+        Returns:
+            ActionPlan: turn_intent="no_action" の ActionPlan。
+        """
+        return cls(
+            turn_intent="no_action",
+            candidate_text=None,
+            should_respond=False,
+            priority=-1,
+        )
 
     @model_validator(mode="after")
     def _validate_no_action(self) -> ActionPlan:

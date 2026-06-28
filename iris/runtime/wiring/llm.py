@@ -11,7 +11,7 @@ from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
-from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator, ResponsePrompt
+from iris.features.chat.definition import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
 from iris.runtime.config.llm import LLMProvider
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver

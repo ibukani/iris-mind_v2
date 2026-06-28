@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.cognitive.action.response import ResponseGenerationStep
 from iris.cognitive.affect.appraisal import AppraisalStep
 from iris.cognitive.affect.persistence import AffectBaselineLoadStep, AffectPersistenceStep
 from iris.cognitive.affect.relationship import RelationshipStep
@@ -17,6 +16,7 @@ from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
 from iris.contracts.actions import ActionPlan
 from iris.contracts.memory import MemoryStore, MutableMemoryStore, VectorMemoryIndex
+from iris.features.chat.definition import ResponseGenerationStep
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.llm import wire_response_generator
@@ -61,12 +61,7 @@ def wire_cognitive_cycle(
         構成済みの CognitiveCycle。
     """
     if fallback_plan is None:
-        fallback_plan = ActionPlan(
-            turn_intent="no_action",
-            candidate_text=None,
-            should_respond=False,
-            priority=-1,
-        )
+        fallback_plan = ActionPlan.no_action()
     return CognitiveCycle(
         steps=steps,
         frame_builder=FrameBuilder(),

@@ -9,7 +9,7 @@ import pytest
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
-from iris.cognitive.action.response import ResponsePrompt
+from iris.features.chat.definition import ResponsePrompt
 from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime_config
 from iris.runtime.config.llm import LLMProvider
 from iris.runtime.wiring.llm import (

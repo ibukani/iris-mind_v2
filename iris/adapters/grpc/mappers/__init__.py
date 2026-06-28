@@ -1,4 +1,5 @@
 """gRPC mapper packageの公開API。"""
+
 from __future__ import annotations
 
 from iris.adapters.grpc.mappers.common import GrpcMappingError, timestamp_from_datetime
@@ -17,7 +18,7 @@ from iris.adapters.grpc.mappers.observations import (
     external_space_ref_from_proto,
     identity_from_proto,
 )
-from iris.adapters.grpc.mappers.outputs import presented_output_to_proto, runtime_response_to_proto
+from iris.adapters.grpc.mappers.outputs import presented_output_to_proto
 
 __all__ = (
     "GrpcMappingError",
@@ -34,6 +35,5 @@ __all__ = (
     "map_exception_to_grpc",
     "map_provider_error_to_status",
     "presented_output_to_proto",
-    "runtime_response_to_proto",
     "timestamp_from_datetime",
 )

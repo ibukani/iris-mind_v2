@@ -26,6 +26,30 @@ ALLOWED_COGNITIVE_IMPORTS: frozenset[tuple[Path, str]] = frozenset(
             Path("iris/features/proactive_talk/definition.py"),
             "iris.cognitive.workspace.frame",
         ),
+        (
+            Path("iris/features/chat/definition.py"),
+            "iris.cognitive.cycle.models",
+        ),
+        (
+            Path("iris/features/chat/definition.py"),
+            "iris.cognitive.cycle.pipeline",
+        ),
+        (
+            Path("iris/features/chat/definition.py"),
+            "iris.cognitive.workspace.frame",
+        ),
+        (
+            Path("iris/features/basic_action/definition.py"),
+            "iris.cognitive.cycle.models",
+        ),
+        (
+            Path("iris/features/basic_action/definition.py"),
+            "iris.cognitive.cycle.pipeline",
+        ),
+        (
+            Path("iris/features/basic_action/definition.py"),
+            "iris.cognitive.workspace.frame",
+        ),
     }
 )
 

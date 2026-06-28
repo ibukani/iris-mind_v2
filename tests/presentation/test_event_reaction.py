@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
-from iris.contracts.event_reaction import EventReactionKind, ReactionCandidate
+import pytest
+
+from iris.contracts.actions import ActionPlan
 from iris.presentation.event_reaction import EventReactionPresenter
 
 
-def test_event_reaction_presenter_converts_candidate_to_output() -> None:
-    """ReactionCandidateをPresentedOutputへ変換する。"""
-    candidate = ReactionCandidate(
-        kind=EventReactionKind.GREETING,
-        text="Welcome back.",
-        reason="voice joined",
+@pytest.mark.asyncio
+async def test_event_reaction_presenter_converts_candidate_to_output() -> None:
+    """ActionPlanをPresentedOutputへ変換する。"""
+    candidate = ActionPlan(
+        turn_intent="event_reaction",
+        candidate_text="Welcome back.",
+        should_respond=True,
         priority=7,
         interruptible=False,
     )
 
-    output = EventReactionPresenter().present(candidate)
+    output = await EventReactionPresenter().present(candidate)
 
     assert output.text == "Welcome back."
     assert output.priority == 7

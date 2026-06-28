@@ -18,7 +18,7 @@ from iris.adapters.grpc.mappers import (
     GrpcMappingError,
     GrpcRuntimeMapper,
     identity_from_proto,
-    runtime_response_to_proto,
+    presented_output_to_proto,
     timestamp_from_datetime,
 )
 from iris.contracts.actions import PresentedOutput
@@ -44,7 +44,6 @@ from iris.core.ids import (
 )
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
-from iris.runtime.service import RuntimeResponse
 from tests.helpers.approx import approx
 
 if TYPE_CHECKING:
@@ -420,31 +419,27 @@ async def test_observation_context_actor_maps_to_identity() -> None:
     assert observation.context.metadata == {"trace_id": "abc-123"}
 
 
-def test_runtime_response_maps_to_proto() -> None:
-    """RuntimeResponseがSubmitObservationResponse protoへmapされることを確認する。"""
-    response = runtime_response_to_proto(
-        RuntimeResponse(
-            output=PresentedOutput(
-                text="hello",
-                style_hint="plain",
-                emotion_hint="calm",
-                expression_hint="smile",
-                delay_ms=10,
-                priority=3,
-                interruptible=False,
-            ),
-            correlation_id=CorrelationId("corr-1"),
-        )
+def test_presented_output_to_proto() -> None:
+    """PresentedOutputがSubmitObservationResponse内のprotoへmapされるか確認。"""
+    output = PresentedOutput(
+        text="hello",
+        style_hint="plain",
+        emotion_hint="calm",
+        expression_hint="smile",
+        delay_ms=10,
+        priority=3,
+        interruptible=False,
     )
 
-    assert response.correlation_id == "corr-1"
-    assert response.output.text == "hello"
-    assert response.output.style_hint == "plain"
-    assert response.output.emotion_hint == "calm"
-    assert response.output.expression_hint == "smile"
-    assert response.output.delay_ms == 10
-    assert response.output.priority == 3
-    assert response.output.interruptible is False
+    proto_output = presented_output_to_proto(output)
+
+    assert proto_output.text == "hello"
+    assert proto_output.style_hint == "plain"
+    assert proto_output.emotion_hint == "calm"
+    assert proto_output.expression_hint == "smile"
+    assert proto_output.delay_ms == 10
+    assert proto_output.priority == 3
+    assert proto_output.interruptible is False
 
 
 @pytest.mark.anyio

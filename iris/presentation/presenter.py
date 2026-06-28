@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
+from typing import override
+
 from iris.contracts.actions import ActionPlan, PresentedOutput
+from iris.presentation.ports import ActionPlanPresenter
 
 
-class SimplePresenter:
+class SimplePresenter(ActionPlanPresenter):
     """アクションプランのフィールドをそのまま出力に委譲するデフォルトプレゼンター."""
 
+    @override
+    def can_present(self, plan: ActionPlan) -> bool:
+        """常にTrueを返すフォールバックプレゼンター.
+
+        Returns:
+            bool: 常にTrue.
+        """
+        _ = plan
+        return True
+
+    @override
     async def present(self, plan: ActionPlan) -> PresentedOutput:
         """アクションプランを提示用出力に変換する.
 

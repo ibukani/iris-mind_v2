@@ -16,6 +16,7 @@ from iris.safety.basic_output_filter import BasicOutputSafetyGate
 from iris.safety.output_filter import AllowAllOutputGate, OutputSafetyGate
 
 if TYPE_CHECKING:
+    from iris.presentation.ports import ActionPlanPresenter
     from iris.runtime.config.safety import RuntimeSafetyConfig
 
 
@@ -25,10 +26,12 @@ def wire_presentation_suite() -> PresentationSuite:
     Returns:
         標準presenter群。
     """
-    return PresentationSuite(
-        action_plan_presenter=SimplePresenter(),
-        event_reaction_presenter=EventReactionPresenter(),
-    )
+    presenters: list[ActionPlanPresenter] = [
+        EventReactionPresenter(),
+        SimplePresenter(),
+    ]
+
+    return PresentationSuite(presenters=tuple(presenters))
 
 
 def wire_action_safety_gate() -> ActionSafetyGate:

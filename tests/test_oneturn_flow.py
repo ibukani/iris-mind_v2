@@ -15,11 +15,11 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.cognitive.action.basic import SimpleActionSelectionStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.contracts.actions import ActionPlan, PresentedOutput
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
+from iris.features.basic_action.definition import SimpleActionSelectionStep
 from iris.runtime.app import IrisApp
 from iris.safety.action_gate import GateDecision, SafetyDecision
 from tests.helpers.output_pipeline import make_output_pipeline

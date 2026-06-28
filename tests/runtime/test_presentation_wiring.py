@@ -16,8 +16,7 @@ def test_wire_presentation_suite_returns_suite() -> None:
     """標準presenter群をsuiteとして構成する。"""
     suite = wire_presentation_suite()
     assert suite is not None
-    assert suite.action_plan_presenter is not None
-    assert suite.event_reaction_presenter is not None
+    assert len(suite.presenters) >= 1
 
 
 def test_wire_output_pipeline() -> None:

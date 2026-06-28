@@ -119,7 +119,7 @@ def test_output_pipeline_orders_action_safety_presentation_and_output_safety() -
     method = _find_method(pipeline_class, "present_action_plan")
 
     check_plan_index = _first_statement_index(method, "check_plan")
-    present_index = _first_statement_index(method, "action_plan_presenter.present")
+    present_index = _first_statement_index(method, "presentation.present_action_plan")
     check_output_index = _first_statement_index(method, "check_output")
 
     assert check_plan_index < present_index < check_output_index

@@ -30,8 +30,7 @@ def make_output_pipeline(
     """
     return RuntimeOutputPipeline(
         presentation=PresentationSuite(
-            action_plan_presenter=presenter or SimplePresenter(),
-            event_reaction_presenter=EventReactionPresenter(),
+            presenters=(presenter or SimplePresenter(), EventReactionPresenter()),
         ),
         action_safety_gate=action_gate or AllowAllActionGate(),
         output_safety_gate=output_gate or AllowAllOutputGate(),

@@ -7,10 +7,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.contracts.actions import PresentedOutput
+from iris.contracts.actions import ActionPlan, PresentedOutput
 from iris.contracts.activity import ActivityKind
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
-from iris.contracts.event_reaction import EventReactionKind, ReactionCandidate
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActivityEventObservation,
@@ -29,11 +28,11 @@ from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 _OCCURRED_AT = datetime(2026, 6, 24, 11, 0, tzinfo=UTC)
 
 
-def _candidate(text: str = "test") -> ReactionCandidate:
-    return ReactionCandidate(
-        kind=EventReactionKind.ACKNOWLEDGMENT,
-        text=text,
-        reason="test",
+def _candidate(text: str = "test") -> ActionPlan:
+    return ActionPlan(
+        turn_intent="event_reaction",
+        candidate_text=text,
+        should_respond=True,
         priority=1,
     )
 
@@ -247,7 +246,7 @@ def _unauthenticated_ingress(*capabilities: ObservationCapability) -> Observatio
 
 @dataclass
 class _RecordingDecisionPipeline:
-    candidate: ReactionCandidate | None
+    candidate: ActionPlan | None
     calls: int = field(default=0, init=False)
 
     async def decide(
@@ -255,7 +254,7 @@ class _RecordingDecisionPipeline:
         observation: ActivityEventObservation,
         *,
         situation_context: SituationContextSnapshot,
-    ) -> ReactionCandidate | None:
+    ) -> ActionPlan | None:
         del observation, situation_context
         self.calls += 1
         return self.candidate
@@ -266,10 +265,10 @@ class _RecordingOutputPipeline:
     output: PresentedOutput
     calls: int = field(default=0, init=False)
 
-    async def present_reaction_candidate(
+    async def present_action_plan(
         self,
-        candidate: ReactionCandidate,
+        plan: ActionPlan,
     ) -> PresentedOutput:
-        del candidate
+        del plan
         self.calls += 1
         return self.output

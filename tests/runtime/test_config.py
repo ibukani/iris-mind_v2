@@ -12,7 +12,6 @@ import pytest
 
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
 from iris.adapters.memory.fake import FakeMemoryStore
-from iris.cognitive.action.response import ResponseGenerationStep
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActorMessageObservation,
@@ -20,6 +19,7 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+from iris.features.chat.definition import ResponseGenerationStep
 from iris.features.proactive_talk import define_proactive_talk_feature
 import iris.runtime.config as config_pkg
 from iris.runtime.config import (

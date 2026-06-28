@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from iris.contracts.event_reaction import ReactionCandidate
+    from iris.contracts.actions import ActionPlan
     from iris.contracts.observations import ActivityEventObservation
     from iris.contracts.workspace_context import SituationContextSnapshot
     from iris.features.definition import ActivityReactionPlanner
@@ -25,15 +25,15 @@ class EventReactionDecisionPipeline:
         observation: ActivityEventObservation,
         *,
         situation_context: SituationContextSnapshot,
-    ) -> ReactionCandidate | None:
-        """プランナーを順に実行し、ReactionCandidateを返す。
+    ) -> ActionPlan | None:
+        """プランナーを順に実行し、ActionPlanを返す。
 
         Args:
             observation: 処理対象の観測。
             situation_context: ランタイムから組み立てられた状況スナップショット。
 
         Returns:
-            ReactionCandidate | None: 反応候補があればそれ、なければNone。
+            ActionPlan | None: 反応候補があればそれ、なければNone。
         """
         for planner in self.planners:
             decision = planner.plan(

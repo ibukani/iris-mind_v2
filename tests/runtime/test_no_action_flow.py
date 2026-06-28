@@ -18,7 +18,11 @@ from tests.helpers.output_pipeline import make_output_pipeline
 
 
 class FailingPresenter:
-    """Presenter stub that raises if called."""
+    """意図的に失敗するPresenter。"""
+
+    def can_present(self, plan: ActionPlan) -> bool:
+        _ = plan
+        return True
 
     async def present(self, plan: ActionPlan) -> PresentedOutput:
         """Raise an error to verify presenter is not invoked.
@@ -32,11 +36,15 @@ class FailingPresenter:
 
 
 class SpyPresenter:
-    """Presenter stub that records calls."""
+    """プレゼンテーション呼び出しを記録する。"""
 
     def __init__(self) -> None:
         """Initialize empty call log."""
         self.calls: list[ActionPlan] = []
+
+    def can_present(self, plan: ActionPlan) -> bool:
+        _ = plan
+        return True
 
     async def present(self, plan: ActionPlan) -> PresentedOutput:
         """Record the plan and return a PresentedOutput.

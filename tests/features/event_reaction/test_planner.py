@@ -8,7 +8,6 @@ import pytest
 
 from iris.contracts.activity import ActivityKind
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
-from iris.contracts.event_reaction import EventReactionKind
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActivityEventObservation,
@@ -106,8 +105,8 @@ def test_voice_joined_available_returns_greeting(
 
     assert decision.should_react is True
     assert decision.candidate is not None
-    assert decision.candidate.kind is EventReactionKind.GREETING
-    assert decision.candidate.text == "Welcome back."
+    assert decision.candidate.turn_intent == "event_reaction"
+    assert decision.candidate.candidate_text == "Welcome back."
     assert decision.candidate.priority == 10
 
 
@@ -124,7 +123,7 @@ def test_app_opened_available_returns_greeting(
 
     assert decision.should_react is True
     assert decision.candidate is not None
-    assert decision.candidate.text == "Welcome back. I am here if you want to talk."
+    assert decision.candidate.candidate_text == "Welcome back. I am here if you want to talk."
     assert decision.candidate.priority == 5
 
 

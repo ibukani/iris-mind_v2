@@ -5,12 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from iris.contracts.actions import ActionPlan
 from iris.contracts.activity import ActivityKind
-from iris.contracts.event_reaction import (
-    EventReactionDecision,
-    EventReactionKind,
-    ReactionCandidate,
-)
+from iris.contracts.event_reaction import EventReactionDecision
 
 if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
@@ -81,22 +78,22 @@ def _status_name(status: AvailabilityStatus | None) -> str:
 
 def _candidate_for(
     kind: ActivityKind, provider: EventReactionTemplateProvider
-) -> ReactionCandidate | None:
+) -> ActionPlan | None:
     text = provider.text_for_activity(kind)
     if text is None:
         return None
     if kind is ActivityKind.VOICE_JOINED:
-        return ReactionCandidate(
-            kind=EventReactionKind.GREETING,
-            text=text,
-            reason="actor joined voice channel",
+        return ActionPlan(
+            turn_intent="event_reaction",
+            candidate_text=text,
+            should_respond=True,
             priority=10,
         )
     if kind is ActivityKind.APP_OPENED:
-        return ReactionCandidate(
-            kind=EventReactionKind.GREETING,
-            text=text,
-            reason="actor opened app",
+        return ActionPlan(
+            turn_intent="event_reaction",
+            candidate_text=text,
+            should_respond=True,
             priority=5,
         )
     return None

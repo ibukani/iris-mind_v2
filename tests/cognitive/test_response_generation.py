@@ -6,12 +6,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.cognitive.action.response import (
-    GeneratedResponse,
-    ResponseGenerationStep,
-    ResponsePrompt,
-    build_response_prompt,
-)
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import StepStatus
 from iris.cognitive.perception.basic import SimplePerceptionStep
@@ -23,6 +17,12 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ObservationId, SessionId
+from iris.features.chat.definition import (
+    GeneratedResponse,
+    ResponseGenerationStep,
+    ResponsePrompt,
+    build_response_prompt,
+)
 from tests.helpers.immutability import assert_frozen_field
 
 

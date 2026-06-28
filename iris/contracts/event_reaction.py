@@ -2,33 +2,9 @@
 
 from __future__ import annotations
 
-from enum import Enum, auto
+from pydantic import BaseModel, ConfigDict
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from iris.contracts.metadata import ImmutableMetadata
-from iris.core.metadata import immutable_metadata
-
-
-class EventReactionKind(Enum):
-    """イベント反応のカテゴリ。"""
-
-    GREETING = auto()
-    ACKNOWLEDGMENT = auto()
-    SILENT = auto()
-
-
-class ReactionCandidate(BaseModel):
-    """生成候補となる1つのイベント反応。"""
-
-    model_config = ConfigDict(frozen=True)
-
-    kind: EventReactionKind
-    text: str
-    reason: str
-    priority: int = 0
-    interruptible: bool = True
-    metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
+from iris.contracts.actions import ActionPlan
 
 
 class EventReactionDecision(BaseModel):
@@ -38,4 +14,4 @@ class EventReactionDecision(BaseModel):
 
     should_react: bool
     reason: str
-    candidate: ReactionCandidate | None = None
+    candidate: ActionPlan | None = None

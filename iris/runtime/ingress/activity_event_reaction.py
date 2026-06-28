@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Protocol
 from iris.contracts.actions import PresentedOutput
 
 if TYPE_CHECKING:
-    from iris.contracts.event_reaction import ReactionCandidate
+    from iris.contracts.actions import ActionPlan
     from iris.contracts.observations import ActivityEventObservation
     from iris.contracts.workspace_context import SituationContextSnapshot
     from iris.runtime.ingress.observation_ingress import ObservationIngressContext
@@ -23,19 +23,19 @@ class EventReactionDecisionPipelinePort(Protocol):
         observation: ActivityEventObservation,
         *,
         situation_context: SituationContextSnapshot,
-    ) -> ReactionCandidate | None:
-        """反応条件を満たせばReactionCandidateを返す。"""
+    ) -> ActionPlan | None:
+        """反応条件を満たせばActionPlanを返す。"""
         ...
 
 
 class ReactionOutputPipelinePort(Protocol):
-    """リアクション候補を安全な提示出力へ変換する境界。"""
+    """アクションプランを安全な提示出力へ変換する境界。"""
 
-    async def present_reaction_candidate(
+    async def present_action_plan(
         self,
-        candidate: ReactionCandidate,
+        plan: ActionPlan,
     ) -> PresentedOutput:
-        """候補をpresentation/output safetyへ渡す。"""
+        """プランをpresentation/output safetyへ渡す。"""
         ...
 
 
@@ -63,7 +63,7 @@ class ActivityEventReactionHandler:
         Returns:
             PresentedOutput: reaction 出力、または no-send。
         """
-        candidate: ReactionCandidate | None = None
+        candidate: ActionPlan | None = None
         if situation_context is not None and self.trust_policy.can_react_to_activity_event(ingress):
             candidate = await self.decision_pipeline.decide(
                 observation,
@@ -71,6 +71,6 @@ class ActivityEventReactionHandler:
             )
 
         if candidate is not None:
-            return await self.output_pipeline.present_reaction_candidate(candidate)
+            return await self.output_pipeline.present_action_plan(candidate)
 
         return PresentedOutput(text=None)

@@ -107,7 +107,7 @@ async def test_voice_joined_returns_reaction_candidate(
     )
 
     assert candidate is not None
-    assert candidate.text == "Welcome back."
+    assert candidate.candidate_text == "Welcome back."
     assert candidate.priority == 10
 
 
@@ -124,7 +124,7 @@ async def test_app_opened_returns_reaction_candidate(
     )
 
     assert candidate is not None
-    assert candidate.text == "Welcome back. I am here if you want to talk."
+    assert candidate.candidate_text == "Welcome back. I am here if you want to talk."
     assert candidate.priority == 5
 
 
