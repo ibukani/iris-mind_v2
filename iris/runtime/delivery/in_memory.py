@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import override
@@ -132,14 +132,15 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             raise DeliveryOutboxError(msg)
         _require_matching_lease(item, lease_id)
         status = _delivery_status_from_action_status(result.status)
-        completed = replace(
-            item,
+        updates = replace(
+            _current_updates(item),
             status=status,
             updated_at=completed_at,
             lease_id=None,
             lease_expires_at=None,
             last_error_reason=result.error_reason,
         )
+        completed = _rebuild_envelope(item, updates)
         self._items[delivery_id] = completed
         self._report_index[delivery_id] = history | {current}
         return completed
@@ -183,8 +184,8 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             if item.attempts >= item.max_attempts
             else DeliveryStatus.PENDING
         )
-        released = replace(
-            item,
+        updates = replace(
+            _current_updates(item),
             status=status,
             updated_at=released_at,
             not_before=retry_after if status is DeliveryStatus.PENDING else item.not_before,
@@ -192,6 +193,7 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             lease_expires_at=None,
             last_error_reason=result.error_reason,
         )
+        released = _rebuild_envelope(item, updates)
         self._items[delivery_id] = released
         self._report_index[delivery_id] = history | {current}
         return released
@@ -209,26 +211,28 @@ class InMemoryDeliveryOutbox(DeliveryOutbox):
             A LEASED copy, or a FAILED_PERMANENT copy when max attempts is exceeded.
         """
         if item.attempts >= item.max_attempts:
-            failed = replace(
-                item,
+            updates = replace(
+                _current_updates(item),
                 status=DeliveryStatus.FAILED_PERMANENT,
                 updated_at=now,
                 lease_id=None,
                 lease_expires_at=None,
                 last_error_reason="max_attempts_exceeded",
             )
+            failed = _rebuild_envelope(item, updates)
             self._items[item.delivery_id] = failed
             return failed
         self._lease_counter += 1
         lease_id = LeaseId(f"lease-{self._lease_counter}")
-        return replace(
-            item,
+        updates = replace(
+            _current_updates(item),
             status=DeliveryStatus.LEASED,
             updated_at=now,
             attempts=item.attempts + 1,
             lease_id=lease_id,
             lease_expires_at=now + timedelta(seconds=lease_seconds),
         )
+        return _rebuild_envelope(item, updates)
 
     def _get(self, delivery_id: DeliveryId) -> DeliveryEnvelope:
         """Return item or raise a transition error.
@@ -253,6 +257,60 @@ def _envelope_sort_key(item: DeliveryEnvelope) -> tuple[datetime, DeliveryId]:
         Tuple of created_at and delivery_id for stable ordering.
     """
     return (item.created_at, item.delivery_id)
+
+
+@dataclass(frozen=True)
+class _EnvelopeUpdates:
+    """Delivery state transitionで更新可能な型付き差分。"""
+
+    status: DeliveryStatus
+    updated_at: datetime
+    not_before: datetime | None
+    attempts: int
+    lease_id: LeaseId | None
+    lease_expires_at: datetime | None
+    blocked_reason: str | None
+    last_error_reason: str | None
+
+
+def _current_updates(item: DeliveryEnvelope) -> _EnvelopeUpdates:
+    return _EnvelopeUpdates(
+        status=item.status,
+        updated_at=item.updated_at,
+        not_before=item.not_before,
+        attempts=item.attempts,
+        lease_id=item.lease_id,
+        lease_expires_at=item.lease_expires_at,
+        blocked_reason=item.blocked_reason,
+        last_error_reason=item.last_error_reason,
+    )
+
+
+def _rebuild_envelope(
+    item: DeliveryEnvelope,
+    updates: _EnvelopeUpdates,
+) -> DeliveryEnvelope:
+    """型付きstate差分から配送envelopeを再検証する。
+
+    Returns:
+        再構築したenvelope。
+    """
+    return DeliveryEnvelope(
+        delivery_id=item.delivery_id,
+        action=item.action,
+        target=item.target,
+        status=updates.status,
+        created_at=item.created_at,
+        updated_at=updates.updated_at,
+        not_before=updates.not_before,
+        attempts=updates.attempts,
+        max_attempts=item.max_attempts,
+        idempotency_key=item.idempotency_key,
+        lease_id=updates.lease_id,
+        lease_expires_at=updates.lease_expires_at,
+        blocked_reason=updates.blocked_reason,
+        last_error_reason=updates.last_error_reason,
+    )
 
 
 type _ReportFingerprint = tuple[

@@ -55,10 +55,10 @@ from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.delivery import wire_app_action_broker, wire_delivery_safety_gate
 from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipeline
+from iris.runtime.wiring.features import RuntimeExtensionComposition, wire_runtime_extensions
 from iris.runtime.wiring.grpc import create_grpc_server
 from iris.runtime.wiring.scheduler import wire_runtime_scheduler, wire_scheduler_runner
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
-from iris.safety.output_filter import AllowAllOutputGate
 
 
 @dataclass(frozen=True)
@@ -77,6 +77,7 @@ def build_runtime_service(
     app: IrisApp,
     stores: RuntimeStateStores,
     *,
+    extensions: RuntimeExtensionComposition,
     target_stale_after_seconds: float,
     now: Callable[[], datetime] | None = None,
 ) -> IrisRuntimeService:
@@ -88,6 +89,7 @@ def build_runtime_service(
     Args:
         app: アプリケーション定義。
         stores: ランタイムstateストア。
+        extensions: フィーチャー定義と共有出力境界。
         target_stale_after_seconds: target が stale になるまでの idle 秒数。
         now: 現在時刻を返す関数。省略時は `datetime.now(UTC)`。
 
@@ -124,12 +126,11 @@ def build_runtime_service(
         availability_resolver=availability_resolver,
         now=current_now,
     )
-    decision_pipeline = wire_event_reaction_decision_pipeline([])
-    # Note: we need to pass features from app config later, but for now empty sequence
+    decision_pipeline = wire_event_reaction_decision_pipeline(extensions.features)
     activity_event_reaction_handler = ActivityEventReactionHandler(
         trust_policy=trust_policy,
         decision_pipeline=decision_pipeline,
-        output_pipeline=app._output_pipeline, # temporary access
+        output_pipeline=extensions.output_pipeline,
     )
     return IrisRuntimeService(
         app,
@@ -162,15 +163,18 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         ランタイムコンポーネント。
     """
     stores = wire_runtime_state(config)
+    extensions = wire_runtime_extensions(config.safety)
     app: IrisApp = build_app_from_config(
         config,
         memory_store=stores.memory_store,
         relationship_store=stores.relationship_store,
         affect_store=stores.affect_store,
+        output_pipeline=extensions.output_pipeline,
     )
     runtime_service = build_runtime_service(
         app,
         stores,
+        extensions=extensions,
         target_stale_after_seconds=config.scheduler.target_stale_after_seconds,
     )
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)

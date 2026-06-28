@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -20,7 +19,7 @@ async def test_actor_joined_adds_and_replaces_occupant() -> None:
     """同じactorのjoinがoccupantを置換することを確認する。"""
     store = InMemorySpaceOccupancyStore()
     first = _occupant()
-    replacement = replace(first, last_seen_at=_NOW + timedelta(seconds=2))
+    replacement = first.model_copy(update={"last_seen_at": _NOW + timedelta(seconds=2)})
 
     await store.actor_joined(space_id=_SPACE_ID, occupant=first)
     await store.actor_joined(space_id=_SPACE_ID, occupant=replacement)

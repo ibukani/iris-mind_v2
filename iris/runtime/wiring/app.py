@@ -13,20 +13,16 @@ from iris.runtime.wiring.cognitive import (
     wire_text_response_cognitive_cycle,
 )
 from iris.runtime.wiring.llm import LLMClientFactory
-from iris.runtime.wiring.memory import (
-    SQLiteFTS5MemoryRetriever,
-    wire_sqlite_hybrid_memory_retriever,
-)
-from iris.runtime.wiring.presentation import wire_output_pipeline
+from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
 
 if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
-    from iris.adapters.memory.vector_index import EmbeddingFunction
     from iris.cognitive.memory.retrieval import MemoryRetriever
     from iris.contracts.affect import AffectStore
-    from iris.contracts.memory import MemoryStore, VectorMemoryIndex
+    from iris.contracts.memory import MemoryStore
     from iris.contracts.relationship import RelationshipStore
     from iris.runtime.config import IrisRuntimeConfig
+    from iris.runtime.output_pipeline import RuntimeOutputPipeline
 
 
 def wire_default_app(
@@ -57,7 +53,7 @@ def build_app_from_config(
     memory_store: MemoryStore,
     relationship_store: RelationshipStore,
     affect_store: AffectStore,
-    embed_text: EmbeddingFunction | None = None,
+    output_pipeline: RuntimeOutputPipeline,
 ) -> IrisApp:
     """ランタイム設定から IrisApp を構築する。
 
@@ -73,15 +69,8 @@ def build_app_from_config(
     model = factory.resolve_model(model_config, config)
 
     memory_retriever: MemoryRetriever | None = None
-    vector_index: VectorMemoryIndex | None = None
     if isinstance(memory_store, SQLiteMemoryStore):
-        if embed_text is not None:
-            memory_retriever, vector_index = wire_sqlite_hybrid_memory_retriever(
-                store=memory_store,
-                embed_text=embed_text,
-            )
-        else:
-            memory_retriever = SQLiteFTS5MemoryRetriever(memory_store)
+        memory_retriever = SQLiteFTS5MemoryRetriever(memory_store)
 
     cycle = wire_policy_affect_memory_aware_text_response_cognitive_cycle(
         stores=CognitiveCycleStores(
@@ -89,7 +78,7 @@ def build_app_from_config(
             relationship_store=relationship_store,
             affect_store=affect_store,
             memory_retriever=memory_retriever,
-            vector_index=vector_index,
+            vector_index=None,
         ),
         llm_client=client,
         response_options=CognitiveResponseOptions(
@@ -100,5 +89,5 @@ def build_app_from_config(
     )
     return IrisApp(
         cycle=cycle,
-        output_pipeline=wire_output_pipeline(safety_config=config.safety),
+        output_pipeline=output_pipeline,
     )

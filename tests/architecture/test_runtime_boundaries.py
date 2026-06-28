@@ -23,6 +23,7 @@ ENTRYPOINT_RUNTIME_FILES: frozenset[Path] = frozenset(
     {
         Path("iris/runtime/app.py"),
         Path("iris/runtime/cli.py"),
+        Path("iris/runtime/server.py"),
     }
 )
 
@@ -102,7 +103,7 @@ def test_runtime_wiring_does_not_import_feature_internals() -> None:
         for imported in _imports(path):
             if not imported.startswith("iris.features."):
                 continue
-            
+
             parts = imported.split(".")
             # iris.features.<feature_name>.<internal>
             if len(parts) > 3 and parts[-1] in forbidden_internals:

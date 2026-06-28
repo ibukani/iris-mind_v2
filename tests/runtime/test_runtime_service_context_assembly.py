@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import override
+from typing import TYPE_CHECKING, override
 
 import pytest
 
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.cognitive.workspace.frame import SituationContextSnapshot, WorkspaceFrame
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
 from iris.contracts.availability import AvailabilityStatus
 from iris.contracts.identity import ActorKind, Identity
@@ -20,6 +19,7 @@ from iris.contracts.observations import (
 )
 from iris.contracts.presence import PresenceSnapshot, PresenceStatus
 from iris.contracts.space_occupancy import SpaceOccupant
+from iris.contracts.workspace_context import SituationContextSnapshot
 from iris.core.ids import (
     AccountId,
     ActivityId,
@@ -30,6 +30,9 @@ from iris.core.ids import (
     SessionId,
     SpaceId,
 )
+
+if TYPE_CHECKING:
+    from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.runtime.app import IrisApp
 from iris.runtime.ingress.observation_ingress import unauthenticated_external_ingress
 from iris.runtime.service import IrisRuntimeService, ObservationEnvelope

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -34,10 +33,12 @@ def _target(subject: str, session: str = "session-1") -> SchedulerTarget:
 async def test_target_store_upserts_by_stable_key() -> None:
     """Upsert replaces existing target with same provider route and session."""
     store = InMemorySchedulerTargetStore()
-    t1 = replace(
-        _target("user-1"),
-        last_observed_at=datetime(2026, 1, 1, tzinfo=UTC),
-        stale_after=datetime(2026, 1, 1, 1, tzinfo=UTC),
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    t1 = _target("user-1").model_copy(
+        update={
+            "last_observed_at": now,
+            "stale_after": datetime(2026, 1, 1, 1, tzinfo=UTC),
+        }
     )
 
     await store.upsert_target(t1)
@@ -46,10 +47,11 @@ async def test_target_store_upserts_by_stable_key() -> None:
         attempted_at=datetime(2026, 1, 2, tzinfo=UTC),
     )
 
-    t2 = replace(
-        _target("user-1"),
-        last_observed_at=datetime(2026, 1, 2, 1, tzinfo=UTC),
-        stale_after=datetime(2026, 1, 2, 2, tzinfo=UTC),
+    t2 = t1.model_copy(
+        update={
+            "last_observed_at": datetime(2026, 1, 2, 1, tzinfo=UTC),
+            "stale_after": datetime(2026, 1, 2, 2, tzinfo=UTC),
+        }
     )
     await store.upsert_target(t2)
 
@@ -77,9 +79,9 @@ async def test_target_store_filters_stale_targets() -> None:
     store = InMemorySchedulerTargetStore()
     now = datetime(2026, 1, 1, tzinfo=UTC)
 
-    stale = replace(_target("stale"), stale_after=now - timedelta(seconds=1))
-    active = replace(_target("active"), stale_after=now + timedelta(seconds=1))
-    open_target = replace(_target("open"), stale_after=None)
+    stale = _target("stale").model_copy(update={"stale_after": now - timedelta(seconds=1)})
+    active = _target("active").model_copy(update={"stale_after": now + timedelta(seconds=1)})
+    open_target = _target("open").model_copy(update={"stale_after": None})
 
     await store.upsert_target(stale)
     await store.upsert_target(active)

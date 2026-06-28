@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from iris.contracts.metadata import ImmutableMetadata
 from iris.core.ids import SpaceId
-from iris.core.metadata import EMPTY_METADATA, immutable_metadata
+from iris.core.metadata import immutable_metadata
 
 
 class SpaceKind(StrEnum):
@@ -33,9 +33,4 @@ class InteractionSpace(BaseModel):
     space_id: SpaceId
     space_kind: SpaceKind
     display_name: str
-    metadata: Mapping[str, str] = Field(default_factory=dict)
-
-    def model_post_init(self, __context: object) -> None:
-        """メタデータが強固に不変であることを保証する。"""
-        if self.metadata is not EMPTY_METADATA:
-            object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+    metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)

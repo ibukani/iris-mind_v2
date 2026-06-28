@@ -2,32 +2,26 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, override
+from typing import override
 
 from sqlalchemy import select
 
-from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
-from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
+from iris.adapters.persistence.sqlite.context import (
+    SQLiteDatabaseInput,
+    resolve_database_manager,
+)
 from iris.adapters.persistence.sqlite.schema.relationship import RelationshipModel
 from iris.contracts.relationship import RelationshipSnapshotRecord, RelationshipStore
 from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.core.ids import ActorId, ObservationId
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
 
 class SQLiteRelationshipStore(RelationshipStore):
     """ActorId を主キーにした SQLite relationship state store."""
 
-    def __init__(self, db: str | Path | AsyncDatabaseManager | SQLitePersistenceContext) -> None:
+    def __init__(self, db: SQLiteDatabaseInput) -> None:
         """SQLite DB path を受け取り、manager を初期化する."""
-        if hasattr(db, "db"):
-            self._manager = db.db  # type: ignore
-        elif isinstance(db, AsyncDatabaseManager):
-            self._manager = db
-        else:
-            self._manager = AsyncDatabaseManager(db)  # type: ignore
+        self._manager = resolve_database_manager(db)
 
     async def close(self) -> None:
         """Close the database manager."""
@@ -81,10 +75,12 @@ class SQLiteRelationshipStore(RelationshipStore):
         """
         now = now_utc()
         current = await self.get(record.actor_id)
-        stored = record.model_copy(update={
-            "created_at": current.created_at if current else record.created_at or now,
-            "updated_at": now,
-        })
+        stored = record.model_copy(
+            update={
+                "created_at": current.created_at if current else record.created_at or now,
+                "updated_at": now,
+            }
+        )
         async with self._manager.transaction() as session:
             stmt = select(RelationshipModel).where(
                 RelationshipModel.actor_id == str(stored.actor_id)

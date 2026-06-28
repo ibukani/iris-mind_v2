@@ -55,7 +55,7 @@ class AccountBackedIdentityResolver(IdentityResolver):
             )
             profile = await self._account_store.put(profile)
         elif profile.display_name != account_ref.display_name:
-            profile = dataclasses.replace(profile, display_name=account_ref.display_name)
+            profile = profile.model_copy(update={"display_name": account_ref.display_name})
             profile = await self._account_store.put(profile)
 
         # Determine actor_id

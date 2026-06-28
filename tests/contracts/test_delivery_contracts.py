@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import MISSING, fields
-
 from iris.contracts.delivery import (
     TERMINAL_DELIVERY_STATUSES,
     DeliveryEnvelope,
@@ -49,7 +47,4 @@ def test_delivery_target_can_hold_provider_route() -> None:
 
 def test_delivery_envelope_requires_idempotency_key_by_contract_use() -> None:
     """DeliveryEnvelope exposes idempotency key as a required constructor field."""
-    field_by_name = {field.name: field for field in fields(DeliveryEnvelope)}
-    idempotency_field = field_by_name["idempotency_key"]
-    assert idempotency_field.default is MISSING
-    assert idempotency_field.default_factory is MISSING
+    assert DeliveryEnvelope.model_fields["idempotency_key"].is_required()

@@ -11,8 +11,6 @@ from typing import TYPE_CHECKING
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.service import CognitiveCycle
 from iris.contracts.actions import ActionPlan, PresentedOutput
-from iris.presentation.suite import PresentationSuite
-from iris.runtime.output_pipeline import RuntimeOutputPipeline
 from iris.runtime.wiring.presentation import wire_output_pipeline
 
 if TYPE_CHECKING:
@@ -20,8 +18,9 @@ if TYPE_CHECKING:
 
     from iris.cognitive.cycle.models import CycleResult, PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
-    from iris.cognitive.workspace.frame import SituationContextSnapshot
     from iris.contracts.observations import Observation
+    from iris.contracts.workspace_context import SituationContextSnapshot
+    from iris.runtime.output_pipeline import RuntimeOutputPipeline
 
 
 class IrisApp:
@@ -87,5 +86,5 @@ class IrisApp:
         plan: ActionPlan = cycle_result.selected_plan
         if plan.is_no_action:
             return PresentedOutput(text=None)
-        
+
         return await self._output_pipeline.present_action_plan(plan)

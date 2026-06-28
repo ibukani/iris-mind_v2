@@ -30,6 +30,7 @@ from iris.runtime.ingress.observation_ingress import (
 )
 from iris.runtime.server import build_runtime_service
 from iris.runtime.service import ObservationEnvelope
+from iris.runtime.wiring.features import wire_runtime_extensions
 from iris.runtime.wiring.state import wire_runtime_state
 
 if TYPE_CHECKING:
@@ -69,9 +70,11 @@ async def test_build_runtime_service_wires_context_availability_for_text_observa
     """Production 配線で text 観測前に統合された state が situation_context へ届く。"""
     stores = wire_runtime_state(default_runtime_config())
     capture = _CaptureFrameStep()
+    extensions = wire_runtime_extensions()
     service = build_runtime_service(
-        IrisApp(steps=[capture]),
+        IrisApp(steps=[capture], output_pipeline=extensions.output_pipeline),
         stores,
+        extensions=extensions,
         target_stale_after_seconds=604800.0,
         now=lambda: _RECEIVED_AT,
     )

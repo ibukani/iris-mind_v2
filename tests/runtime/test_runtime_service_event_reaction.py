@@ -21,6 +21,7 @@ from iris.contracts.observations import (
 )
 from iris.contracts.presence import PresenceStatus
 from iris.core.ids import ActorId, ObservationId, SessionId, SpaceId
+from iris.features.event_reaction import define_event_reaction_feature
 from iris.runtime.app import IrisApp
 from iris.runtime.config import default_runtime_config
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
@@ -38,13 +39,16 @@ from iris.runtime.service import (
 from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
-from iris.features.event_reaction.definition import define_event_reaction_feature
 from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipeline
+from iris.runtime.wiring.features import wire_runtime_extensions
+from iris.runtime.wiring.presentation import wire_output_pipeline
 from iris.runtime.wiring.state import wire_runtime_state
 from iris.safety.action_gate import GateDecision, SafetyDecision
 
 if TYPE_CHECKING:
     from iris.contracts.actions import PresentedOutput
+    from iris.runtime.config import IrisRuntimeConfig
+    from iris.runtime.output_pipeline import RuntimeOutputPipeline
 
 
 _OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
@@ -109,6 +113,19 @@ class _BlockAllOutputGate:
         )
 
 
+def _blocked_output_pipeline(config: IrisRuntimeConfig) -> RuntimeOutputPipeline:
+    default = wire_output_pipeline(safety_config=config.safety)
+    return type(default)(
+        presentation=default.presentation,
+        action_safety_gate=default.action_safety_gate,
+        output_safety_gate=_BlockAllOutputGate(),
+    )
+
+
+def _received_at() -> datetime:
+    return _RECEIVED_AT
+
+
 def _presence_observation() -> PresenceSignalObservation:
     return PresenceSignalObservation(
         observation_id=ObservationId("obs-presence"),
@@ -162,14 +179,15 @@ def service_setup() -> tuple[IrisRuntimeService, _CaptureFrameStep]:
     config = default_runtime_config()
     stores = wire_runtime_state(config)
     capture = _CaptureFrameStep()
-    from iris.runtime.wiring.presentation import wire_output_pipeline
+    extensions = wire_runtime_extensions(config.safety)
     app = IrisApp(
         steps=[capture],
-        output_pipeline=wire_output_pipeline(safety_config=config.safety)
+        output_pipeline=extensions.output_pipeline,
     )
     service: IrisRuntimeService = build_runtime_service(
         app,
         stores,
+        extensions=extensions,
         now=lambda: _RECEIVED_AT,
         target_stale_after_seconds=604800.0,
     )
@@ -378,22 +396,15 @@ async def test_blocking_output_gate_prevents_sendable_reaction() -> None:
     """Output safety gateがBLOCKするとevent reaction出力は送信されない。"""
     config = default_runtime_config()
     stores = wire_runtime_state(config)
-    capture = _CaptureFrameStep()
-    from iris.runtime.wiring.presentation import wire_output_pipeline
-    app = IrisApp(
-        steps=[capture],
-        output_pipeline=wire_output_pipeline(safety_config=config.safety)
-    )
+    output_pipeline = _blocked_output_pipeline(config)
+    app = IrisApp(steps=[_CaptureFrameStep()], output_pipeline=output_pipeline)
 
     trust_policy = ObservationTrustPolicy()
-
-    def _now() -> datetime:
-        return _RECEIVED_AT
 
     presence_integrator = PresenceIntegrator(
         store=stores.presence_store,
         trust_policy=trust_policy,
-        now=_now,
+        now=_received_at,
     )
     availability_resolver = wire_availability_resolver()
     workspace_context_assembler = wire_workspace_context_assembler(
@@ -401,21 +412,14 @@ async def test_blocking_output_gate_prevents_sendable_reaction() -> None:
         presence_store=stores.presence_store,
         occupancy_store=stores.space_occupancy_store,
         availability_resolver=availability_resolver,
-        now=_now,
+        now=_received_at,
     )
     decision_pipeline = wire_event_reaction_decision_pipeline([define_event_reaction_feature()])
-
-    # Mock output gate within pipeline
-    app._output_pipeline = type(app._output_pipeline)(
-        presentation=app._output_pipeline.presentation,
-        action_safety_gate=app._output_pipeline.action_safety_gate,
-        output_safety_gate=_BlockAllOutputGate(),
-    )
 
     handler = ActivityEventReactionHandler(
         trust_policy=trust_policy,
         decision_pipeline=decision_pipeline,
-        output_pipeline=app._output_pipeline,
+        output_pipeline=output_pipeline,
     )
 
     service = IrisRuntimeService(

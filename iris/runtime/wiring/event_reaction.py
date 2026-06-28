@@ -9,7 +9,7 @@ from iris.runtime.ingress.event_reaction_decision_pipeline import EventReactionD
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from iris.features.definition import FeatureDefinition
+    from iris.features.definition import ActivityReactionPlanner, FeatureDefinition
 
 
 def wire_event_reaction_decision_pipeline(
@@ -23,8 +23,8 @@ def wire_event_reaction_decision_pipeline(
     Returns:
         EventReactionDecisionPipeline: 配線済みの decision pipeline。
     """
-    planners = []
+    planners: list[ActivityReactionPlanner] = []
     for feature in features:
         planners.extend(feature.activity_reaction_planners)
-    
+
     return EventReactionDecisionPipeline(planners=tuple(planners))

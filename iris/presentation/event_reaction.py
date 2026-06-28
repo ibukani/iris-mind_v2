@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from iris.contracts.actions import PresentedOutput
+from iris.presentation.ports import EventReactionCandidatePresenter
 
 if TYPE_CHECKING:
     from iris.contracts.event_reaction import ReactionCandidate
 
 
 @dataclass(frozen=True)
-class EventReactionPresenter:
+class EventReactionPresenter(EventReactionCandidatePresenter):
     """ReactionCandidateをPresentedOutputに変換する。"""
 
+    @override
     def present(self, candidate: ReactionCandidate) -> PresentedOutput:
         """候補からPresentedOutputを生成する。
 

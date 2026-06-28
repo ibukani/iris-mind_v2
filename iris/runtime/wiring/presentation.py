@@ -20,7 +20,11 @@ if TYPE_CHECKING:
 
 
 def wire_presentation_suite() -> PresentationSuite:
-    """PresentationSuite を組み立てる。"""
+    """PresentationSuite を組み立てる。
+
+    Returns:
+        標準presenter群。
+    """
     return PresentationSuite(
         action_plan_presenter=SimplePresenter(),
         event_reaction_presenter=EventReactionPresenter(),
@@ -28,14 +32,22 @@ def wire_presentation_suite() -> PresentationSuite:
 
 
 def wire_action_safety_gate() -> ActionSafetyGate:
-    """デフォルトのアクション安全性ゲートを組み立てる。"""
+    """デフォルトのアクション安全性ゲートを組み立てる。
+
+    Returns:
+        標準action safety gate。
+    """
     return AllowAllActionGate()
 
 
 def wire_output_safety_gate(
     safety_config: RuntimeSafetyConfig | None = None,
 ) -> OutputSafetyGate:
-    """安全性設定に基づいて出力安全性ゲートを組み立てる。"""
+    """安全性設定に基づいて出力安全性ゲートを組み立てる。
+
+    Returns:
+        設定に対応するoutput safety gate。
+    """
     if safety_config is not None and safety_config.mode == "basic":
         return BasicOutputSafetyGate(max_output_chars=safety_config.max_output_chars)
     return AllowAllOutputGate()
@@ -44,7 +56,11 @@ def wire_output_safety_gate(
 def wire_output_pipeline(
     safety_config: RuntimeSafetyConfig | None = None,
 ) -> RuntimeOutputPipeline:
-    """RuntimeOutputPipeline を組み立てる。"""
+    """RuntimeOutputPipeline を組み立てる。
+
+    Returns:
+        presentationとsafetyを統合した出力境界。
+    """
     return RuntimeOutputPipeline(
         presentation=wire_presentation_suite(),
         action_safety_gate=wire_action_safety_gate(),

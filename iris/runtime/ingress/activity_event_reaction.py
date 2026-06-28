@@ -8,12 +8,11 @@ from typing import TYPE_CHECKING, Protocol
 from iris.contracts.actions import PresentedOutput
 
 if TYPE_CHECKING:
-    from iris.cognitive.workspace.frame import SituationContextSnapshot
     from iris.contracts.event_reaction import ReactionCandidate
     from iris.contracts.observations import ActivityEventObservation
+    from iris.contracts.workspace_context import SituationContextSnapshot
     from iris.runtime.ingress.observation_ingress import ObservationIngressContext
     from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
-    from iris.runtime.output_pipeline import RuntimeOutputPipeline
 
 
 class EventReactionDecisionPipelinePort(Protocol):
@@ -29,13 +28,24 @@ class EventReactionDecisionPipelinePort(Protocol):
         ...
 
 
+class ReactionOutputPipelinePort(Protocol):
+    """リアクション候補を安全な提示出力へ変換する境界。"""
+
+    async def present_reaction_candidate(
+        self,
+        candidate: ReactionCandidate,
+    ) -> PresentedOutput:
+        """候補をpresentation/output safetyへ渡す。"""
+        ...
+
+
 @dataclass(frozen=True)
 class ActivityEventReactionHandler:
-    """ActivityEventObservation に対する trust check → reaction decision → output pipeline パイプライン。"""
+    """Activity eventのtrust check、reaction decision、output処理を調停する。"""
 
     trust_policy: ObservationTrustPolicy
     decision_pipeline: EventReactionDecisionPipelinePort
-    output_pipeline: RuntimeOutputPipeline
+    output_pipeline: ReactionOutputPipelinePort
 
     async def handle(
         self,

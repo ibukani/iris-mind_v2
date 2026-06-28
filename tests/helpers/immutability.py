@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 
-import pytest
 from pydantic import ValidationError
+import pytest
 
 
 def assert_frozen_field(instance: object, field_name: str, value: object) -> None:

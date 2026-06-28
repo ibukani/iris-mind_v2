@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, override
 
-from iris.contracts.memory import MutableMemoryStore
 from iris.adapters.memory.utils import matches_query, rank_text_matches
 from iris.adapters.persistence.sqlite.database import SQLiteDatabase
 from iris.contracts.memory import (
@@ -14,6 +13,7 @@ from iris.contracts.memory import (
     MemoryQuery,
     MemoryRecord,
     MemorySearchResult,
+    MutableMemoryStore,
 )
 from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.core.ids import ActorId, ObservationId, SpaceId
@@ -341,10 +341,12 @@ def _normalize_for_update(
 
     if record.created_at is None and record.updated_at is None:
         if existing_created is not None:
-            return record.model_copy(update={
-                "created_at": existing_created,
-                "updated_at": now_utc(),
-            })
+            return record.model_copy(
+                update={
+                    "created_at": existing_created,
+                    "updated_at": now_utc(),
+                }
+            )
         now = now_utc()
         return record.model_copy(update={"created_at": now, "updated_at": now})
 

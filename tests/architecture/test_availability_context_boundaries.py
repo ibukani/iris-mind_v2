@@ -70,9 +70,9 @@ def test_event_reaction_feature_does_not_import_runtime_or_adapters() -> None:
     )
 
 
-def test_event_reaction_runner_does_not_import_adapters_or_app_gateway() -> None:
-    """EventReactionRunner は adapters / app_gateway に依存してはならない。"""
-    path = PROJECT_ROOT / "iris" / "runtime" / "ingress" / "activity_event_reaction_runner.py"
+def test_event_reaction_handler_does_not_import_adapters_or_app_gateway() -> None:
+    """EventReaction handler は adapters / app_gateway に依存してはならない。"""
+    path = PROJECT_ROOT / "iris" / "runtime" / "ingress" / "activity_event_reaction.py"
     _assert_no_forbidden_imports(
         path,
         ("iris.adapters", "iris.runtime.adapters", "iris.runtime.app_gateway"),

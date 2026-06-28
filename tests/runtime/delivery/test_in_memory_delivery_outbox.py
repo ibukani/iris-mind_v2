@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -257,14 +256,15 @@ async def test_failed_item_can_retry_then_max_attempts_permanent() -> None:
 async def test_no_action_is_not_accepted_for_delivery() -> None:
     """NoAction cannot be enqueued in DeliveryOutbox."""
     outbox = InMemoryDeliveryOutbox()
-    no_action_envelope = replace(
-        envelope(),
-        action=NoAction(
-            action_id=ActionId("action-no"),
-            session_id=SessionId("session-1"),
-            correlation_id=CorrelationId("corr-1"),
-            reason="no send",
-        ),
+    no_action_envelope = envelope().model_copy(
+        update={
+            "action": NoAction(
+                action_id=ActionId("action-no"),
+                session_id=SessionId("session-1"),
+                correlation_id=CorrelationId("corr-1"),
+                reason="no send",
+            )
+        }
     )
     with pytest.raises(DeliveryOutboxError, match="no_action_not_deliverable"):
         await outbox.enqueue(no_action_envelope)
@@ -410,7 +410,7 @@ async def test_conflicting_report_after_recorded_report_raises() -> None:
         result=success_result,
         completed_at=now,
     )
-    conflicting_result = replace(success_result, status=ActionStatus.CANCELLED)
+    conflicting_result = success_result.model_copy(update={"status": ActionStatus.CANCELLED})
     with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
         await outbox.complete(
             delivery_id=leased.delivery_id,

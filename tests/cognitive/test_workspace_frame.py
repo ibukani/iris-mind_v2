@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from iris.cognitive.workspace.frame import SituationContextSnapshot, WorkspaceFrame
+from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.activity import ActivityEventRecord, ActivityKind
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.identity import ActorKind, Identity
@@ -15,6 +15,7 @@ from iris.contracts.observations import (
 )
 from iris.contracts.presence import PresenceSnapshot, PresenceStatus
 from iris.contracts.space_occupancy import SpaceOccupancySnapshot
+from iris.contracts.workspace_context import SituationContextSnapshot
 from iris.core.ids import (
     AccountId,
     ActivityId,

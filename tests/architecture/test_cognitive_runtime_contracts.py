@@ -29,8 +29,7 @@ TARGET_FILES: dict[str, Path] = {
 
 
 def _skip_if_missing(path: Path, label: str = "") -> None:
-    if not path.is_file():
-        pytest.skip(f"Target file not found: {path} ({label}) — test activates when implemented")
+    assert path.is_file(), f"Target file not found: {path} ({label})"
 
 
 def _parse(path: Path) -> ast.Module:
@@ -119,16 +118,27 @@ def _get_field_type_annotations(cls: ast.ClassDef) -> list[str]:
 # ── 1. WorkspaceFrame immutability ─────────────────────────────
 
 
-def test_workspace_frame_is_frozen_dataclass() -> None:
-    """WorkspaceFrameはfrozen dataclassでなければならない。"""
+def test_workspace_frame_is_frozen_pydantic_model() -> None:
+    """WorkspaceFrameはfrozen Pydantic modelでなければならない。"""
     path = TARGET_FILES["workspace_frame"]
     _skip_if_missing(path)
     tree = _parse(path)
     cls = _find_class(tree, "WorkspaceFrame")
     assert cls is not None, "WorkspaceFrame class not found in frame.py"
-    assert _class_has_frozen_dataclass(cls), (
-        "WorkspaceFrame must be decorated with @dataclass(frozen=True)"
-    )
+    assert any(
+        isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "model_config" for target in node.targets
+        )
+        and isinstance(node.value, ast.Call)
+        and any(
+            keyword.arg == "frozen"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value is True
+            for keyword in node.value.keywords
+        )
+        for node in cls.body
+    ), "WorkspaceFrame must declare ConfigDict(frozen=True)"
 
 
 def test_workspace_frame_no_dict_any_fields() -> None:
@@ -175,8 +185,8 @@ def test_workspace_frame_no_mutable_mapping() -> None:
 # ── 2. FrameBuilder ────────────────────────────────────────────
 
 
-def test_frame_builder_uses_replace() -> None:
-    """FrameBuilder.applyはdataclasses.replace()を使用して新しいフレームを作成しなければならない。"""
+def test_frame_builder_uses_immutable_copy() -> None:
+    """FrameBuilderはPydanticのimmutable copyで新しいframeを作成する。"""
     path = TARGET_FILES["frame_builder"]
     _skip_if_missing(path)
     tree = _parse(path)
@@ -185,17 +195,16 @@ def test_frame_builder_uses_replace() -> None:
     cls = _find_class(tree, "FrameBuilder")
     assert cls is not None, "FrameBuilder class not found"
 
-    # Check that replace() is called inside the class
-    has_replace = False
+    has_typed_copy = False
     for node in ast.walk(cls):
         if isinstance(node, ast.Call):
             func = node.func
-            if (isinstance(func, ast.Attribute) and func.attr == "replace") or (
-                isinstance(func, ast.Name) and func.id == "replace"
+            if (isinstance(func, ast.Name) and func.id == "replace") or (
+                isinstance(func, ast.Attribute) and func.attr == "replace"
             ):
-                has_replace = True
+                has_typed_copy = True
 
-    assert has_replace, "FrameBuilder must use dataclasses.replace() — no replace() call found"
+    assert has_typed_copy, "FrameBuilder must use a typed immutable copy"
 
     # Check no direct frame attribute mutation (frame.x = ...)
     for node in ast.walk(cls):
@@ -242,10 +251,7 @@ def test_cognitive_cycle_no_app_specific_imports(app_name: str) -> None:
     """CognitiveCycleはアプリ固有またはIOパッケージを直接インポートしてはならない。"""
     path = TARGET_FILES["cycle_service"]
     _skip_if_missing(path)
-    try:
-        text = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        pytest.skip("CognitiveCycle service.py does not exist yet")
+    text = path.read_text(encoding="utf-8")
     if app_name in text:
         pytest.fail(f"CognitiveCycle depends on '{app_name}' — no app/IO imports allowed")
 
@@ -324,8 +330,7 @@ def test_pipeline_step_returns_typed_result() -> None:
 def test_pipeline_step_no_forbidden_imports() -> None:
     """PipelineStepの実装はアダプター、ランタイム、機能を直接呼び出してはならない。"""
     cognitive_dir = PROJECT_ROOT / "iris" / "cognitive"
-    if not cognitive_dir.is_dir():
-        pytest.skip("iris/cognitive/ does not exist yet")
+    assert cognitive_dir.is_dir(), "iris/cognitive/ must exist"
 
     forbidden = {"iris.adapters", "iris.runtime", "iris.features"}
     violations: list[str] = []
@@ -409,8 +414,7 @@ def test_pipeline_step_does_not_mutate_frame() -> None:
     'frame'パラメータの属性をターゲットとするAssignノードをスキャンする。
     """
     cognitive_dir = PROJECT_ROOT / "iris" / "cognitive"
-    if not cognitive_dir.is_dir():
-        pytest.skip("iris/cognitive/ does not exist yet")
+    assert cognitive_dir.is_dir(), "iris/cognitive/ must exist"
 
     violations: list[str] = []
     for filepath in sorted(cognitive_dir.rglob("*.py")):
@@ -437,8 +441,7 @@ TARGET_ACTIONS_FILE: Path = PROJECT_ROOT / "iris" / "contracts" / "actions.py"
 
 def test_iris_app_checks_no_action_before_safety_gate() -> None:
     """IrisApp.process_observationはセーフティゲートを呼び出す前にis_no_actionをチェックしなければならない。"""
-    if not TARGET_APP_FILE.is_file():
-        pytest.skip("iris/runtime/app.py does not exist yet")
+    assert TARGET_APP_FILE.is_file(), "iris/runtime/app.py must exist"
 
     text = TARGET_APP_FILE.read_text(encoding="utf-8")
     tree = ast.parse(text)
@@ -465,19 +468,14 @@ def test_iris_app_checks_no_action_before_safety_gate() -> None:
     assert "is_no_action" in method_source, (
         "process_observation() must check plan.is_no_action to shortcut no-action plans"
     )
-    assert "check_plan" in method_source, (
-        "process_observation() must call action_safety_gate.check_plan()"
-    )
-    assert "present" in method_source, "process_observation() must call presenter.present()"
-    assert "check_output" in method_source, (
-        "process_observation() must call output_safety_gate.check_output()"
+    assert "present_action_plan" in method_source, (
+        "process_observation() must delegate sendable plans to RuntimeOutputPipeline"
     )
 
 
 def test_iris_app_no_action_returns_presented_output_with_no_text() -> None:
     """IrisApp.process_observationはno-actionに対してPresentedOutput(text=None)を返さなければならない。"""
-    if not TARGET_APP_FILE.is_file():
-        pytest.skip("iris/runtime/app.py does not exist yet")
+    assert TARGET_APP_FILE.is_file(), "iris/runtime/app.py must exist"
 
     text = TARGET_APP_FILE.read_text(encoding="utf-8")
     assert "PresentedOutput(text=None)" in text, (
@@ -490,8 +488,7 @@ def test_iris_app_no_action_returns_presented_output_with_no_text() -> None:
 
 def test_action_plan_is_no_action_property() -> None:
     """ActionPlan.is_no_actionはturn_intentとshould_respondをチェックするプロパティでなければならない。"""
-    if not TARGET_ACTIONS_FILE.is_file():
-        pytest.skip("iris/contracts/actions.py does not exist yet")
+    assert TARGET_ACTIONS_FILE.is_file(), "iris/contracts/actions.py must exist"
 
     tree = ast.parse(TARGET_ACTIONS_FILE.read_text(encoding="utf-8"))
     cls = None
@@ -514,8 +511,7 @@ def test_action_plan_is_no_action_property() -> None:
 
 def test_presented_output_is_sendable_property() -> None:
     """PresentedOutput.is_sendableはtextがNoneでないことをチェックするプロパティでなければならない。"""
-    if not TARGET_ACTIONS_FILE.is_file():
-        pytest.skip("iris/contracts/actions.py does not exist yet")
+    assert TARGET_ACTIONS_FILE.is_file(), "iris/contracts/actions.py must exist"
 
     tree = ast.parse(TARGET_ACTIONS_FILE.read_text(encoding="utf-8"))
     cls = None
@@ -550,8 +546,7 @@ REQUIRED_FEATURE_DEFINITION_FIELDS: set[str] = {
 
 def test_feature_definition_has_all_required_fields() -> None:
     """FeatureDefinitionは5つすべての拡張ポイントフィールドを公開しなければならない。"""
-    if not TARGET_FEATURE_DEF_FILE.is_file():
-        pytest.skip("iris/features/definition.py does not exist yet")
+    assert TARGET_FEATURE_DEF_FILE.is_file(), "iris/features/definition.py must exist"
 
     tree = ast.parse(TARGET_FEATURE_DEF_FILE.read_text(encoding="utf-8"))
     cls = None
@@ -576,8 +571,7 @@ def test_feature_definition_has_all_required_fields() -> None:
 def test_all_pipeline_step_results_are_frozen_dataclass() -> None:
     """すべてのPipelineStepResultサブクラスはfrozen dataclassでなければならない。"""
     path = TARGET_FILES["cycle_models"]
-    if not path.is_file():
-        pytest.skip("cycle/models.py does not exist yet")
+    assert path.is_file(), "cycle/models.py must exist"
 
     tree = ast.parse(path.read_text(encoding="utf-8"))
     pipeline_result_classes: list[tuple[str, bool, bool]] = []

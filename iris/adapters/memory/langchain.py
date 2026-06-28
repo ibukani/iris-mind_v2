@@ -8,8 +8,13 @@ from typing import TYPE_CHECKING, NotRequired, Protocol, TypedDict, override, ru
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-from iris.contracts.memory import MemoryStore
-from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
+from iris.contracts.memory import (
+    MemoryId,
+    MemoryQuery,
+    MemoryRecord,
+    MemorySearchResult,
+    MemoryStore,
+)
 from iris.core.ids import ActorId, SpaceId
 
 _MEMORY_ID_KEY = "iris_memory_id"

@@ -2,28 +2,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel, ConfigDict, Field
 
+from iris.contracts.actions import ActionPlan
+from iris.contracts.memory import MemorySearchResult
+from iris.contracts.observations import Observation
+from iris.contracts.policy import ActionPreference, PolicyConstraint
 from iris.contracts.workspace_context import (
     ActorContextSnapshot,
     SituationContextSnapshot,
     SpaceContextSnapshot,
 )
-
-if TYPE_CHECKING:
-    from iris.contracts.actions import ActionPlan
-    from iris.contracts.activity import ActivityEventRecord
-    from iris.contracts.availability import AvailabilitySnapshot
-    from iris.contracts.identity import Identity
-    from iris.contracts.memory import MemorySearchResult
-    from iris.contracts.observations import Observation
-    from iris.contracts.policy import ActionPreference, PolicyConstraint
-    from iris.contracts.presence import PresenceSnapshot
-    from iris.contracts.space_occupancy import SpaceOccupancySnapshot
-    from iris.contracts.spaces import InteractionSpace
-    from iris.core.ids import AccountId, ActorId, DeviceId, SpaceId
 
 
 class InterpretedInput(BaseModel):
@@ -112,3 +101,6 @@ def interpreted_input_text(frame: WorkspaceFrame) -> str | None:
     if frame.interpreted_input is None:
         return None
     return frame.interpreted_input.text
+
+
+WorkspaceFrame.model_rebuild()

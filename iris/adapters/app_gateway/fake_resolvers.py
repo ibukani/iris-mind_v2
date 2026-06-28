@@ -74,7 +74,7 @@ class FakeIdentityResolver(IdentityResolver):
         # Check explicit links from constructor mapping
         link_target = self._linked_actor_ids.get(link_key)
         if link_target and profile.linked_actor_id != link_target:
-            profile = dataclasses.replace(profile, linked_actor_id=link_target)
+            profile = profile.model_copy(update={"linked_actor_id": link_target})
             if self._account_store is None:
                 self._local_accounts_by_ref[link_key] = profile
             else:

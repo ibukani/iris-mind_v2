@@ -36,6 +36,7 @@ from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.app import build_app_from_config
 from iris.runtime.wiring.llm import LLMClientFactory
+from iris.runtime.wiring.presentation import wire_output_pipeline
 
 if TYPE_CHECKING:
     from iris.contracts.memory import MemoryQuery, MemorySearchResult
@@ -468,6 +469,7 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
         memory_store=memory_store,
         relationship_store=InMemoryRelationshipStore(),
         affect_store=InMemoryAffectStore(),
+        output_pipeline=wire_output_pipeline(safety_config=config.safety),
     )
 
     await app.process_observation(_actor_observation("I need help with suicide and tea"))
@@ -508,6 +510,7 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
         memory_store=memory_store,
         relationship_store=InMemoryRelationshipStore(),
         affect_store=InMemoryAffectStore(),
+        output_pipeline=wire_output_pipeline(safety_config=config.safety),
     )
 
     await app.process_observation(_observation("hello"))

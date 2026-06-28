@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.cognitive.workspace.frame import SituationContextSnapshot
 from iris.contracts.activity import ActivityKind
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.identity import ActorKind, Identity
@@ -15,6 +14,7 @@ from iris.contracts.observations import (
     ObservationContext,
     ObservationKind,
 )
+from iris.contracts.workspace_context import SituationContextSnapshot
 from iris.core.ids import ActorId, ObservationId, SessionId
 from iris.features.event_reaction.planner import EventReactionPlanner
 from iris.features.event_reaction.policy import default_event_reaction_policy

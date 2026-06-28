@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from iris.cognitive.affect.appraisal import AppraisalStep
@@ -9,17 +10,46 @@ from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
+from iris.features.event_reaction import define_event_reaction_feature
 from iris.features.proactive_talk import define_proactive_talk_feature
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import wire_cognitive_cycle
+from iris.runtime.wiring.presentation import wire_output_pipeline
 
 if TYPE_CHECKING:
-    from iris.contracts.memory import MemoryStore
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.cognitive.cycle.service import CognitiveCycle
+    from iris.contracts.memory import MemoryStore
     from iris.contracts.relationship import RelationshipStore
     from iris.features.definition import FeatureDefinition
+    from iris.runtime.config.safety import RuntimeSafetyConfig
+    from iris.runtime.output_pipeline import RuntimeOutputPipeline
+
+
+@dataclass(frozen=True)
+class RuntimeExtensionComposition:
+    """フィーチャーと共有出力境界を束ねた composition root 値。"""
+
+    features: tuple[FeatureDefinition, ...]
+    output_pipeline: RuntimeOutputPipeline
+
+
+def wire_runtime_extensions(
+    safety_config: RuntimeSafetyConfig | None = None,
+) -> RuntimeExtensionComposition:
+    """標準ランタイムのフィーチャーと出力境界を組み立てる。
+
+    Args:
+        safety_config: 出力安全性のランタイム設定。
+
+    Returns:
+        明示注入するフィーチャー定義と共有出力パイプライン。
+    """
+    return RuntimeExtensionComposition(
+        features=(define_event_reaction_feature(),),
+        output_pipeline=wire_output_pipeline(safety_config=safety_config),
+    )
 
 
 def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefinition:

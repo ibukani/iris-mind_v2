@@ -35,7 +35,14 @@ class AvailabilitySnapshot(BaseModel):
 
     @model_validator(mode="after")
     def _validate_confidence(self) -> AvailabilitySnapshot:
-        """Confidence が有効範囲内にあることを検証する。"""
+        """Confidence が有効範囲内にあることを検証する。
+
+        Returns:
+            検証済みsnapshot。
+
+        Raises:
+            ValueError: confidenceが範囲外の場合。
+        """
         if not 0.0 <= self.confidence <= 1.0:
             message = "confidence must be between 0.0 and 1.0"
             raise ValueError(message)

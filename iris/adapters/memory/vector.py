@@ -5,9 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import override
 
-from iris.contracts.memory import MemoryStore
 from iris.adapters.memory.utils import cosine_similarity, vector_from_embedding
-from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
+from iris.contracts.memory import (
+    MemoryId,
+    MemoryQuery,
+    MemoryRecord,
+    MemorySearchResult,
+    MemoryStore,
+)
 
 EmbeddingFunction = Callable[[str], Sequence[float]]
 

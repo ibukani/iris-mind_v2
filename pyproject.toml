@@ -96,6 +96,9 @@ parametrize-names-type = "tuple"
 parametrize-values-row-type = "tuple"
 parametrize-values-type = "list"
 
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+
 [tool.ruff.lint.isort]
 force-single-line = false
 force-sort-within-sections = true
@@ -123,6 +126,7 @@ line-ending = "lf"
 
 [tool.mypy]
 python_version = "3.13"
+plugins = ["pydantic.mypy"]
 files = ["iris", "tests", "scripts", "main.py"]
 exclude = ["iris/generated"]
 strict = true
@@ -161,6 +165,11 @@ enable_error_code = [
     "truthy-iterable",
     "unused-awaitable",
 ]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [[tool.mypy.overrides]]
 module = [

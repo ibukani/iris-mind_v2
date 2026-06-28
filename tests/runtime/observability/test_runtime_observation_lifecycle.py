@@ -31,7 +31,7 @@ from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
 from iris.runtime.wiring.app import wire_default_app
 
 if TYPE_CHECKING:
-    from iris.cognitive.workspace.frame import SituationContextSnapshot
+    from iris.contracts.workspace_context import SituationContextSnapshot
 
 
 class _RecordingObserver:

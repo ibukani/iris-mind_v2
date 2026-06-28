@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -224,14 +223,16 @@ async def test_sqlite_depth_limit_and_no_action_match_contract(tmp_path: Path) -
     with pytest.raises(DeliveryOutboxError, match="outbox_depth_exceeded"):
         await outbox.enqueue(_envelope("2"))
 
-    no_action = _envelope("3", provider="slack").model_copy(update={
-        "action": NoAction(
-            action_id=ActionId("action-no"),
-            session_id=SessionId("session-1"),
-            correlation_id=CorrelationId("corr-no"),
-            reason="silent",
-        )
-    })
+    no_action = _envelope("3", provider="slack").model_copy(
+        update={
+            "action": NoAction(
+                action_id=ActionId("action-no"),
+                session_id=SessionId("session-1"),
+                correlation_id=CorrelationId("corr-no"),
+                reason="silent",
+            )
+        }
+    )
     with pytest.raises(DeliveryOutboxError, match="no_action_not_deliverable"):
         await outbox.enqueue(no_action)
     await outbox.close()

@@ -16,7 +16,7 @@ def test_event_reaction_presenter_converts_candidate_to_output() -> None:
         interruptible=False,
     )
 
-    output = EventReactionPresenter.present(candidate)
+    output = EventReactionPresenter().present(candidate)
 
     assert output.text == "Welcome back."
     assert output.priority == 7

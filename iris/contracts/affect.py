@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from iris.core.ids import ActorId, ObservationId
 
@@ -46,12 +46,32 @@ class AffectBaselineRecord(BaseModel):
     updated_at: datetime | None = None
     version: int = 1
 
+    @field_validator("scope", mode="before")
+    @classmethod
+    def _validate_scope(cls, scope: object) -> object:
+        """未知のscopeへ安定したdomain errorを返す。
+
+        Returns:
+            Pydanticのenum変換へ渡すscope。
+
+        Raises:
+            ValueError: scopeが既知値でない場合。
+        """
+        if scope not in {AffectScope.GLOBAL, AffectScope.ACTOR}:
+            msg = f"unknown affect scope: {scope}"
+            raise ValueError(msg)
+        return scope
+
     @model_validator(mode="after")
     def _validate_record(self) -> AffectBaselineRecord:
-        """Scope と actor_id の整合性、および VAD 値を検証する。"""
-        if self.scope not in AffectScope:
-            msg = f"unknown affect scope: {self.scope}"
-            raise ValueError(msg)
+        """Scope と actor_id の整合性、および VAD 値を検証する。
+
+        Returns:
+            検証済みrecord。
+
+        Raises:
+            ValueError: scope、VAD、versionの不変条件に違反した場合。
+        """
         if self.scope == AffectScope.GLOBAL and self.actor_id is not None:
             msg = "global affect baseline must not have actor_id"
             raise ValueError(msg)

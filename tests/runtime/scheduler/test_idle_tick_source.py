@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -53,9 +52,8 @@ async def test_idle_tick_ignores_stale_targets() -> None:
     """IdleTickSource does not emit due observations for stale targets."""
     now = datetime(2026, 1, 1, tzinfo=UTC)
     store = InMemorySchedulerTargetStore()
-    target = replace(
-        make_target(observed_at=now - timedelta(seconds=601)),
-        stale_after=now - timedelta(seconds=1),
+    target = make_target(observed_at=now - timedelta(seconds=601)).model_copy(
+        update={"stale_after": now - timedelta(seconds=1)}
     )
     await store.upsert_target(target)
 
@@ -102,7 +100,9 @@ async def test_max_due_and_ordering_are_deterministic() -> None:
     base = make_target("b", observed_at=now - timedelta(seconds=1000))
     await store.upsert_target(base)
     await store.upsert_target(
-        replace(base, route=replace(base.route, provider_subject=ExternalRef("a")))
+        base.model_copy(
+            update={"route": base.route.model_copy(update={"provider_subject": ExternalRef("a")})}
+        )
     )
     source = IdleTickSource(store, policy=IdleTickSchedulePolicy(max_due_per_run=1))
     due = await source.due_observations(now)

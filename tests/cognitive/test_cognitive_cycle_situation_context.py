@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import override
+from typing import TYPE_CHECKING, override
 
 import pytest
 
@@ -11,7 +11,6 @@ from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.cycle.service import CognitiveCycle
-from iris.cognitive.workspace.frame import SituationContextSnapshot, WorkspaceFrame
 from iris.contracts.actions import ActionPlan
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.identity import ActorKind, Identity
@@ -20,6 +19,7 @@ from iris.contracts.observations import (
     ObservationContext,
     ObservationKind,
 )
+from iris.contracts.workspace_context import SituationContextSnapshot
 from iris.core.ids import (
     AccountId,
     ActorId,
@@ -29,6 +29,9 @@ from iris.core.ids import (
     SessionId,
     SpaceId,
 )
+
+if TYPE_CHECKING:
+    from iris.cognitive.workspace.frame import WorkspaceFrame
 
 
 class _RecordingStep(PipelineStep[ActionSelectionResult]):

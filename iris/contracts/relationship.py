@@ -39,7 +39,14 @@ class RelationshipSnapshotRecord(BaseModel):
 
     @model_validator(mode="after")
     def _validate_record(self) -> RelationshipSnapshotRecord:
-        """永続化境界で扱える関係性値だけを許可する。"""
+        """永続化境界で扱える関係性値だけを許可する。
+
+        Returns:
+            検証済みrecord。
+
+        Raises:
+            ValueError: 永続化不変条件に違反した場合。
+        """
         if not self.actor_id:
             msg = "actor_id is required for durable relationship records"
             raise ValueError(msg)

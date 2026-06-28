@@ -9,7 +9,11 @@ from iris.features.event_reaction.templates import EventReactionTemplateProvider
 
 
 def define_event_reaction_feature() -> FeatureDefinition:
-    """イベントに対するリアクション機能の定義を返す。"""
+    """イベントに対するリアクション機能の定義を返す。
+
+    Returns:
+        Event reaction vertical sliceの定義。
+    """
     return FeatureDefinition(
         name="event_reaction",
         activity_reaction_planners=(

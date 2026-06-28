@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING, override
 
 from iris.contracts.affect import AffectBaselineRecord, AffectStore
 from iris.core.datetime_utils import now_utc
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from iris.core.ids import ActorId
 
 
@@ -43,7 +44,7 @@ class InMemoryAffectStore(AffectStore):
             msg = "upsert_global requires scope='global'"
             raise ValueError(msg)
         now = now_utc()
-        stored = replace(
+        stored = _with_timestamps(
             record,
             created_at=self._global.created_at if self._global else record.created_at or now,
             updated_at=now,
@@ -75,10 +76,36 @@ class InMemoryAffectStore(AffectStore):
             raise ValueError(msg)
         now = now_utc()
         current = self._actor_records.get(record.actor_id)
-        stored = replace(
+        stored = _with_timestamps(
             record,
             created_at=current.created_at if current else record.created_at or now,
             updated_at=now,
         )
         self._actor_records[record.actor_id] = stored
         return stored
+
+
+def _with_timestamps(
+    record: AffectBaselineRecord,
+    *,
+    created_at: datetime | None,
+    updated_at: datetime,
+) -> AffectBaselineRecord:
+    """Affect recordを時刻付きで再検証する。
+
+    Returns:
+        再構築したrecord。
+    """
+    return AffectBaselineRecord(
+        scope=record.scope,
+        actor_id=record.actor_id,
+        mood_label=record.mood_label,
+        valence=record.valence,
+        arousal=record.arousal,
+        dominance=record.dominance,
+        affect_summary=record.affect_summary,
+        source_observation_id=record.source_observation_id,
+        created_at=created_at,
+        updated_at=updated_at,
+        version=record.version,
+    )

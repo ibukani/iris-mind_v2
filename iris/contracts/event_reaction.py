@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from enum import Enum, auto
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from iris.core.metadata import EMPTY_METADATA, immutable_metadata
+from iris.contracts.metadata import ImmutableMetadata
+from iris.core.metadata import immutable_metadata
 
 
 class EventReactionKind(Enum):
@@ -28,12 +28,7 @@ class ReactionCandidate(BaseModel):
     reason: str
     priority: int = 0
     interruptible: bool = True
-    metadata: Mapping[str, str] = Field(default_factory=dict)
-
-    def model_post_init(self, __context: object) -> None:
-        """補助metadataを不変なmapping proxyとして防御的にコピーする。"""
-        if self.metadata is not EMPTY_METADATA:
-            object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+    metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
 
 
 class EventReactionDecision(BaseModel):

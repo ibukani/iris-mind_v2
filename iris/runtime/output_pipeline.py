@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from iris.contracts.actions import ActionPlan
     from iris.contracts.event_reaction import ReactionCandidate
     from iris.presentation.suite import PresentationSuite
-    from iris.safety.action_filter import ActionSafetyGate
+    from iris.safety.action_gate import ActionSafetyGate
     from iris.safety.output_filter import OutputSafetyGate
 
 
@@ -34,7 +34,7 @@ class RuntimeOutputPipeline:
             PresentedOutput: 出力、またはブロック時はno-send。
         """
         # 1. Action Safety
-        action_decision = await self.action_safety_gate.check_action(plan)
+        action_decision = await self.action_safety_gate.check_plan(plan)
         if action_decision.decision is GateDecision.BLOCK:
             return PresentedOutput(text=None)
 

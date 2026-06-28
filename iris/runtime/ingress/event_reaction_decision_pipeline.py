@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from iris.cognitive.workspace.frame import SituationContextSnapshot
+    from collections.abc import Sequence
+
     from iris.contracts.event_reaction import ReactionCandidate
     from iris.contracts.observations import ActivityEventObservation
+    from iris.contracts.workspace_context import SituationContextSnapshot
     from iris.features.definition import ActivityReactionPlanner
 
 

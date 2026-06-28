@@ -9,9 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 RUNTIME_ROOT = PROJECT_ROOT / "iris" / "runtime"
 EVENT_REACTION_FEATURE_ROOT = PROJECT_ROOT / "iris" / "features" / "event_reaction"
 EVENT_REACTION_PRESENTATION = PROJECT_ROOT / "iris" / "presentation" / "event_reaction.py"
-EVENT_REACTION_RUNNER = (
-    PROJECT_ROOT / "iris" / "runtime" / "ingress" / "activity_event_reaction_runner.py"
-)
+EVENT_REACTION_RUNNER = PROJECT_ROOT / "iris" / "runtime" / "ingress" / "activity_event_reaction.py"
 
 ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
     {
@@ -66,7 +64,6 @@ RUNNER_FORBIDDEN_NAMES: frozenset[str] = frozenset(
         "ActivityKind",
         "EventReactionPolicy",
         "EventReactionTemplateProvider",
-        "ReactionCandidate",
     },
 )
 
@@ -235,8 +232,8 @@ def test_runtime_observability_boundary_modules_do_not_import_concrete_implement
     )
 
 
-def test_event_reaction_runner_remains_thin_bridge() -> None:
-    """EventReactionRunner must not grow feature policy, templates, or candidates."""
+def test_event_reaction_handler_remains_thin_bridge() -> None:
+    """EventReaction handler must not grow feature policy or templates."""
     tree = ast.parse(EVENT_REACTION_RUNNER.read_text(encoding="utf-8"))
     imports = _imports(EVENT_REACTION_RUNNER)
     imported_violations = [
@@ -270,6 +267,6 @@ def test_event_reaction_runner_remains_thin_bridge() -> None:
         *(f"forbidden reaction text {text!r}" for text in text_violations),
     ]
 
-    assert not violations, "EventReactionRunner must stay a thin bridge:\n" + "\n".join(
+    assert not violations, "EventReaction handler must stay a thin bridge:\n" + "\n".join(
         violations,
     )

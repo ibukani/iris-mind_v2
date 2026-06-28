@@ -3,31 +3,25 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, override
+from typing import override
 
 from sqlalchemy import select
 
-from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
-from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
+from iris.adapters.persistence.sqlite.context import (
+    SQLiteDatabaseInput,
+    resolve_database_manager,
+)
 from iris.adapters.persistence.sqlite.schema.account import AccountModel
 from iris.contracts.accounts import AccountProfile, AccountStore, AccountStoreError
 from iris.core.ids import AccountId, ActorId, ExternalRef
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class SQLiteAccountStore(AccountStore):
     """SQLite-backed account store using Async SQLAlchemy."""
 
-    def __init__(self, db: str | Path | AsyncDatabaseManager | SQLitePersistenceContext) -> None:
+    def __init__(self, db: SQLiteDatabaseInput) -> None:
         """Initialize the store and create tables if missing."""
-        if hasattr(db, "db"):
-            self._manager = db.db  # type: ignore
-        elif isinstance(db, AsyncDatabaseManager):
-            self._manager = db
-        else:
-            self._manager = AsyncDatabaseManager(db)  # type: ignore
+        self._manager = resolve_database_manager(db)
 
     async def close(self) -> None:
         """Close the database manager.

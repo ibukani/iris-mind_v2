@@ -12,8 +12,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 
-from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
-from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
+from iris.adapters.persistence.sqlite.context import (
+    SQLiteDatabaseInput,
+    resolve_database_manager,
+)
 from iris.adapters.persistence.sqlite.schema.delivery import (
     DeliveryOutboxModel,
     DeliveryReportFingerprintModel,
@@ -47,8 +49,7 @@ from iris.core.ids import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable
-    from pathlib import Path
+    from collections.abc import AsyncGenerator
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,16 +60,14 @@ class SQLiteDeliveryOutbox:
     """Durable SQLite delivery outbox."""
 
     def __init__(
-        self, db: str | Path | AsyncDatabaseManager | SQLitePersistenceContext, *, max_depth_per_provider: int | None = None
+        self,
+        db: SQLiteDatabaseInput,
+        *,
+        max_depth_per_provider: int | None = None,
     ) -> None:
         """Create a SQLite delivery outbox."""
         self._max_depth_per_provider = max_depth_per_provider
-        if hasattr(db, "db"):
-            self._db = db.db  # type: ignore
-        elif isinstance(db, AsyncDatabaseManager):
-            self._db = db
-        else:
-            self._db = AsyncDatabaseManager(db)  # type: ignore
+        self._db = resolve_database_manager(db)
 
     async def enqueue(self, envelope: DeliveryEnvelope) -> DeliveryEnvelope:
         """Store pending delivery item idempotently by idempotency key.
@@ -211,13 +210,15 @@ class SQLiteDeliveryOutbox:
                 msg = "delivery_already_terminal"
                 raise DeliveryOutboxError(msg)
             _require_matching_lease(item, lease_id)
-            completed = item.model_copy(update={
-                "status": _delivery_status_from_action_status(result.status),
-                "updated_at": completed_at,
-                "lease_id": None,
-                "lease_expires_at": None,
-                "last_error_reason": result.error_reason,
-            })
+            completed = item.model_copy(
+                update={
+                    "status": _delivery_status_from_action_status(result.status),
+                    "updated_at": completed_at,
+                    "lease_id": None,
+                    "lease_expires_at": None,
+                    "last_error_reason": result.error_reason,
+                }
+            )
             _update_model(row, completed)
             _insert_fingerprint(session, current)
             return completed
@@ -261,22 +262,26 @@ class SQLiteDeliveryOutbox:
                 raise DeliveryOutboxError(msg)
             _require_matching_lease(item, lease_id)
             if item.attempts >= item.max_attempts:
-                released = item.model_copy(update={
-                    "status": DeliveryStatus.FAILED_PERMANENT,
-                    "updated_at": released_at,
-                    "lease_id": None,
-                    "lease_expires_at": None,
-                    "last_error_reason": result.error_reason,
-                })
+                released = item.model_copy(
+                    update={
+                        "status": DeliveryStatus.FAILED_PERMANENT,
+                        "updated_at": released_at,
+                        "lease_id": None,
+                        "lease_expires_at": None,
+                        "last_error_reason": result.error_reason,
+                    }
+                )
             else:
-                released = item.model_copy(update={
-                    "status": DeliveryStatus.PENDING,
-                    "updated_at": released_at,
-                    "not_before": retry_after,
-                    "lease_id": None,
-                    "lease_expires_at": None,
-                    "last_error_reason": result.error_reason,
-                })
+                released = item.model_copy(
+                    update={
+                        "status": DeliveryStatus.PENDING,
+                        "updated_at": released_at,
+                        "not_before": retry_after,
+                        "lease_id": None,
+                        "lease_expires_at": None,
+                        "last_error_reason": result.error_reason,
+                    }
+                )
             _update_model(row, released)
             _insert_fingerprint(session, current)
             return released
@@ -312,27 +317,31 @@ def _lease_item(
     lease_seconds: float,
 ) -> DeliveryEnvelope:
     if item.attempts >= item.max_attempts:
-        return item.model_copy(update={
-            "status": DeliveryStatus.FAILED_PERMANENT,
-            "updated_at": now,
-            "lease_id": None,
-            "lease_expires_at": None,
-            "last_error_reason": item.last_error_reason or "max_attempts_exceeded",
-        })
+        return item.model_copy(
+            update={
+                "status": DeliveryStatus.FAILED_PERMANENT,
+                "updated_at": now,
+                "lease_id": None,
+                "lease_expires_at": None,
+                "last_error_reason": item.last_error_reason or "max_attempts_exceeded",
+            }
+        )
     attempt = item.attempts + 1
-    return item.model_copy(update={
-        "status": DeliveryStatus.LEASED,
-        "updated_at": now,
-        "not_before": None,
-        "attempts": attempt,
-        "lease_id": LeaseId(f"{item.delivery_id}:lease:{attempt}"),
-        "lease_expires_at": now + timedelta(seconds=lease_seconds),
-    })
+    return item.model_copy(
+        update={
+            "status": DeliveryStatus.LEASED,
+            "updated_at": now,
+            "not_before": None,
+            "attempts": attempt,
+            "lease_id": LeaseId(f"{item.delivery_id}:lease:{attempt}"),
+            "lease_expires_at": now + timedelta(seconds=lease_seconds),
+        }
+    )
 
 
 def _update_model(model: DeliveryOutboxModel, envelope: DeliveryEnvelope) -> None:
     model.status = envelope.status.value
-    model.updated_at = _requireddatetime_to_text(envelope.updated_at)
+    model.updated_at = required_datetime_to_text(envelope.updated_at)
     model.not_before = datetime_to_text(envelope.not_before)
     model.attempts = envelope.attempts
     model.max_attempts = envelope.max_attempts
@@ -460,8 +469,8 @@ def _envelope_to_model(envelope: DeliveryEnvelope) -> DeliveryOutboxModel:
         delivery_id=str(envelope.delivery_id),
         idempotency_key=envelope.idempotency_key,
         status=envelope.status.value,
-        created_at=_requireddatetime_to_text(envelope.created_at),
-        updated_at=_requireddatetime_to_text(envelope.updated_at),
+        created_at=required_datetime_to_text(envelope.created_at),
+        updated_at=required_datetime_to_text(envelope.updated_at),
         not_before=datetime_to_text(envelope.not_before),
         attempts=envelope.attempts,
         max_attempts=envelope.max_attempts,
@@ -520,38 +529,3 @@ def _model_to_envelope(row: DeliveryOutboxModel) -> DeliveryEnvelope:
         blocked_reason=row.blocked_reason,
         last_error_reason=row.last_error_reason,
     )
-
-
-def optional_text(value: object | None) -> str | None:
-    if value is None:
-        return None
-    return str(value)
-
-
-def optional_new_type[IdT: str](
-    type_constructor: Callable[[str], IdT],
-    value: object | None,
-) -> IdT | None:
-    if value is None:
-        return None
-    return type_constructor(str(value))
-
-
-def datetime_to_text(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return value.isoformat()
-
-
-def _requireddatetime_to_text(value: datetime) -> str:
-    return value.isoformat()
-
-
-def text_to_datetime(value: str) -> datetime:
-    return datetime.fromisoformat(value)
-
-
-def optional_datetime(value: object | None) -> datetime | None:
-    if value is None:
-        return None
-    return text_to_datetime(str(value))

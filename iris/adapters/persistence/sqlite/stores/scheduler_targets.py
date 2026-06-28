@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 
-from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
-from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
+from iris.adapters.persistence.sqlite.context import (
+    SQLiteDatabaseInput,
+    resolve_database_manager,
+)
 from iris.adapters.persistence.sqlite.schema.scheduler_target import SchedulerTargetModel
 from iris.adapters.persistence.sqlite.serialization import (
     datetime_to_text,
@@ -23,21 +24,15 @@ from iris.contracts.delivery import DeliveryRouteHint, SchedulerTarget
 from iris.core.ids import AccountId, ActorId, ExternalRef, SessionId, SpaceId
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from pathlib import Path
+    from datetime import datetime
 
 
 class SQLiteSchedulerTargetStore:
     """SQLite-backed durable scheduler target store."""
 
-    def __init__(self, db: str | Path | AsyncDatabaseManager | SQLitePersistenceContext) -> None:
+    def __init__(self, db: SQLiteDatabaseInput) -> None:
         """Create a SQLite scheduler target store."""
-        if hasattr(db, "db"):
-            self._db = db.db  # type: ignore
-        elif isinstance(db, AsyncDatabaseManager):
-            self._db = db
-        else:
-            self._db = AsyncDatabaseManager(db)  # type: ignore
+        self._db = resolve_database_manager(db)
 
     async def upsert_target(self, target: SchedulerTarget) -> None:
         """Insert or update a target by stable provider/session key."""

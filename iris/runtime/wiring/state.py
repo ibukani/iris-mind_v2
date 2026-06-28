@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
 from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
 from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
@@ -24,12 +25,11 @@ from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
-from iris.adapters.memory.in_memory import InMemoryMemoryStore
 
 if TYPE_CHECKING:
-    from iris.contracts.memory import MutableMemoryStore
     from iris.contracts.accounts import AccountStore
     from iris.contracts.affect import AffectStore
+    from iris.contracts.memory import MutableMemoryStore
     from iris.contracts.relationship import RelationshipStore
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.delivery.outbox import DeliveryOutbox
@@ -60,25 +60,9 @@ class RuntimeStateStores:
         """Close all persistent store connections."""
         if hasattr(self.memory_store, "close"):
             self.memory_store.close()
-        
+
         if self.sqlite_context is not None:
             await self.sqlite_context.close()
-        else:
-            # Fallback for manual or individual store closure if needed
-            for store in (
-                self.account_store,
-                self.relationship_store,
-                self.affect_store,
-                self.activity_journal,
-                self.delivery_outbox,
-                self.scheduler_target_store,
-            ):
-                if hasattr(store, "close") and callable(store.close):
-                    import inspect
-                    if inspect.iscoroutinefunction(store.close):
-                        await store.close()
-                    else:
-                        store.close()
 
 
 def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:

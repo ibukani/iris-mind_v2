@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING, override
 
 from iris.contracts.relationship import RelationshipSnapshotRecord, RelationshipStore
 from iris.core.datetime_utils import now_utc
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from iris.core.ids import ActorId
 
 
@@ -40,10 +41,35 @@ class InMemoryRelationshipStore(RelationshipStore):
         """
         now = now_utc()
         current = self._records.get(record.actor_id)
-        stored = replace(
+        stored = _with_timestamps(
             record,
             created_at=current.created_at if current else record.created_at or now,
             updated_at=now,
         )
         self._records[record.actor_id] = stored
         return stored
+
+
+def _with_timestamps(
+    record: RelationshipSnapshotRecord,
+    *,
+    created_at: datetime | None,
+    updated_at: datetime,
+) -> RelationshipSnapshotRecord:
+    """Relationship recordを時刻付きで再検証する。
+
+    Returns:
+        再構築したrecord。
+    """
+    return RelationshipSnapshotRecord(
+        actor_id=record.actor_id,
+        actor_label=record.actor_label,
+        affinity=record.affinity,
+        trust=record.trust,
+        familiarity=record.familiarity,
+        relationship_summary=record.relationship_summary,
+        source_observation_id=record.source_observation_id,
+        created_at=created_at,
+        updated_at=updated_at,
+        version=record.version,
+    )

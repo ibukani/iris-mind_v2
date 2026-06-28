@@ -35,7 +35,14 @@ class ActionPlan(BaseModel):
 
     @model_validator(mode="after")
     def _validate_no_action(self) -> ActionPlan:
-        """no_actionプランの不変条件を検証する。"""
+        """no_actionプランの不変条件を検証する。
+
+        Returns:
+            検証済みplan。
+
+        Raises:
+            ValueError: no-action不変条件に違反した場合。
+        """
         if self.turn_intent == "no_action" and (
             self.candidate_text is not None or self.should_respond
         ):
