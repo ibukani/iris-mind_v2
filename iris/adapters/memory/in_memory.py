@@ -9,7 +9,7 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, override
 
-from iris.adapters.memory.ports import MutableMemoryStore
+from iris.contracts.memory import MutableMemoryStore
 from iris.adapters.memory.utils import matches_query, rank_text_matches
 
 if TYPE_CHECKING:

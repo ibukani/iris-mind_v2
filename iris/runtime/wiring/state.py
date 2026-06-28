@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.adapters.memory.in_memory import InMemoryMemoryStore
+from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
+from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
 from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
 from iris.adapters.persistence.sqlite.stores.activity_journal import SQLiteActivityJournal
 from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
@@ -23,9 +24,10 @@ from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
+from iris.adapters.memory.in_memory import InMemoryMemoryStore
 
 if TYPE_CHECKING:
-    from iris.adapters.memory.ports import MutableMemoryStore
+    from iris.contracts.memory import MutableMemoryStore
     from iris.contracts.accounts import AccountStore
     from iris.contracts.affect import AffectStore
     from iris.contracts.relationship import RelationshipStore
@@ -52,6 +54,31 @@ class RuntimeStateStores:
     space_occupancy_store: SpaceOccupancyStore
     delivery_outbox: DeliveryOutbox
     scheduler_target_store: SchedulerTargetStore
+    sqlite_context: SQLitePersistenceContext | None = None
+
+    async def close(self) -> None:
+        """Close all persistent store connections."""
+        if hasattr(self.memory_store, "close"):
+            self.memory_store.close()
+        
+        if self.sqlite_context is not None:
+            await self.sqlite_context.close()
+        else:
+            # Fallback for manual or individual store closure if needed
+            for store in (
+                self.account_store,
+                self.relationship_store,
+                self.affect_store,
+                self.activity_journal,
+                self.delivery_outbox,
+                self.scheduler_target_store,
+            ):
+                if hasattr(store, "close") and callable(store.close):
+                    import inspect
+                    if inspect.iscoroutinefunction(store.close):
+                        await store.close()
+                    else:
+                        store.close()
 
 
 def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
@@ -62,16 +89,20 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     """
     if config.state.backend is RuntimeStateBackend.SQLITE:
         sqlite_path = config.state.sqlite_path
-        account_store: AccountStore = SQLiteAccountStore(sqlite_path)
+        db_manager = AsyncDatabaseManager(sqlite_path)
+        ctx = SQLitePersistenceContext(db=db_manager)
+
+        account_store: AccountStore = SQLiteAccountStore(ctx)
         memory_store: MutableMemoryStore = SQLiteMemoryStore(sqlite_path)
-        relationship_store: RelationshipStore = SQLiteRelationshipStore(sqlite_path)
-        affect_store: AffectStore = SQLiteAffectStore(sqlite_path)
-        activity_journal: ActivityJournal = SQLiteActivityJournal(sqlite_path)
+        relationship_store: RelationshipStore = SQLiteRelationshipStore(ctx)
+        affect_store: AffectStore = SQLiteAffectStore(ctx)
+        activity_journal: ActivityJournal = SQLiteActivityJournal(ctx)
         delivery_outbox: DeliveryOutbox = SQLiteDeliveryOutbox(
-            sqlite_path,
+            ctx,
             max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
         )
-        scheduler_target_store: SchedulerTargetStore = SQLiteSchedulerTargetStore(sqlite_path)
+        scheduler_target_store: SchedulerTargetStore = SQLiteSchedulerTargetStore(ctx)
+        sqlite_context = ctx
     else:
         account_store = InMemoryAccountStore()
         memory_store = InMemoryMemoryStore()
@@ -82,6 +113,7 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
             max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
         )
         scheduler_target_store = InMemorySchedulerTargetStore()
+        sqlite_context = None
 
     return RuntimeStateStores(
         account_store=account_store,
@@ -94,4 +126,5 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         space_occupancy_store=InMemorySpaceOccupancyStore(),
         delivery_outbox=delivery_outbox,
         scheduler_target_store=scheduler_target_store,
+        sqlite_context=sqlite_context,
     )

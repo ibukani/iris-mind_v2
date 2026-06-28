@@ -97,7 +97,7 @@ async def test_sqlite_enqueue_idempotent_by_idempotency_key(tmp_path: Path) -> N
     """SQLite outbox returns the first envelope for repeated idempotency key."""
     outbox = SQLiteDeliveryOutbox(str(tmp_path / "state.sqlite3"))
     first = await outbox.enqueue(_envelope("1"))
-    duplicate = replace(_envelope("2"), idempotency_key=first.idempotency_key)
+    duplicate = _envelope("2").model_copy(update={"idempotency_key": first.idempotency_key})
 
     stored = await outbox.enqueue(duplicate)
 
@@ -178,7 +178,7 @@ async def test_sqlite_same_lease_different_report_conflicts_after_reopen(
 async def test_sqlite_failed_release_retries_then_permanent(tmp_path: Path) -> None:
     """FAILED reports retry until max attempts, then become permanent."""
     outbox = SQLiteDeliveryOutbox(str(tmp_path / "state.sqlite3"))
-    await outbox.enqueue(replace(_envelope(), max_attempts=2))
+    await outbox.enqueue(_envelope().model_copy(update={"max_attempts": 2}))
     first = (
         await outbox.lease_due(
             provider="discord",
@@ -224,15 +224,14 @@ async def test_sqlite_depth_limit_and_no_action_match_contract(tmp_path: Path) -
     with pytest.raises(DeliveryOutboxError, match="outbox_depth_exceeded"):
         await outbox.enqueue(_envelope("2"))
 
-    no_action = replace(
-        _envelope("3", provider="slack"),
-        action=NoAction(
+    no_action = _envelope("3", provider="slack").model_copy(update={
+        "action": NoAction(
             action_id=ActionId("action-no"),
             session_id=SessionId("session-1"),
             correlation_id=CorrelationId("corr-no"),
             reason="silent",
-        ),
-    )
+        )
+    })
     with pytest.raises(DeliveryOutboxError, match="no_action_not_deliverable"):
         await outbox.enqueue(no_action)
     await outbox.close()
@@ -241,7 +240,7 @@ async def test_sqlite_depth_limit_and_no_action_match_contract(tmp_path: Path) -
 async def test_sqlite_expired_max_attempt_lease_becomes_permanent(tmp_path: Path) -> None:
     """Expired leases at max attempts become permanent and are not returned."""
     outbox = SQLiteDeliveryOutbox(str(tmp_path / "state.sqlite3"))
-    await outbox.enqueue(replace(_envelope(), max_attempts=1))
+    await outbox.enqueue(_envelope().model_copy(update={"max_attempts": 1}))
     first = await outbox.lease_due(
         provider="discord",
         now=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),

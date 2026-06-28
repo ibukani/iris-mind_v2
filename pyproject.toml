@@ -19,6 +19,7 @@ dependencies = [
     "loguru>=0.7.0",
     "sqlalchemy>=2.0",
     "aiosqlite>=0.22.1",
+    "pydantic>=2.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -132,7 +132,7 @@ async def test_update_linked_actor_id(tmp_path: Path) -> None:
     )
     await store.put(profile)
 
-    updated = dataclasses.replace(profile, linked_actor_id=ActorId("actor-mina"))
+    updated = profile.model_copy(update={"linked_actor_id": ActorId("actor-mina")})
     await store.put(updated)
     await store.close()
 
@@ -143,7 +143,7 @@ async def test_update_linked_actor_id(tmp_path: Path) -> None:
     assert fetched.linked_actor_id == ActorId("actor-mina")
 
     # Unlink
-    unlinked = dataclasses.replace(fetched, linked_actor_id=None)
+    unlinked = fetched.model_copy(update={"linked_actor_id": None})
     await store2.put(unlinked)
 
     fetched_unlinked = await store2.get_by_account_id(AccountId("acct-1"))

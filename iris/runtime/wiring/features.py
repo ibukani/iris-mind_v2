@@ -14,7 +14,7 @@ from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import wire_cognitive_cycle
 
 if TYPE_CHECKING:
-    from iris.adapters.memory.ports import MemoryStore
+    from iris.contracts.memory import MemoryStore
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.cognitive.cycle.service import CognitiveCycle

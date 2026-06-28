@@ -32,6 +32,8 @@ class RuntimeStatePersistencePolicy:
     space_occupancy_store: PersistenceKind
     relationship_store: PersistenceKind
     affect_store: PersistenceKind
+    delivery_outbox: PersistenceKind
+    scheduler_target_store: PersistenceKind
 
 
 def runtime_state_persistence_policy(
@@ -55,6 +57,8 @@ def runtime_state_persistence_policy(
             space_occupancy_store=PersistenceKind.EPHEMERAL,
             relationship_store=PersistenceKind.DURABLE,
             affect_store=PersistenceKind.DURABLE,
+            delivery_outbox=PersistenceKind.DURABLE,
+            scheduler_target_store=PersistenceKind.DURABLE,
         )
 
     return RuntimeStatePersistencePolicy(
@@ -66,4 +70,6 @@ def runtime_state_persistence_policy(
         space_occupancy_store=PersistenceKind.EPHEMERAL,
         relationship_store=PersistenceKind.EPHEMERAL,
         affect_store=PersistenceKind.EPHEMERAL,
+        delivery_outbox=PersistenceKind.EPHEMERAL,
+        scheduler_target_store=PersistenceKind.EPHEMERAL,
     )

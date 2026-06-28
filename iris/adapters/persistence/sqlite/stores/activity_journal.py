@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, override
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.future import select
 
+from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
 from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
 from iris.adapters.persistence.sqlite.schema.activity import ActivityEventModel
 from iris.runtime.state.activity_journal import (
@@ -53,13 +54,18 @@ class SQLiteActivityJournal(ActivityJournal):
     Provider event dedupeは永続化され、新しいstore instanceへ引き継がれる。
     """
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db: str | Path | AsyncDatabaseManager | SQLitePersistenceContext) -> None:
         """データベースパスでjournalを初期化する。
 
         Args:
-            db_path: SQLiteデータベースファイルへのパス。
+            db: SQLiteデータベースファイルへのパス、または永続化コンテキスト。
         """
-        self._db = AsyncDatabaseManager(db_path)
+        if hasattr(db, "db"):
+            self._db = db.db  # type: ignore
+        elif isinstance(db, AsyncDatabaseManager):
+            self._db = db
+        else:
+            self._db = AsyncDatabaseManager(db)  # type: ignore
 
     async def close(self) -> None:
         """永続connectionを閉じる。"""

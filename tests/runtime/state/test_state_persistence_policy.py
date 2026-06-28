@@ -46,6 +46,8 @@ def test_memory_backend_policy_marks_runtime_state_ephemeral() -> None:
     assert policy.space_occupancy_store == PersistenceKind.EPHEMERAL
     assert policy.relationship_store == PersistenceKind.EPHEMERAL
     assert policy.affect_store == PersistenceKind.EPHEMERAL
+    assert policy.delivery_outbox == PersistenceKind.EPHEMERAL
+    assert policy.scheduler_target_store == PersistenceKind.EPHEMERAL
 
 
 def test_sqlite_backend_policy_marks_durable_companion_state() -> None:
@@ -57,6 +59,8 @@ def test_sqlite_backend_policy_marks_durable_companion_state() -> None:
     assert policy.relationship_store == PersistenceKind.DURABLE
     assert policy.affect_store == PersistenceKind.DURABLE
     assert policy.activity_journal == PersistenceKind.DURABLE
+    assert policy.delivery_outbox == PersistenceKind.DURABLE
+    assert policy.scheduler_target_store == PersistenceKind.DURABLE
 
 
 def test_sqlite_backend_keeps_runtime_projections_ephemeral() -> None:

@@ -8,8 +8,17 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 
+from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
 from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
 from iris.adapters.persistence.sqlite.schema.scheduler_target import SchedulerTargetModel
+from iris.adapters.persistence.sqlite.serialization import (
+    datetime_to_text,
+    optional_datetime,
+    optional_new_type,
+    optional_text,
+    required_datetime_to_text,
+    text_to_datetime,
+)
 from iris.contracts.delivery import DeliveryRouteHint, SchedulerTarget
 from iris.core.ids import AccountId, ActorId, ExternalRef, SessionId, SpaceId
 
@@ -21,9 +30,14 @@ if TYPE_CHECKING:
 class SQLiteSchedulerTargetStore:
     """SQLite-backed durable scheduler target store."""
 
-    def __init__(self, sqlite_path: str | Path) -> None:
+    def __init__(self, db: str | Path | AsyncDatabaseManager | SQLitePersistenceContext) -> None:
         """Create a SQLite scheduler target store."""
-        self._db = AsyncDatabaseManager(sqlite_path)
+        if hasattr(db, "db"):
+            self._db = db.db  # type: ignore
+        elif isinstance(db, AsyncDatabaseManager):
+            self._db = db
+        else:
+            self._db = AsyncDatabaseManager(db)  # type: ignore
 
     async def upsert_target(self, target: SchedulerTarget) -> None:
         """Insert or update a target by stable provider/session key."""
@@ -40,7 +54,7 @@ class SQLiteSchedulerTargetStore:
             last_attempt = (
                 str(existing)
                 if existing is not None
-                else _datetime_to_text(target.last_scheduler_attempt_at)
+                else datetime_to_text(target.last_scheduler_attempt_at)
             )
 
             stmt = insert(SchedulerTargetModel).values(
@@ -48,13 +62,13 @@ class SQLiteSchedulerTargetStore:
                 provider_subject=key[1],
                 provider_space_ref=key[2],
                 session_id=key[3],
-                actor_id=_optional_text(target.actor_id),
-                account_id=_optional_text(target.account_id),
-                space_id=_optional_text(target.space_id),
+                actor_id=optional_text(target.actor_id),
+                account_id=optional_text(target.account_id),
+                space_id=optional_text(target.space_id),
                 display_name=target.display_name,
-                last_observed_at=_required_datetime_to_text(target.last_observed_at),
+                last_observed_at=required_datetime_to_text(target.last_observed_at),
                 last_scheduler_attempt_at=last_attempt,
-                stale_after=_datetime_to_text(target.stale_after),
+                stale_after=datetime_to_text(target.stale_after),
                 route_display_name=target.route.display_name,
             )
 
@@ -80,7 +94,7 @@ class SQLiteSchedulerTargetStore:
     ) -> tuple[SchedulerTarget, ...]:
         """Return non-stale targets in deterministic order."""
         async with self._db.transaction() as session:
-            now_text = _datetime_to_text(now)
+            now_text = datetime_to_text(now)
             result = await session.scalars(
                 select(SchedulerTargetModel)
                 .where(
@@ -114,7 +128,7 @@ class SQLiteSchedulerTargetStore:
                 )
             )
             if model is not None:
-                model.last_scheduler_attempt_at = _datetime_to_text(attempted_at)
+                model.last_scheduler_attempt_at = datetime_to_text(attempted_at)
 
     async def close(self) -> None:
         """Close the underlying SQLite connection."""
@@ -123,9 +137,9 @@ class SQLiteSchedulerTargetStore:
 
 def _model_to_target(model: SchedulerTargetModel) -> SchedulerTarget:
     return SchedulerTarget(
-        actor_id=_optional_new_type(ActorId, model.actor_id),
-        account_id=_optional_new_type(AccountId, model.account_id),
-        space_id=_optional_new_type(SpaceId, model.space_id),
+        actor_id=optional_new_type(ActorId, model.actor_id),
+        account_id=optional_new_type(AccountId, model.account_id),
+        space_id=optional_new_type(SpaceId, model.space_id),
         session_id=SessionId(str(model.session_id)),
         route=DeliveryRouteHint(
             provider=str(model.provider),
@@ -134,9 +148,9 @@ def _model_to_target(model: SchedulerTargetModel) -> SchedulerTarget:
             display_name=model.route_display_name,
         ),
         display_name=model.display_name,
-        last_observed_at=_text_to_datetime(str(model.last_observed_at)),
-        last_scheduler_attempt_at=_optional_datetime(model.last_scheduler_attempt_at),
-        stale_after=_optional_datetime(model.stale_after),
+        last_observed_at=text_to_datetime(str(model.last_observed_at)),
+        last_scheduler_attempt_at=optional_datetime(model.last_scheduler_attempt_at),
+        stale_after=optional_datetime(model.stale_after),
     )
 
 
@@ -149,43 +163,8 @@ def _target_key(target: SchedulerTarget) -> tuple[str, str, str, str]:
     )
 
 
-def _optional_text(value: object | None) -> str | None:
-    if value is None:
-        return None
-    return str(value)
-
-
 def _empty_to_none(value: object) -> ExternalRef | None:
     text = str(value)
     if not text:
         return None
     return ExternalRef(text)
-
-
-def _optional_new_type[IdT: str](
-    type_constructor: Callable[[str], IdT],
-    value: object | None,
-) -> IdT | None:
-    if value is None:
-        return None
-    return type_constructor(str(value))
-
-
-def _datetime_to_text(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return value.isoformat()
-
-
-def _required_datetime_to_text(value: datetime) -> str:
-    return value.isoformat()
-
-
-def _text_to_datetime(value: str) -> datetime:
-    return datetime.fromisoformat(value)
-
-
-def _optional_datetime(value: object | None) -> datetime | None:
-    if value is None:
-        return None
-    return _text_to_datetime(str(value))

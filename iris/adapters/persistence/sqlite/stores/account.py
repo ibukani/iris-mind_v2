@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, override
 
 from sqlalchemy import select
 
+from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
 from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
 from iris.adapters.persistence.sqlite.schema.account import AccountModel
 from iris.contracts.accounts import AccountProfile, AccountStore, AccountStoreError
@@ -19,9 +20,14 @@ if TYPE_CHECKING:
 class SQLiteAccountStore(AccountStore):
     """SQLite-backed account store using Async SQLAlchemy."""
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db: str | Path | AsyncDatabaseManager | SQLitePersistenceContext) -> None:
         """Initialize the store and create tables if missing."""
-        self._manager = AsyncDatabaseManager(db_path)
+        if hasattr(db, "db"):
+            self._manager = db.db  # type: ignore
+        elif isinstance(db, AsyncDatabaseManager):
+            self._manager = db
+        else:
+            self._manager = AsyncDatabaseManager(db)  # type: ignore
 
     async def close(self) -> None:
         """Close the database manager.

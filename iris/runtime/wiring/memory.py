@@ -11,7 +11,7 @@ from iris.cognitive.memory.hybrid import HybridMemoryRetriever
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from iris.adapters.memory.ports import MemoryStore
+    from iris.contracts.memory import MemoryStore
     from iris.adapters.memory.vector_index import EmbeddingFunction
     from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
     from iris.cognitive.memory.retrieval import MemoryRetriever

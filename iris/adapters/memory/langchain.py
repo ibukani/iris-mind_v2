@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, NotRequired, Protocol, TypedDict, override, ru
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-from iris.adapters.memory.ports import MemoryStore
+from iris.contracts.memory import MemoryStore
 from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
 from iris.core.ids import ActorId, SpaceId
 

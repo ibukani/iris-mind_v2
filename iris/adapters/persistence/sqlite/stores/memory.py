@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import dataclasses
 import json
 from typing import TYPE_CHECKING, override
 
-from iris.adapters.memory.ports import MutableMemoryStore
+from iris.contracts.memory import MutableMemoryStore
 from iris.adapters.memory.utils import matches_query, rank_text_matches
 from iris.adapters.persistence.sqlite.database import SQLiteDatabase
 from iris.contracts.memory import (
@@ -308,14 +307,14 @@ def _normalize_for_put(record: MemoryRecord) -> MemoryRecord:
     """
     if record.created_at is None and record.updated_at is None:
         now = now_utc()
-        return dataclasses.replace(record, created_at=now, updated_at=now)
+        return record.model_copy(update={"created_at": now, "updated_at": now})
     if record.created_at is None:
         created = record.updated_at
         if created is None:  # pragma: no cover -- defensive
             created = now_utc()
-        return dataclasses.replace(record, created_at=created)
+        return record.model_copy(update={"created_at": created})
     if record.updated_at is None:
-        return dataclasses.replace(record, updated_at=record.created_at)
+        return record.model_copy(update={"updated_at": record.created_at})
     return record
 
 
@@ -342,22 +341,21 @@ def _normalize_for_update(
 
     if record.created_at is None and record.updated_at is None:
         if existing_created is not None:
-            return dataclasses.replace(
-                record,
-                created_at=existing_created,
-                updated_at=now_utc(),
-            )
+            return record.model_copy(update={
+                "created_at": existing_created,
+                "updated_at": now_utc(),
+            })
         now = now_utc()
-        return dataclasses.replace(record, created_at=now, updated_at=now)
+        return record.model_copy(update={"created_at": now, "updated_at": now})
 
     if record.created_at is None:
         if existing_created is not None:
-            record = dataclasses.replace(record, created_at=existing_created)
+            record = record.model_copy(update={"created_at": existing_created})
         else:
-            record = dataclasses.replace(record, created_at=now_utc())
+            record = record.model_copy(update={"created_at": now_utc()})
 
     if record.updated_at is None:
-        record = dataclasses.replace(record, updated_at=now_utc())
+        record = record.model_copy(update={"updated_at": now_utc()})
 
     return record
 

@@ -52,9 +52,13 @@ Actor identity が long-term memory と relationship semantics を所有する�
 
 - `iris/runtime/config/state.py`
 - `iris/runtime/wiring/state.py`
-- `iris/adapters/accounts/sqlite.py`
-- `iris/adapters/memory/sqlite.py`
-- `iris/adapters/relationship/sqlite.py`
-- `iris/adapters/affect/sqlite.py`
-- `iris/adapters/activity/sqlite_journal.py`
-- `iris/runtime/state/`
+- `iris/runtime/wiring/state_policy.py`
+- `iris/adapters/persistence/sqlite/engine.py`
+- `iris/adapters/persistence/sqlite/schema/`
+- `iris/adapters/persistence/sqlite/stores/account.py`
+- `iris/adapters/persistence/sqlite/stores/memory.py`
+- `iris/adapters/persistence/sqlite/stores/relationship.py`
+- `iris/adapters/persistence/sqlite/stores/affect.py`
+- `iris/adapters/persistence/sqlite/stores/activity_journal.py`
+- `iris/adapters/persistence/sqlite/stores/delivery_outbox.py`
+- `iris/adapters/persistence/sqlite/stores/scheduler_targets.py`
