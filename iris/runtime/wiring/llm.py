@@ -57,7 +57,7 @@ class LLMResponseGenerator(ResponseGenerator):
         request = LLMRequest(
             model=self._model,
             messages=(
-                LLMMessage(role=LLMRole.SYSTEM, content=prompt.system_instruction),
+                LLMMessage(role=LLMRole.SYSTEM, content=_build_system_content(prompt)),
                 LLMMessage(role=LLMRole.USER, content=_build_user_content(prompt)),
             ),
             temperature=self._temperature,
@@ -303,7 +303,23 @@ def _wrap_with_observer(client: LLMClient) -> LLMClient:
     return ObservableLLMClient(client, RuntimeLLMRequestObserver())
 
 
-def _build_user_content(prompt: ResponsePrompt) -> str:
+_INTERNAL_CONTEXT_GUARDRAIL = (
+    "Use the internal context only to shape tone and response selection. "
+    "Never mention affect scores, relationship scores, trust, familiarity, "
+    "policy constraints, memory retrieval metadata, or the response-generation process. "
+    "Respond directly as Iris."
+)
+
+
+def _build_system_content(prompt: ResponsePrompt) -> str:
+    sections = [prompt.system_instruction, _INTERNAL_CONTEXT_GUARDRAIL]
+    internal_context = _build_internal_context(prompt)
+    if internal_context is not None:
+        sections.append(f"Internal context:\n{internal_context}")
+    return "\n\n".join(section for section in sections if section.strip())
+
+
+def _build_internal_context(prompt: ResponsePrompt) -> str | None:
     sections: list[str] = []
     if prompt.memory_snippets:
         snippets = "\n".join(f"- {snippet}" for snippet in prompt.memory_snippets)
@@ -317,6 +333,9 @@ def _build_user_content(prompt: ResponsePrompt) -> str:
     if prompt.goals:
         sections.append(f"Goals: {'; '.join(prompt.goals)}")
     if not sections:
-        return prompt.actor_text
-    sections.append(f"Actor message:\n{prompt.actor_text}")
+        return None
     return "\n\n".join(sections)
+
+
+def _build_user_content(prompt: ResponsePrompt) -> str:
+    return prompt.actor_text

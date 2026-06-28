@@ -9,6 +9,7 @@ import pytest
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
+from iris.adapters.llm.ports import LLMRole
 from iris.features.chat.definition import ResponsePrompt
 from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime_config
 from iris.runtime.config.llm import LLMProvider
@@ -137,6 +138,32 @@ def test_build_user_content_with_no_sections() -> None:
     assert content == "hello"
 
 
+def test_build_user_content_excludes_internal_context() -> None:
+    """_build_user_content returns only actor_text, even when internal context exists."""
+    build_user_content: Any = import_private_matching(
+        "iris.runtime.wiring.llm", "_build_user_content", is_callable
+    )
+    prompt = ResponsePrompt(
+        system_instruction="sys",
+        actor_text="ありがとう。最後に一言だけ返してください。",
+        memory_snippets=("User likes concise replies.",),
+        affect_context="neutral VAD(v=0.00, a=0.00, d=0.00)",
+        relationship_context="User: neutral relationship, trust=0.50, familiarity=0.00",
+        constraints=("keep tone calm", "avoid over-familiarity"),
+        goals=("respond_to_user",),
+    )
+
+    content = build_user_content(prompt)
+
+    assert content == "ありがとう。最後に一言だけ返してください。"
+    assert "Affect context" not in content
+    assert "Relationship context" not in content
+    assert "Policy constraints" not in content
+    assert "trust=0.50" not in content
+    assert "familiarity=0.00" not in content
+    assert "VAD" not in content
+
+
 @pytest.mark.anyio
 async def test_llm_response_generator_builds_request() -> None:
     """LLMResponseGenerator.builds an LLMRequest and calls the client."""
@@ -149,3 +176,58 @@ async def test_llm_response_generator_builds_request() -> None:
     result = await gen.generate_response(prompt)
     assert result.text == "reply"
     assert result.model == "test-model"
+
+
+@pytest.mark.anyio
+async def test_llm_response_generator_separates_internal_context_from_user_message() -> None:
+    """Internal context is system-only; the user message remains clean actor text."""
+    client = FakeLLMClient(responses=("reply",), model="test-model")
+    gen = LLMResponseGenerator(client, model="test-model")
+    actor_text = "ありがとう。最後に一言だけ返してください。"
+    prompt = ResponsePrompt(
+        system_instruction="Generate a concise text response for Iris.",
+        actor_text=actor_text,
+        memory_snippets=("User likes concise replies.",),
+        affect_context="neutral VAD(v=0.00, a=0.00, d=0.00)",
+        relationship_context="User: neutral relationship, trust=0.50, familiarity=0.00",
+        constraints=("keep tone calm", "avoid over-familiarity"),
+        goals=("respond_to_user",),
+    )
+
+    result = await gen.generate_response(prompt)
+
+    assert result.text == "reply"
+    assert len(client.requests) == 1
+    request = client.requests[0]
+
+    system_messages = [
+        message.content for message in request.messages if message.role == LLMRole.SYSTEM
+    ]
+    user_messages = [
+        message.content for message in request.messages if message.role == LLMRole.USER
+    ]
+
+    assert len(system_messages) == 1
+    assert len(user_messages) == 1
+
+    system_content = system_messages[0]
+    user_content = user_messages[0]
+
+    assert user_content == actor_text
+    assert "Affect context" not in user_content
+    assert "Relationship context" not in user_content
+    assert "Policy constraints" not in user_content
+    assert "trust=0.50" not in user_content
+    assert "familiarity=0.00" not in user_content
+    assert "VAD" not in user_content
+    assert "response-generation process" not in user_content
+
+    assert "Internal context:" in system_content
+    assert "Affect context" in system_content
+    assert "Relationship context" in system_content
+    assert "Policy constraints" in system_content
+    assert "trust=0.50" in system_content
+    assert "familiarity=0.00" in system_content
+    assert "VAD" in system_content
+    assert "Never mention affect scores" in system_content
+    assert "response-generation process" in system_content
