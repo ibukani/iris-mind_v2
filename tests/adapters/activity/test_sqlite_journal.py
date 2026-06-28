@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -84,7 +83,7 @@ async def test_sqlite_activity_journal_rejects_duplicate_provider_event(
     """Duplicate source/provider_event_id is rejected with DUPLICATE_PROVIDER_EVENT."""
     event = _build_event()
     await journal.append(event)
-    duplicate = replace(event, activity_id=ActivityId("activity:obs-2"))
+    duplicate = event.model_copy(update={"activity_id": ActivityId("activity:obs-2")})
 
     result = await journal.append(duplicate)
 
@@ -102,7 +101,7 @@ async def test_sqlite_activity_journal_dedupe_survives_new_instance(tmp_path: Pa
     await first.append(event)
     await first.close()
 
-    duplicate = replace(event, activity_id=ActivityId("activity:obs-2"))
+    duplicate = event.model_copy(update={"activity_id": ActivityId("activity:obs-2")})
     reopened = SQLiteActivityJournal(db_path)
 
     result = await reopened.append(duplicate)
@@ -215,7 +214,10 @@ async def test_sqlite_activity_journal_concurrent_append_dedupe(tmp_path: Path) 
     db_path = str(tmp_path / "activity_journal.db")
     base = _build_event()
     total = 20
-    events = [replace(base, activity_id=ActivityId(f"activity:race-{i}")) for i in range(total)]
+    events = [
+        base.model_copy(update={"activity_id": ActivityId(f"activity:race-{i}")})
+        for i in range(total)
+    ]
 
     # initialize schema first to avoid concurrent schema creation errors
     j = SQLiteActivityJournal(db_path)

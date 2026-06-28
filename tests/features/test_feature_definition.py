@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 from iris.features.definition import ActivityReactionPlanner, FeatureDefinition
-from iris.runtime.wiring.features import wire_runtime_extensions
+from iris.features.proactive_talk import define_proactive_talk_feature
+from iris.runtime.wiring.features import collect_cognitive_steps, wire_runtime_features
 
 if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot
@@ -46,9 +47,20 @@ def test_feature_definition_can_attach_activity_reaction_planner() -> None:
     assert isinstance(feature.activity_reaction_planners[0], DummyPlanner)
 
 
-def test_runtime_extensions_register_event_reaction_through_feature_definition() -> None:
+def test_runtime_features_register_event_reaction_through_feature_definition() -> None:
     """標準 composition root は event reaction を FeatureDefinition として登録する。"""
-    composition = wire_runtime_extensions()
+    catalog = wire_runtime_features()
 
-    assert tuple(feature.name for feature in composition.features) == ("event_reaction",)
-    assert len(composition.features[0].activity_reaction_planners) == 1
+    assert tuple(feature.name for feature in catalog.features) == ("event_reaction",)
+    assert len(catalog.features[0].activity_reaction_planners) == 1
+
+
+def test_collect_cognitive_steps_preserves_feature_registration_order() -> None:
+    """認知ステップはフィーチャー登録順とフィーチャー内順序を維持する。"""
+    proactive_steps = define_proactive_talk_feature().cognitive_steps
+    features = (
+        FeatureDefinition(name="first", cognitive_steps=proactive_steps[:1]),
+        FeatureDefinition(name="second", cognitive_steps=proactive_steps[1:]),
+    )
+
+    assert collect_cognitive_steps(features) == tuple(proactive_steps)

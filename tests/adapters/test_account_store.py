@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 
 import pytest
 
@@ -91,7 +90,7 @@ def test_update_linked_actor_id() -> None:
     )
     asyncio.run(store.put(profile))
 
-    updated = dataclasses.replace(profile, linked_actor_id=ActorId("actor-mina"))
+    updated = profile.model_copy(update={"linked_actor_id": ActorId("actor-mina")})
     linked = asyncio.run(store.put(updated))
     assert linked.linked_actor_id == ActorId("actor-mina")
 
@@ -101,7 +100,7 @@ def test_update_linked_actor_id() -> None:
     assert fetched.linked_actor_id == ActorId("actor-mina")
 
     # Unlink
-    unlinked_profile = dataclasses.replace(fetched, linked_actor_id=None)
+    unlinked_profile = fetched.model_copy(update={"linked_actor_id": None})
     unlinked = asyncio.run(store.put(unlinked_profile))
     assert unlinked.linked_actor_id is None
 

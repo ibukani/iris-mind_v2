@@ -45,14 +45,15 @@ def test_cognitive_frame_does_not_import_runtime() -> None:
     _assert_no_forbidden_imports(path, ("iris.runtime",))
 
 
-def test_workspace_context_assembler_may_import_cognitive() -> None:
-    """WorkspaceContextAssembler は runtime 側で cognitive snapshot を組み立てる。"""
+def test_workspace_context_assembler_uses_shared_context_contract() -> None:
+    """WorkspaceContextAssembler は共有contract snapshotを組み立てる。"""
     path = PROJECT_ROOT / "iris" / "runtime" / "state" / "context_assembler.py"
     assert path.is_file(), "context_assembler.py must exist"
 
     tree = ast.parse(path.read_text(encoding="utf-8"))
     imports = _get_imports(tree)
-    assert "iris.cognitive.workspace.frame" in imports
+    assert "iris.contracts.workspace_context" in imports
+    assert "iris.cognitive.workspace.frame" not in imports
 
 
 def test_workspace_context_assembler_does_not_import_adapters() -> None:

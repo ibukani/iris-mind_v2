@@ -50,9 +50,7 @@ class InMemorySchedulerTargetStore(SchedulerTargetStore):
         if existing is None:
             self._targets[key] = target
             return
-        self._targets[key] = _with_scheduler_attempt(
-            target, existing.last_scheduler_attempt_at
-        )
+        self._targets[key] = _with_scheduler_attempt(target, existing.last_scheduler_attempt_at)
 
     @override
     async def list_targets(

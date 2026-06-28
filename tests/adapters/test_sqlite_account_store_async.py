@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 from typing import TYPE_CHECKING
 
 import pytest
@@ -92,11 +91,11 @@ async def test_update_linked_actor_id_async(
     store = SQLiteAccountStore(tmp_path / "link.sqlite3")
 
     await store.put(profile)
-    updated = dataclasses.replace(profile, linked_actor_id=ActorId("actor-link-1"))
+    updated = profile.model_copy(update={"linked_actor_id": ActorId("actor-link-1")})
     linked = await store.put(updated)
     assert linked.linked_actor_id == ActorId("actor-link-1")
 
-    unlinked_profile = dataclasses.replace(linked, linked_actor_id=None)
+    unlinked_profile = linked.model_copy(update={"linked_actor_id": None})
     unlinked = await store.put(unlinked_profile)
     assert unlinked.linked_actor_id is None
     await store.close()

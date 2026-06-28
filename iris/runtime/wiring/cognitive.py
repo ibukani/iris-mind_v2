@@ -194,11 +194,12 @@ def wire_policy_affect_memory_aware_text_response_cognitive_cycle(
     llm_client: LLMClient | None = None,
     *,
     response_options: CognitiveResponseOptions | None = None,
+    extension_steps: Sequence[PipelineStep[PipelineStepResult]] = (),
 ) -> CognitiveCycle:
     """Policy inhibition 付きの感情・メモリ対応テキスト応答サイクルを組み立てる。
 
     Returns:
-        memory → appraisal → persistence → policy → response の CognitiveCycle。
+        memory → appraisal → persistence → policy → feature extension → response の CognitiveCycle。
     """
     stores = stores or CognitiveCycleStores()
     options = response_options or CognitiveResponseOptions()
@@ -220,7 +221,8 @@ def wire_policy_affect_memory_aware_text_response_cognitive_cycle(
             AffectPersistenceStep(affect_store),
             RelationshipStep(stores.relationship_store or InMemoryRelationshipStore()),
             PolicyInhibitionStep(),
-            response_generator,
         ),
     )
+    steps.extend(extension_steps)
+    steps.append(response_generator)
     return wire_cognitive_cycle(steps=tuple(steps))

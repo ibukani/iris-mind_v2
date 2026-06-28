@@ -2,31 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, NoReturn, assert_never
+from typing import TYPE_CHECKING, assert_never
 
-from google.protobuf.timestamp_pb2 import Timestamp
-import grpc
-
-from iris.adapters.llm.diagnostics import (
-    LLMProviderAuthenticationError,
-    LLMProviderConnectionError,
-    LLMProviderError,
-    LLMProviderInvalidResponseError,
-    LLMProviderModelUnavailableError,
-    LLMProviderQuotaError,
-    LLMProviderRateLimitError,
-    LLMProviderTimeoutError,
-)
-from iris.contracts.actions import (
-    ActionResult,
-    ActionStatus,
-    PresentedOutput,
-    SendMessageAction,
+from iris.adapters.grpc.mappers.common import (
+    datetime_from_proto_timestamp,
+    metadata_dict,
+    raise_mapping_error,
 )
 from iris.contracts.activity import ActivityKind
-from iris.contracts.delivery import DeliveryEnvelope, DeliveryReport, DeliveryRouteHint
+from iris.contracts.delivery import DeliveryRouteHint
 from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
@@ -42,19 +27,15 @@ from iris.contracts.presence import PresenceStatus
 from iris.contracts.spaces import SpaceKind
 from iris.core.ids import (
     AccountId,
-    ActionId,
     ActorId,
     CorrelationId,
-    DeliveryId,
     DeviceId,
     ExternalRef,
-    LeaseId,
     ObservationId,
     SessionId,
     SpaceId,
 )
-from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2, spaces_pb2
-from iris.generated.iris.runtime.v1 import runtime_pb2
+from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.runtime.auth.principals import ClientKind, ClientPrincipal
 from iris.runtime.service import ObservationEnvelope
 
@@ -71,16 +52,13 @@ _GRPC_ADAPTER_ID = "grpc"
 _GRPC_ADAPTER_PROVIDER = "grpc"
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
+    from datetime import datetime
 
     from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
     from iris.contracts.spaces import InteractionSpace
+    from iris.generated.iris.runtime.v1 import runtime_pb2
     from iris.runtime.ingress.observation_ingress import ObservationCapability
-    from iris.runtime.service import RuntimeResponse
-
-
-class GrpcMappingError(ValueError):
-    """Raised when gRPC DTOs cannot be mapped to Iris contracts."""
 
 
 class RuntimeIngressProfile(StrEnum):
@@ -94,7 +72,7 @@ def _runtime_ingress_profile(value: RuntimeIngressProfile | str) -> RuntimeIngre
     try:
         return RuntimeIngressProfile(value)
     except (TypeError, ValueError) as exc:
-        _raise_mapping_error("invalid runtime ingress profile", cause=exc)
+        raise_mapping_error("invalid runtime ingress profile", cause=exc)
 
 
 class GrpcRuntimeMapper:
@@ -128,7 +106,7 @@ class GrpcRuntimeMapper:
             self._ingress_profile is RuntimeIngressProfile.TRUSTED_ADAPTER
             and adapter_capabilities is None
         ):
-            _raise_mapping_error("trusted adapter ingress requires explicit capabilities")
+            raise_mapping_error("trusted adapter ingress requires explicit capabilities")
         self._adapter_capabilities = frozenset(adapter_capabilities or ())
 
     async def observation_envelope_from_proto(
@@ -142,7 +120,7 @@ class GrpcRuntimeMapper:
             ObservationEnvelope: Runtime service input envelope.
         """
         if not request.HasField("observation"):
-            _raise_mapping_error("observation required")
+            raise_mapping_error("observation required")
         correlation_id = CorrelationId(request.correlation_id) if request.correlation_id else None
         observation = await self.observation_from_proto(request.observation)
         if principal is not None and principal.client_kind is ClientKind.TRUSTED_ADAPTER:
@@ -242,7 +220,7 @@ class GrpcRuntimeMapper:
     ) -> ActivityEventObservation:
         activity_payload = observation.activity_event
         if activity_payload.provider_sequence < 0:
-            _raise_mapping_error("activity_event.provider_sequence must not be negative")
+            raise_mapping_error("activity_event.provider_sequence must not be negative")
         activity_kind = _activity_kind_from_proto(activity_payload.activity_kind)
         _require_activity_subject(
             activity_kind=activity_kind,
@@ -257,7 +235,7 @@ class GrpcRuntimeMapper:
             activity_kind=activity_kind,
             provider_event_id=activity_payload.provider_event_id or None,
             provider_sequence=activity_payload.provider_sequence or None,
-            metadata=_metadata_dict(activity_payload.metadata),
+            metadata=metadata_dict(activity_payload.metadata),
         )
 
     @staticmethod
@@ -270,7 +248,7 @@ class GrpcRuntimeMapper:
         _require_presence_subject(context)
         presence_payload = observation.presence_signal
         expires_at = (
-            _datetime_from_proto_timestamp(
+            datetime_from_proto_timestamp(
                 presence_payload.expires_at,
                 field_name="presence_signal.expires_at",
             )
@@ -285,7 +263,7 @@ class GrpcRuntimeMapper:
             kind=kind,
             status=_presence_status_from_proto(presence_payload.status),
             expires_at=expires_at,
-            metadata=_metadata_dict(presence_payload.metadata),
+            metadata=metadata_dict(presence_payload.metadata),
         )
 
     async def observation_context_from_proto(
@@ -306,7 +284,7 @@ class GrpcRuntimeMapper:
             device_id=DeviceId(context.device_id) if context.device_id else None,
             space_id=space_id,
             source=context.source or None,
-            metadata=_metadata_dict(context.metadata),
+            metadata=metadata_dict(context.metadata),
         )
 
     async def _resolve_actor_from_context(
@@ -316,9 +294,9 @@ class GrpcRuntimeMapper:
         has_actor = context.HasField("actor")
         has_account_ref = context.HasField("account_ref")
         if has_actor and has_account_ref:
-            _raise_mapping_error("context must not include both actor and account_ref")
+            raise_mapping_error("context must not include both actor and account_ref")
         if has_account_ref and context.account_id:
-            _raise_mapping_error("context must not include both account_ref and account_id")
+            raise_mapping_error("context must not include both account_ref and account_id")
 
         if has_account_ref:
             actor = await self._resolve_account_ref(
@@ -328,7 +306,7 @@ class GrpcRuntimeMapper:
         elif has_actor:
             actor = identity_from_proto(context.actor)
             if context.account_id and actor.account_id and context.account_id != actor.account_id:
-                _raise_mapping_error("context.account_id and actor.account_id do not match")
+                raise_mapping_error("context.account_id and actor.account_id do not match")
         else:
             actor = None
 
@@ -345,7 +323,7 @@ class GrpcRuntimeMapper:
         has_space_ref = context.HasField("space_ref")
         if has_space_ref:
             if context.space_id:
-                _raise_mapping_error("context must not include both space_ref and space_id")
+                raise_mapping_error("context must not include both space_ref and space_id")
             resolved_space = await self._resolve_space_ref(context.space_ref)
             return resolved_space.space_id
         if context.space_id:
@@ -364,7 +342,7 @@ class GrpcRuntimeMapper:
             Identity: Resolved typed actor identity.
         """
         if self._identity_resolver is None:
-            _raise_mapping_error("identity resolver is required for account_ref")
+            raise_mapping_error("identity resolver is required for account_ref")
 
         dto = external_account_ref_from_proto(account_ref)
         return await self._identity_resolver.resolve_identity(
@@ -382,7 +360,7 @@ class GrpcRuntimeMapper:
             InteractionSpace: Resolved typed space.
         """
         if self._space_resolver is None:
-            _raise_mapping_error("space resolver is required for space_ref")
+            raise_mapping_error("space resolver is required for space_ref")
 
         dto = external_space_ref_from_proto(space_ref)
 
@@ -398,11 +376,11 @@ def external_account_ref_from_proto(
         ExternalAccountRef: Mapped DTO.
     """
     if not account_ref.provider:
-        _raise_mapping_error("account_ref.provider is required")
+        raise_mapping_error("account_ref.provider is required")
     if not account_ref.provider_subject:
-        _raise_mapping_error("account_ref.provider_subject is required")
+        raise_mapping_error("account_ref.provider_subject is required")
     if not account_ref.display_name:
-        _raise_mapping_error("account_ref.display_name is required")
+        raise_mapping_error("account_ref.display_name is required")
     actor_kind = _account_ref_kind_to_contract(account_ref.actor_kind)
     return ExternalAccountRef(
         provider=account_ref.provider,
@@ -410,7 +388,7 @@ def external_account_ref_from_proto(
         display_name=account_ref.display_name,
         actor_kind=actor_kind,
         account_id=None,
-        metadata=_metadata_dict(account_ref.metadata),
+        metadata=metadata_dict(account_ref.metadata),
     )
 
 
@@ -423,13 +401,13 @@ def external_space_ref_from_proto(
         ExternalSpaceRef: Mapped DTO.
     """
     if not space_ref.provider:
-        _raise_mapping_error("space_ref.provider is required")
+        raise_mapping_error("space_ref.provider is required")
     if not space_ref.provider_space_ref:
-        _raise_mapping_error("space_ref.provider_space_ref is required")
+        raise_mapping_error("space_ref.provider_space_ref is required")
     if not space_ref.display_name:
-        _raise_mapping_error("space_ref.display_name is required")
+        raise_mapping_error("space_ref.display_name is required")
     if space_ref.space_kind == spaces_pb2.SPACE_KIND_UNSPECIFIED:
-        _raise_mapping_error("space_ref.space_kind must not be unspecified")
+        raise_mapping_error("space_ref.space_kind must not be unspecified")
 
     space_kind = _space_kind_from_proto(space_ref.space_kind)
 
@@ -438,7 +416,7 @@ def external_space_ref_from_proto(
         provider_space_ref=ExternalRef(space_ref.provider_space_ref),
         display_name=space_ref.display_name,
         space_kind=space_kind,
-        metadata=_metadata_dict(space_ref.metadata),
+        metadata=metadata_dict(space_ref.metadata),
     )
 
 
@@ -483,7 +461,7 @@ def _route_provider_from_context(
     account_provider = context.account_ref.provider if context.HasField("account_ref") else ""
     space_provider = context.space_ref.provider if context.HasField("space_ref") else ""
     if account_provider and space_provider and account_provider != space_provider:
-        _raise_mapping_error("account_ref.provider space_ref.provider mismatch")
+        raise_mapping_error("account_ref.provider space_ref.provider mismatch")
     return account_provider or space_provider or None
 
 
@@ -495,13 +473,13 @@ def identity_from_proto(identity: identity_pb2.Identity) -> Identity:
     """
     actor_kind = _actor_kind_from_proto(identity.actor_kind)
     if not identity.actor_id:
-        _raise_mapping_error("identity.actor_id is required")
+        raise_mapping_error("identity.actor_id is required")
     provider = identity.provider or None
     provider_subject = ExternalRef(identity.provider_subject) if identity.provider_subject else None
 
     # Require provider_subject for external actors
     if actor_kind not in {ActorKind.SYSTEM, ActorKind.IRIS} and not provider_subject:
-        _raise_mapping_error("identity.provider_subject is required for external actors")
+        raise_mapping_error("identity.provider_subject is required for external actors")
 
     return Identity(
         actor_id=ActorId(identity.actor_id),
@@ -511,166 +489,17 @@ def identity_from_proto(identity: identity_pb2.Identity) -> Identity:
         provider_subject=provider_subject,
         account_id=AccountId(identity.account_id) if identity.account_id else None,
         device_id=DeviceId(identity.device_id) if identity.device_id else None,
-        metadata=_metadata_dict(identity.metadata),
+        metadata=metadata_dict(identity.metadata),
     )
-
-
-def runtime_response_to_proto(
-    response: RuntimeResponse,
-) -> runtime_pb2.SubmitObservationResponse:
-    """Map RuntimeResponse to SubmitObservationResponse proto.
-
-    Returns:
-        runtime_pb2.SubmitObservationResponse: Proto response.
-    """
-    return runtime_pb2.SubmitObservationResponse(
-        correlation_id=str(response.correlation_id or ""),
-        output=presented_output_to_proto(response.output),
-    )
-
-
-def delivery_envelope_to_proto(envelope: DeliveryEnvelope) -> runtime_pb2.AppActionEnvelope:
-    """Map a leased DeliveryEnvelope to the polling DTO.
-
-    Returns:
-        AppActionEnvelope: proto 配送 DTO。
-    """
-    action = envelope.action
-    if not isinstance(action, SendMessageAction):
-        _raise_mapping_error("unsupported delivery action")
-    return runtime_pb2.AppActionEnvelope(
-        delivery_id=str(envelope.delivery_id),
-        lease_id=str(envelope.lease_id or ""),
-        action_id=str(action.action_id),
-        correlation_id=str(action.correlation_id),
-        session_id=str(action.session_id),
-        provider=envelope.target.provider,
-        provider_subject=str(envelope.target.provider_subject or ""),
-        provider_space_ref=str(envelope.target.provider_space_ref or ""),
-        attempts=envelope.attempts,
-        send_message=runtime_pb2.SendMessageAction(text=action.text),
-    )
-
-
-def delivery_envelopes_to_poll_response(
-    envelopes: tuple[DeliveryEnvelope, ...],
-) -> runtime_pb2.PollAppActionsResponse:
-    """Map leased envelopes to PollAppActionsResponse.
-
-    Returns:
-        PollAppActionsResponse: proto 配送応答。
-    """
-    return runtime_pb2.PollAppActionsResponse(
-        actions=[delivery_envelope_to_proto(envelope) for envelope in envelopes]
-    )
-
-
-def delivery_id_from_report_proto(
-    request: runtime_pb2.ReportActionResultRequest,
-) -> DeliveryId:
-    """Extract and validate DeliveryId from ReportActionResultRequest.
-
-    Returns:
-        DeliveryId: 抽出された配送 ID。
-    """
-    if not request.delivery_id:
-        _raise_mapping_error("delivery_id required")
-    return DeliveryId(request.delivery_id)
-
-
-def delivery_report_from_proto(
-    request: runtime_pb2.ReportActionResultRequest,
-    reported_at: datetime,
-) -> DeliveryReport:
-    """Map ReportActionResultRequest to DeliveryReport.
-
-    Returns:
-        DeliveryReport: 配送結果報告。
-    """
-    delivery_id = delivery_id_from_report_proto(request)
-    status = _action_status_from_report_status(request.status)
-    if not request.action_id:
-        _raise_mapping_error("action_id required")
-    if not request.correlation_id:
-        _raise_mapping_error("correlation_id required")
-    return DeliveryReport(
-        delivery_id=delivery_id,
-        lease_id=LeaseId(request.lease_id) if request.lease_id else None,
-        result=ActionResult(
-            action_id=ActionId(request.action_id),
-            correlation_id=CorrelationId(request.correlation_id),
-            status=status,
-            delivered_at=reported_at if status is ActionStatus.SUCCEEDED else None,
-            external_message_id=(
-                ExternalRef(request.external_message_id) if request.external_message_id else None
-            ),
-            error_reason=request.error_reason or None,
-        ),
-        reported_at=reported_at,
-    )
-
-
-def _action_status_from_report_status(status: str) -> ActionStatus:
-    """Map report status string to ActionStatus.
-
-    Returns:
-        ActionStatus: 解析後の状態。
-    """
-    try:
-        return ActionStatus(status)
-    except ValueError as exc:
-        _raise_mapping_error(f"invalid action result status: {status}", cause=exc)
-
-
-def presented_output_to_proto(output: PresentedOutput) -> outputs_pb2.PresentedOutput:
-    """Map PresentedOutput contract to proto DTO.
-
-    Returns:
-        outputs_pb2.PresentedOutput: Proto presented output.
-    """
-    return outputs_pb2.PresentedOutput(
-        text=output.text or "",
-        style_hint=output.style_hint or "",
-        emotion_hint=output.emotion_hint or "",
-        expression_hint=output.expression_hint or "",
-        delay_ms=output.delay_ms,
-        priority=output.priority,
-        interruptible=output.interruptible,
-    )
-
-
-def timestamp_from_datetime(value: datetime) -> Timestamp:
-    """Map timezone-aware datetime to protobuf Timestamp.
-
-    Returns:
-        Timestamp: Proto timestamp.
-    """
-    timestamp = Timestamp()
-    timestamp.FromDatetime(value)
-    return timestamp
 
 
 def _datetime_from_timestamp(observation: observations_pb2.Observation) -> datetime:
     if not observation.HasField("occurred_at"):
-        _raise_mapping_error("occurred_at is required")
-    return _datetime_from_proto_timestamp(
+        raise_mapping_error("occurred_at is required")
+    return datetime_from_proto_timestamp(
         observation.occurred_at,
         field_name="occurred_at",
     )
-
-
-def _datetime_from_proto_timestamp(
-    timestamp: Timestamp,
-    *,
-    field_name: str,
-) -> datetime:
-    try:
-        value = timestamp.ToDatetime(tzinfo=UTC)
-    except (OverflowError, ValueError) as exc:
-        _raise_mapping_error(f"{field_name} is invalid", cause=exc)
-    if value.tzinfo is None:
-        _raise_mapping_error(f"{field_name} must be timezone-aware")
-    return value
 
 
 def _validate_observation_kind_and_payload(
@@ -685,17 +514,17 @@ def _validate_observation_kind_and_payload(
     try:
         expected_payload = expected_payload_by_kind[observation.kind]
     except KeyError:
-        _raise_mapping_error(f"unsupported or unspecified observation kind: {observation.kind}")
+        raise_mapping_error(f"unsupported or unspecified observation kind: {observation.kind}")
     actual_payload = observation.WhichOneof("payload")
     if actual_payload != expected_payload:
-        _raise_mapping_error(
+        raise_mapping_error(
             f"observation kind requires {expected_payload} payload, got {actual_payload or 'none'}"
         )
 
 
 def _require_presence_subject(context: ObservationContext) -> None:
     if context.actor is None and context.account_id is None:
-        _raise_mapping_error("presence_signal requires actor or account_id")
+        raise_mapping_error("presence_signal requires actor or account_id")
 
 
 def _require_activity_subject(
@@ -708,7 +537,7 @@ def _require_activity_subject(
         and context.actor is None
         and context.account_id is None
     ):
-        _raise_mapping_error(f"{activity_kind.value} requires actor or account_id")
+        raise_mapping_error(f"{activity_kind.value} requires actor or account_id")
 
 
 def _observation_kind_from_proto(
@@ -723,7 +552,7 @@ def _observation_kind_from_proto(
     try:
         return mapping[kind]
     except KeyError:
-        _raise_mapping_error(f"unsupported or unspecified observation kind: {kind}")
+        raise_mapping_error(f"unsupported or unspecified observation kind: {kind}")
 
 
 def _activity_kind_from_proto(
@@ -741,7 +570,7 @@ def _activity_kind_from_proto(
     try:
         return mapping[kind]
     except KeyError:
-        _raise_mapping_error(f"unsupported or unspecified activity kind: {kind}")
+        raise_mapping_error(f"unsupported or unspecified activity kind: {kind}")
 
 
 def _presence_status_from_proto(
@@ -759,7 +588,7 @@ def _presence_status_from_proto(
     try:
         return mapping[status]
     except KeyError:
-        _raise_mapping_error(f"unsupported or unspecified presence status: {status}")
+        raise_mapping_error(f"unsupported or unspecified presence status: {status}")
 
 
 def _actor_kind_from_proto(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
@@ -773,7 +602,7 @@ def _actor_kind_from_proto(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
     try:
         return mapping[kind]
     except KeyError:
-        _raise_mapping_error(f"unsupported or unspecified actor kind: {kind}")
+        raise_mapping_error(f"unsupported or unspecified actor kind: {kind}")
 
 
 def _space_kind_from_proto(kind: spaces_pb2.SpaceKind.ValueType) -> SpaceKind:
@@ -788,7 +617,7 @@ def _space_kind_from_proto(kind: spaces_pb2.SpaceKind.ValueType) -> SpaceKind:
     try:
         return mapping[kind]
     except KeyError:
-        _raise_mapping_error(f"unsupported or unspecified space kind: {kind}")
+        raise_mapping_error(f"unsupported or unspecified space kind: {kind}")
 
 
 def _account_ref_kind_to_contract(kind: identity_pb2.ActorKind.ValueType) -> ActorKind:
@@ -800,63 +629,3 @@ def _account_ref_kind_to_contract(kind: identity_pb2.ActorKind.ValueType) -> Act
     if kind == identity_pb2.ACTOR_KIND_UNSPECIFIED:
         return ActorKind.HUMAN
     return _actor_kind_from_proto(kind)
-
-
-def _metadata_dict(metadata: Mapping[str, str]) -> dict[str, str]:
-    return dict(metadata.items())
-
-
-def _raise_mapping_error(message: str, *, cause: BaseException | None = None) -> NoReturn:
-    """Raise GrpcMappingError with a caller-provided message.
-
-    Raises:
-        GrpcMappingError: Always raised.
-    """
-    if cause is None:
-        raise GrpcMappingError(message)
-    raise GrpcMappingError(message) from cause
-
-
-_ProviderErrorToStatus: tuple[tuple[type[LLMProviderError], grpc.StatusCode], ...] = (
-    (LLMProviderAuthenticationError, grpc.StatusCode.UNAUTHENTICATED),
-    (LLMProviderConnectionError, grpc.StatusCode.UNAVAILABLE),
-    (LLMProviderTimeoutError, grpc.StatusCode.DEADLINE_EXCEEDED),
-    (LLMProviderRateLimitError, grpc.StatusCode.RESOURCE_EXHAUSTED),
-    (LLMProviderQuotaError, grpc.StatusCode.RESOURCE_EXHAUSTED),
-    (LLMProviderModelUnavailableError, grpc.StatusCode.FAILED_PRECONDITION),
-    (LLMProviderInvalidResponseError, grpc.StatusCode.INTERNAL),
-)
-
-
-def map_provider_error_to_status(exc: LLMProviderError) -> grpc.StatusCode:
-    """Map a concrete :class:`LLMProviderError` subclass to a gRPC status code.
-
-    Args:
-        exc: The provider error to translate.
-
-    Returns:
-        The most specific gRPC status code for the error category.
-    """
-    for error_type, status in _ProviderErrorToStatus:
-        if isinstance(exc, error_type):
-            return status
-    return grpc.StatusCode.UNKNOWN
-
-
-def map_exception_to_grpc(exc: BaseException) -> tuple[grpc.StatusCode, str]:
-    """Map any exception to a gRPC status code and a client-facing message.
-
-    The mapping first checks the :class:`LLMProviderError` hierarchy
-    so that specific provider failure modes produce actionable status
-    codes. Any other exception falls back to ``INTERNAL``.
-
-    Args:
-        exc: The exception to translate.
-
-    Returns:
-        A tuple of (gRPC status code, human-readable message).
-    """
-    if isinstance(exc, LLMProviderError):
-        status = map_provider_error_to_status(exc)
-        return status, f"provider error: {exc}"
-    return grpc.StatusCode.INTERNAL, "runtime service failed"

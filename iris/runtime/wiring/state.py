@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
@@ -40,6 +40,14 @@ if TYPE_CHECKING:
     from iris.runtime.state.space_occupancy import SpaceOccupancyStore
 
 
+class SyncLifecycle(Protocol):
+    """同期closeを持つ明示的lifecycle境界。"""
+
+    def close(self) -> None:
+        """所有resourceを閉じる。"""
+        ...
+
+
 @dataclass(frozen=True)
 class RuntimeStateStores:
     """ランタイム状態ストア群。"""
@@ -55,11 +63,12 @@ class RuntimeStateStores:
     delivery_outbox: DeliveryOutbox
     scheduler_target_store: SchedulerTargetStore
     sqlite_context: SQLitePersistenceContext | None = None
+    memory_lifecycle: SyncLifecycle | None = None
 
     async def close(self) -> None:
         """Close all persistent store connections."""
-        if hasattr(self.memory_store, "close"):
-            self.memory_store.close()
+        if self.memory_lifecycle is not None:
+            self.memory_lifecycle.close()
 
         if self.sqlite_context is not None:
             await self.sqlite_context.close()
@@ -111,4 +120,5 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         delivery_outbox=delivery_outbox,
         scheduler_target_store=scheduler_target_store,
         sqlite_context=sqlite_context,
+        memory_lifecycle=memory_store if isinstance(memory_store, SQLiteMemoryStore) else None,
     )

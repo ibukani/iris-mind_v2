@@ -22,6 +22,7 @@ from iris.contracts.observations import ActorMessageObservation, ObservationCont
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.safety.action_gate import GateDecision, SafetyDecision
+from tests.helpers.output_pipeline import make_output_pipeline
 
 
 @pytest.fixture
@@ -89,7 +90,7 @@ async def test_action_safety_gate_blocks(actor_message: ActorMessageObservation)
 
     app = IrisApp(
         steps=[SimplePerceptionStep(), SimpleActionSelectionStep()],
-        action_safety_gate=BlockingGate(),
+        output_pipeline=make_output_pipeline(action_gate=BlockingGate()),
     )
     result = await app.process_observation(actor_message)
     assert isinstance(result, PresentedOutput)
@@ -107,7 +108,7 @@ async def test_output_safety_gate_blocks(actor_message: ActorMessageObservation)
 
     app = IrisApp(
         steps=[SimplePerceptionStep(), SimpleActionSelectionStep()],
-        output_safety_gate=BlockingGate(),
+        output_pipeline=make_output_pipeline(output_gate=BlockingGate()),
     )
     result = await app.process_observation(actor_message)
     assert isinstance(result, PresentedOutput)

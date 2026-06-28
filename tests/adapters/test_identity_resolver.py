@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING
 
 import pytest
@@ -87,7 +86,7 @@ async def test_account_backed_resolver_uses_linked_actor_id(
 
     profile = await store.get_by_account_id(identity1.account_id)
     assert profile is not None
-    updated_profile = dataclasses.replace(profile, linked_actor_id=ActorId("actor-mina"))
+    updated_profile = profile.model_copy(update={"linked_actor_id": ActorId("actor-mina")})
     await store.put(updated_profile)
 
     # Restart and resolve again

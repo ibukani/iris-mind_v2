@@ -2,6 +2,24 @@
 
 This repository is **Iris**, an AI companion cognitive runtime MVP. Treat this file as the entry point for Codex, OpenCode, and other coding agents.
 
+## Subagent coding policy
+
+Use subagents in three tiers:
+
+1. Read-only exploration agents
+   Use gpt-5.4-mini for codebase mapping, dependency tracing, architecture scouting, and log summarization.
+
+2. Read-only patch proposal agents
+   Use gpt-5.4-mini patch-writing agents to propose concrete code snippets, test changes, and unified diffs.
+   The parent GPT-5.5 agent should review and apply the final changes.
+
+3. Narrow implementation agents
+   Use gpt-5.4-mini write-capable agents only for small, isolated, low-risk changes.
+   Do not let multiple write-capable subagents edit overlapping files.
+   The parent GPT-5.5 agent owns final architecture decisions and final review.
+
+Prefer patch proposals over direct subagent edits for large refactors.
+
 ## Must-follow token, language, and output compression policy
 
 These rules are embedded here, not delegated to another file, because they must be loaded at the start of every agent session.

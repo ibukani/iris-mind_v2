@@ -9,6 +9,7 @@ from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.workspace.frame import WorkspaceFrame, interpreted_input_text
 from iris.contracts.actions import ActionPlan
+from iris.contracts.observations import ActorMessageObservation
 
 if TYPE_CHECKING:
     from iris.contracts.policy import PolicyConstraint
@@ -49,6 +50,8 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
     Returns:
         ResponsePrompt | None: 構築された応答プロンプト。入力テキストがない場合は None。
     """
+    if not isinstance(frame.observation, ActorMessageObservation):
+        return None
     text = interpreted_input_text(frame)
     if text is None:
         return None

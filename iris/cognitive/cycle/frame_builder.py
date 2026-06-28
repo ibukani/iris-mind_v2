@@ -167,7 +167,7 @@ class FrameBuilder:
     ) -> WorkspaceFrame:
         updates = replace(
             _current_updates(frame),
-            candidate_action_plans=result.action_plans,
+            candidate_action_plans=frame.candidate_action_plans + result.action_plans,
         )
         return _rebuild_frame(frame, updates)
 

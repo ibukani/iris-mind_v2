@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from iris.adapters.app_gateway.ports import AppActionBroker
     from iris.runtime.app import IrisApp
+    from iris.runtime.output_pipeline import RuntimeOutputPipeline
     from iris.runtime.scheduler.runner import SchedulerRunner
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
@@ -50,13 +51,14 @@ from iris.runtime.state.activity_integrator import ActivityIntegrator
 from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.state.scheduler_target_integrator import SchedulerTargetIntegrator
 from iris.runtime.state.space_occupancy_integrator import SpaceOccupancyIntegrator
-from iris.runtime.wiring.app import build_app_from_config
+from iris.runtime.wiring.app import AppStateDependencies, build_app_from_config
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.delivery import wire_app_action_broker, wire_delivery_safety_gate
 from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipeline
-from iris.runtime.wiring.features import RuntimeExtensionComposition, wire_runtime_extensions
+from iris.runtime.wiring.features import RuntimeFeatureCatalog, wire_runtime_features
 from iris.runtime.wiring.grpc import create_grpc_server
+from iris.runtime.wiring.presentation import wire_output_pipeline
 from iris.runtime.wiring.scheduler import wire_runtime_scheduler, wire_scheduler_runner
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
 
@@ -77,7 +79,8 @@ def build_runtime_service(
     app: IrisApp,
     stores: RuntimeStateStores,
     *,
-    extensions: RuntimeExtensionComposition,
+    feature_catalog: RuntimeFeatureCatalog,
+    output_pipeline: RuntimeOutputPipeline,
     target_stale_after_seconds: float,
     now: Callable[[], datetime] | None = None,
 ) -> IrisRuntimeService:
@@ -89,7 +92,8 @@ def build_runtime_service(
     Args:
         app: アプリケーション定義。
         stores: ランタイムstateストア。
-        extensions: フィーチャー定義と共有出力境界。
+        feature_catalog: 有効なフィーチャー定義の集合。
+        output_pipeline: presentation と safety を適用する共有出力境界。
         target_stale_after_seconds: target が stale になるまでの idle 秒数。
         now: 現在時刻を返す関数。省略時は `datetime.now(UTC)`。
 
@@ -126,11 +130,11 @@ def build_runtime_service(
         availability_resolver=availability_resolver,
         now=current_now,
     )
-    decision_pipeline = wire_event_reaction_decision_pipeline(extensions.features)
+    decision_pipeline = wire_event_reaction_decision_pipeline(feature_catalog.features)
     activity_event_reaction_handler = ActivityEventReactionHandler(
         trust_policy=trust_policy,
         decision_pipeline=decision_pipeline,
-        output_pipeline=extensions.output_pipeline,
+        output_pipeline=output_pipeline,
     )
     return IrisRuntimeService(
         app,
@@ -163,18 +167,22 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         ランタイムコンポーネント。
     """
     stores = wire_runtime_state(config)
-    extensions = wire_runtime_extensions(config.safety)
-    app: IrisApp = build_app_from_config(
-        config,
-        memory_store=stores.memory_store,
-        relationship_store=stores.relationship_store,
-        affect_store=stores.affect_store,
-        output_pipeline=extensions.output_pipeline,
-    )
+    feature_catalog = wire_runtime_features()
+    output_pipeline = wire_output_pipeline(safety_config=config.safety)
     runtime_service = build_runtime_service(
-        app,
+        build_app_from_config(
+            config,
+            state=AppStateDependencies(
+                memory_store=stores.memory_store,
+                relationship_store=stores.relationship_store,
+                affect_store=stores.affect_store,
+            ),
+            output_pipeline=output_pipeline,
+            features=feature_catalog.features,
+        ),
         stores,
-        extensions=extensions,
+        feature_catalog=feature_catalog,
+        output_pipeline=output_pipeline,
         target_stale_after_seconds=config.scheduler.target_stale_after_seconds,
     )
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)

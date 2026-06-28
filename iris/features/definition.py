@@ -49,6 +49,7 @@ class ActivityReactionPlanner(Protocol):
         availability: AvailabilitySnapshot | None,
     ) -> EventReactionDecision:
         """リアクションを計画する。"""
+        ...
 
 
 @dataclass(frozen=True)

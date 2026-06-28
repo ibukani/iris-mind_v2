@@ -16,7 +16,12 @@ from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import StepStatus
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
-from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
+from iris.contracts.observations import (
+    ActorMessageObservation,
+    IdleTickObservation,
+    ObservationContext,
+    ObservationKind,
+)
 from iris.core.ids import ObservationId, SessionId
 from tests.helpers.immutability import assert_frozen_field
 
@@ -87,6 +92,31 @@ async def test_response_generation_skips_when_frame_has_no_interpreted_text() ->
     """フレームに解釈テキストがない場合にResponseGenerationStepがスキップすることを確認する。"""
     frame = WorkspaceFrame(observation=actor_message())
     generator = StubResponseGenerator("unused")
+
+    result = await ResponseGenerationStep(generator).run(frame)
+
+    assert result.status == StepStatus.SKIPPED
+    assert result.action_plans == ()
+    assert generator.prompts == []
+
+
+@pytest.mark.anyio
+async def test_response_generation_skips_non_actor_observation_text() -> None:
+    """内部観測の知覚ラベルをactor向け応答プロンプトへ変換しない。"""
+    frame_builder = FrameBuilder()
+    frame = WorkspaceFrame(
+        observation=IdleTickObservation(
+            observation_id=ObservationId("obs-idle-response"),
+            session_id=SessionId("session-idle-response"),
+            context=ObservationContext(),
+            occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
+            kind=ObservationKind.IDLE_TICK,
+            idle_seconds=600.0,
+        ),
+    )
+    perceived = await SimplePerceptionStep().run(frame)
+    frame = frame_builder.apply(frame, perceived)
+    generator = StubResponseGenerator("must not be generated")
 
     result = await ResponseGenerationStep(generator).run(frame)
 

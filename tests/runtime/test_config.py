@@ -12,9 +12,15 @@ import pytest
 
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
 from iris.adapters.memory.fake import FakeMemoryStore
+from iris.cognitive.action.response import ResponseGenerationStep
 from iris.contracts.identity import ActorKind, Identity
-from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
+from iris.contracts.observations import (
+    ActorMessageObservation,
+    ObservationContext,
+    ObservationKind,
+)
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+from iris.features.proactive_talk import define_proactive_talk_feature
 import iris.runtime.config as config_pkg
 from iris.runtime.config import (
     ConfigError,
@@ -34,7 +40,7 @@ from iris.runtime.config import (
 from iris.runtime.config.llm import LLMProvider
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
-from iris.runtime.wiring.app import build_app_from_config
+from iris.runtime.wiring.app import AppStateDependencies, build_app_from_config
 from iris.runtime.wiring.llm import LLMClientFactory
 from iris.runtime.wiring.presentation import wire_output_pipeline
 
@@ -43,6 +49,16 @@ if TYPE_CHECKING:
 
 from tests.helpers.approx import approx
 from tests.helpers.exact_eq import assert_exact_eq
+from tests.helpers.private_access import get_private_attr_as
+
+
+def _is_object_tuple(value: object) -> TypeGuard[tuple[object, ...]]:
+    """値が任意オブジェクトのtupleか判定する。
+
+    Returns:
+        tupleの場合はTrue。
+    """
+    return isinstance(value, tuple)
 
 
 def test_default_config_uses_fake_default_chat() -> None:
@@ -466,9 +482,11 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
     app = build_app_from_config(
         config,
         client_factory=factory,
-        memory_store=memory_store,
-        relationship_store=InMemoryRelationshipStore(),
-        affect_store=InMemoryAffectStore(),
+        state=AppStateDependencies(
+            memory_store=memory_store,
+            relationship_store=InMemoryRelationshipStore(),
+            affect_store=InMemoryAffectStore(),
+        ),
         output_pipeline=wire_output_pipeline(safety_config=config.safety),
     )
 
@@ -507,9 +525,11 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
     app = build_app_from_config(
         config,
         client_factory=factory,
-        memory_store=memory_store,
-        relationship_store=InMemoryRelationshipStore(),
-        affect_store=InMemoryAffectStore(),
+        state=AppStateDependencies(
+            memory_store=memory_store,
+            relationship_store=InMemoryRelationshipStore(),
+            affect_store=InMemoryAffectStore(),
+        ),
         output_pipeline=wire_output_pipeline(safety_config=config.safety),
     )
 
@@ -517,6 +537,33 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
 
     assert client.request is not None
     assert client.request.model == "gpt-5-mini"
+
+
+def test_build_app_from_config_includes_registered_feature_steps() -> None:
+    """標準 app wiring は FeatureDefinition の認知ステップを cycle に含める。"""
+    config = default_runtime_config()
+    feature = define_proactive_talk_feature()
+    app = build_app_from_config(
+        config,
+        state=AppStateDependencies(
+            memory_store=FakeMemoryStore(),
+            relationship_store=InMemoryRelationshipStore(),
+            affect_store=InMemoryAffectStore(),
+        ),
+        output_pipeline=wire_output_pipeline(safety_config=config.safety),
+        features=(feature,),
+    )
+
+    cycle = get_private_attr_as(app, "_cycle", object)
+    steps_value = get_private_attr_as(cycle, "_steps", tuple)
+    assert _is_object_tuple(steps_value)
+    steps = steps_value
+    extension_indexes = tuple(steps.index(step) for step in feature.cognitive_steps)
+    response_index = len(steps) - 1
+
+    assert isinstance(steps[response_index], ResponseGenerationStep)
+    assert extension_indexes == tuple(sorted(extension_indexes))
+    assert all(index < response_index for index in extension_indexes)
 
 
 class _RecordingLLMClient:

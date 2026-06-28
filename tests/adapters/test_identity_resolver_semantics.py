@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
-
 import pytest
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
@@ -68,14 +66,14 @@ async def test_linked_actor_id_takes_precedence_and_unlink_restores_provisional(
 
     profile = await store.get_by_account_id(account_id)
     assert profile is not None
-    linked_profile = dataclasses.replace(profile, linked_actor_id=ActorId("actor-linked"))
+    linked_profile = profile.model_copy(update={"linked_actor_id": ActorId("actor-linked")})
     await store.put(linked_profile)
 
     linked = await resolver.resolve_identity(_account_ref())
 
     profile = await store.get_by_account_id(account_id)
     assert profile is not None
-    unlinked_profile = dataclasses.replace(profile, linked_actor_id=None)
+    unlinked_profile = profile.model_copy(update={"linked_actor_id": None})
     await store.put(unlinked_profile)
 
     unlinked = await resolver.resolve_identity(_account_ref())

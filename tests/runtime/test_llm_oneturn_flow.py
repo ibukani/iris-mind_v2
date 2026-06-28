@@ -13,6 +13,7 @@ from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import wire_text_response_cognitive_cycle
 from iris.safety.action_gate import GateDecision, SafetyDecision
+from tests.helpers.output_pipeline import make_output_pipeline
 
 if TYPE_CHECKING:
     from iris.contracts.actions import ActionPlan, PresentedOutput
@@ -67,7 +68,7 @@ async def test_action_safety_gate_blocks_llm_action_plan() -> None:
     llm = FakeLLMClient(responses=("unsafe reply",))
     app = IrisApp(
         cycle=wire_text_response_cognitive_cycle(llm),
-        action_safety_gate=BlockingActionGate(),
+        output_pipeline=make_output_pipeline(action_gate=BlockingActionGate()),
     )
 
     output = await app.process_observation(actor_message())
@@ -81,7 +82,7 @@ async def test_output_safety_gate_blocks_llm_presented_output() -> None:
     llm = FakeLLMClient(responses=("blocked presented output",))
     app = IrisApp(
         cycle=wire_text_response_cognitive_cycle(llm),
-        output_safety_gate=BlockingOutputGate(),
+        output_pipeline=make_output_pipeline(output_gate=BlockingOutputGate()),
     )
 
     output = await app.process_observation(actor_message())

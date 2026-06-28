@@ -40,7 +40,7 @@ from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipeline
-from iris.runtime.wiring.features import wire_runtime_extensions
+from iris.runtime.wiring.features import wire_runtime_features
 from iris.runtime.wiring.presentation import wire_output_pipeline
 from iris.runtime.wiring.state import wire_runtime_state
 from iris.safety.action_gate import GateDecision, SafetyDecision
@@ -179,15 +179,17 @@ def service_setup() -> tuple[IrisRuntimeService, _CaptureFrameStep]:
     config = default_runtime_config()
     stores = wire_runtime_state(config)
     capture = _CaptureFrameStep()
-    extensions = wire_runtime_extensions(config.safety)
+    feature_catalog = wire_runtime_features()
+    output_pipeline = wire_output_pipeline(safety_config=config.safety)
     app = IrisApp(
         steps=[capture],
-        output_pipeline=extensions.output_pipeline,
+        output_pipeline=output_pipeline,
     )
     service: IrisRuntimeService = build_runtime_service(
         app,
         stores,
-        extensions=extensions,
+        feature_catalog=feature_catalog,
+        output_pipeline=output_pipeline,
         now=lambda: _RECEIVED_AT,
         target_stale_after_seconds=604800.0,
     )

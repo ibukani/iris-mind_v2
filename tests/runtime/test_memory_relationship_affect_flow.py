@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from dataclasses import fields
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -166,8 +165,8 @@ async def test_reloaded_affect_baseline_is_visible_to_response_prompt(
 
 def test_relationship_and_affect_records_are_not_space_owned() -> None:
     """Relationship / affect durable state は space_id を owner field にしない。"""
-    relationship_fields = {field.name for field in fields(RelationshipSnapshotRecord)}
-    affect_fields = {field.name for field in fields(AffectBaselineRecord)}
+    relationship_fields = set(RelationshipSnapshotRecord.model_fields)
+    affect_fields = set(AffectBaselineRecord.model_fields)
 
     assert "space_id" not in relationship_fields
     assert "space_id" not in affect_fields

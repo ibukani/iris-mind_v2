@@ -143,19 +143,19 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
     ),
     (
         "iris/adapters",
-        "iris/adapters/grpc/mappers.py",
+        "iris/adapters/grpc/mappers/observations.py",
         "iris.runtime.service",
         "gRPC ingress maps transport DTOs to runtime service envelope/response",
     ),
     (
         "iris/adapters",
-        "iris/adapters/grpc/mappers.py",
+        "iris/adapters/grpc/mappers/observations.py",
         "iris.runtime.ingress.observation_ingress",
         "gRPC ingress mapper needs ObservationCapability for adapter capabilities typing",
     ),
     (
         "iris/adapters",
-        "iris/adapters/grpc/mappers.py",
+        "iris/adapters/grpc/mappers/observations.py",
         "iris.runtime.auth.principals",
         "gRPC mapper reads ClientPrincipal to select trusted/external ingress path",
     ),

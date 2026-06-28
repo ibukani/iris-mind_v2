@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.app_gateway.ports import IdentityResolver
