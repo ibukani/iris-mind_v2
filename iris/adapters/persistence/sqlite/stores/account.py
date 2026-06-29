@@ -64,8 +64,7 @@ class SQLiteAccountStore(AccountStore):
                 AccountModel.provider == provider,
                 AccountModel.provider_subject == str(provider_subject),
             )
-            result = await session.execute(stmt)
-            model = result.scalar_one_or_none()
+            model = await session.scalar(stmt)
             if not model:
                 return None
             return self._model_to_profile(model)
@@ -82,8 +81,7 @@ class SQLiteAccountStore(AccountStore):
         """
         async with self._manager.transaction() as session:
             stmt = select(AccountModel).where(AccountModel.account_id == str(account_id))
-            result = await session.execute(stmt)
-            model = result.scalar_one_or_none()
+            model = await session.scalar(stmt)
             if not model:
                 return None
             return self._model_to_profile(model)
@@ -104,8 +102,7 @@ class SQLiteAccountStore(AccountStore):
         async with self._manager.transaction() as session:
             # Check for account_id conflict
             stmt_id = select(AccountModel).where(AccountModel.account_id == str(account.account_id))
-            result_id = await session.execute(stmt_id)
-            existing_by_id = result_id.scalar_one_or_none()
+            existing_by_id = await session.scalar(stmt_id)
             if existing_by_id and (
                 existing_by_id.provider != account.provider
                 or existing_by_id.provider_subject != str(account.provider_subject)
@@ -118,8 +115,7 @@ class SQLiteAccountStore(AccountStore):
                 AccountModel.provider == account.provider,
                 AccountModel.provider_subject == str(account.provider_subject),
             )
-            result_ref = await session.execute(stmt_ref)
-            existing_by_ref = result_ref.scalar_one_or_none()
+            existing_by_ref = await session.scalar(stmt_ref)
             if existing_by_ref and existing_by_ref.account_id != str(account.account_id):
                 msg = "external ref conflict: already exists with different account_id"
                 raise AccountStoreError(msg)

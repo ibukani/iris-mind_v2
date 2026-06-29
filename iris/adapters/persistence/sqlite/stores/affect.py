@@ -104,8 +104,7 @@ class SQLiteAffectStore(AffectStore):
     async def _get(self, owner_key: str) -> AffectBaselineRecord | None:
         async with self._manager.transaction() as session:
             stmt = select(AffectModel).where(AffectModel.owner_key == owner_key)
-            result = await session.execute(stmt)
-            model = result.scalar_one_or_none()
+            model = await session.scalar(stmt)
             if not model:
                 return None
             return self._model_to_record(model)
@@ -126,8 +125,7 @@ class SQLiteAffectStore(AffectStore):
         )
         async with self._manager.transaction() as session:
             stmt = select(AffectModel).where(AffectModel.owner_key == owner_key)
-            result = await session.execute(stmt)
-            model = result.scalar_one_or_none()
+            model = await session.scalar(stmt)
 
             source_str = optional_text(stored.source_observation_id)
             actor_str = optional_text(stored.actor_id)

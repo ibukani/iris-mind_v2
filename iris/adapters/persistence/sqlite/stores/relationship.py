@@ -64,8 +64,7 @@ class SQLiteRelationshipStore(RelationshipStore):
         """
         async with self._manager.transaction() as session:
             stmt = select(RelationshipModel).where(RelationshipModel.actor_id == str(actor_id))
-            result = await session.execute(stmt)
-            model = result.scalar_one_or_none()
+            model = await session.scalar(stmt)
             if not model:
                 return None
             return self._model_to_record(model)
@@ -92,8 +91,7 @@ class SQLiteRelationshipStore(RelationshipStore):
             stmt = select(RelationshipModel).where(
                 RelationshipModel.actor_id == str(stored.actor_id)
             )
-            result = await session.execute(stmt)
-            model = result.scalar_one_or_none()
+            model = await session.scalar(stmt)
 
             source_str = optional_text(stored.source_observation_id)
             created_str = required_datetime_to_text(stored.created_at or now)
