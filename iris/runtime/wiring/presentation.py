@@ -28,11 +28,7 @@ def wire_presentation_suite(
     Returns:
         標準presenter群。
     """
-    presenters: list[ActionPlanPresenter] = [
-        *extension_presenters,
-    ]
-
-    return PresentationSuite(presenters=tuple(presenters))
+    return PresentationSuite(presenters=tuple(extension_presenters))
 
 
 def wire_action_safety_gate() -> ActionSafetyGate:
