@@ -1,0 +1,13 @@
+# Normalize text files to LF in the index
+* text=auto
+
+# Shell scripts must use LF
+*.sh text eol=lf
+
+# Makefiles must use LF
+Makefile text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.ico binary
