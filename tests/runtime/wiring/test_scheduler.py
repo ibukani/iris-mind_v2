@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-
-import pytest
+from math import isclose
 
 from iris.runtime.config import default_runtime_config
 from iris.runtime.scheduler.idle_tick import IdleTickSchedulePolicy, IdleTickSource
@@ -32,6 +31,6 @@ def test_wire_runtime_scheduler_maps_runtime_scheduler_config_to_policy() -> Non
     assert isinstance(source, IdleTickSource)
     policy = get_private_attr_as(source, "_policy", IdleTickSchedulePolicy)
     assert isinstance(policy, IdleTickSchedulePolicy)
-    assert policy.idle_threshold_seconds == pytest.approx(10.0)
-    assert policy.min_interval_per_target_seconds == pytest.approx(20.0)
+    assert isclose(policy.idle_threshold_seconds, 10.0)
+    assert isclose(policy.min_interval_per_target_seconds, 20.0)
     assert policy.max_due_per_run == 3

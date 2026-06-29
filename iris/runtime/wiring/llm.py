@@ -446,13 +446,9 @@ def _build_internal_context(prompt: ResponsePrompt) -> str | None:
     if prompt.affect_context is not None:
         sections.append(_build_context_section("Affect context", prompt.affect_context))
     if prompt.relationship_context is not None:
-        sections.append(
-            _build_context_section("Relationship context", prompt.relationship_context)
-        )
+        sections.append(_build_context_section("Relationship context", prompt.relationship_context))
     if prompt.constraints:
-        sections.append(
-            _build_context_section("Policy constraints", "; ".join(prompt.constraints))
-        )
+        sections.append(_build_context_section("Policy constraints", "; ".join(prompt.constraints)))
     if prompt.goals:
         sections.append(_build_context_section("Goals", "; ".join(prompt.goals)))
     if not sections:

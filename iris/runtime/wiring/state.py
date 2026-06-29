@@ -94,7 +94,8 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     sqlite_path = config.state.sqlite_path
     db_manager = AsyncDatabaseManager(sqlite_path)
     ctx = SQLitePersistenceContext(db=db_manager)
-    memory_store: MutableMemoryStore = SQLiteMemoryStore(sqlite_path)
+    sqlite_memory_store = SQLiteMemoryStore(sqlite_path)
+    memory_store: MutableMemoryStore = sqlite_memory_store
     return RuntimeStateStores(
         account_store=SQLiteAccountStore(ctx),
         memory_store=memory_store,
@@ -110,7 +111,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         ),
         scheduler_target_store=SQLiteSchedulerTargetStore(ctx),
         sqlite_context=ctx,
-        memory_lifecycle=memory_store if isinstance(memory_store, SQLiteMemoryStore) else None,
+        memory_lifecycle=sqlite_memory_store,
     )
 
 
