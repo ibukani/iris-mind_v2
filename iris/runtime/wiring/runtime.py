@@ -40,6 +40,8 @@ if TYPE_CHECKING:
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.output_pipeline import RuntimeOutputPipeline
     from iris.runtime.scheduler.runner import SchedulerRunner
+    from iris.runtime.service import WorkspaceContextProvider
+    from iris.runtime.state.availability import AvailabilityResolver
 
 
 @dataclass(frozen=True)
@@ -81,50 +83,26 @@ def build_runtime_service(
     """
     trust_policy = ObservationTrustPolicy()
     current_now = now or now_utc
-    activity_integrator = ActivityIntegrator(
-        journal=stores.activity_journal,
-        projections=stores.activity_projection_store,
+    observation_pipeline = _wire_observation_pipeline(
+        stores,
         trust_policy=trust_policy,
         now=current_now,
-    )
-    presence_integrator = PresenceIntegrator(
-        store=stores.presence_store,
-        trust_policy=trust_policy,
-        now=current_now,
-    )
-    occupancy_integrator = SpaceOccupancyIntegrator(
-        store=stores.space_occupancy_store,
-        trust_policy=trust_policy,
-        now=current_now,
-    )
-    scheduler_target_integrator = SchedulerTargetIntegrator(
-        target_store=stores.scheduler_target_store,
         target_stale_after_seconds=target_stale_after_seconds,
     )
     availability_resolver = wire_availability_resolver()
-    workspace_context_assembler = wire_workspace_context_assembler(
-        activity_projection_store=stores.activity_projection_store,
-        presence_store=stores.presence_store,
-        occupancy_store=stores.space_occupancy_store,
+    workspace_context_assembler = _wire_workspace_context_assembler(
+        stores,
         availability_resolver=availability_resolver,
         now=current_now,
     )
-    decision_pipeline = wire_event_reaction_decision_pipeline(feature_catalog.features)
-    activity_event_reaction_handler = ActivityEventReactionHandler(
+    activity_event_reaction_handler = _wire_activity_event_reaction_handler(
         trust_policy=trust_policy,
-        decision_pipeline=decision_pipeline,
+        feature_catalog=feature_catalog,
         output_pipeline=output_pipeline,
     )
     return IrisRuntimeService(
         app,
-        observation_pipeline=IntegratingObservationPipeline(
-            (
-                activity_integrator,
-                presence_integrator,
-                occupancy_integrator,
-                scheduler_target_integrator,
-            )
-        ),
+        observation_pipeline=observation_pipeline,
         workspace_context_assembler=workspace_context_assembler,
         activity_event_reaction_handler=activity_event_reaction_handler,
         observation_observer=LoggingRuntimeObservationObserver(),
@@ -145,21 +123,18 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     """
     stores = wire_runtime_state(config)
     feature_catalog = wire_runtime_features()
-    output_pipeline = wire_output_pipeline(
-        safety_config=config.safety,
-        extension_presenters=collect_action_plan_presenters(feature_catalog.features),
+    output_pipeline = _wire_runtime_output_pipeline(
+        config,
+        feature_catalog=feature_catalog,
+    )
+    app = _build_runtime_app(
+        config,
+        stores=stores,
+        output_pipeline=output_pipeline,
+        feature_catalog=feature_catalog,
     )
     runtime_service = build_runtime_service(
-        build_app_from_config(
-            config,
-            state=AppStateDependencies(
-                memory_store=stores.memory_store,
-                relationship_store=stores.relationship_store,
-                affect_store=stores.affect_store,
-            ),
-            output_pipeline=output_pipeline,
-            features=feature_catalog.features,
-        ),
+        app,
         stores,
         feature_catalog=feature_catalog,
         output_pipeline=output_pipeline,
@@ -192,4 +167,125 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         space_resolver=space_resolver,
         app_action_broker=app_action_broker,
         scheduler_runner=scheduler_runner,
+    )
+
+
+def _wire_observation_pipeline(
+    stores: RuntimeStateStores,
+    *,
+    trust_policy: ObservationTrustPolicy,
+    now: Callable[[], datetime],
+    target_stale_after_seconds: float,
+) -> IntegratingObservationPipeline:
+    """観測統合 pipeline を組み立てる。
+
+    Returns:
+        構成済みの IntegratingObservationPipeline。
+    """
+    activity_integrator = ActivityIntegrator(
+        journal=stores.activity_journal,
+        projections=stores.activity_projection_store,
+        trust_policy=trust_policy,
+        now=now,
+    )
+    presence_integrator = PresenceIntegrator(
+        store=stores.presence_store,
+        trust_policy=trust_policy,
+        now=now,
+    )
+    occupancy_integrator = SpaceOccupancyIntegrator(
+        store=stores.space_occupancy_store,
+        trust_policy=trust_policy,
+        now=now,
+    )
+    scheduler_target_integrator = SchedulerTargetIntegrator(
+        target_store=stores.scheduler_target_store,
+        target_stale_after_seconds=target_stale_after_seconds,
+    )
+    return IntegratingObservationPipeline(
+        (
+            activity_integrator,
+            presence_integrator,
+            occupancy_integrator,
+            scheduler_target_integrator,
+        )
+    )
+
+
+def _wire_workspace_context_assembler(
+    stores: RuntimeStateStores,
+    *,
+    availability_resolver: AvailabilityResolver,
+    now: Callable[[], datetime],
+) -> WorkspaceContextProvider:
+    """Workspace context assembler を組み立てる。
+
+    Returns:
+        構成済みの WorkspaceContextProvider。
+    """
+    return wire_workspace_context_assembler(
+        activity_projection_store=stores.activity_projection_store,
+        presence_store=stores.presence_store,
+        occupancy_store=stores.space_occupancy_store,
+        availability_resolver=availability_resolver,
+        now=now,
+    )
+
+
+def _wire_activity_event_reaction_handler(
+    *,
+    trust_policy: ObservationTrustPolicy,
+    feature_catalog: RuntimeFeatureCatalog,
+    output_pipeline: RuntimeOutputPipeline,
+) -> ActivityEventReactionHandler:
+    """Event reaction handler を組み立てる。
+
+    Returns:
+        構成済みの ActivityEventReactionHandler。
+    """
+    decision_pipeline = wire_event_reaction_decision_pipeline(feature_catalog.features)
+    return ActivityEventReactionHandler(
+        trust_policy=trust_policy,
+        decision_pipeline=decision_pipeline,
+        output_pipeline=output_pipeline,
+    )
+
+
+def _wire_runtime_output_pipeline(
+    config: IrisRuntimeConfig,
+    *,
+    feature_catalog: RuntimeFeatureCatalog,
+) -> RuntimeOutputPipeline:
+    """Runtime 用 output pipeline を組み立てる。
+
+    Returns:
+        構成済みの RuntimeOutputPipeline。
+    """
+    return wire_output_pipeline(
+        safety_config=config.safety,
+        extension_presenters=collect_action_plan_presenters(feature_catalog.features),
+    )
+
+
+def _build_runtime_app(
+    config: IrisRuntimeConfig,
+    *,
+    stores: RuntimeStateStores,
+    output_pipeline: RuntimeOutputPipeline,
+    feature_catalog: RuntimeFeatureCatalog,
+) -> IrisApp:
+    """Runtime 用 IrisApp を組み立てる。
+
+    Returns:
+        構成済みの IrisApp。
+    """
+    return build_app_from_config(
+        config,
+        state=AppStateDependencies(
+            memory_store=stores.memory_store,
+            relationship_store=stores.relationship_store,
+            affect_store=stores.affect_store,
+        ),
+        output_pipeline=output_pipeline,
+        features=feature_catalog.features,
     )
