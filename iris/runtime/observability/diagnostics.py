@@ -116,35 +116,24 @@ async def run_startup_diagnostics(
     Returns:
         集計された診断レポート。
 
-    Raises:
-        ConfigError: ``mode == "strict"`` で 1 件以上の outcome が FAIL の場合。
     """
     diagnostics_config = runtime_config.diagnostics
     if diagnostics_config.mode == "off":
-        logger.info("startup.diagnostics.skipped reason=mode_off")
+        _log_diagnostics_skipped()
         return StartupDiagnosticsReport(outcomes=(), enabled=False)
 
-    logger.bind(
-        mode=diagnostics_config.mode,
+    _log_diagnostics_start(
+        diagnostics_config.mode,
         warmup_models=diagnostics_config.warmup_models,
-    ).info("startup.diagnostics.start")
-
-    outcomes = await _probe_all_slots(
+    )
+    report = await _run_diagnostics(
         runtime_config,
         warmup_models=diagnostics_config.warmup_models,
         readiness_timeout_seconds=diagnostics_config.readiness_timeout_seconds,
         warmup_timeout_seconds=diagnostics_config.warmup_timeout_seconds,
     )
-    report = StartupDiagnosticsReport(outcomes=tuple(outcomes), enabled=True)
-    failure_count = sum(1 for outcome in report.outcomes if _outcome_has_failure(outcome))
-    logger.bind(
-        checked_count=report.checked_count,
-        failure_count=failure_count,
-        mode=diagnostics_config.mode,
-    ).info("startup.diagnostics.complete")
-    if report.has_failures and diagnostics_config.mode == "strict":
-        logger.bind(failure_count=failure_count).error("startup.diagnostics.strict_fail")
-        raise ConfigError(_build_strict_fail_message(report))
+    _log_diagnostics_complete(report, diagnostics_config.mode)
+    _raise_if_strict_failure(report, diagnostics_config.mode)
     return report
 
 
@@ -179,6 +168,53 @@ async def _probe_all_slots(
         if outcome is not None:
             outcomes.append(outcome)
     return outcomes
+
+
+def _log_diagnostics_skipped() -> None:
+    logger.info("startup.diagnostics.skipped reason=mode_off")
+
+
+def _log_diagnostics_start(mode: str, *, warmup_models: bool) -> None:
+    logger.bind(mode=mode, warmup_models=warmup_models).info("startup.diagnostics.start")
+
+
+async def _run_diagnostics(
+    runtime_config: IrisRuntimeConfig,
+    *,
+    warmup_models: bool,
+    readiness_timeout_seconds: float,
+    warmup_timeout_seconds: float,
+) -> StartupDiagnosticsReport:
+    outcomes = await _probe_all_slots(
+        runtime_config,
+        warmup_models=warmup_models,
+        readiness_timeout_seconds=readiness_timeout_seconds,
+        warmup_timeout_seconds=warmup_timeout_seconds,
+    )
+    return StartupDiagnosticsReport(outcomes=tuple(outcomes), enabled=True)
+
+
+def _log_diagnostics_complete(report: StartupDiagnosticsReport, mode: str) -> None:
+    failure_count = _failure_count(report)
+    logger.bind(
+        checked_count=report.checked_count,
+        failure_count=failure_count,
+        mode=mode,
+    ).info("startup.diagnostics.complete")
+
+
+def _raise_if_strict_failure(
+    report: StartupDiagnosticsReport,
+    mode: str,
+) -> None:
+    if report.has_failures and mode == "strict":
+        failure_count = _failure_count(report)
+        logger.bind(failure_count=failure_count).error("startup.diagnostics.strict_fail")
+        raise ConfigError(_build_strict_fail_message(report))
+
+
+def _failure_count(report: StartupDiagnosticsReport) -> int:
+    return sum(1 for outcome in report.outcomes if _outcome_has_failure(outcome))
 
 
 async def _probe_slot(
