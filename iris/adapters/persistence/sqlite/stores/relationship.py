@@ -11,6 +11,11 @@ from iris.adapters.persistence.sqlite.context import (
     resolve_database_manager,
 )
 from iris.adapters.persistence.sqlite.schema.relationship import RelationshipModel
+from iris.adapters.persistence.sqlite.serialization import (
+    optional_new_type,
+    optional_text,
+    required_datetime_to_text,
+)
 from iris.contracts.relationship import RelationshipSnapshotRecord, RelationshipStore
 from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.core.ids import ActorId, ObservationId
@@ -34,7 +39,6 @@ class SQLiteRelationshipStore(RelationshipStore):
         Returns:
             RelationshipSnapshotRecord: The resulting record.
         """
-        source = model.source_observation_id
         return RelationshipSnapshotRecord(
             actor_id=ActorId(model.actor_id),
             actor_label=model.actor_label,
@@ -42,7 +46,10 @@ class SQLiteRelationshipStore(RelationshipStore):
             trust=model.trust,
             familiarity=model.familiarity,
             relationship_summary=model.relationship_summary,
-            source_observation_id=ObservationId(source) if source is not None else None,
+            source_observation_id=optional_new_type(
+                ObservationId,
+                model.source_observation_id,
+            ),
             created_at=parse_datetime(model.created_at),
             updated_at=parse_datetime(model.updated_at),
             version=model.version,
@@ -88,10 +95,9 @@ class SQLiteRelationshipStore(RelationshipStore):
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
 
-            source = stored.source_observation_id
-            source_str = str(source) if source is not None else None
-            created_str = stored.created_at.isoformat() if stored.created_at else now.isoformat()
-            updated_str = stored.updated_at.isoformat() if stored.updated_at else now.isoformat()
+            source_str = optional_text(stored.source_observation_id)
+            created_str = required_datetime_to_text(stored.created_at or now)
+            updated_str = required_datetime_to_text(stored.updated_at or now)
 
             if model:
                 model.actor_label = stored.actor_label

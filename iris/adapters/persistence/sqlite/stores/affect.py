@@ -11,6 +11,11 @@ from iris.adapters.persistence.sqlite.context import (
     resolve_database_manager,
 )
 from iris.adapters.persistence.sqlite.schema.affect import AffectModel
+from iris.adapters.persistence.sqlite.serialization import (
+    optional_new_type,
+    optional_text,
+    required_datetime_to_text,
+)
 from iris.contracts.affect import AffectBaselineRecord, AffectScope, AffectStore
 from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.core.ids import ActorId, ObservationId
@@ -31,17 +36,18 @@ class SQLiteAffectStore(AffectStore):
 
     @staticmethod
     def _model_to_record(model: AffectModel) -> AffectBaselineRecord:
-        actor_id = model.actor_id
-        source = model.source_observation_id
         return AffectBaselineRecord(
             scope=_scope_from_str(model.scope),
-            actor_id=ActorId(str(actor_id)) if actor_id is not None else None,
+            actor_id=optional_new_type(ActorId, model.actor_id),
             mood_label=model.mood_label,
             valence=model.valence,
             arousal=model.arousal,
             dominance=model.dominance,
             affect_summary=model.affect_summary,
-            source_observation_id=ObservationId(str(source)) if source is not None else None,
+            source_observation_id=optional_new_type(
+                ObservationId,
+                model.source_observation_id,
+            ),
             created_at=parse_datetime(model.created_at),
             updated_at=parse_datetime(model.updated_at),
             version=model.version,
@@ -123,11 +129,10 @@ class SQLiteAffectStore(AffectStore):
             result = await session.execute(stmt)
             model = result.scalar_one_or_none()
 
-            source = stored.source_observation_id
-            source_str = str(source) if source is not None else None
-            actor_str = str(stored.actor_id) if stored.actor_id is not None else None
-            created_str = stored.created_at.isoformat() if stored.created_at else now.isoformat()
-            updated_str = stored.updated_at.isoformat() if stored.updated_at else now.isoformat()
+            source_str = optional_text(stored.source_observation_id)
+            actor_str = optional_text(stored.actor_id)
+            created_str = required_datetime_to_text(stored.created_at or now)
+            updated_str = required_datetime_to_text(stored.updated_at or now)
 
             if model:
                 model.scope = stored.scope
