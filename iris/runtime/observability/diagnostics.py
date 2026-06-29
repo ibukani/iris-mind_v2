@@ -377,17 +377,14 @@ def _log_issues(
         slot: Slot name being summarized.
         model_config: Model config for the slot.
     """
+    base_fields = {
+        "slot": slot,
+        "provider": model_config.provider,
+        "model": model_config.model,
+        "status": result.status.value,
+    }
     for issue in result.issues:
-        remediation = issue.remediation
-        logger.bind(
-            slot=slot,
-            provider=model_config.provider,
-            model=model_config.model,
-            status=result.status.value,
-            issue_code=issue.code,
-            severity=issue.severity.value,
-            **({"remediation": remediation} if remediation is not None else {}),
-        ).warning("startup.diagnostics.issue")
+        _log_issue(base_fields, issue)
 
 
 def _log_result_event(
@@ -412,6 +409,22 @@ def _log_result_event(
         latency_ms=round(result.latency_ms or 0.0, 2),
     ).info(event_name)
     _log_issues(result, slot, model_config)
+
+
+def _log_issue(
+    base_fields: dict[str, ModelSlotName | str],
+    issue: ProviderDiagnosticIssue,
+) -> None:
+    """1 issue を structured WARNING として出力する。"""
+    fields = {
+        **base_fields,
+        "issue_code": issue.code,
+        "severity": issue.severity.value,
+    }
+    remediation = issue.remediation
+    if remediation is not None:
+        fields["remediation"] = remediation
+    logger.bind(**fields).warning("startup.diagnostics.issue")
 
 
 def _log_outcome_issues(
