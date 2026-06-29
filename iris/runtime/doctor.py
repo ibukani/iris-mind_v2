@@ -444,31 +444,35 @@ def _report(
 
 
 def _format_json(report: RuntimeDoctorReport) -> str:
-    payload = {
-        "ok": report.ok,
-        "checks": [
-            {
-                "name": check.name,
-                "status": check.status,
-                "summary": check.summary,
-                "issue": check.issue,
-                "next_action": check.next_action,
-            }
-            for check in report.checks
-        ],
-    }
+    payload = {"ok": report.ok, "checks": [_check_payload(check) for check in report.checks]}
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
 def _format_text(report: RuntimeDoctorReport) -> str:
     lines = ["Runtime doctor ok:"] if report.ok else ["Runtime doctor failed:"]
     for check in report.checks:
-        lines.extend(("", f"* {check.name}: {check.summary} [{check.status}]"))
-        if check.issue is not None:
-            lines.append(f"  issue: {check.issue}")
-        if check.next_action is not None:
-            lines.append(f"  next: {check.next_action}")
+        lines.extend(_format_check_block(check))
     return "\n".join(lines) + "\n"
+
+
+def _check_payload(check: RuntimeDoctorCheck) -> dict[str, str | None]:
+    return {
+        "name": check.name,
+        "status": check.status,
+        "summary": check.summary,
+        "issue": check.issue,
+        "next_action": check.next_action,
+    }
+
+
+def _format_check_block(check: RuntimeDoctorCheck) -> list[str]:
+    lines = ("", f"* {check.name}: {check.summary} [{check.status}]")
+    block = [*lines]
+    if check.issue is not None:
+        block.append(f"  issue: {check.issue}")
+    if check.next_action is not None:
+        block.append(f"  next: {check.next_action}")
+    return block
 
 
 if __name__ == "__main__":
