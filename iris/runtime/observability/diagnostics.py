@@ -253,24 +253,24 @@ async def _probe_slot(
         return failure
     if provider_diag is None:
         return None
-    readiness = await _run_with_timeout(
+    readiness = await _probe_stage(
         provider_diag.check_readiness(model_config.model),
+        slot=slot,
+        model_config=model_config,
         timeout_seconds=readiness_timeout_seconds,
         config_key="diagnostics.readiness_timeout_seconds",
-        model_config=model_config,
         stage="readiness",
     )
-    _log_result_event("startup.diagnostics.readiness", readiness, slot, model_config)
     warmup: ProviderReadinessResult | None = None
     if warmup_models and provider_diag.capabilities.warmup:
-        warmup = await _run_with_timeout(
+        warmup = await _probe_stage(
             provider_diag.warmup(model_config.model),
+            slot=slot,
+            model_config=model_config,
             timeout_seconds=warmup_timeout_seconds,
             config_key="diagnostics.warmup_timeout_seconds",
-            model_config=model_config,
             stage="warmup",
         )
-        _log_result_event("startup.diagnostics.warmup", warmup, slot, model_config)
     return DiagnosticsCheckOutcome(
         slot=slot,
         provider=model_config.provider,
@@ -338,6 +338,31 @@ async def _run_with_timeout(
                 ),
             ),
         )
+
+
+async def _probe_stage(
+    awaitable: Awaitable[ProviderReadinessResult],
+    *,
+    slot: ModelSlotName,
+    model_config: RuntimeModelConfig,
+    timeout_seconds: float,
+    config_key: str,
+    stage: str,
+) -> ProviderReadinessResult:
+    """単一 stage の probe と structured logging をまとめて実行する。
+
+    Returns:
+        構成済みの ProviderReadinessResult。
+    """
+    result = await _run_with_timeout(
+        awaitable,
+        timeout_seconds=timeout_seconds,
+        config_key=config_key,
+        model_config=model_config,
+        stage=stage,
+    )
+    _log_result_event(f"startup.diagnostics.{stage}", result, slot, model_config)
+    return result
 
 
 def _log_issues(
