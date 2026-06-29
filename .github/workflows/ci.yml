@@ -5,13 +5,18 @@ on:
     push:
         branches:
             - main
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 permissions:
     contents: read
 
 jobs:
-    check:
-        name: AI harness check
+    quick-gates:
+        name: Quick gates
         runs-on: ubuntu-latest
 
         steps:
@@ -33,5 +38,169 @@ jobs:
             - name: Install dependencies
               run: uv sync --all-groups
 
-            - name: Run strict verification
-              run: make check
+            - name: Run quick verification
+              run: make quick
+
+    test-coverage:
+        name: Tests and coverage
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.13"
+
+            - name: Install dependencies
+              run: uv sync --all-groups
+
+            - name: Run coverage gate
+              run: make coverage
+
+            - name: Upload coverage HTML
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: coverage-html
+                  path: htmlcov
+                  retention-days: 7
+
+    e2e:
+        name: E2E
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.13"
+
+            - name: Install dependencies
+              run: uv sync --all-groups
+
+            - name: Run non-live E2E tests
+              run: make e2e
+
+    proto-drift:
+        name: Protobuf drift
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.13"
+
+            - name: Install dependencies
+              run: uv sync --all-groups
+
+            - name: Regenerate protobuf files
+              run: make generate-protos
+
+            - name: Check generated file drift
+              run: git diff --exit-code iris/generated
+
+    runtime-smoke:
+        name: Runtime smoke
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.13"
+
+            - name: Install dependencies
+              run: uv sync --all-groups
+
+            - name: Run runtime doctor
+              run: make runtime-doctor-json
+
+    package-smoke:
+        name: Package smoke
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.13"
+
+            - name: Install dependencies
+              run: uv sync --all-groups
+
+            - name: Build package
+              run: uv build
+
+            - name: Install wheel and import runtime modules
+              run: |
+                  python -m venv /tmp/iris-mind-smoke
+                  /tmp/iris-mind-smoke/bin/pip install dist/*.whl
+                  /tmp/iris-mind-smoke/bin/python - <<'PY'
+                  import iris
+                  import iris.runtime.server
+                  import iris.runtime.config
+                  import iris.runtime.doctor
+                  PY
+
+    ci-success:
+        name: CI success
+        runs-on: ubuntu-latest
+        needs:
+            - quick-gates
+            - test-coverage
+            - e2e
+            - proto-drift
+            - runtime-smoke
+            - package-smoke
+        if: always()
+
+        steps:
+            - name: Check required jobs
+              run: |
+                  if [ "${{ needs.quick-gates.result }}" != "success" ]; then exit 1; fi
+                  if [ "${{ needs.test-coverage.result }}" != "success" ]; then exit 1; fi
+                  if [ "${{ needs.e2e.result }}" != "success" ]; then exit 1; fi
+                  if [ "${{ needs.proto-drift.result }}" != "success" ]; then exit 1; fi
+                  if [ "${{ needs.runtime-smoke.result }}" != "success" ]; then exit 1; fi
+                  if [ "${{ needs.package-smoke.result }}" != "success" ]; then exit 1; fi
