@@ -25,14 +25,7 @@ def wire_runtime_scheduler(
     Returns:
         構成済みの IdleTickSource。
     """
-    return IdleTickSource(
-        target_store,
-        policy=IdleTickSchedulePolicy(
-            idle_threshold_seconds=config.scheduler.idle_threshold_seconds,
-            min_interval_per_target_seconds=config.scheduler.min_interval_per_target_seconds,
-            max_due_per_run=config.scheduler.max_due_per_run,
-        ),
-    )
+    return IdleTickSource(target_store, policy=_build_idle_tick_schedule_policy(config))
 
 
 def wire_scheduler_runner(
@@ -57,4 +50,19 @@ def wire_scheduler_runner(
         availability_provider=availability_provider,
         delivery_enabled=config.delivery.enabled,
         max_attempts=config.delivery.max_attempts,
+    )
+
+
+def _build_idle_tick_schedule_policy(
+    config: IrisRuntimeConfig,
+) -> IdleTickSchedulePolicy:
+    """Runtime scheduler config から idle tick policy を組み立てる。
+
+    Returns:
+        構成済みの IdleTickSchedulePolicy。
+    """
+    return IdleTickSchedulePolicy(
+        idle_threshold_seconds=config.scheduler.idle_threshold_seconds,
+        min_interval_per_target_seconds=config.scheduler.min_interval_per_target_seconds,
+        max_due_per_run=config.scheduler.max_due_per_run,
     )
