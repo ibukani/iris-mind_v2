@@ -18,8 +18,6 @@ from iris.runtime.config.llm import LLMProvider
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
 
 
@@ -253,18 +251,13 @@ def _build_llm_client(
     Returns:
         構成済みの LLM client。
     """
-    builders: dict[LLMProvider, Callable[[], LLMClient]] = {
-        LLMProvider.FAKE: lambda: _build_fake_llm_client(model_config),
-        LLMProvider.OLLAMA: lambda: _build_ollama_llm_client(
-            model_config,
-            runtime_config,
-        ),
-        LLMProvider.OPENAI: lambda: _build_openai_llm_client(
-            model_config,
-            runtime_config,
-        ),
-    }
-    return builders[provider]()
+    match provider:
+        case LLMProvider.FAKE:
+            return _build_fake_llm_client(model_config)
+        case LLMProvider.OLLAMA:
+            return _build_ollama_llm_client(model_config, runtime_config)
+        case LLMProvider.OPENAI:
+            return _build_openai_llm_client(model_config, runtime_config)
 
 
 def _build_provider_diagnostics(
@@ -281,18 +274,13 @@ def _build_provider_diagnostics(
         ConfigError: openai diagnostics 構築失敗時。
     """
     try:
-        builders: dict[LLMProvider, Callable[[], LLMProviderDiagnostics | None]] = {
-            LLMProvider.FAKE: _build_fake_provider_diagnostics,
-            LLMProvider.OLLAMA: lambda: _build_ollama_provider_diagnostics(
-                model_config,
-                runtime_config,
-            ),
-            LLMProvider.OPENAI: lambda: _build_openai_provider_diagnostics(
-                model_config,
-                runtime_config,
-            ),
-        }
-        return builders[provider]()
+        match provider:
+            case LLMProvider.FAKE:
+                return _build_fake_provider_diagnostics()
+            case LLMProvider.OLLAMA:
+                return _build_ollama_provider_diagnostics(model_config, runtime_config)
+            case LLMProvider.OPENAI:
+                return _build_openai_provider_diagnostics(model_config, runtime_config)
     except OpenAIAdapterError as exc:
         message = f"Failed to build openai provider diagnostics: {exc}"
         raise ConfigError(message) from exc
