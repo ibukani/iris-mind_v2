@@ -442,18 +442,26 @@ def _build_internal_context(prompt: ResponsePrompt) -> str | None:
     sections: list[str] = []
     if prompt.memory_snippets:
         snippets = "\n".join(f"- {snippet}" for snippet in prompt.memory_snippets)
-        sections.append(f"Relevant memories:\n{snippets}")
+        sections.append(_build_context_section("Relevant memories", snippets))
     if prompt.affect_context is not None:
-        sections.append(f"Affect context:\n{prompt.affect_context}")
+        sections.append(_build_context_section("Affect context", prompt.affect_context))
     if prompt.relationship_context is not None:
-        sections.append(f"Relationship context:\n{prompt.relationship_context}")
+        sections.append(
+            _build_context_section("Relationship context", prompt.relationship_context)
+        )
     if prompt.constraints:
-        sections.append(f"Policy constraints: {'; '.join(prompt.constraints)}")
+        sections.append(
+            _build_context_section("Policy constraints", "; ".join(prompt.constraints))
+        )
     if prompt.goals:
-        sections.append(f"Goals: {'; '.join(prompt.goals)}")
+        sections.append(_build_context_section("Goals", "; ".join(prompt.goals)))
     if not sections:
         return None
     return "\n\n".join(sections)
+
+
+def _build_context_section(title: str, body: str) -> str:
+    return f"{title}:\n{body}"
 
 
 def _build_user_content(prompt: ResponsePrompt) -> str:
