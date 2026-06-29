@@ -77,7 +77,7 @@ def wire_basic_cognitive_cycle(
     """
     steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
     steps.extend(extension_steps)
-    return wire_cognitive_cycle(steps=tuple(steps))
+    return wire_cognitive_cycle(steps=steps)
 
 
 def wire_memory_aware_cognitive_cycle(
@@ -95,7 +95,7 @@ def wire_memory_aware_cognitive_cycle(
         MemoryRetrievalStep(memory_store),
     ]
     steps.extend(extension_steps)
-    return wire_cognitive_cycle(steps=tuple(steps))
+    return wire_cognitive_cycle(steps=steps)
 
 
 def _build_memory_steps(
@@ -145,7 +145,7 @@ def wire_affect_memory_aware_cognitive_cycle(
         ),
     )
     steps.extend(extension_steps)
-    return wire_cognitive_cycle(steps=tuple(steps))
+    return wire_cognitive_cycle(steps=steps)
 
 
 def wire_core_cognitive_cycle(
@@ -172,4 +172,4 @@ def wire_core_cognitive_cycle(
         ),
     )
     steps.extend(extension_steps)
-    return wire_cognitive_cycle(steps=tuple(steps))
+    return wire_cognitive_cycle(steps=steps)

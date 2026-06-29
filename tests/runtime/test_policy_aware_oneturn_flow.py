@@ -82,4 +82,4 @@ async def test_policy_aware_one_turn_flow_includes_policy_context() -> None:
 
     assert output.text == "policy-aware reply"
     assert "Relevant memories:" in system_prompt
-    assert "Policy constraints: avoid over-familiarity" in system_prompt
+    assert "Policy constraints:\navoid over-familiarity" in system_prompt
