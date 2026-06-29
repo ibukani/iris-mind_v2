@@ -66,7 +66,7 @@ def wire_default_app(
         )
     )
     basic_action_feature = define_basic_action_feature()
-    features = [chat_feature, basic_action_feature]
+    features = _compose_features((chat_feature,), (basic_action_feature,))
     cycle = wire_basic_cognitive_cycle(extension_steps=collect_cognitive_steps(features))
     output_pipeline = wire_output_pipeline(
         extension_presenters=collect_action_plan_presenters(features),
@@ -107,7 +107,7 @@ def build_app_from_config(
             max_tokens=model_config.max_output_tokens,
         )
     )
-    all_features = [*list(features), chat_feature]
+    all_features = _compose_features(features, (chat_feature,))
 
     cycle = wire_core_cognitive_cycle(
         stores=CognitiveCycleStores(
@@ -123,3 +123,14 @@ def build_app_from_config(
         cycle=cycle,
         output_pipeline=output_pipeline,
     )
+
+
+def _compose_features(
+    *feature_groups: Sequence[FeatureDefinition],
+) -> tuple[FeatureDefinition, ...]:
+    """FeatureDefinition 群を登録順のまま単一 tuple にまとめる。
+
+    Returns:
+        登録順を維持した FeatureDefinition の tuple。
+    """
+    return tuple(feature for feature_group in feature_groups for feature in feature_group)
