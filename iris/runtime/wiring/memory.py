@@ -107,13 +107,14 @@ def wire_sqlite_hybrid_memory_retriever(
         tuple[HybridMemoryRetriever, InMemoryVectorMemoryIndex]:
             ハイブリッドレトリーバーとベクトルインデックスのタプル。
     """
-    fts = SQLiteFTS5MemoryRetriever(store)
     vector = InMemoryVectorMemoryIndex(embed_text)
-    hybrid = wire_hybrid_memory_retriever(
-        fts_retriever=fts,
-        vector_index=vector,
-        store=store,
-        fts_limit=fts_limit,
-        vector_limit=vector_limit,
+    return (
+        wire_hybrid_memory_retriever(
+            fts_retriever=SQLiteFTS5MemoryRetriever(store),
+            vector_index=vector,
+            store=store,
+            fts_limit=fts_limit,
+            vector_limit=vector_limit,
+        ),
+        vector,
     )
-    return hybrid, vector
