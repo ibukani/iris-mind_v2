@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, override
 
 from iris.adapters.memory.utils import matches_query, rank_text_matches
 from iris.adapters.persistence.sqlite.database import SQLiteDatabase
+from iris.adapters.persistence.sqlite.serialization import datetime_to_text, optional_text
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,
@@ -20,7 +21,6 @@ from iris.core.ids import ActorId, ObservationId, SpaceId
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from datetime import datetime
     from pathlib import Path
     import sqlite3
 
@@ -366,14 +366,14 @@ def _record_to_row(record: MemoryRecord) -> tuple[object, ...]:
     return (
         str(record.id),
         record.text,
-        str(record.actor_id) if record.actor_id is not None else None,
-        str(record.space_id) if record.space_id is not None else None,
+        optional_text(record.actor_id),
+        optional_text(record.space_id),
         float(record.salience),
         str(record.kind),
         float(record.confidence),
-        str(record.source_observation_id) if record.source_observation_id is not None else None,
-        _isoformat(record.created_at),
-        _isoformat(record.updated_at),
+        optional_text(record.source_observation_id),
+        datetime_to_text(record.created_at),
+        datetime_to_text(record.updated_at),
         1 if record.archived else 0,
         json.dumps(dict(record.metadata)),
     )
@@ -400,9 +400,3 @@ def _row_to_record(row: sqlite3.Row) -> MemoryRecord:
         archived=bool(row["archived"]),
         metadata=json.loads(metadata_raw) if metadata_raw else {},
     )
-
-
-def _isoformat(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return value.isoformat()
