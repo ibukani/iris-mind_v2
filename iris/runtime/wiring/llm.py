@@ -18,6 +18,8 @@ from iris.runtime.config.llm import LLMProvider
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
 
 
@@ -251,11 +253,18 @@ def _build_llm_client(
     Returns:
         構成済みの LLM client。
     """
-    if provider == LLMProvider.FAKE:
-        return FakeLLMClient(model=model_config.model)
-    if provider == LLMProvider.OLLAMA:
-        return wire_ollama_llm_client(ollama_adapter_config(model_config, runtime_config))
-    return wire_openai_llm_client(openai_adapter_config(model_config, runtime_config))
+    builders: dict[LLMProvider, Callable[[], LLMClient]] = {
+        LLMProvider.FAKE: lambda: _build_fake_llm_client(model_config),
+        LLMProvider.OLLAMA: lambda: _build_ollama_llm_client(
+            model_config,
+            runtime_config,
+        ),
+        LLMProvider.OPENAI: lambda: _build_openai_llm_client(
+            model_config,
+            runtime_config,
+        ),
+    }
+    return builders[provider]()
 
 
 def _build_provider_diagnostics(
@@ -271,15 +280,58 @@ def _build_provider_diagnostics(
     Raises:
         ConfigError: openai diagnostics 構築失敗時。
     """
-    if provider == LLMProvider.FAKE:
-        return None
     try:
-        if provider == LLMProvider.OLLAMA:
-            return OllamaDiagnostics(ollama_adapter_config(model_config, runtime_config))
-        return OpenAIDiagnostics(openai_adapter_config(model_config, runtime_config))
+        builders: dict[LLMProvider, Callable[[], LLMProviderDiagnostics | None]] = {
+            LLMProvider.FAKE: _build_fake_provider_diagnostics,
+            LLMProvider.OLLAMA: lambda: _build_ollama_provider_diagnostics(
+                model_config,
+                runtime_config,
+            ),
+            LLMProvider.OPENAI: lambda: _build_openai_provider_diagnostics(
+                model_config,
+                runtime_config,
+            ),
+        }
+        return builders[provider]()
     except OpenAIAdapterError as exc:
         message = f"Failed to build openai provider diagnostics: {exc}"
         raise ConfigError(message) from exc
+
+
+def _build_fake_llm_client(model_config: RuntimeModelConfig) -> LLMClient:
+    return FakeLLMClient(model=model_config.model)
+
+
+def _build_ollama_llm_client(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> LLMClient:
+    return wire_ollama_llm_client(ollama_adapter_config(model_config, runtime_config))
+
+
+def _build_openai_llm_client(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> LLMClient:
+    return wire_openai_llm_client(openai_adapter_config(model_config, runtime_config))
+
+
+def _build_fake_provider_diagnostics() -> LLMProviderDiagnostics | None:
+    return None
+
+
+def _build_ollama_provider_diagnostics(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> LLMProviderDiagnostics:
+    return OllamaDiagnostics(ollama_adapter_config(model_config, runtime_config))
+
+
+def _build_openai_provider_diagnostics(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> LLMProviderDiagnostics:
+    return OpenAIDiagnostics(openai_adapter_config(model_config, runtime_config))
 
 
 def ollama_adapter_config(
