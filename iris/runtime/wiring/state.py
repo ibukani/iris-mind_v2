@@ -81,44 +81,58 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         構成済みの RuntimeStateStores。
     """
     if config.state.backend is RuntimeStateBackend.SQLITE:
-        sqlite_path = config.state.sqlite_path
-        db_manager = AsyncDatabaseManager(sqlite_path)
-        ctx = SQLitePersistenceContext(db=db_manager)
+        return _wire_sqlite_runtime_state(config)
+    return _wire_in_memory_runtime_state(config)
 
-        account_store: AccountStore = SQLiteAccountStore(ctx)
-        memory_store: MutableMemoryStore = SQLiteMemoryStore(sqlite_path)
-        relationship_store: RelationshipStore = SQLiteRelationshipStore(ctx)
-        affect_store: AffectStore = SQLiteAffectStore(ctx)
-        activity_journal: ActivityJournal = SQLiteActivityJournal(ctx)
-        delivery_outbox: DeliveryOutbox = SQLiteDeliveryOutbox(
-            ctx,
-            max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
-        )
-        scheduler_target_store: SchedulerTargetStore = SQLiteSchedulerTargetStore(ctx)
-        sqlite_context = ctx
-    else:
-        account_store = InMemoryAccountStore()
-        memory_store = InMemoryMemoryStore()
-        relationship_store = InMemoryRelationshipStore()
-        affect_store = InMemoryAffectStore()
-        activity_journal = InMemoryActivityJournal()
-        delivery_outbox = InMemoryDeliveryOutbox(
-            max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
-        )
-        scheduler_target_store = InMemorySchedulerTargetStore()
-        sqlite_context = None
 
+def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
+    """SQLite backend 用の永続状態ストア群を組み立てる。
+
+    Returns:
+        SQLite backend に対応した RuntimeStateStores。
+    """
+    sqlite_path = config.state.sqlite_path
+    db_manager = AsyncDatabaseManager(sqlite_path)
+    ctx = SQLitePersistenceContext(db=db_manager)
+    memory_store: MutableMemoryStore = SQLiteMemoryStore(sqlite_path)
     return RuntimeStateStores(
-        account_store=account_store,
+        account_store=SQLiteAccountStore(ctx),
         memory_store=memory_store,
-        relationship_store=relationship_store,
-        affect_store=affect_store,
-        activity_journal=activity_journal,
+        relationship_store=SQLiteRelationshipStore(ctx),
+        affect_store=SQLiteAffectStore(ctx),
+        activity_journal=SQLiteActivityJournal(ctx),
         activity_projection_store=InMemoryActivityProjectionStore(),
         presence_store=InMemoryPresenceStore(),
         space_occupancy_store=InMemorySpaceOccupancyStore(),
-        delivery_outbox=delivery_outbox,
-        scheduler_target_store=scheduler_target_store,
-        sqlite_context=sqlite_context,
+        delivery_outbox=SQLiteDeliveryOutbox(
+            ctx,
+            max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
+        ),
+        scheduler_target_store=SQLiteSchedulerTargetStore(ctx),
+        sqlite_context=ctx,
         memory_lifecycle=memory_store if isinstance(memory_store, SQLiteMemoryStore) else None,
+    )
+
+
+def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
+    """Process-local backend 用の永続状態ストア群を組み立てる。
+
+    Returns:
+        Process-local backend に対応した RuntimeStateStores。
+    """
+    return RuntimeStateStores(
+        account_store=InMemoryAccountStore(),
+        memory_store=InMemoryMemoryStore(),
+        relationship_store=InMemoryRelationshipStore(),
+        affect_store=InMemoryAffectStore(),
+        activity_journal=InMemoryActivityJournal(),
+        activity_projection_store=InMemoryActivityProjectionStore(),
+        presence_store=InMemoryPresenceStore(),
+        space_occupancy_store=InMemorySpaceOccupancyStore(),
+        delivery_outbox=InMemoryDeliveryOutbox(
+            max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
+        ),
+        scheduler_target_store=InMemorySchedulerTargetStore(),
+        sqlite_context=None,
+        memory_lifecycle=None,
     )
