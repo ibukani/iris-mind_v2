@@ -56,6 +56,16 @@ class RuntimeComponents:
     scheduler_runner: SchedulerRunner
 
 
+@dataclass(frozen=True)
+class _RuntimeGatewayComponents:
+    """Iris runtime の gateway 系コンポーネント群。"""
+
+    identity_resolver: AccountBackedIdentityResolver
+    space_resolver: EphemeralSpaceResolver
+    app_action_broker: AppActionBroker | None
+    availability_provider: DeliveryAvailabilityResolverAdapter
+
+
 def build_runtime_service(
     app: IrisApp,
     stores: RuntimeStateStores,
@@ -140,32 +150,21 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         output_pipeline=output_pipeline,
         target_stale_after_seconds=config.scheduler.target_stale_after_seconds,
     )
-    identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
-    space_resolver = EphemeralSpaceResolver()
-    app_action_broker = (
-        wire_app_action_broker(stores.delivery_outbox, config.delivery)
-        if config.delivery.enabled
-        else None
-    )
-    availability_provider = DeliveryAvailabilityResolverAdapter(
-        resolver=wire_availability_resolver(),
-        presence_store=stores.presence_store,
-        activity_projection_store=stores.activity_projection_store,
-    )
+    gateway_components = _wire_runtime_gateway_components(config, stores)
     scheduler_runner = wire_scheduler_runner(
         runtime_service=runtime_service,
         scheduler=wire_runtime_scheduler(stores.scheduler_target_store, config),
         delivery_gate=wire_delivery_safety_gate(config.delivery),
         outbox=stores.delivery_outbox,
         config=config,
-        availability_provider=availability_provider,
+        availability_provider=gateway_components.availability_provider,
     )
     return RuntimeComponents(
         stores=stores,
         runtime_service=runtime_service,
-        identity_resolver=identity_resolver,
-        space_resolver=space_resolver,
-        app_action_broker=app_action_broker,
+        identity_resolver=gateway_components.identity_resolver,
+        space_resolver=gateway_components.space_resolver,
+        app_action_broker=gateway_components.app_action_broker,
         scheduler_runner=scheduler_runner,
     )
 
@@ -248,6 +247,35 @@ def _wire_activity_event_reaction_handler(
         trust_policy=trust_policy,
         decision_pipeline=decision_pipeline,
         output_pipeline=output_pipeline,
+    )
+
+
+def _wire_runtime_gateway_components(
+    config: IrisRuntimeConfig,
+    stores: RuntimeStateStores,
+) -> _RuntimeGatewayComponents:
+    """App gateway と delivery 周辺の依存をまとめて組み立てる。
+
+    Returns:
+        まとめた gateway 系コンポーネント。
+    """
+    identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
+    space_resolver = EphemeralSpaceResolver()
+    app_action_broker = (
+        wire_app_action_broker(stores.delivery_outbox, config.delivery)
+        if config.delivery.enabled
+        else None
+    )
+    availability_provider = DeliveryAvailabilityResolverAdapter(
+        resolver=wire_availability_resolver(),
+        presence_store=stores.presence_store,
+        activity_projection_store=stores.activity_projection_store,
+    )
+    return _RuntimeGatewayComponents(
+        identity_resolver=identity_resolver,
+        space_resolver=space_resolver,
+        app_action_broker=app_action_broker,
+        availability_provider=availability_provider,
     )
 
 
