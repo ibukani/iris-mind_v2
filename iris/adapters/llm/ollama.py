@@ -18,6 +18,7 @@ from iris.adapters.llm.diagnostics import (
     LLMProviderTimeoutError,
 )
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL, DEFAULT_OLLAMA_MODEL
 
 type _JsonPrimitive = str | int | float | bool | None
 type _JsonValue = _JsonPrimitive | _JsonObject | list[_JsonValue]
@@ -28,7 +29,7 @@ type _JsonObject = dict[str, _JsonValue]
 class OllamaConfig:
     """Configuration for the local Ollama LLM adapter."""
 
-    model: str = "qwen3:8b"
+    model: str = DEFAULT_OLLAMA_MODEL
     base_url: str = "http://localhost:11434"
     timeout_seconds: float = 120.0
     temperature: float = 0.0
@@ -93,7 +94,7 @@ class OllamaLLMClient(LLMClient):
         return _to_llm_response(body, fallback_model=model)
 
     def _request_model(self, request: LLMRequest) -> str:
-        if request.model == "fake-llm":
+        if request.model == DEFAULT_FAKE_LLM_MODEL:
             return self._config.model
         return request.model or self._config.model
 

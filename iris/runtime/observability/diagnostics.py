@@ -35,6 +35,8 @@ from iris.adapters.llm.diagnostics import (
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.llm import (
     ModelSlotName,
+    model_slot_names,
+    runtime_model_config_for_slot,
 )
 from iris.runtime.wiring.llm import build_provider_diagnostics
 
@@ -42,15 +44,8 @@ if TYPE_CHECKING:
     from iris.runtime.config.llm import (
         LLMProvider,
         RuntimeModelConfig,
-        RuntimeModelsConfig,
     )
     from iris.runtime.config.root import IrisRuntimeConfig
-
-_DIAGNOSTICS_MODEL_SLOTS: tuple[ModelSlotName, ...] = (
-    ModelSlotName.DEFAULT_CHAT,
-    ModelSlotName.FAST_JUDGE,
-    ModelSlotName.REASONING,
-)
 
 
 @dataclass(frozen=True)
@@ -173,7 +168,7 @@ async def _probe_all_slots(
         List of outcomes, one per probed slot (skipped fake slots are omitted).
     """
     outcomes: list[DiagnosticsCheckOutcome] = []
-    for slot in _DIAGNOSTICS_MODEL_SLOTS:
+    for slot in model_slot_names():
         outcome = await _probe_slot(
             runtime_config,
             slot,
@@ -213,7 +208,7 @@ async def _probe_slot(
         (e.g. the provider is ``fake``).
     """
     logger.bind(slot=slot).info("startup.diagnostics.check")
-    model_config = _slot_config(runtime_config.models, slot)
+    model_config = runtime_model_config_for_slot(runtime_config.models, slot)
     try:
         provider_diag = build_provider_diagnostics(model_config, runtime_config)
     except ConfigError as exc:
@@ -229,14 +224,7 @@ async def _probe_slot(
         model_config=model_config,
         stage="readiness",
     )
-    logger.bind(
-        slot=slot,
-        provider=model_config.provider,
-        model=model_config.model,
-        status=readiness.status.value,
-        latency_ms=round(readiness.latency_ms or 0.0, 2),
-    ).info("startup.diagnostics.readiness")
-    _log_issues(readiness, slot, model_config)
+    _log_result_event("startup.diagnostics.readiness", readiness, slot, model_config)
     warmup: ProviderReadinessResult | None = None
     if warmup_models and provider_diag.capabilities.warmup:
         warmup = await _run_with_timeout(
@@ -246,14 +234,7 @@ async def _probe_slot(
             model_config=model_config,
             stage="warmup",
         )
-        logger.bind(
-            slot=slot,
-            provider=model_config.provider,
-            model=model_config.model,
-            status=warmup.status.value,
-            latency_ms=round(warmup.latency_ms or 0.0, 2),
-        ).info("startup.diagnostics.warmup")
-        _log_issues(warmup, slot, model_config)
+        _log_result_event("startup.diagnostics.warmup", warmup, slot, model_config)
     return DiagnosticsCheckOutcome(
         slot=slot,
         provider=model_config.provider,
@@ -348,6 +329,30 @@ def _log_issues(
         ).warning("startup.diagnostics.issue")
 
 
+def _log_result_event(
+    event_name: str,
+    result: ProviderReadinessResult,
+    slot: ModelSlotName,
+    model_config: RuntimeModelConfig,
+) -> None:
+    """結果イベントを 1 回出してから issue を記録する。
+
+    Args:
+        event_name: Emit する structured event 名。
+        result: readiness / warmup の結果。
+        slot: 対象スロット。
+        model_config: スロットのモデル設定。
+    """
+    logger.bind(
+        slot=slot,
+        provider=model_config.provider,
+        model=model_config.model,
+        status=result.status.value,
+        latency_ms=round(result.latency_ms or 0.0, 2),
+    ).info(event_name)
+    _log_issues(result, slot, model_config)
+
+
 def _log_outcome_issues(
     outcome: DiagnosticsCheckOutcome,
     model_config: RuntimeModelConfig,
@@ -359,13 +364,12 @@ def _log_outcome_issues(
             construction failure issues.
         model_config: The model config that was used to build diagnostics.
     """
-    logger.bind(
-        slot=outcome.slot,
-        provider=outcome.provider,
-        model=outcome.model,
-        status=outcome.readiness.status.value,
-    ).info("startup.diagnostics.readiness")
-    _log_issues(outcome.readiness, outcome.slot, model_config)
+    _log_result_event(
+        "startup.diagnostics.readiness",
+        outcome.readiness,
+        outcome.slot,
+        model_config,
+    )
 
 
 def _build_strict_fail_message(report: StartupDiagnosticsReport) -> str:
@@ -379,14 +383,7 @@ def _build_strict_fail_message(report: StartupDiagnosticsReport) -> str:
     """
     lines = ["startup diagnostics failed (mode=strict)"]
     for outcome in report.outcomes:
-        if not _outcome_has_failure(outcome):
-            continue
-        failed_results: list[tuple[str, ProviderReadinessResult]] = []
-        if outcome.readiness.status is ReadinessStatus.FAIL:
-            failed_results.append(("readiness", outcome.readiness))
-        if outcome.warmup and outcome.warmup.status is ReadinessStatus.FAIL:
-            failed_results.append(("warmup", outcome.warmup))
-        for stage, result in failed_results:
+        for stage, result in _failed_stage_results(outcome):
             codes = ", ".join(issue.code for issue in result.issues) or "unknown"
             lines.append(
                 "".join(
@@ -400,26 +397,6 @@ def _build_strict_fail_message(report: StartupDiagnosticsReport) -> str:
     return "\n".join(lines)
 
 
-def _slot_config(
-    models: RuntimeModelsConfig,
-    slot: ModelSlotName,
-) -> RuntimeModelConfig:
-    """指定モデルスロットの現在の config を返す。
-
-    Args:
-        models: ランタイム models config。
-        slot: 対象スロット名。
-
-    Returns:
-        指定スロットに格納された ``RuntimeModelConfig``。
-    """
-    if slot == "default_chat":
-        return models.default_chat
-    if slot == "fast_judge":
-        return models.fast_judge
-    return models.reasoning
-
-
 def _outcome_has_failure(outcome: DiagnosticsCheckOutcome) -> bool:
     """Outcome に FAIL ステータスがあれば True を返す。
 
@@ -429,9 +406,26 @@ def _outcome_has_failure(outcome: DiagnosticsCheckOutcome) -> bool:
     Returns:
         readiness または warmup のいずれかが FAIL なら True。
     """
+    return bool(_failed_stage_results(outcome))
+
+
+def _failed_stage_results(
+    outcome: DiagnosticsCheckOutcome,
+) -> tuple[tuple[str, ProviderReadinessResult], ...]:
+    """FAIL の stage/result pair を列挙する。
+
+    Args:
+        outcome: 確認対象の outcome。
+
+    Returns:
+        FAIL になった stage/result の tuple。
+    """
+    failed_results: list[tuple[str, ProviderReadinessResult]] = []
     if outcome.readiness.status is ReadinessStatus.FAIL:
-        return True
-    return bool(outcome.warmup and outcome.warmup.status is ReadinessStatus.FAIL)
+        failed_results.append(("readiness", outcome.readiness))
+    if outcome.warmup and outcome.warmup.status is ReadinessStatus.FAIL:
+        failed_results.append(("warmup", outcome.warmup))
+    return tuple(failed_results)
 
 
 def _build_construction_failure(

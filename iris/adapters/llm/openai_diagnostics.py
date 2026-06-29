@@ -27,6 +27,7 @@ from iris.adapters.llm.openai import (
     openai_sdk,
 )
 from iris.adapters.llm.type_utils import is_object_sequence
+from iris.contracts.llm import DEFAULT_OPENAI_MODEL
 
 _OPENAI_DIAGNOSTICS_PROVIDER = "openai"
 
@@ -82,7 +83,7 @@ class OpenAIDiagnostics(LLMProviderDiagnostics):
             config: Adapter-local OpenAI configuration.
             client: Optional injected client for tests.
         """
-        self._config = config or OpenAIConfig(model="gpt-5-mini")
+        self._config = config or OpenAIConfig(model=DEFAULT_OPENAI_MODEL)
         self._client = client or _build_client(self._config)
 
     @override

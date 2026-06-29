@@ -830,9 +830,6 @@ def test_example_config_contains_no_secret_like_keys(config_path: Path) -> None:
     assert not violations, (
         f"{config_path.name} contains forbidden secret-like keys: {', '.join(violations)}"
     )
-    assert not violations, (
-        f"{config_path.name} contains forbidden secret-like keys: {', '.join(violations)}"
-    )
 
 
 def test_minimal_example_overrides_only_default_chat() -> None:

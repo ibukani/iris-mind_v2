@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.model_slots import model_slot_specs
 
@@ -70,7 +71,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             ConfigFieldSpec(
                 f"models.{slot.name}.model",
                 ConfigValueType.STR,
-                "fake-llm",
+                DEFAULT_FAKE_LLM_MODEL,
                 f"{slot.name}モデルスロットのモデル名。",
                 env=f"IRIS_{slot.name.upper()}_MODEL",
             ),

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.parsing import env_bool, env_float, parse_bool, parse_float, parse_string
+from iris.runtime.config.validation import require_greater_than_zero
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -68,21 +69,15 @@ def apply_diagnostics_toml(
     timeout_seconds = config.timeout_seconds
     readiness_timeout_seconds = config.readiness_timeout_seconds
     warmup_timeout_seconds = config.warmup_timeout_seconds
-
     if "timeout_seconds" in table:
-        timeout_seconds = parse_float(
-            table["timeout_seconds"],
-            "diagnostics.timeout_seconds",
-        )
+        timeout_seconds = parse_float(table["timeout_seconds"], "diagnostics.timeout_seconds")
         readiness_timeout_seconds = timeout_seconds
         warmup_timeout_seconds = timeout_seconds
-
     if "readiness_timeout_seconds" in table:
         readiness_timeout_seconds = parse_float(
             table["readiness_timeout_seconds"],
             "diagnostics.readiness_timeout_seconds",
         )
-
     if "warmup_timeout_seconds" in table:
         warmup_timeout_seconds = parse_float(
             table["warmup_timeout_seconds"],
@@ -91,11 +86,7 @@ def apply_diagnostics_toml(
 
     warmup_models = config.warmup_models
     if "warmup_models" in table:
-        warmup_models = parse_bool(
-            table["warmup_models"],
-            "diagnostics.warmup_models",
-        )
-
+        warmup_models = parse_bool(table["warmup_models"], "diagnostics.warmup_models")
     return _validate_config(
         RuntimeDiagnosticsConfig(
             mode=mode,
@@ -103,7 +94,7 @@ def apply_diagnostics_toml(
             readiness_timeout_seconds=readiness_timeout_seconds,
             warmup_timeout_seconds=warmup_timeout_seconds,
             warmup_models=warmup_models,
-        )
+        ),
     )
 
 
@@ -122,17 +113,13 @@ def apply_diagnostics_env(
     """
     raw_mode = env.get("IRIS_DIAGNOSTICS_MODE")
     mode = _validate_mode(raw_mode) if raw_mode is not None else config.mode
-
     timeout_seconds = config.timeout_seconds
     readiness_timeout_seconds = config.readiness_timeout_seconds
     warmup_timeout_seconds = config.warmup_timeout_seconds
-
-    legacy_timeout = env.get("IRIS_DIAGNOSTICS_TIMEOUT_SECONDS")
-    if legacy_timeout is not None:
+    if "IRIS_DIAGNOSTICS_TIMEOUT_SECONDS" in env:
         timeout_seconds = env_float(env, "IRIS_DIAGNOSTICS_TIMEOUT_SECONDS", timeout_seconds)
         readiness_timeout_seconds = timeout_seconds
         warmup_timeout_seconds = timeout_seconds
-
     readiness_timeout_seconds = env_float(
         env,
         "IRIS_DIAGNOSTICS_READINESS_TIMEOUT_SECONDS",
@@ -143,7 +130,6 @@ def apply_diagnostics_env(
         "IRIS_DIAGNOSTICS_WARMUP_TIMEOUT_SECONDS",
         warmup_timeout_seconds,
     )
-
     return _validate_config(
         RuntimeDiagnosticsConfig(
             mode=mode,
@@ -155,7 +141,7 @@ def apply_diagnostics_env(
                 "IRIS_DIAGNOSTICS_WARMUP_MODELS",
                 default=config.warmup_models,
             ),
-        )
+        ),
     )
 
 
@@ -187,17 +173,19 @@ def _validate_config(config: RuntimeDiagnosticsConfig) -> RuntimeDiagnosticsConf
 
     Returns:
         検証済みの設定。
-
-    Raises:
-        ConfigError: タイムアウトが正の値でない場合、または mode が不正な場合。
     """
-    if config.timeout_seconds <= 0:
-        message = "diagnostics.timeout_seconds must be greater than zero"
-        raise ConfigError(message)
-    if config.readiness_timeout_seconds <= 0:
-        message = "diagnostics.readiness_timeout_seconds must be greater than zero"
-        raise ConfigError(message)
-    if config.warmup_timeout_seconds <= 0:
-        message = "diagnostics.warmup_timeout_seconds must be greater than zero"
-        raise ConfigError(message)
-    return replace(config)
+    return replace(
+        config,
+        timeout_seconds=require_greater_than_zero(
+            config.timeout_seconds,
+            "diagnostics.timeout_seconds",
+        ),
+        readiness_timeout_seconds=require_greater_than_zero(
+            config.readiness_timeout_seconds,
+            "diagnostics.readiness_timeout_seconds",
+        ),
+        warmup_timeout_seconds=require_greater_than_zero(
+            config.warmup_timeout_seconds,
+            "diagnostics.warmup_timeout_seconds",
+        ),
+    )

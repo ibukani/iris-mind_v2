@@ -15,6 +15,7 @@ from iris.cognitive.memory.write import MemoryWriteStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
 from iris.contracts.actions import ActionPlan
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.contracts.memory import MemoryStore, MutableMemoryStore, VectorMemoryIndex
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
@@ -43,7 +44,7 @@ class CognitiveCycleStores:
 class CognitiveResponseOptions:
     """応答生成ステップへ渡す LLM 設定。(Deprecated: use Chat Feature instead)"""
 
-    model: str = "fake-llm"
+    model: str = DEFAULT_FAKE_LLM_MODEL
     temperature: float = 0.0
     max_tokens: int | None = None
 

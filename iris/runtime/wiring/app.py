@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.features.basic_action.definition import define_basic_action_feature
 from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
@@ -47,7 +48,7 @@ class AppStateDependencies:
 def wire_default_app(
     llm_client: LLMClient,
     *,
-    model: str = "fake-llm",
+    model: str = DEFAULT_FAKE_LLM_MODEL,
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> IrisApp:

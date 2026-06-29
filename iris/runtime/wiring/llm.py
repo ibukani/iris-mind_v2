@@ -11,6 +11,7 @@ from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.features.chat.definition import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
 from iris.runtime.config.llm import LLMProvider
@@ -20,13 +21,16 @@ if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
 
 
+_KNOWN_LLM_PROVIDERS: frozenset[LLMProvider] = frozenset(LLMProvider)
+
+
 class LLMResponseGenerator(ResponseGenerator):
     """LLM クライアントをバックエンドとする ResponseGenerator。"""
 
     def __init__(
         self,
         client: LLMClient,
-        model: str = "fake-llm",
+        model: str = DEFAULT_FAKE_LLM_MODEL,
         *,
         temperature: float = 0.0,
         max_tokens: int | None = None,
@@ -82,7 +86,7 @@ def wire_fake_llm_client(responses: tuple[str, ...] | None = None) -> FakeLLMCli
 def wire_response_generator(
     client: LLMClient | None = None,
     *,
-    model: str = "fake-llm",
+    model: str = DEFAULT_FAKE_LLM_MODEL,
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> LLMResponseGenerator:
@@ -135,8 +139,8 @@ class LLMClientFactory:
     """プロバイダ固有の LLM クライアントを組み立てる明示的なランタイムファクトリ。"""
 
     def __init__(self) -> None:
-        """明示的な LLM クライアントファクトリを作成する。"""
-        self._known_providers = frozenset(LLMProvider)
+        """既知の LLM provider 集合を共有参照する。"""
+        self._known_providers = _KNOWN_LLM_PROVIDERS
 
     def create_client(
         self,
@@ -151,22 +155,19 @@ class LLMClientFactory:
 
         Returns:
             プロバイダ中立な LLM クライアント。
-
-        Raises:
-            ConfigError: 設定されたプロバイダが未知の場合。
         """
-        if model_config.provider not in self._known_providers:
-            message = f"Unknown LLM provider: {model_config.provider}"
-            raise ConfigError(message)
-        if model_config.provider == LLMProvider.FAKE:
-            return _wrap_with_observer(FakeLLMClient(model=model_config.model))
-        if model_config.provider == LLMProvider.OLLAMA:
-            return _wrap_with_observer(
-                OllamaLLMClient(ollama_adapter_config(model_config, runtime_config)),
-            )
-        return _wrap_with_observer(
-            OpenAILLMClient(openai_adapter_config(model_config, runtime_config)),
+        provider = _require_known_provider(
+            model_config.provider,
+            "Unknown LLM provider",
+            self._known_providers,
         )
+        if provider == LLMProvider.FAKE:
+            client: LLMClient = FakeLLMClient(model=model_config.model)
+        elif provider == LLMProvider.OLLAMA:
+            client = OllamaLLMClient(ollama_adapter_config(model_config, runtime_config))
+        else:
+            client = OpenAILLMClient(openai_adapter_config(model_config, runtime_config))
+        return _wrap_with_observer(client)
 
     def resolve_model(
         self,
@@ -181,16 +182,15 @@ class LLMClientFactory:
 
         Returns:
             応答生成に渡すモデル名。
-
-        Raises:
-            ConfigError: 設定されたプロバイダが未知の場合。
         """
-        if model_config.provider not in self._known_providers:
-            message = f"Unknown LLM provider: {model_config.provider}"
-            raise ConfigError(message)
-        if model_config.provider == LLMProvider.OLLAMA:
+        provider = _require_known_provider(
+            model_config.provider,
+            "Unknown LLM provider",
+            self._known_providers,
+        )
+        if provider == LLMProvider.OLLAMA:
             return ollama_adapter_config(model_config, runtime_config).model
-        if model_config.provider == LLMProvider.OPENAI:
+        if provider == LLMProvider.OPENAI:
             return openai_adapter_config(model_config, runtime_config).model
         return model_config.model
 
@@ -217,18 +217,43 @@ def build_provider_diagnostics(
     Raises:
         ConfigError: 未知のプロバイダ名、もしくは adapter 構築失敗時。
     """
-    if model_config.provider not in frozenset(LLMProvider):
-        message = f"Unknown LLM provider for diagnostics: {model_config.provider}"
-        raise ConfigError(message)
-    if model_config.provider == LLMProvider.FAKE:
+    provider = _require_known_provider(
+        model_config.provider,
+        "Unknown LLM provider for diagnostics",
+    )
+    if provider == LLMProvider.FAKE:
         return None
     try:
-        if model_config.provider == LLMProvider.OLLAMA:
+        if provider == LLMProvider.OLLAMA:
             return OllamaDiagnostics(ollama_adapter_config(model_config, runtime_config))
         return OpenAIDiagnostics(openai_adapter_config(model_config, runtime_config))
     except OpenAIAdapterError as exc:
         message = f"Failed to build openai provider diagnostics: {exc}"
         raise ConfigError(message) from exc
+
+
+def _require_known_provider(
+    provider: LLMProvider,
+    message_prefix: str,
+    known_providers: frozenset[LLMProvider] = _KNOWN_LLM_PROVIDERS,
+) -> LLMProvider:
+    """既知のプロバイダか検証する。
+
+    Args:
+        provider: 検証対象のプロバイダ。
+        message_prefix: エラーメッセージの先頭。
+        known_providers: 許可する provider の集合。
+
+    Returns:
+        検証済みプロバイダ。
+
+    Raises:
+        ConfigError: provider が未対応の場合。
+    """
+    if provider not in known_providers:
+        message = f"{message_prefix}: {provider}"
+        raise ConfigError(message)
+    return provider
 
 
 def ollama_adapter_config(
@@ -245,7 +270,7 @@ def ollama_adapter_config(
         ``OllamaLLMClient`` / ``OllamaDiagnostics`` が受け取る ``OllamaConfig``。
     """
     model = model_config.model
-    if model == "fake-llm":
+    if _is_fake_llm_model(model):
         model = OllamaConfig().model
     return OllamaConfig(
         model=model,
@@ -273,7 +298,7 @@ def openai_adapter_config(
         API key は環境変数 ``OPENAI_API_KEY`` から解決される。
     """
     model = model_config.model
-    if model == "fake-llm":
+    if _is_fake_llm_model(model):
         model = runtime_config.openai.model
     max_output_tokens = model_config.max_output_tokens
     if max_output_tokens is None:
@@ -302,6 +327,15 @@ def _wrap_with_observer(client: LLMClient) -> LLMClient:
         a :class:`RuntimeLLMRequestObserver`.
     """
     return ObservableLLMClient(client, RuntimeLLMRequestObserver())
+
+
+def _is_fake_llm_model(model: str) -> bool:
+    """Fake LLM sentinel model か判定する。
+
+    Returns:
+        fake センチネルなら True。
+    """
+    return model == DEFAULT_FAKE_LLM_MODEL
 
 
 _INTERNAL_CONTEXT_GUARDRAIL = (

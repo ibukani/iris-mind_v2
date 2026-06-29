@@ -44,11 +44,11 @@ def validate_backend(value: str, path: str) -> RuntimeStateBackend:
     Raises:
         ConfigError: バックエンド名が不正な場合。
     """
-    for backend in RuntimeStateBackend:
-        if value == backend.value:
-            return backend
-    message = f"Invalid {path}: {value}"
-    raise ConfigError(message)
+    try:
+        return RuntimeStateBackend(value)
+    except ValueError as exc:
+        message = f"Invalid {path}: {value}"
+        raise ConfigError(message) from exc
 
 
 def validate_state_config(config: RuntimeStateConfig) -> RuntimeStateConfig:
@@ -79,18 +79,21 @@ def apply_state_toml(config: RuntimeStateConfig, table: TomlTable) -> RuntimeSta
     Returns:
         TOML 値を反映した状態設定。
     """
-    backend = config.backend
-    sqlite_path = config.sqlite_path
-
+    value = config
     if "backend" in table:
-        value = parse_string(table["backend"], "state.backend")
-        backend = validate_backend(value, "state.backend in TOML")
-
+        value = replace(
+            value,
+            backend=validate_backend(
+                parse_string(table["backend"], "state.backend"),
+                "state.backend in TOML",
+            ),
+        )
     if "sqlite_path" in table:
-        sqlite_path = parse_string(table["sqlite_path"], "state.sqlite_path")
-
-    new_config = replace(config, backend=backend, sqlite_path=sqlite_path)
-    return validate_state_config(new_config)
+        value = replace(
+            value,
+            sqlite_path=parse_string(table["sqlite_path"], "state.sqlite_path"),
+        )
+    return validate_state_config(value)
 
 
 def apply_state_env(
@@ -106,15 +109,12 @@ def apply_state_env(
     Returns:
         環境変数値を反映した状態設定。
     """
-    backend = config.backend
-    sqlite_path = config.sqlite_path
-
+    value = config
     if "IRIS_STATE_BACKEND" in env:
-        value = env["IRIS_STATE_BACKEND"]
-        backend = validate_backend(value, "IRIS_STATE_BACKEND")
-
+        value = replace(
+            value,
+            backend=validate_backend(env["IRIS_STATE_BACKEND"], "IRIS_STATE_BACKEND"),
+        )
     if "IRIS_STATE_SQLITE_PATH" in env:
-        sqlite_path = env["IRIS_STATE_SQLITE_PATH"]
-
-    new_config = replace(config, backend=backend, sqlite_path=sqlite_path)
-    return validate_state_config(new_config)
+        value = replace(value, sqlite_path=env["IRIS_STATE_SQLITE_PATH"])
+    return validate_state_config(value)

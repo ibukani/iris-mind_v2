@@ -10,6 +10,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 import grpc
 import pytest
 
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from tests.e2e.runtime_process import (
@@ -251,7 +252,9 @@ def write_runtime_config(
         state_section = f'[state]\nbackend = "{backend}"\n'
     model_lines: list[str] = []
     for slot, provider in (models or {"default_chat": "fake"}).items():
-        model_lines.append(f'[models.{slot}]\nprovider = "{provider}"\nmodel = "fake-llm"\n')
+        model_lines.append(
+            f'[models.{slot}]\nprovider = "{provider}"\nmodel = "{DEFAULT_FAKE_LLM_MODEL}"\n'
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     body = (
         '[server]\nhost = "127.0.0.1"\nlocal_only = true\n\n'

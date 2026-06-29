@@ -38,10 +38,10 @@ from iris.runtime.config.diagnostics import (
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.llm import (
     LLMProvider,
-    RuntimeModelConfig,
     RuntimeModelsConfig,
     RuntimeOllamaConfig,
     RuntimeOpenAIConfig,
+    default_runtime_models_config,
     validate_provider,
 )
 from iris.runtime.config.logging import RuntimeLoggingConfig
@@ -64,7 +64,9 @@ from iris.runtime.config.server import (
     validate_server_config,
     validate_server_port,
 )
-from iris.runtime.config.sources import apply_env, apply_toml, read_toml_file
+from iris.runtime.config.sources import apply_env as apply_llm_logging_env
+from iris.runtime.config.sources import apply_toml as apply_llm_logging_toml
+from iris.runtime.config.sources import read_toml_file
 from iris.runtime.config.spec import runtime_config_specs_for_version
 from iris.runtime.config.state import (
     RuntimeStateConfig,
@@ -130,23 +132,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         config=RuntimeConfigMetadata(),
         server=RuntimeServerConfig(),
         state=RuntimeStateConfig(),
-        models=RuntimeModelsConfig(
-            default_chat=RuntimeModelConfig(
-                provider=LLMProvider.FAKE,
-                model="fake-llm",
-                max_output_tokens=512,
-            ),
-            fast_judge=RuntimeModelConfig(
-                provider=LLMProvider.FAKE,
-                model="fake-llm",
-                max_output_tokens=128,
-            ),
-            reasoning=RuntimeModelConfig(
-                provider=LLMProvider.FAKE,
-                model="fake-llm",
-                max_output_tokens=1024,
-            ),
-        ),
+        models=default_runtime_models_config(),
         ollama=RuntimeOllamaConfig(),
         openai=RuntimeOpenAIConfig(),
         logging=RuntimeLoggingConfig(),
@@ -200,19 +186,7 @@ def load_runtime_config(
     config = _apply_env(config, runtime_env)
     if overrides is not None:
         config = apply_runtime_overrides(config, overrides)
-
-    config = replace(config, server=validate_server_config(config.server))
-    config = replace(
-        config,
-        auth=validate_auth_config(
-            auth=config.auth,
-            server_local_only=config.server.local_only,
-            tls_enabled=config.server.tls.enabled,
-        ),
-    )
-    config = replace(config, state=validate_state_config(config.state))
-    config = replace(config, scheduler=validate_scheduler_config(config.scheduler))
-    return replace(config, delivery=validate_delivery_config(config.delivery))
+    return _validate_runtime_config(config)
 
 
 def resolve_runtime_config_path(
@@ -315,29 +289,7 @@ def apply_runtime_overrides(
     Returns:
         オーバーライド適用後のランタイム設定。
     """
-    default_chat = config.models.default_chat
-    if overrides.llm is not None:
-        default_chat = replace(default_chat, provider=overrides.llm)
-    if overrides.model is not None:
-        default_chat = replace(default_chat, model=overrides.model)
-
-    ollama = config.ollama
-    if overrides.ollama_host is not None:
-        ollama = replace(ollama, base_url=overrides.ollama_host)
-
-    server = config.server
-    if overrides.server_host is not None:
-        server = replace(server, host=overrides.server_host)
-    if overrides.server_port is not None:
-        port = validate_server_port(overrides.server_port, source="server_port override")
-        server = replace(server, port=port)
-
-    return replace(
-        config,
-        server=server,
-        models=replace(config.models, default_chat=default_chat),
-        ollama=ollama,
-    )
+    return _RuntimeConfigOverridePatch.from_overrides(overrides).apply(config)
 
 
 def parse_llm_provider(value: str) -> LLMProvider:
@@ -380,45 +332,59 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     Returns:
         TOML 値を反映したランタイム設定。
     """
-    metadata = _apply_config_toml(table_or_empty(table, "config"))
-    server = apply_server_toml(config.server, table_or_empty(table, "server"))
-    state = apply_state_toml(config.state, table_or_empty(table, "state"))
-    scheduler = apply_scheduler_toml(config.scheduler, table_or_empty(table, "scheduler"))
-    delivery = apply_delivery_toml(config.delivery, table_or_empty(table, "delivery"))
-    safety = apply_safety_toml(config.safety, table_or_empty(table, "safety"))
-    auth = apply_auth_toml(config.auth, table_or_empty(table, "auth"))
-    diagnostics = apply_diagnostics_toml(
-        config.diagnostics,
-        table_or_empty(table, "diagnostics"),
-    )
-
-    models, ollama, openai, logging = apply_toml(
-        config.models,
-        config.ollama,
-        config.openai,
-        config.logging,
-        table,
-    )
-    return replace(
+    return _compose_runtime_config(
         config,
-        config=metadata,
-        server=server,
-        state=state,
-        scheduler=scheduler,
-        delivery=delivery,
-        models=models,
-        ollama=ollama,
-        openai=openai,
-        logging=logging,
-        safety=safety,
-        auth=auth,
-        diagnostics=diagnostics,
+        _apply_toml_sections(config, table),
     )
 
 
 def _apply_config_toml(table: TomlTable) -> RuntimeConfigMetadata:
     version = parse_raw_config_version({"config": table})
     return RuntimeConfigMetadata(version=version)
+
+
+def _apply_toml_sections(
+    config: IrisRuntimeConfig,
+    table: TomlTable,
+) -> _RuntimeConfigSections:
+    """TOML テーブルから更新済み section 群を組み立てる。
+
+    Args:
+        config: ベースとなるランタイム設定。
+        table: 解析済みの最上位 TOML テーブル。
+
+    Returns:
+        更新後の section 群。
+    """
+    config_table = table_or_empty(table, "config")
+    server_table = table_or_empty(table, "server")
+    state_table = table_or_empty(table, "state")
+    scheduler_table = table_or_empty(table, "scheduler")
+    delivery_table = table_or_empty(table, "delivery")
+    safety_table = table_or_empty(table, "safety")
+    auth_table = table_or_empty(table, "auth")
+    diagnostics_table = table_or_empty(table, "diagnostics")
+    models, ollama, openai, logging = apply_llm_logging_toml(
+        config.models,
+        config.ollama,
+        config.openai,
+        config.logging,
+        table,
+    )
+    return _RuntimeConfigSections(
+        config_metadata=_apply_config_toml(config_table),
+        server=apply_server_toml(config.server, server_table),
+        state=apply_state_toml(config.state, state_table),
+        scheduler=apply_scheduler_toml(config.scheduler, scheduler_table),
+        delivery=apply_delivery_toml(config.delivery, delivery_table),
+        models=models,
+        ollama=ollama,
+        openai=openai,
+        logging=logging,
+        safety=apply_safety_toml(config.safety, safety_table),
+        auth=apply_auth_toml(config.auth, auth_table),
+        diagnostics=apply_diagnostics_toml(config.diagnostics, diagnostics_table),
+    )
 
 
 def _apply_env(
@@ -434,26 +400,176 @@ def _apply_env(
     Returns:
         環境変数値を反映したランタイム設定。
     """
-    server = apply_server_env(config.server, env)
-    state = apply_state_env(config.state, env)
-    scheduler = apply_scheduler_env(config.scheduler, env)
-    safety = apply_safety_env(config.safety, env)
-    auth = apply_auth_env(config.auth, env)
-    diagnostics = apply_diagnostics_env(config.diagnostics, env)
+    return _compose_runtime_config(
+        config,
+        _apply_env_sections(config, env),
+    )
 
-    models, ollama, openai, logging = apply_env(
+
+@dataclass(frozen=True)
+class _RuntimeConfigSections:
+    """TOML / ENV で更新した runtime section 群を束ねる。"""
+
+    server: RuntimeServerConfig
+    state: RuntimeStateConfig
+    scheduler: RuntimeSchedulerConfig
+    delivery: RuntimeDeliveryConfig
+    models: RuntimeModelsConfig
+    ollama: RuntimeOllamaConfig
+    openai: RuntimeOpenAIConfig
+    logging: RuntimeLoggingConfig
+    safety: RuntimeSafetyConfig
+    auth: RuntimeAuthConfig
+    diagnostics: RuntimeDiagnosticsConfig
+    config_metadata: RuntimeConfigMetadata | None = None
+
+
+def _apply_env_sections(
+    config: IrisRuntimeConfig,
+    env: Mapping[str, str],
+) -> _RuntimeConfigSections:
+    """環境変数から更新済み section 群を組み立てる。
+
+    Args:
+        config: ベースとなるランタイム設定。
+        env: 環境変数のマッピング。
+
+    Returns:
+        更新後の section 群。
+    """
+    models, ollama, openai, logging = apply_llm_logging_env(
         config.models, config.ollama, config.openai, config.logging, env
     )
-    return replace(
-        config,
-        server=server,
-        state=state,
-        scheduler=scheduler,
+    return _RuntimeConfigSections(
+        server=apply_server_env(config.server, env),
+        state=apply_state_env(config.state, env),
+        scheduler=apply_scheduler_env(config.scheduler, env),
+        delivery=config.delivery,
         models=models,
         ollama=ollama,
         openai=openai,
         logging=logging,
-        safety=safety,
-        auth=auth,
-        diagnostics=diagnostics,
+        safety=apply_safety_env(config.safety, env),
+        auth=apply_auth_env(config.auth, env),
+        diagnostics=apply_diagnostics_env(config.diagnostics, env),
     )
+
+
+def _compose_runtime_config(
+    config: IrisRuntimeConfig,
+    sections: _RuntimeConfigSections,
+) -> IrisRuntimeConfig:
+    """更新済み section 群を 1 つの runtime config にまとめる。
+
+    Args:
+        config: ベースとなるランタイム設定。
+        sections: 更新後の section 群。
+
+    Returns:
+        section 群を反映した runtime config。
+    """
+    metadata = config.config if sections.config_metadata is None else sections.config_metadata
+    return replace(
+        config,
+        config=metadata,
+        server=sections.server,
+        state=sections.state,
+        scheduler=sections.scheduler,
+        delivery=sections.delivery,
+        models=sections.models,
+        ollama=sections.ollama,
+        openai=sections.openai,
+        logging=sections.logging,
+        safety=sections.safety,
+        auth=sections.auth,
+        diagnostics=sections.diagnostics,
+    )
+
+
+def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
+    """ランタイム設定全体の後段検証をまとめて適用する。
+
+    Args:
+        config: 検証対象のランタイム設定。
+
+    Returns:
+        検証済みのランタイム設定。
+    """
+    validated_server = validate_server_config(config.server)
+    validated_auth = validate_auth_config(
+        auth=config.auth,
+        server_local_only=validated_server.local_only,
+        tls_enabled=validated_server.tls.enabled,
+    )
+    validated_state = validate_state_config(config.state)
+    validated_scheduler = validate_scheduler_config(config.scheduler)
+    validated_delivery = validate_delivery_config(config.delivery)
+    return replace(
+        config,
+        server=validated_server,
+        auth=validated_auth,
+        state=validated_state,
+        scheduler=validated_scheduler,
+        delivery=validated_delivery,
+    )
+
+
+@dataclass(frozen=True)
+class _RuntimeConfigOverridePatch:
+    """RuntimeConfigOverrides の optional 値を適用する。"""
+
+    llm: LLMProvider | None = None
+    model: str | None = None
+    ollama_host: str | None = None
+    server_host: str | None = None
+    server_port: int | None = None
+
+    @classmethod
+    def from_overrides(cls, overrides: RuntimeConfigOverrides) -> _RuntimeConfigOverridePatch:
+        """RuntimeConfigOverrides から patch を作る。
+
+        Returns:
+            取り出した override patch。
+        """
+        server_port = (
+            validate_server_port(overrides.server_port, source="server_port override")
+            if overrides.server_port is not None
+            else None
+        )
+        return cls(
+            llm=overrides.llm,
+            model=overrides.model,
+            ollama_host=overrides.ollama_host,
+            server_host=overrides.server_host,
+            server_port=server_port,
+        )
+
+    def apply(self, config: IrisRuntimeConfig) -> IrisRuntimeConfig:
+        """ランタイム設定へ CLI override を適用する。
+
+        Returns:
+            オーバーライド適用後のランタイム設定。
+        """
+        models = config.models
+        default_chat = models.default_chat
+        if self.llm is not None:
+            default_chat = replace(default_chat, provider=self.llm)
+        if self.model is not None:
+            default_chat = replace(default_chat, model=self.model)
+
+        ollama = config.ollama
+        if self.ollama_host is not None:
+            ollama = replace(ollama, base_url=self.ollama_host)
+
+        server = config.server
+        if self.server_host is not None:
+            server = replace(server, host=self.server_host)
+        if self.server_port is not None:
+            server = replace(server, port=self.server_port)
+        validated_server = validate_server_config(server)
+        return replace(
+            config,
+            server=validated_server,
+            models=replace(models, default_chat=default_chat),
+            ollama=ollama,
+        )

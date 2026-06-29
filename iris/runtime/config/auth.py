@@ -91,13 +91,12 @@ def apply_auth_env(
     Returns:
         更新後の auth 設定。
     """
-    value = config
-    if "IRIS_RUNTIME_AUTH_MODE" in env:
-        value = replace(
-            value,
-            mode=_parse_auth_mode(env["IRIS_RUNTIME_AUTH_MODE"]),
-        )
-    return value
+    if "IRIS_RUNTIME_AUTH_MODE" not in env:
+        return config
+    return replace(
+        config,
+        mode=_parse_auth_mode(env["IRIS_RUNTIME_AUTH_MODE"]),
+    )
 
 
 def validate_auth_config(
