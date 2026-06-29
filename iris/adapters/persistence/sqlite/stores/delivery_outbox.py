@@ -192,35 +192,24 @@ class SQLiteDeliveryOutbox:
 
         Returns:
             Updated terminal envelope, or existing envelope for repeated report.
-
-        Raises:
-            DeliveryOutboxError: On backend error, conflicts, or not found.
         """
         async with _map_operational_error(), self._db.transaction() as session:
-            row = await session.scalar(
-                select(DeliveryOutboxModel).where(
-                    DeliveryOutboxModel.delivery_id == str(delivery_id)
-                )
+            prepared = await _prepare_report(
+                session,
+                delivery_id=delivery_id,
+                lease_id=lease_id,
+                result=result,
             )
-            if row is None:
-                msg = "delivery_not_found"
-                raise DeliveryOutboxError(msg)
-            item = _model_to_envelope(row)
-            current = _result_fingerprint(delivery_id, lease_id, result)
-            outcome = await _classify_report(session, current)
-            if outcome is _ReportOutcome.IDEMPOTENT:
-                return item
-            if outcome is _ReportOutcome.CONFLICT:
-                msg = "delivery_report_conflict"
-                raise DeliveryOutboxError(msg)
+            if prepared.idempotent:
+                return prepared.envelope
             completed = complete_delivery(
-                item,
+                prepared.envelope,
                 lease_id=lease_id,
                 result=result,
                 completed_at=completed_at,
             )
-            _update_model(row, completed)
-            _insert_fingerprint(session, current)
+            _update_model(prepared.model, completed)
+            _insert_fingerprint(session, prepared.fingerprint)
             return completed
 
     async def release(
@@ -236,36 +225,25 @@ class SQLiteDeliveryOutbox:
 
         Returns:
             Updated pending or permanently failed envelope.
-
-        Raises:
-            DeliveryOutboxError: On backend error, conflicts, or not found.
         """
         async with _map_operational_error(), self._db.transaction() as session:
-            row = await session.scalar(
-                select(DeliveryOutboxModel).where(
-                    DeliveryOutboxModel.delivery_id == str(delivery_id)
-                )
+            prepared = await _prepare_report(
+                session,
+                delivery_id=delivery_id,
+                lease_id=lease_id,
+                result=result,
             )
-            if row is None:
-                msg = "delivery_not_found"
-                raise DeliveryOutboxError(msg)
-            item = _model_to_envelope(row)
-            current = _result_fingerprint(delivery_id, lease_id, result)
-            outcome = await _classify_report(session, current)
-            if outcome is _ReportOutcome.IDEMPOTENT:
-                return item
-            if outcome is _ReportOutcome.CONFLICT:
-                msg = "delivery_report_conflict"
-                raise DeliveryOutboxError(msg)
+            if prepared.idempotent:
+                return prepared.envelope
             released = release_delivery(
-                item,
+                prepared.envelope,
                 lease_id=lease_id,
                 retry_after=retry_after,
                 result=result,
                 released_at=released_at,
             )
-            _update_model(row, released)
-            _insert_fingerprint(session, current)
+            _update_model(prepared.model, released)
+            _insert_fingerprint(session, prepared.fingerprint)
             return released
 
     async def close(self) -> None:
@@ -290,6 +268,14 @@ class _ReportOutcome(StrEnum):
     IDEMPOTENT = "idempotent"
     CONFLICT = "conflict"
     NEW = "new"
+
+
+@dataclass(frozen=True)
+class _PreparedReport:
+    model: DeliveryOutboxModel
+    envelope: DeliveryEnvelope
+    fingerprint: _ReportFingerprint
+    idempotent: bool
 
 
 def _lease_item(
@@ -335,6 +321,34 @@ class _ReportFingerprint:
     status: str
     external_message_id: ExternalRef | None
     error_reason: str | None
+
+
+async def _prepare_report(
+    session: AsyncSession,
+    *,
+    delivery_id: DeliveryId,
+    lease_id: LeaseId | None,
+    result: ActionResult,
+) -> _PreparedReport:
+    model = await session.scalar(
+        select(DeliveryOutboxModel).where(
+            DeliveryOutboxModel.delivery_id == str(delivery_id)
+        )
+    )
+    if model is None:
+        msg = "delivery_not_found"
+        raise DeliveryOutboxError(msg)
+    fingerprint = _result_fingerprint(delivery_id, lease_id, result)
+    outcome = await _classify_report(session, fingerprint)
+    if outcome is _ReportOutcome.CONFLICT:
+        msg = "delivery_report_conflict"
+        raise DeliveryOutboxError(msg)
+    return _PreparedReport(
+        model=model,
+        envelope=_model_to_envelope(model),
+        fingerprint=fingerprint,
+        idempotent=outcome is _ReportOutcome.IDEMPOTENT,
+    )
 
 
 def _build_fingerprint_key(fingerprint: _ReportFingerprint) -> str:
