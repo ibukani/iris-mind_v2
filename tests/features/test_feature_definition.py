@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, override
 
+from iris.contracts.actions import ActionPlan, PresentedOutput
 from iris.features.definition import ActivityReactionPlanner, FeatureDefinition
 from iris.features.proactive_talk import define_proactive_talk_feature
-from iris.runtime.wiring.features import collect_cognitive_steps, wire_runtime_features
+from iris.runtime.wiring.features import (
+    collect_action_plan_presenters,
+    collect_cognitive_steps,
+    wire_runtime_features,
+)
 
 if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot
@@ -65,3 +70,28 @@ def test_collect_cognitive_steps_preserves_feature_registration_order() -> None:
     )
 
     assert collect_cognitive_steps(features) == tuple(proactive_steps)
+
+
+def test_collect_action_plan_presenters_preserves_feature_registration_order() -> None:
+    """Action plan presenters はフィーチャー登録順とフィーチャー内順序を維持する。"""
+
+    class _Presenter:
+        def can_present(self, plan: ActionPlan) -> bool:
+            del plan
+            return True
+
+        async def present(self, plan: ActionPlan) -> PresentedOutput:
+            del plan
+            return PresentedOutput(text="ok")
+
+    first = _Presenter()
+    second = _Presenter()
+    features = (
+        FeatureDefinition(name="first", action_plan_presenters=(first,)),
+        FeatureDefinition(name="second", action_plan_presenters=(second,)),
+    )
+
+    presenters = collect_action_plan_presenters(features)
+    assert len(presenters) == 2
+    assert presenters[0] is first
+    assert presenters[1] is second
