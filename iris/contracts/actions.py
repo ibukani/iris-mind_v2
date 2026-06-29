@@ -93,6 +93,30 @@ class PresentedOutput(BaseModel):
         return self.text is not None and bool(self.text.strip())
 
 
+def presented_output_from_plan(
+    plan: ActionPlan,
+    *,
+    style_hint: str | None = None,
+) -> PresentedOutput:
+    """ActionPlan の共通フィールドを PresentedOutput へ写像する。
+
+    Args:
+        plan: 変換元のアクションプラン。
+        style_hint: 必要に応じて付与する表示ヒント。
+
+    Returns:
+        変換済みの提示出力。no_action の場合は非送信出力。
+    """
+    if plan.is_no_action:
+        return PresentedOutput(text=None)
+    return PresentedOutput(
+        text=plan.candidate_text,
+        style_hint=style_hint,
+        priority=plan.priority,
+        interruptible=plan.interruptible,
+    )
+
+
 class AppAction(BaseModel):
     """外部アプリアクションの基本型。"""
 

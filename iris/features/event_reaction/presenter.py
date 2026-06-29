@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import override
+from typing import TYPE_CHECKING, override
 
-from iris.contracts.actions import ActionPlan, PresentedOutput
+from iris.contracts.actions import presented_output_from_plan
 from iris.contracts.presentation import ActionPlanPresenter
+
+if TYPE_CHECKING:
+    from iris.contracts.actions import ActionPlan, PresentedOutput
 
 
 @dataclass(frozen=True)
@@ -29,9 +32,4 @@ class EventReactionPresenter(ActionPlanPresenter):
         Returns:
             PresentedOutput: 変換された出力。
         """
-        return PresentedOutput(
-            text=plan.candidate_text,
-            priority=plan.priority,
-            interruptible=plan.interruptible,
-            style_hint="event_reaction",
-        )
+        return presented_output_from_plan(plan, style_hint="event_reaction")

@@ -331,9 +331,7 @@ async def _prepare_report(
     result: ActionResult,
 ) -> _PreparedReport:
     model = await session.scalar(
-        select(DeliveryOutboxModel).where(
-            DeliveryOutboxModel.delivery_id == str(delivery_id)
-        )
+        select(DeliveryOutboxModel).where(DeliveryOutboxModel.delivery_id == str(delivery_id))
     )
     if model is None:
         msg = "delivery_not_found"

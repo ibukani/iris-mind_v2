@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.contracts.actions import ActionResult
@@ -58,9 +56,9 @@ class FeatureDefinition:
     """パイプラインステップ、観測ソース、フックを持つ垂直フィーチャースライス。"""
 
     name: str
-    cognitive_steps: Sequence[PipelineStep[PipelineStepResult]] = ()
-    activity_reaction_planners: Sequence[ActivityReactionPlanner] = ()
-    observation_sources: Sequence[ObservationSource] = ()
-    learning_hooks: Sequence[LearningHook] = ()
-    background_jobs: Sequence[BackgroundJob] = ()
-    action_plan_presenters: Sequence[ActionPlanPresenter] = ()
+    cognitive_steps: tuple[PipelineStep[PipelineStepResult], ...] = ()
+    activity_reaction_planners: tuple[ActivityReactionPlanner, ...] = ()
+    observation_sources: tuple[ObservationSource, ...] = ()
+    learning_hooks: tuple[LearningHook, ...] = ()
+    background_jobs: tuple[BackgroundJob, ...] = ()
+    action_plan_presenters: tuple[ActionPlanPresenter, ...] = ()

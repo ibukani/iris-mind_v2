@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from typing import override
+from typing import TYPE_CHECKING, override
 
-from iris.contracts.actions import ActionPlan, PresentedOutput
+from iris.contracts.actions import presented_output_from_plan
 from iris.contracts.presentation import ActionPlanPresenter
+
+if TYPE_CHECKING:
+    from iris.contracts.actions import ActionPlan, PresentedOutput
 
 
 class SimplePresenter(ActionPlanPresenter):
@@ -31,10 +34,4 @@ class SimplePresenter(ActionPlanPresenter):
             Presented output with text and metadata from the plan.
         """
         _ = self
-        if plan.is_no_action:
-            return PresentedOutput(text=None)
-        return PresentedOutput(
-            text=plan.candidate_text,
-            priority=plan.priority,
-            interruptible=plan.interruptible,
-        )
+        return presented_output_from_plan(plan)
