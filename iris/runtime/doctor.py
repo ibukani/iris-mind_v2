@@ -323,8 +323,8 @@ def _check_file_path(path: Path, *, spec: _FilePathCheckSpec) -> RuntimeDoctorCh
 
 
 def _directory_file_path_check(path: Path, *, spec: _FilePathCheckSpec) -> RuntimeDoctorCheck:
-    return RuntimeDoctorCheck(
-        name=spec.name,
+    return _build_file_path_check(
+        spec,
         status="fail",
         summary=spec.directory_summary.format(path=path),
         issue=spec.directory_issue,
@@ -334,13 +334,13 @@ def _directory_file_path_check(path: Path, *, spec: _FilePathCheckSpec) -> Runti
 
 def _existing_file_path_check(path: Path, *, spec: _FilePathCheckSpec) -> RuntimeDoctorCheck:
     if os.access(path, os.R_OK) and os.access(path, os.W_OK):
-        return RuntimeDoctorCheck(
-            name=spec.name,
+        return _build_file_path_check(
+            spec,
             status="ok",
             summary=spec.existing_ok_summary.format(path=path, parent=path.parent),
         )
-    return RuntimeDoctorCheck(
-        name=spec.name,
+    return _build_file_path_check(
+        spec,
         status="fail",
         summary=spec.existing_fail_summary.format(path=path, parent=path.parent),
         issue=spec.existing_fail_issue,
@@ -351,17 +351,34 @@ def _existing_file_path_check(path: Path, *, spec: _FilePathCheckSpec) -> Runtim
 def _missing_file_path_check(path: Path, *, spec: _FilePathCheckSpec) -> RuntimeDoctorCheck:
     parent = path.parent
     if parent.exists() and os.access(parent, os.W_OK | os.X_OK):
-        return RuntimeDoctorCheck(
-            name=spec.name,
+        return _build_file_path_check(
+            spec,
             status="ok",
             summary=spec.missing_ok_summary.format(path=path, parent=parent),
         )
-    return RuntimeDoctorCheck(
-        name=spec.name,
+    return _build_file_path_check(
+        spec,
         status="fail",
         summary=spec.missing_fail_summary.format(path=path, parent=parent),
         issue=spec.missing_fail_issue,
         next_action=spec.missing_fail_next_action,
+    )
+
+
+def _build_file_path_check(
+    spec: _FilePathCheckSpec,
+    *,
+    status: str,
+    summary: str,
+    issue: str | None = None,
+    next_action: str | None = None,
+) -> RuntimeDoctorCheck:
+    return RuntimeDoctorCheck(
+        name=spec.name,
+        status=status,
+        summary=summary,
+        issue=issue,
+        next_action=next_action,
     )
 
 
