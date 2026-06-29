@@ -64,8 +64,16 @@ def wire_default_app(
         temperature=temperature,
         max_tokens=max_tokens,
     )
-    features = _compose_features((chat_feature,), (define_basic_action_feature(),))
-    return _wire_app_with_basic_cycle(features)
+    features = collect_feature_items(
+        ((chat_feature,), (define_basic_action_feature(),)),
+    )
+    cycle = wire_basic_cognitive_cycle(
+        extension_steps=collect_cognitive_steps(features),
+    )
+    output_pipeline = wire_output_pipeline(
+        extension_presenters=collect_action_plan_presenters(features),
+    )
+    return IrisApp(cycle=cycle, output_pipeline=output_pipeline)
 
 
 def build_app_from_config(
@@ -99,9 +107,8 @@ def build_app_from_config(
         temperature=model_config.temperature,
         max_tokens=model_config.max_output_tokens,
     )
-    all_features = _compose_features(features, (chat_feature,))
-    return _wire_app_with_core_cycle(
-        all_features,
+    all_features = collect_feature_items((features, (chat_feature,)))
+    cycle = wire_core_cognitive_cycle(
         stores=CognitiveCycleStores(
             memory_store=state.memory_store,
             relationship_store=state.relationship_store,
@@ -109,19 +116,9 @@ def build_app_from_config(
             memory_retriever=memory_retriever,
             vector_index=None,
         ),
-        output_pipeline=output_pipeline,
+        extension_steps=collect_cognitive_steps(all_features),
     )
-
-
-def _compose_features(
-    *feature_groups: Sequence[FeatureDefinition],
-) -> tuple[FeatureDefinition, ...]:
-    """FeatureDefinition 群を登録順のまま単一 tuple にまとめる。
-
-    Returns:
-        登録順を維持した FeatureDefinition の tuple。
-    """
-    return collect_feature_items(feature_groups)
+    return IrisApp(cycle=cycle, output_pipeline=output_pipeline)
 
 
 def _wire_chat_feature(
@@ -144,39 +141,3 @@ def _wire_chat_feature(
             max_tokens=max_tokens,
         )
     )
-
-
-def _wire_app_with_basic_cycle(
-    features: Sequence[FeatureDefinition],
-) -> IrisApp:
-    """基本 text 応答向けの features から IrisApp を組み立てる。
-
-    Returns:
-        構成済みの IrisApp。
-    """
-    cycle = wire_basic_cognitive_cycle(
-        extension_steps=collect_cognitive_steps(features),
-    )
-    pipeline = wire_output_pipeline(
-        extension_presenters=collect_action_plan_presenters(features),
-    )
-    return IrisApp(cycle=cycle, output_pipeline=pipeline)
-
-
-def _wire_app_with_core_cycle(
-    features: Sequence[FeatureDefinition],
-    *,
-    stores: CognitiveCycleStores,
-    output_pipeline: RuntimeOutputPipeline,
-) -> IrisApp:
-    """Core wiring 用 features から IrisApp を組み立てる。
-
-    Returns:
-        構成済みの IrisApp。
-    """
-    cycle = wire_core_cognitive_cycle(
-        stores=stores,
-        extension_steps=collect_cognitive_steps(features),
-    )
-    pipeline = output_pipeline
-    return IrisApp(cycle=cycle, output_pipeline=pipeline)
