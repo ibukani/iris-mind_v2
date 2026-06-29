@@ -161,12 +161,7 @@ class LLMClientFactory:
             "Unknown LLM provider",
             self._known_providers,
         )
-        if provider == LLMProvider.FAKE:
-            client: LLMClient = FakeLLMClient(model=model_config.model)
-        elif provider == LLMProvider.OLLAMA:
-            client = OllamaLLMClient(ollama_adapter_config(model_config, runtime_config))
-        else:
-            client = OpenAILLMClient(openai_adapter_config(model_config, runtime_config))
+        client = _build_llm_client(provider, model_config, runtime_config)
         return _wrap_with_observer(client)
 
     def resolve_model(
@@ -214,22 +209,12 @@ def build_provider_diagnostics(
     Returns:
         組み立てた診断インスタンス。 fake プロバイダなら ``None``。
 
-    Raises:
-        ConfigError: 未知のプロバイダ名、もしくは adapter 構築失敗時。
     """
     provider = _require_known_provider(
         model_config.provider,
         "Unknown LLM provider for diagnostics",
     )
-    if provider == LLMProvider.FAKE:
-        return None
-    try:
-        if provider == LLMProvider.OLLAMA:
-            return OllamaDiagnostics(ollama_adapter_config(model_config, runtime_config))
-        return OpenAIDiagnostics(openai_adapter_config(model_config, runtime_config))
-    except OpenAIAdapterError as exc:
-        message = f"Failed to build openai provider diagnostics: {exc}"
-        raise ConfigError(message) from exc
+    return _build_provider_diagnostics(provider, model_config, runtime_config)
 
 
 def _require_known_provider(
@@ -254,6 +239,47 @@ def _require_known_provider(
         message = f"{message_prefix}: {provider}"
         raise ConfigError(message)
     return provider
+
+
+def _build_llm_client(
+    provider: LLMProvider,
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> LLMClient:
+    """Provider ごとの LLM client を組み立てる。
+
+    Returns:
+        構成済みの LLM client。
+    """
+    if provider == LLMProvider.FAKE:
+        return FakeLLMClient(model=model_config.model)
+    if provider == LLMProvider.OLLAMA:
+        return wire_ollama_llm_client(ollama_adapter_config(model_config, runtime_config))
+    return wire_openai_llm_client(openai_adapter_config(model_config, runtime_config))
+
+
+def _build_provider_diagnostics(
+    provider: LLMProvider,
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> LLMProviderDiagnostics | None:
+    """Provider ごとの診断を組み立てる。
+
+    Returns:
+        構成済みの provider diagnostics。 fake provider なら None。
+
+    Raises:
+        ConfigError: openai diagnostics 構築失敗時。
+    """
+    if provider == LLMProvider.FAKE:
+        return None
+    try:
+        if provider == LLMProvider.OLLAMA:
+            return OllamaDiagnostics(ollama_adapter_config(model_config, runtime_config))
+        return OpenAIDiagnostics(openai_adapter_config(model_config, runtime_config))
+    except OpenAIAdapterError as exc:
+        message = f"Failed to build openai provider diagnostics: {exc}"
+        raise ConfigError(message) from exc
 
 
 def ollama_adapter_config(
