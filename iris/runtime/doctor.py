@@ -119,8 +119,8 @@ def _resolve_config_path(config_path: str | None) -> _ResolvedConfigPath:
         path = resolve_runtime_config_path(config_path)
     except ConfigError as exc:
         return _ResolvedConfigPath(
-            RuntimeDoctorCheck(
-                name="config-discovery",
+            _build_check(
+                "config-discovery",
                 status="fail",
                 summary="config path resolution failed",
                 issue=str(exc),
@@ -131,7 +131,7 @@ def _resolve_config_path(config_path: str | None) -> _ResolvedConfigPath:
     if path is not None:
         summary = str(path)
     return _ResolvedConfigPath(
-        RuntimeDoctorCheck(name="config-discovery", status="ok", summary=summary),
+        _build_check("config-discovery", status="ok", summary=summary),
     )
 
 
@@ -140,8 +140,8 @@ def _load_config(config_path: str | None) -> _LoadedConfig:
         config = load_runtime_config(config_path)
     except ConfigError as exc:
         return _LoadedConfig(
-            check=RuntimeDoctorCheck(
-                name="config-parse",
+            check=_build_check(
+                "config-parse",
                 status="fail",
                 summary="config parse / validation failed",
                 issue=str(exc),
@@ -150,18 +150,14 @@ def _load_config(config_path: str | None) -> _LoadedConfig:
             config=None,
         )
     return _LoadedConfig(
-        check=RuntimeDoctorCheck(
-            name="config-parse",
-            status="ok",
-            summary="config parsed and validated",
-        ),
+        check=_build_check("config-parse", status="ok", summary="config parsed and validated"),
         config=config,
     )
 
 
 def _state_backend_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
-    return RuntimeDoctorCheck(
-        name="state-backend",
+    return _build_check(
+        "state-backend",
         status="ok",
         summary=f"selected state backend: {config.state.backend.value}",
     )
@@ -169,11 +165,7 @@ def _state_backend_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
 
 def _sqlite_state_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     if config.state.backend is not RuntimeStateBackend.SQLITE:
-        return RuntimeDoctorCheck(
-            name="sqlite-state",
-            status="skipped",
-            summary="state.backend is not sqlite",
-        )
+        return _build_check("sqlite-state", status="skipped", summary="state.backend is not sqlite")
     return _check_file_path(
         Path(config.state.sqlite_path),
         spec=_FilePathCheckSpec(
@@ -198,8 +190,8 @@ def _sqlite_state_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
 def _logging_path_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     file_path = config.logging.file_path
     if file_path is None:
-        return RuntimeDoctorCheck(
-            name="logging-file",
+        return _build_check(
+            "logging-file",
             status="skipped",
             summary="logging.file_path is not set",
         )
@@ -224,8 +216,8 @@ def _logging_path_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
 
 def _server_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     local = "local-only" if config.server.local_only else "network-visible"
-    return RuntimeDoctorCheck(
-        name="server",
+    return _build_check(
+        "server",
         status="ok",
         summary=f"{config.server.host}:{config.server.port} ({local})",
     )
@@ -237,17 +229,17 @@ def _model_slots_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
         f"fast_judge={config.models.fast_judge.provider.value}:{config.models.fast_judge.model}",
         f"reasoning={config.models.reasoning.provider.value}:{config.models.reasoning.model}",
     )
-    return RuntimeDoctorCheck(name="model-slots", status="ok", summary=", ".join(slots))
+    return _build_check("model-slots", status="ok", summary=", ".join(slots))
 
 
 def _delivery_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     status = "enabled" if config.delivery.enabled else "disabled"
-    return RuntimeDoctorCheck(name="delivery", status="ok", summary=status)
+    return _build_check("delivery", status="ok", summary=status)
 
 
 def _scheduler_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     status = "enabled" if config.scheduler.enabled else "disabled"
-    return RuntimeDoctorCheck(name="scheduler", status="ok", summary=status)
+    return _build_check("scheduler", status="ok", summary=status)
 
 
 def _runtime_doctor_base_checks(config: IrisRuntimeConfig) -> list[RuntimeDoctorCheck]:
@@ -274,8 +266,8 @@ async def _startup_diagnostics_checks(
         report = await run_startup_diagnostics(_read_only_diagnostics_config(config))
     except ConfigError as exc:
         return (
-            RuntimeDoctorCheck(
-                name="provider-readiness",
+            _build_check(
+                "provider-readiness",
                 status="fail",
                 summary="startup diagnostics failed",
                 issue=str(exc),
@@ -284,8 +276,8 @@ async def _startup_diagnostics_checks(
         )
     if not report.enabled:
         return (
-            RuntimeDoctorCheck(
-                name="provider-readiness",
+            _build_check(
+                "provider-readiness",
                 status="skipped",
                 summary="diagnostics.mode is off",
             ),
@@ -293,8 +285,8 @@ async def _startup_diagnostics_checks(
     checks = [_diagnostics_outcome_check(outcome) for outcome in report.outcomes]
     if not checks:
         checks.append(
-            RuntimeDoctorCheck(
-                name="provider-readiness",
+            _build_check(
+                "provider-readiness",
                 status="skipped",
                 summary="all model slots use fake provider",
             ),
@@ -373,8 +365,8 @@ def _build_file_path_check(
     issue: str | None = None,
     next_action: str | None = None,
 ) -> RuntimeDoctorCheck:
-    return RuntimeDoctorCheck(
-        name=spec.name,
+    return _build_check(
+        spec.name,
         status=status,
         summary=summary,
         issue=issue,
@@ -388,8 +380,25 @@ def _diagnostics_outcome_check(outcome: DiagnosticsCheckOutcome) -> RuntimeDocto
     issue = stage.issue_code
     next_action = stage.next_action
     summary = _diagnostics_summary(outcome, stage)
+    return _build_check(
+        "provider-readiness",
+        status=status,
+        summary=summary,
+        issue=issue,
+        next_action=next_action,
+    )
+
+
+def _build_check(
+    name: str,
+    *,
+    status: str,
+    summary: str,
+    issue: str | None = None,
+    next_action: str | None = None,
+) -> RuntimeDoctorCheck:
     return RuntimeDoctorCheck(
-        name="provider-readiness",
+        name=name,
         status=status,
         summary=summary,
         issue=issue,
