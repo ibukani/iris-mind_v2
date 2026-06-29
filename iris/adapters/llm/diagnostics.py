@@ -16,7 +16,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+from iris.core.metadata import immutable_metadata
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 class ReadinessStatus(Enum):
@@ -80,7 +85,7 @@ class ProviderReadinessResult:
     capabilities: ProviderCapability
     latency_ms: float | None = None
     issues: tuple[ProviderDiagnosticIssue, ...] = ()
-    metadata: dict[str, str] | None = None
+    metadata: Mapping[str, str] | None = None
 
 
 def aggregate_issue_severity(
@@ -134,7 +139,7 @@ def build_provider_readiness_result(
         capabilities=capabilities,
         latency_ms=latency_ms,
         issues=issues,
-        metadata=metadata,
+        metadata=immutable_metadata(metadata) if metadata is not None else None,
     )
 
 

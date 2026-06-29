@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
+
 import pytest
 
 from iris.adapters.llm.diagnostics import (
@@ -139,7 +141,8 @@ def test_aggregate_issue_severity_prefers_fail_then_warn() -> None:
 
 
 def test_build_provider_readiness_result_sets_status_and_metadata() -> None:
-    """build_provider_readiness_result preserves provider metadata."""
+    """Builder は provider metadata の防御的な読み取り専用コピーを保持する。"""
+    metadata = {"k": "v"}
     result = build_provider_readiness_result(
         provider="demo",
         model="m",
@@ -152,8 +155,9 @@ def test_build_provider_readiness_result_sets_status_and_metadata() -> None:
             ),
         ),
         latency_ms=12.5,
-        metadata={"k": "v"},
+        metadata=metadata,
     )
+    metadata["k"] = "changed"
 
     assert result.provider == "demo"
     assert result.model == "m"
@@ -162,6 +166,7 @@ def test_build_provider_readiness_result_sets_status_and_metadata() -> None:
     assert result.latency_ms is not None
     assert abs(result.latency_ms - 12.5) < 1e-9
     assert result.metadata == {"k": "v"}
+    assert isinstance(result.metadata, MappingProxyType)
 
 
 @pytest.mark.parametrize(

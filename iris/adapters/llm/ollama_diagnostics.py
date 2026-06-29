@@ -320,7 +320,7 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
         except httpx.HTTPError:
             return None
         try:
-            return _extract_loaded_model_names(_safe_json(response))
+            return _extract_model_names(_safe_json(response))
         except LLMProviderInvalidResponseError:
             return None
 
@@ -508,19 +508,4 @@ def _extract_model_names(body: _JsonObject) -> frozenset[str] | None:
             name_value = entry_value.get("name")
             if isinstance(name_value, str):
                 names.add(name_value)
-    return frozenset(names)
-
-
-def _extract_loaded_model_names(body: _JsonObject) -> frozenset[str] | None:
-    models_value = body.get("models")
-    if not isinstance(models_value, list):
-        return None
-    names: set[str] = set()
-    for entry_value in models_value:
-        if isinstance(entry_value, dict):
-            name_value = entry_value.get("name")
-            if isinstance(name_value, str):
-                names.add(name_value)
-    if not names:
-        return frozenset()
     return frozenset(names)
