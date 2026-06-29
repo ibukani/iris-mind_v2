@@ -57,21 +57,14 @@ def wire_default_app(
     Returns:
         完全に組み立てられた IrisApp。
     """
-    chat_feature = define_chat_feature(
-        wire_response_generator(
-            llm_client,
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+    chat_feature = _wire_chat_feature(
+        llm_client,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
-    basic_action_feature = define_basic_action_feature()
-    features = _compose_features((chat_feature,), (basic_action_feature,))
-    cycle = wire_basic_cognitive_cycle(extension_steps=collect_cognitive_steps(features))
-    output_pipeline = wire_output_pipeline(
-        extension_presenters=collect_action_plan_presenters(features),
-    )
-    return IrisApp(cycle=cycle, output_pipeline=output_pipeline)
+    features = _compose_features((chat_feature,), (define_basic_action_feature(),))
+    return _wire_app_with_basic_cycle(features)
 
 
 def build_app_from_config(
@@ -99,17 +92,15 @@ def build_app_from_config(
     if isinstance(state.memory_store, SQLiteMemoryStore):
         memory_retriever = SQLiteFTS5MemoryRetriever(state.memory_store)
 
-    chat_feature = define_chat_feature(
-        wire_response_generator(
-            client,
-            model=model,
-            temperature=model_config.temperature,
-            max_tokens=model_config.max_output_tokens,
-        )
+    chat_feature = _wire_chat_feature(
+        client,
+        model=model,
+        temperature=model_config.temperature,
+        max_tokens=model_config.max_output_tokens,
     )
     all_features = _compose_features(features, (chat_feature,))
-
-    cycle = wire_core_cognitive_cycle(
+    return _wire_app_with_core_cycle(
+        all_features,
         stores=CognitiveCycleStores(
             memory_store=state.memory_store,
             relationship_store=state.relationship_store,
@@ -117,10 +108,6 @@ def build_app_from_config(
             memory_retriever=memory_retriever,
             vector_index=None,
         ),
-        extension_steps=collect_cognitive_steps(all_features),
-    )
-    return IrisApp(
-        cycle=cycle,
         output_pipeline=output_pipeline,
     )
 
@@ -134,3 +121,61 @@ def _compose_features(
         登録順を維持した FeatureDefinition の tuple。
     """
     return tuple(feature for feature_group in feature_groups for feature in feature_group)
+
+
+def _wire_chat_feature(
+    llm_client: LLMClient,
+    *,
+    model: str,
+    temperature: float,
+    max_tokens: int | None,
+) -> FeatureDefinition:
+    """Chat feature を再利用可能な形で組み立てる。
+
+    Returns:
+        構成済みの chat feature。
+    """
+    return define_chat_feature(
+        wire_response_generator(
+            llm_client,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    )
+
+
+def _wire_app_with_basic_cycle(
+    features: Sequence[FeatureDefinition],
+) -> IrisApp:
+    """基本 text 応答向けの features から IrisApp を組み立てる。
+
+    Returns:
+        構成済みの IrisApp。
+    """
+    cycle = wire_basic_cognitive_cycle(
+        extension_steps=collect_cognitive_steps(features),
+    )
+    pipeline = wire_output_pipeline(
+        extension_presenters=collect_action_plan_presenters(features),
+    )
+    return IrisApp(cycle=cycle, output_pipeline=pipeline)
+
+
+def _wire_app_with_core_cycle(
+    features: Sequence[FeatureDefinition],
+    *,
+    stores: CognitiveCycleStores,
+    output_pipeline: RuntimeOutputPipeline,
+) -> IrisApp:
+    """Core wiring 用 features から IrisApp を組み立てる。
+
+    Returns:
+        構成済みの IrisApp。
+    """
+    cycle = wire_core_cognitive_cycle(
+        stores=stores,
+        extension_steps=collect_cognitive_steps(features),
+    )
+    pipeline = output_pipeline
+    return IrisApp(cycle=cycle, output_pipeline=pipeline)
