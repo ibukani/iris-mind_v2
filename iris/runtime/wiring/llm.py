@@ -189,9 +189,9 @@ class LLMClientFactory:
             self._known_providers,
         )
         if provider == LLMProvider.OLLAMA:
-            return ollama_adapter_config(model_config, runtime_config).model
+            return _resolve_ollama_model(model_config.model)
         if provider == LLMProvider.OPENAI:
-            return openai_adapter_config(model_config, runtime_config).model
+            return _resolve_openai_model(model_config.model, runtime_config)
         return model_config.model
 
 
@@ -269,9 +269,7 @@ def ollama_adapter_config(
     Returns:
         ``OllamaLLMClient`` / ``OllamaDiagnostics`` が受け取る ``OllamaConfig``。
     """
-    model = model_config.model
-    if _is_fake_llm_model(model):
-        model = OllamaConfig().model
+    model = _resolve_ollama_model(model_config.model)
     return OllamaConfig(
         model=model,
         base_url=runtime_config.ollama.base_url,
@@ -297,9 +295,7 @@ def openai_adapter_config(
         ``OpenAILLMClient`` / ``OpenAIDiagnostics`` が受け取る ``OpenAIConfig``。
         API key は環境変数 ``OPENAI_API_KEY`` から解決される。
     """
-    model = model_config.model
-    if _is_fake_llm_model(model):
-        model = runtime_config.openai.model
+    model = _resolve_openai_model(model_config.model, runtime_config)
     max_output_tokens = model_config.max_output_tokens
     if max_output_tokens is None:
         max_output_tokens = runtime_config.openai.max_output_tokens
@@ -336,6 +332,28 @@ def _is_fake_llm_model(model: str) -> bool:
         fake センチネルなら True。
     """
     return model == DEFAULT_FAKE_LLM_MODEL
+
+
+def _resolve_ollama_model(model: str) -> str:
+    """Ollama 用の実際のモデル名を解決する。
+
+    Returns:
+        実際に Ollama へ渡すモデル名。
+    """
+    if _is_fake_llm_model(model):
+        return OllamaConfig().model
+    return model
+
+
+def _resolve_openai_model(model: str, runtime_config: IrisRuntimeConfig) -> str:
+    """OpenAI 用の実際のモデル名を解決する。
+
+    Returns:
+        実際に OpenAI へ渡すモデル名。
+    """
+    if _is_fake_llm_model(model):
+        return runtime_config.openai.model
+    return model
 
 
 _INTERNAL_CONTEXT_GUARDRAIL = (
