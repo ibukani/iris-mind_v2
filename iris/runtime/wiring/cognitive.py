@@ -122,17 +122,14 @@ def _build_memory_steps(
     return steps
 
 
-def wire_affect_memory_aware_cognitive_cycle(
-    stores: CognitiveCycleStores | None = None,
-    *,
-    extension_steps: Sequence[PipelineStep[PipelineStepResult]] = (),
-) -> CognitiveCycle:
-    """メモリ、感情、関係性を使う認知サイクルを組み立てる。
+def _build_affect_memory_steps(
+    stores: CognitiveCycleStores,
+) -> list[PipelineStep[PipelineStepResult]]:
+    """Memory、affect、relationship の共通 step 群を組み立てる。
 
     Returns:
-        affect/relationship persistence を持つ CognitiveCycle。
+        perception から relationship 更新までの pipeline step。
     """
-    stores = stores or CognitiveCycleStores()
     affect_store = stores.affect_store or InMemoryAffectStore()
     steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
     steps.extend(_build_memory_steps(stores))
@@ -144,6 +141,21 @@ def wire_affect_memory_aware_cognitive_cycle(
             RelationshipStep(stores.relationship_store or InMemoryRelationshipStore()),
         ),
     )
+    return steps
+
+
+def wire_affect_memory_aware_cognitive_cycle(
+    stores: CognitiveCycleStores | None = None,
+    *,
+    extension_steps: Sequence[PipelineStep[PipelineStepResult]] = (),
+) -> CognitiveCycle:
+    """メモリ、感情、関係性を使う認知サイクルを組み立てる。
+
+    Returns:
+        affect/relationship persistence を持つ CognitiveCycle。
+    """
+    stores = stores or CognitiveCycleStores()
+    steps = _build_affect_memory_steps(stores)
     steps.extend(extension_steps)
     return wire_cognitive_cycle(steps=steps)
 
@@ -159,17 +171,7 @@ def wire_core_cognitive_cycle(
         memory → appraisal → persistence → policy → feature extension の CognitiveCycle。
     """
     stores = stores or CognitiveCycleStores()
-    affect_store = stores.affect_store or InMemoryAffectStore()
-    steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
-    steps.extend(_build_memory_steps(stores))
-    steps.extend(
-        (
-            AffectBaselineLoadStep(affect_store),
-            AppraisalStep(),
-            AffectPersistenceStep(affect_store),
-            RelationshipStep(stores.relationship_store or InMemoryRelationshipStore()),
-            PolicyInhibitionStep(),
-        ),
-    )
+    steps = _build_affect_memory_steps(stores)
+    steps.append(PolicyInhibitionStep())
     steps.extend(extension_steps)
     return wire_cognitive_cycle(steps=steps)
