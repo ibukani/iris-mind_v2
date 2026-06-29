@@ -6,7 +6,14 @@ from dataclasses import dataclass, replace
 from datetime import time
 
 from iris.runtime.config.errors import ConfigError
-from iris.runtime.config.parsing import TomlTable, parse_bool, parse_float, parse_int, parse_string
+from iris.runtime.config.parsing import (
+    TomlTable,
+    parse_bool,
+    parse_float,
+    parse_int,
+    parse_string,
+    table_or_empty,
+)
 from iris.runtime.config.validation import require_greater_than_zero, require_zero_or_greater
 
 
@@ -111,27 +118,6 @@ def quiet_time(value: str, path: str) -> time:
         time: 変換後の時刻。
     """
     return _parse_hhmm(value, path)
-
-
-def _quiet_hours_patch(table: TomlTable) -> _QuietHoursPatch | None:
-    """quiet_hours サブテーブルを patch へ変換する。
-
-    Args:
-        table: ``[delivery]`` TOML テーブル。
-
-    Returns:
-        quiet_hours patch。キーがない場合は None。
-
-    Raises:
-        ConfigError: quiet_hours がテーブルでない場合。
-    """
-    if "quiet_hours" not in table:
-        return None
-    quiet_table = table["quiet_hours"]
-    if not isinstance(quiet_table, dict):
-        msg = "delivery.quiet_hours must be a table"
-        raise ConfigError(msg)
-    return _QuietHoursPatch.from_table(quiet_table)
 
 
 _HHMM_PARTS = 2
@@ -294,7 +280,13 @@ class _DeliveryConfigPatch:
                 if "rate_limit_window_seconds" in table
                 else None
             ),
-            quiet_hours=_quiet_hours_patch(table),
+            quiet_hours=_QuietHoursPatch.from_table(
+                table_or_empty(
+                    table,
+                    "quiet_hours",
+                    path="delivery.quiet_hours",
+                ),
+            ),
         )
 
     def apply(self, config: RuntimeDeliveryConfig) -> RuntimeDeliveryConfig:

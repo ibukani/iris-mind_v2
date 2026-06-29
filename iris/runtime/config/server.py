@@ -12,6 +12,7 @@ from iris.runtime.config.parsing import (
     parse_int,
     parse_optional_string,
     parse_string,
+    table_or_empty,
 )
 from iris.runtime.config.validation import require_zero_or_greater
 
@@ -157,24 +158,6 @@ def _validate_tls_config(config: RuntimeServerTlsConfig) -> RuntimeServerTlsConf
     return config
 
 
-def _tls_patch(table: TomlTable) -> _ServerTlsPatch | None:
-    """TOML の ``[server.tls]`` 設定を patch へ変換する。
-
-    Returns:
-        TLS patch。`tls` キーがなければ None。
-
-    Raises:
-        ConfigError: ``server.tls`` がテーブルでない場合。
-    """
-    if "tls" not in table:
-        return None
-    tls_table = table["tls"]
-    if not isinstance(tls_table, dict):
-        message = "server.tls must be a table"
-        raise ConfigError(message)
-    return _ServerTlsPatch.from_table(tls_table)
-
-
 def _parse_env_int(env: Mapping[str, str], key: str) -> int | None:
     """環境変数の整数 override を解析する。
 
@@ -299,7 +282,9 @@ class _ServerConfigPatch:
                 if "shutdown_grace_seconds" in table
                 else None
             ),
-            tls=_tls_patch(table),
+            tls=_ServerTlsPatch.from_table(
+                table_or_empty(table, "tls", path="server.tls"),
+            ),
         )
 
     @classmethod
