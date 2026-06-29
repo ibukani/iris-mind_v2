@@ -57,7 +57,7 @@ def collect_cognitive_steps(
     Returns:
         CognitiveCycle の拡張位置へ注入する認知ステップ。
     """
-    return _collect_feature_items(tuple(feature.cognitive_steps for feature in features))
+    return collect_feature_items(tuple(feature.cognitive_steps for feature in features))
 
 
 def collect_action_plan_presenters(
@@ -71,7 +71,7 @@ def collect_action_plan_presenters(
     Returns:
         PresentationSuite へ注入するプレゼンター。
     """
-    return _collect_feature_items(
+    return collect_feature_items(
         tuple(feature.action_plan_presenters for feature in features),
     )
 
@@ -88,7 +88,7 @@ def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefin
     return define_proactive_talk_feature(salience_threshold=salience_threshold)
 
 
-def _collect_feature_items[FeatureItemT](
+def collect_feature_items[FeatureItemT](
     feature_item_groups: Sequence[Sequence[FeatureItemT]],
 ) -> tuple[FeatureItemT, ...]:
     """FeatureDefinition 群の属性列を順序どおりに平坦化する。

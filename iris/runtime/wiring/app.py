@@ -18,6 +18,7 @@ from iris.runtime.wiring.cognitive import (
 from iris.runtime.wiring.features import (
     collect_action_plan_presenters,
     collect_cognitive_steps,
+    collect_feature_items,
 )
 from iris.runtime.wiring.llm import LLMClientFactory, wire_response_generator
 from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
@@ -120,7 +121,7 @@ def _compose_features(
     Returns:
         登録順を維持した FeatureDefinition の tuple。
     """
-    return tuple(feature for feature_group in feature_groups for feature in feature_group)
+    return collect_feature_items(feature_groups)
 
 
 def _wire_chat_feature(
