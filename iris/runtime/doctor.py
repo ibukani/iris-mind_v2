@@ -74,31 +74,17 @@ async def run_runtime_doctor(config_path: str | None = None) -> RuntimeDoctorRep
     Returns:
         runtime doctor report。
     """
-    checks: list[RuntimeDoctorCheck] = []
     resolved_path = _resolve_config_path(config_path)
-    checks.append(resolved_path.check)
     if resolved_path.check.status == "fail":
-        return _report(checks)
+        return _report((resolved_path.check,))
 
     loaded = _load_config(config_path)
-    checks.append(loaded.check)
     if loaded.config is None:
-        return _report(checks)
+        return _report((resolved_path.check, loaded.check))
 
-    config = loaded.config
-    checks.extend(
-        (
-            _state_backend_check(config),
-            _sqlite_state_check(config),
-            _logging_path_check(config),
-            _server_check(config),
-            _model_slots_check(config),
-            _delivery_check(config),
-            _scheduler_check(config),
-        ),
-    )
-    checks.extend(await _startup_diagnostics_checks(config))
-    return _report(checks)
+    checks = _runtime_doctor_base_checks(loaded.config)
+    checks.extend(await _startup_diagnostics_checks(loaded.config))
+    return _report((resolved_path.check, loaded.check, *checks))
 
 
 @dataclass(frozen=True)
@@ -264,6 +250,23 @@ def _scheduler_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     return RuntimeDoctorCheck(name="scheduler", status="ok", summary=status)
 
 
+def _runtime_doctor_base_checks(config: IrisRuntimeConfig) -> list[RuntimeDoctorCheck]:
+    """Runtime doctor の固定チェック群を順序付きで組み立てる。
+
+    Returns:
+        順序を保った RuntimeDoctorCheck の list。
+    """
+    return [
+        _state_backend_check(config),
+        _sqlite_state_check(config),
+        _logging_path_check(config),
+        _server_check(config),
+        _model_slots_check(config),
+        _delivery_check(config),
+        _scheduler_check(config),
+    ]
+
+
 async def _startup_diagnostics_checks(
     config: IrisRuntimeConfig,
 ) -> tuple[RuntimeDoctorCheck, ...]:
@@ -418,7 +421,9 @@ def _diagnostics_summary(
     )
 
 
-def _report(checks: list[RuntimeDoctorCheck]) -> RuntimeDoctorReport:
+def _report(
+    checks: tuple[RuntimeDoctorCheck, ...] | list[RuntimeDoctorCheck],
+) -> RuntimeDoctorReport:
     ok = all(check.status != "fail" for check in checks)
     return RuntimeDoctorReport(ok=ok, checks=tuple(checks))
 
