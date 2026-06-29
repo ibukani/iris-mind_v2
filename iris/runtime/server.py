@@ -120,6 +120,45 @@ async def _shutdown(
     logger.info("shutdown complete")
 
 
+def _create_runtime_server(
+    components: RuntimeComponents,
+    config: IrisRuntimeConfig,
+) -> grpc.aio.Server:
+    """Runtime components から gRPC server を組み立てる。
+
+    Returns:
+        構成済みの gRPC server。
+    """
+    return create_grpc_server(
+        components.runtime_service,
+        host=config.server.host,
+        port=config.server.port,
+        app_action_broker=components.app_action_broker,
+        identity_resolver=components.identity_resolver,
+        space_resolver=components.space_resolver,
+        auth_config=config.auth,
+        token_verifier=load_token_verifier_from_runtime_env(config.auth),
+        tls_config=config.server.tls,
+    )
+
+
+async def _run_runtime_server(
+    server: grpc.aio.Server,
+    components: RuntimeComponents,
+    config: IrisRuntimeConfig,
+) -> None:
+    """Scheduler task と gRPC server の待受けを管理する。"""
+    await server.start()
+    scheduler_task = _start_scheduler_task(components, config)
+
+    try:
+        await server.wait_for_termination()
+    except asyncio.CancelledError:
+        logger.info("shutdown requested")
+    finally:
+        await _shutdown(server, scheduler_task, config.server.shutdown_grace_seconds)
+
+
 async def serve(
     config_path: str | None = None,
     overrides: RuntimeConfigOverrides | None = None,
@@ -141,27 +180,8 @@ async def serve(
 
     components = build_runtime_components(config)
 
-    server: grpc.aio.Server = create_grpc_server(
-        components.runtime_service,
-        host=config.server.host,
-        port=config.server.port,
-        app_action_broker=components.app_action_broker,
-        identity_resolver=components.identity_resolver,
-        space_resolver=components.space_resolver,
-        auth_config=config.auth,
-        token_verifier=load_token_verifier_from_runtime_env(config.auth),
-        tls_config=config.server.tls,
-    )
-
-    await server.start()
-    scheduler_task = _start_scheduler_task(components, config)
-
-    try:
-        await server.wait_for_termination()
-    except asyncio.CancelledError:
-        logger.info("shutdown requested")
-    finally:
-        await _shutdown(server, scheduler_task, config.server.shutdown_grace_seconds)
+    server = _create_runtime_server(components, config)
+    await _run_runtime_server(server, components, config)
 
 
 def main() -> None:
