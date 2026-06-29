@@ -158,15 +158,27 @@ def test_opencode_commands_match_make_targets() -> None:
     assert not violations, "opencode command integrity violations:\n" + "\n".join(violations)
 
 
-def test_make_check_ci_and_verify_script_use_same_entrypoint() -> None:
-    """Makefile and CI must keep scripts/verify.py as the single strict gate."""
+def test_ci_uses_explicit_supported_quality_gates() -> None:
+    """CI must run the supported split quality gates explicitly."""
     makefile_text = (PROJECT_ROOT / "Makefile").read_text(encoding="utf-8")
     ci_text = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "check:" in makefile_text
     assert "uv run python scripts/verify.py" in makefile_text
     assert "verify: check" in makefile_text
-    assert "make check" in ci_text
+
+    required_ci_commands = (
+        "make quick",
+        "make coverage",
+        "make e2e",
+        "make generate-protos",
+        "git diff --exit-code iris/generated",
+        "make runtime-doctor-json",
+        "uv build",
+    )
+
+    missing = [command for command in required_ci_commands if command not in ci_text]
+    assert not missing, "CI is missing required quality gates:\n" + "\n".join(missing)
 
 
 def test_verify_script_contains_all_required_checks() -> None:
