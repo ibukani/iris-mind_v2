@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from datetime import datetime
+from typing import Protocol
 
-if TYPE_CHECKING:
-    from datetime import datetime
+from pydantic import BaseModel, ConfigDict, model_validator
 
-    from iris.core.ids import ActorId, ObservationId
+from iris.core.ids import ActorId, ObservationId
 
 
 def _validate_range(value: float, *, minimum: float, maximum: float, field_name: str) -> None:
@@ -22,9 +21,10 @@ def _validate_range(value: float, *, minimum: float, maximum: float, field_name:
         raise ValueError(msg)
 
 
-@dataclass(frozen=True)
-class RelationshipSnapshotRecord:
+class RelationshipSnapshotRecord(BaseModel):
     """ActorId を主キーに持つ現在の関係性スナップショット。"""
+
+    model_config = ConfigDict(frozen=True)
 
     actor_id: ActorId
     actor_label: str | None = None
@@ -37,11 +37,15 @@ class RelationshipSnapshotRecord:
     updated_at: datetime | None = None
     version: int = 1
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate_record(self) -> RelationshipSnapshotRecord:
         """永続化境界で扱える関係性値だけを許可する。
 
+        Returns:
+            検証済みrecord。
+
         Raises:
-            ValueError: actor_id が空、または値が契約範囲外の場合。
+            ValueError: 永続化不変条件に違反した場合。
         """
         if not self.actor_id:
             msg = "actor_id is required for durable relationship records"
@@ -57,16 +61,17 @@ class RelationshipSnapshotRecord:
         if self.version < 1:
             msg = "version must be greater than or equal to 1"
             raise ValueError(msg)
+        return self
 
 
 class RelationshipStore(Protocol):
     """ActorId ごとの現在の関係性スナップショットを保存するストア。"""
 
-    def get(self, actor_id: ActorId) -> RelationshipSnapshotRecord | None:
+    async def get(self, actor_id: ActorId) -> RelationshipSnapshotRecord | None:
         """ActorId に対応する関係性スナップショットを取得する。"""
         ...
 
-    def upsert(
+    async def upsert(
         self,
         record: RelationshipSnapshotRecord,
     ) -> RelationshipSnapshotRecord:

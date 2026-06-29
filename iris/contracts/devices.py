@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
-from iris.core.metadata import EMPTY_METADATA, immutable_metadata
+from pydantic import BaseModel, ConfigDict, Field
 
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from iris.core.ids import ActorId, DeviceId
+from iris.contracts.metadata import ImmutableMetadata
+from iris.core.ids import ActorId, DeviceId
+from iris.core.metadata import immutable_metadata
 
 
 class DeviceKind(StrEnum):
@@ -25,29 +22,23 @@ class DeviceKind(StrEnum):
     SENSOR = "sensor"
 
 
-@dataclass(frozen=True)
-class DeviceCapability:
+class DeviceCapability(BaseModel):
     """デバイスが公開する capability。"""
 
+    model_config = ConfigDict(frozen=True)
+
     name: str
-    metadata: Mapping[str, str] = EMPTY_METADATA
-
-    def __post_init__(self) -> None:
-        """メタデータを不変な mapping proxy として防御的にコピーする。"""
-        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+    metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
 
 
-@dataclass(frozen=True)
-class DeviceProfile:
+class DeviceProfile(BaseModel):
     """任意の所有 Actor にリンクされた Device プロファイル。"""
+
+    model_config = ConfigDict(frozen=True)
 
     device_id: DeviceId
     device_kind: DeviceKind
     display_name: str
     owner_actor_id: ActorId | None = None
     capabilities: tuple[DeviceCapability, ...] = ()
-    metadata: Mapping[str, str] = EMPTY_METADATA
-
-    def __post_init__(self) -> None:
-        """メタデータを不変な mapping proxy として防御的にコピーする。"""
-        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+    metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)

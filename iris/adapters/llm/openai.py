@@ -18,6 +18,7 @@ from iris.adapters.llm.diagnostics import (
 )
 from iris.adapters.llm.ports import LLMMessage, LLMRequest, LLMResponse
 from iris.adapters.llm.type_utils import is_object_mapping, is_object_sequence
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL, DEFAULT_OPENAI_MODEL
 
 
 class OpenAIProviderMessage(TypedDict):
@@ -61,7 +62,7 @@ class OpenAIConfig:
     def from_env(
         cls,
         *,
-        model: str = "gpt-5-mini",
+        model: str = DEFAULT_OPENAI_MODEL,
         api_key_name: str = "OPENAI_API_KEY",
         timeout_seconds: float | None = None,
         max_output_tokens: int | None = None,
@@ -183,7 +184,7 @@ class OpenAILLMClient:
         )
 
     def _request_model(self, request: LLMRequest) -> str:
-        if request.model == "fake-llm":
+        if request.model == DEFAULT_FAKE_LLM_MODEL:
             return self._config.model
         return request.model or self._config.model
 

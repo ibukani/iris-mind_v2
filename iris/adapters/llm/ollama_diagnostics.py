@@ -23,6 +23,7 @@ from iris.adapters.llm.diagnostics import (
     ProviderDiagnosticIssue,
     ProviderReadinessResult,
     ReadinessStatus,
+    build_provider_readiness_result,
 )
 from iris.adapters.llm.ollama import OllamaConfig
 
@@ -319,7 +320,7 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
         except httpx.HTTPError:
             return None
         try:
-            return _extract_loaded_model_names(_safe_json(response))
+            return _extract_model_names(_safe_json(response))
         except LLMProviderInvalidResponseError:
             return None
 
@@ -477,28 +478,15 @@ def _build_result(
     started: float,
     metadata: dict[str, str],
 ) -> ProviderReadinessResult:
-    severity = _aggregate_severity(issues)
     latency_ms = (_now() - started) * 1000.0
-    return ProviderReadinessResult(
+    return build_provider_readiness_result(
         provider=_OLLAMA_DIAGNOSTICS_PROVIDER,
         model=model,
-        status=severity,
         capabilities=_OLLAMA_DIAGNOSTICS_CAPABILITIES,
         latency_ms=latency_ms,
         issues=issues,
         metadata=metadata,
     )
-
-
-def _aggregate_severity(issues: tuple[ProviderDiagnosticIssue, ...]) -> ReadinessStatus:
-    if not issues:
-        return ReadinessStatus.OK
-    severities = {issue.severity for issue in issues}
-    if ReadinessStatus.FAIL in severities:
-        return ReadinessStatus.FAIL
-    if ReadinessStatus.WARN in severities:
-        return ReadinessStatus.WARN
-    return ReadinessStatus.SKIPPED
 
 
 def _safe_json(response: httpx.Response) -> _JsonObject:
@@ -520,19 +508,4 @@ def _extract_model_names(body: _JsonObject) -> frozenset[str] | None:
             name_value = entry_value.get("name")
             if isinstance(name_value, str):
                 names.add(name_value)
-    return frozenset(names)
-
-
-def _extract_loaded_model_names(body: _JsonObject) -> frozenset[str] | None:
-    models_value = body.get("models")
-    if not isinstance(models_value, list):
-        return None
-    names: set[str] = set()
-    for entry_value in models_value:
-        if isinstance(entry_value, dict):
-            name_value = entry_value.get("name")
-            if isinstance(name_value, str):
-                names.add(name_value)
-    if not names:
-        return frozenset()
     return frozenset(names)

@@ -133,8 +133,9 @@ iris/
 │       └── templates.py
 │
 ├── adapters/
-│ ├── activity/
-│ │ └── sqlite_journal.py
+│   ├── persistence/
+│   │   └── sqlite/
+│   │       └── stores/
 │   ├── app_gateway/
 │   │   ├── ingress.py
 │   │   ├── identity_resolver.py
@@ -203,7 +204,7 @@ Deferred / future phase:
 
 ### `contracts/`
 
-層間で共享する型を置く。
+層間で共享する型を置く。データモデルの型安全と実行時バリデーションを強化するため、境界モデルから Pydantic V2 の `BaseModel` を段階的に導入する。ただし標準の `dataclass` を全廃するわけではない。
 
 主な責務。
 
@@ -219,8 +220,10 @@ Deferred / future phase:
 
 注意点。
 
-- `contracts/ports.py` は原則作らない。
-- Port は利用側モジュールの近くに置く。
+- 全体をまとめた巨大な `contracts/ports.py` は作らない。
+- 安定したドメインレコードと、それに直結する安定したドメインストアのプロトコル（例: `MemoryStore`, `RelationshipStore`, `AffectStore`）は `contracts/<domain>.py` または `contracts/<domain>/` に配置してよい。
+- `WorkspaceFrame` 自体は `contracts` には移さず、機能間で共有が必要な「最小限の context 型」だけを `contracts/` に切り出して一元管理する。
+- 特定のユースケースに特化した Runtime / Application port は、それを利用するモジュールの近く（consuming layer）に置く。
 - EventBus 的な逃げ道は作らない。
 
 Port の配置例。
@@ -253,7 +256,7 @@ adapters/app_gateway/ports.py
 
 - `runtime/composition.py` 1ファイルにすべて詰め込まない。
 - `runtime/wiring/` に分割する。
-- `runtime/wiring/` は constructor injection に限定する。
+- `runtime/wiring/` は constructor injection に限定する。DI コンテナ（dependency-injector 等）は導入せず、手動配線でシンプルさと構成の明確さを維持する。
 - `runtime/wiring/` に業務ロジックや認知ロジックを書かない。
 - `runtime/ingress/` は trust check、観測統合、runtime handler 呼び出し、safety gate などの orchestration に限定する。
 - `runtime/state/` は activity journal/projection、presence、space occupancy、scheduler target、availability、workspace context assembly など runtime-owned state とその port を置く。volatile store は process-local、durable backend は `runtime/wiring/state.py` が明示的に adapter を注入する。`ActivityJournal` port は consuming runtime state module の近くに置く。
@@ -359,7 +362,7 @@ CognitiveCycle → action step
 - 巨大な `dict[str, Any]`
 - LLM prompt 文字列だけの巨大 context
 
-`WorkspaceFrame` は「何でも入る箱」にしない。
+`WorkspaceFrame` は「何でも入る箱」にしない。肥大化を防ぐため、機能間で共有必須な型だけを `contracts/` 側に切り出し、Feature 固有のデータは各 Feature 内に閉じて管理する。
 
 ### `presentation/`
 
@@ -385,7 +388,7 @@ adapters/       = どこへ送るかを担当する
 ### `features/`
 
 新機能を縦切りで追加する場所。
-feature 固有の policy、planning、scoring、candidate generation、template、`FeatureDefinition` provider を置く。
+各featureは Vertical Slice Architecture の考え方に基づいて整理する。feature固有の policy、planning、scoring、candidate generation、template、`FeatureDefinition` provider、および feature 固有の `ports`, `models`, `services` をこのフォルダ内に完結させる。ただし、`MemoryStore` などの安定したドメインPortは `contracts` 側に残し、feature-local な port はその feature 固有のものだけに限定する。
 
 ただし、`features/` は好き勝手に内部実装を改造する場所ではない。
 `CognitiveCycle` の拡張ポイントに参加する extension provider である。
@@ -404,8 +407,10 @@ class FeatureDefinition:
 
 現在実装済みの feature: `proactive_talk/`（salience scoring, goal proposal, proactive policy, expression抑制）と `event_reaction/`（activity event reaction policy、planning、template）。
 
-`runtime/wiring/features.py` は `FeatureDefinition` を集めて登録するだけにする。
-feature は `runtime/`、`adapters/`、`presentation/`、`safety/` に依存しない。runtime が feature を配線・実行する。
+`FeatureDefinition` は現在のところ内部拡張の型契約であり、自動検出（auto-discovery）や汎用レジストリによる動的ロードは実装されていない。
+各 feature の有効化は `runtime/wiring/features.py` などの配線層で、明示的な関数呼び出しとパイプラインステップへのマニュアル追加によって行われる。
+
+feature は `runtime/`、`adapters/`、`presentation/`、`safety/` に依存しない。runtime が feature を明示的に配線・実行する。
 
 `event_reaction` は名前が同じでも層ごとに責務を分ける。
 
@@ -423,8 +428,8 @@ runtime/ingress/activity_event_reaction.py
 ### `adapters/`
 
 外部技術との接続を担当する。
-provider、transport、storage、SDK、backend implementation はここに置く。runtime state port は利用側の `runtime/state/` に置く。SQLite activity journal は backend implementation として `adapters/activity/sqlite_journal.py` に置き、runtime-owned `ActivityJournal` port を実装する。
-`runtime/wiring/state.py` は設定に基づき `SQLiteActivityJournal` を選択し、`ActivityJournal` port として注入してよい。
+provider、transport、storage、SDK、backend implementation はここに置く。runtime state port は利用側の `runtime/state/` に置く。SQLite による永続化実装 (activity journal, memory, relationship など) は `adapters/persistence/sqlite/stores` に集約する。
+`runtime/wiring/state.py` は設定に基づき SQLite store を選択し、port として注入してよい。
 
 原則として `adapters/` は `runtime/` を import しない。
 例外として backend adapter が runtime-owned port を実装できる条件:

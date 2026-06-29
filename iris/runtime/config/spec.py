@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.model_slots import model_slot_specs
 
 
 class ConfigValueType(StrEnum):
@@ -56,40 +58,36 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
     """
     model_specs = tuple(
         spec
-        for slot, max_tokens in (
-            ("default_chat", 512),
-            ("fast_judge", 128),
-            ("reasoning", 1024),
-        )
+        for slot in model_slot_specs()
         for spec in (
             ConfigFieldSpec(
-                f"models.{slot}.provider",
+                f"models.{slot.name}.provider",
                 ConfigValueType.ENUM,
                 "fake",
-                f"{slot}モデルスロットのプロバイダ。",
-                env=f"IRIS_{slot.upper()}_PROVIDER",
+                f"{slot.name}モデルスロットのプロバイダ。",
+                env=f"IRIS_{slot.name.upper()}_PROVIDER",
                 allowed_values=("fake", "ollama", "openai"),
             ),
             ConfigFieldSpec(
-                f"models.{slot}.model",
+                f"models.{slot.name}.model",
                 ConfigValueType.STR,
-                "fake-llm",
-                f"{slot}モデルスロットのモデル名。",
-                env=f"IRIS_{slot.upper()}_MODEL",
+                DEFAULT_FAKE_LLM_MODEL,
+                f"{slot.name}モデルスロットのモデル名。",
+                env=f"IRIS_{slot.name.upper()}_MODEL",
             ),
             ConfigFieldSpec(
-                f"models.{slot}.temperature",
+                f"models.{slot.name}.temperature",
                 ConfigValueType.FLOAT,
                 0.0,
-                f"{slot}モデルスロットのtemperature。",
-                env=f"IRIS_{slot.upper()}_TEMPERATURE",
+                f"{slot.name}モデルスロットのtemperature。",
+                env=f"IRIS_{slot.name.upper()}_TEMPERATURE",
             ),
             ConfigFieldSpec(
-                f"models.{slot}.max_output_tokens",
+                f"models.{slot.name}.max_output_tokens",
                 ConfigValueType.OPTIONAL_INT,
-                max_tokens,
-                f"{slot}モデルスロットの最大出力トークン数。",
-                env=f"IRIS_{slot.upper()}_MAX_OUTPUT_TOKENS",
+                slot.default_max_output_tokens,
+                f"{slot.name}モデルスロットの最大出力トークン数。",
+                env=f"IRIS_{slot.name.upper()}_MAX_OUTPUT_TOKENS",
             ),
         )
     )
@@ -334,6 +332,13 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             env="IRIS_OLLAMA_KEEP_ALIVE",
         ),
         ConfigFieldSpec(
+            "ollama.think",
+            ConfigValueType.OPTIONAL_STR,
+            default=False,
+            description="Ollamaの推論思考設定 (true/false/low/highなど)。",
+            env="IRIS_OLLAMA_THINK",
+        ),
+        ConfigFieldSpec(
             "openai.model",
             ConfigValueType.STR,
             "gpt-5-mini",
@@ -419,6 +424,20 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             5.0,
             "診断チェック 1 件あたりのタイムアウト秒数。",
             env="IRIS_DIAGNOSTICS_TIMEOUT_SECONDS",
+        ),
+        ConfigFieldSpec(
+            "diagnostics.readiness_timeout_seconds",
+            ConfigValueType.FLOAT,
+            5.0,
+            "readiness 診断チェックのタイムアウト秒数。",
+            env="IRIS_DIAGNOSTICS_READINESS_TIMEOUT_SECONDS",
+        ),
+        ConfigFieldSpec(
+            "diagnostics.warmup_timeout_seconds",
+            ConfigValueType.FLOAT,
+            120.0,
+            "warmup 診断チェックのタイムアウト秒数。",
+            env="IRIS_DIAGNOSTICS_WARMUP_TIMEOUT_SECONDS",
         ),
         ConfigFieldSpec(
             "diagnostics.warmup_models",

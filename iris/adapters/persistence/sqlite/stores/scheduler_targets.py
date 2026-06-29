@@ -1,0 +1,165 @@
+"""SQLite-backed scheduler target store."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert
+
+from iris.adapters.persistence.sqlite.context import (
+    SQLiteDatabaseInput,
+    resolve_database_manager,
+)
+from iris.adapters.persistence.sqlite.schema.scheduler_target import SchedulerTargetModel
+from iris.adapters.persistence.sqlite.serialization import (
+    datetime_to_text,
+    optional_datetime,
+    optional_new_type,
+    optional_text,
+    required_datetime_to_text,
+    text_to_datetime,
+)
+from iris.contracts.delivery import DeliveryRouteHint, SchedulerTarget
+from iris.core.ids import AccountId, ActorId, ExternalRef, SessionId, SpaceId
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+
+class SQLiteSchedulerTargetStore:
+    """SQLite-backed durable scheduler target store."""
+
+    def __init__(self, db: SQLiteDatabaseInput) -> None:
+        """Create a SQLite scheduler target store."""
+        self._db = resolve_database_manager(db)
+
+    async def upsert_target(self, target: SchedulerTarget) -> None:
+        """Insert or update a target by stable provider/session key."""
+        key = _target_key(target)
+        async with self._db.transaction() as session:
+            existing = await session.scalar(
+                select(SchedulerTargetModel.last_scheduler_attempt_at).where(
+                    SchedulerTargetModel.provider == key[0],
+                    SchedulerTargetModel.provider_subject == key[1],
+                    SchedulerTargetModel.provider_space_ref == key[2],
+                    SchedulerTargetModel.session_id == key[3],
+                )
+            )
+            last_attempt = (
+                str(existing)
+                if existing is not None
+                else datetime_to_text(target.last_scheduler_attempt_at)
+            )
+
+            stmt = insert(SchedulerTargetModel).values(
+                provider=key[0],
+                provider_subject=key[1],
+                provider_space_ref=key[2],
+                session_id=key[3],
+                actor_id=optional_text(target.actor_id),
+                account_id=optional_text(target.account_id),
+                space_id=optional_text(target.space_id),
+                display_name=target.display_name,
+                last_observed_at=required_datetime_to_text(target.last_observed_at),
+                last_scheduler_attempt_at=last_attempt,
+                stale_after=datetime_to_text(target.stale_after),
+                route_display_name=target.route.display_name,
+            )
+
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["provider", "provider_subject", "provider_space_ref", "session_id"],
+                set_={
+                    "actor_id": stmt.excluded.actor_id,
+                    "account_id": stmt.excluded.account_id,
+                    "space_id": stmt.excluded.space_id,
+                    "display_name": stmt.excluded.display_name,
+                    "last_observed_at": stmt.excluded.last_observed_at,
+                    "last_scheduler_attempt_at": last_attempt,
+                    "stale_after": stmt.excluded.stale_after,
+                    "route_display_name": stmt.excluded.route_display_name,
+                },
+            )
+            await session.execute(stmt)
+
+    async def list_targets(
+        self,
+        *,
+        now: datetime,
+    ) -> tuple[SchedulerTarget, ...]:
+        """Return non-stale targets in deterministic order."""
+        async with self._db.transaction() as session:
+            now_text = datetime_to_text(now)
+            result = await session.scalars(
+                select(SchedulerTargetModel)
+                .where(
+                    (SchedulerTargetModel.stale_after.is_(None))
+                    | (SchedulerTargetModel.stale_after > now_text)
+                )
+                .order_by(
+                    SchedulerTargetModel.provider,
+                    SchedulerTargetModel.provider_subject,
+                    SchedulerTargetModel.provider_space_ref,
+                    SchedulerTargetModel.session_id,
+                )
+            )
+            return tuple(_model_to_target(row) for row in result.all())
+
+    async def mark_scheduler_attempt(
+        self,
+        target: SchedulerTarget,
+        *,
+        attempted_at: datetime,
+    ) -> None:
+        """Update one target's scheduler attempt timestamp."""
+        key = _target_key(target)
+        async with self._db.transaction() as session:
+            model = await session.scalar(
+                select(SchedulerTargetModel).where(
+                    SchedulerTargetModel.provider == key[0],
+                    SchedulerTargetModel.provider_subject == key[1],
+                    SchedulerTargetModel.provider_space_ref == key[2],
+                    SchedulerTargetModel.session_id == key[3],
+                )
+            )
+            if model is not None:
+                model.last_scheduler_attempt_at = datetime_to_text(attempted_at)
+
+    async def close(self) -> None:
+        """Close the underlying SQLite connection."""
+        await self._db.close()
+
+
+def _model_to_target(model: SchedulerTargetModel) -> SchedulerTarget:
+    return SchedulerTarget(
+        actor_id=optional_new_type(ActorId, model.actor_id),
+        account_id=optional_new_type(AccountId, model.account_id),
+        space_id=optional_new_type(SpaceId, model.space_id),
+        session_id=SessionId(str(model.session_id)),
+        route=DeliveryRouteHint(
+            provider=str(model.provider),
+            provider_subject=_empty_to_none(model.provider_subject),
+            provider_space_ref=_empty_to_none(model.provider_space_ref),
+            display_name=model.route_display_name,
+        ),
+        display_name=model.display_name,
+        last_observed_at=text_to_datetime(str(model.last_observed_at)),
+        last_scheduler_attempt_at=optional_datetime(model.last_scheduler_attempt_at),
+        stale_after=optional_datetime(model.stale_after),
+    )
+
+
+def _target_key(target: SchedulerTarget) -> tuple[str, str, str, str]:
+    return (
+        target.route.provider,
+        str(target.route.provider_subject or ""),
+        str(target.route.provider_space_ref or ""),
+        str(target.session_id),
+    )
+
+
+def _empty_to_none(value: object) -> ExternalRef | None:
+    text = str(value)
+    if not text:
+        return None
+    return ExternalRef(text)

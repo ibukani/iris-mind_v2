@@ -98,7 +98,7 @@ def define_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDef
     scorer = SalienceScorer(threshold=salience_threshold)
     return FeatureDefinition(
         name="proactive_talk",
-        pipeline_steps=(
+        cognitive_steps=(
             ProactivePolicyStep(),
             ProactiveActionSelectionStep(scorer=scorer, proposer=GoalProposer()),
         ),

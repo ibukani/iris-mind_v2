@@ -6,10 +6,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.adapters.affect.memory import InMemoryAffectStore
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryQuery
 from iris.contracts.observations import (
@@ -18,11 +16,16 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+from iris.features.chat.definition import ResponseGenerationStep
 from iris.runtime.app import IrisApp
+from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
+from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
-    wire_policy_affect_memory_aware_text_response_cognitive_cycle,
+    wire_core_cognitive_cycle,
 )
+from iris.runtime.wiring.llm import wire_response_generator
+from tests.helpers.output_pipeline import make_output_pipeline
 
 
 def _actor_message(text: str) -> ActorMessageObservation:
@@ -51,13 +54,14 @@ async def test_two_turn_memory_write_then_retrieval_flow() -> None:
     memory_store = InMemoryMemoryStore()
     llm = FakeLLMClient(responses=("saved", "how about jasmine tea?"))
     app = IrisApp(
-        cycle=wire_policy_affect_memory_aware_text_response_cognitive_cycle(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_core_cognitive_cycle(
             stores=CognitiveCycleStores(
                 memory_store=memory_store,
                 relationship_store=InMemoryRelationshipStore(),
                 affect_store=InMemoryAffectStore(),
             ),
-            llm_client=llm,
+            extension_steps=(ResponseGenerationStep(wire_response_generator(llm)),),
         ),
     )
 
@@ -65,9 +69,9 @@ async def test_two_turn_memory_write_then_retrieval_flow() -> None:
     output2 = await app.process_observation(_actor_message("what tea do I like?"))
 
     records = memory_store.filter(MemoryQuery(text="", include_archived=True))
-    second_prompt = llm.requests[1].messages[-1].content
+    second_system_prompt = llm.requests[1].messages[0].content
 
     assert output1.text == "saved"
     assert output2.text == "how about jasmine tea?"
     assert any("jasmine tea" in record.text for record in records)
-    assert "jasmine tea" in second_prompt
+    assert "jasmine tea" in second_system_prompt

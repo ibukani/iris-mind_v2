@@ -22,9 +22,9 @@ from iris.runtime.observation_router import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from iris.cognitive.workspace.frame import SituationContextSnapshot
     from iris.contracts.delivery import DeliveryRouteHint
     from iris.contracts.observations import ActivityEventObservation, Observation
+    from iris.contracts.workspace_context import SituationContextSnapshot
     from iris.core.ids import CorrelationId
     from iris.runtime.app import IrisApp
     from iris.runtime.ingress.observation_ingress import ObservationIngressContext

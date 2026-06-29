@@ -7,6 +7,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 APP_PATH = PROJECT_ROOT / "iris" / "runtime" / "app.py"
+OUTPUT_PIPELINE_PATH = PROJECT_ROOT / "iris" / "runtime" / "output_pipeline.py"
 
 
 def _find_method(
@@ -106,11 +107,22 @@ def test_no_action_guard_precedes_safety_presentation_and_output_gates() -> None
     method = _find_method(app_class, "process_observation")
 
     no_action_index = _first_statement_index(method, "is_no_action")
+    output_index = _first_statement_index(method, "present_action_plan")
+
+    assert no_action_index < output_index
+
+
+def test_output_pipeline_orders_action_safety_presentation_and_output_safety() -> None:
+    """Sendable planはaction safety、presentation、output safetyの順で処理する。"""
+    tree = ast.parse(OUTPUT_PIPELINE_PATH.read_text(encoding="utf-8"))
+    pipeline_class = _find_class(tree, "RuntimeOutputPipeline")
+    method = _find_method(pipeline_class, "present_action_plan")
+
     check_plan_index = _first_statement_index(method, "check_plan")
-    present_index = _first_statement_index(method, "present")
+    present_index = _first_statement_index(method, "presentation.present_action_plan")
     check_output_index = _first_statement_index(method, "check_output")
 
-    assert no_action_index < check_plan_index < present_index < check_output_index
+    assert check_plan_index < present_index < check_output_index
 
 
 def test_no_action_branch_returns_empty_presented_output_only() -> None:

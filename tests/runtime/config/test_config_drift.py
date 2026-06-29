@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 from iris.runtime.config import default_runtime_config, load_runtime_config, runtime_config_specs
+from iris.runtime.config.model_slots import model_slot_specs
 
 
 class _ManifestField(TypedDict):
@@ -45,6 +46,23 @@ def test_runtime_defaults_match_config_spec() -> None:
     spec_defaults = {spec.path: spec.default for spec in runtime_config_specs()}
 
     assert defaults == spec_defaults
+
+
+def test_model_slot_specs_match_runtime_defaults() -> None:
+    """Shared model slot specs stay aligned with runtime defaults."""
+    slot_specs = model_slot_specs()
+    default_models = default_runtime_config().models
+
+    assert tuple(spec.name for spec in slot_specs) == (
+        "default_chat",
+        "fast_judge",
+        "reasoning",
+    )
+    assert tuple(spec.default_max_output_tokens for spec in slot_specs) == (
+        default_models.default_chat.max_output_tokens,
+        default_models.fast_judge.max_output_tokens,
+        default_models.reasoning.max_output_tokens,
+    )
 
 
 def test_full_example_values_are_applied_by_runtime_parser() -> None:

@@ -2,42 +2,41 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from pydantic import BaseModel, ConfigDict, Field
 
-if TYPE_CHECKING:
-    from iris.contracts.actions import ActionPlan
-    from iris.contracts.activity import ActivityEventRecord
-    from iris.contracts.availability import AvailabilitySnapshot
-    from iris.contracts.identity import Identity
-    from iris.contracts.memory import MemorySearchResult
-    from iris.contracts.observations import Observation
-    from iris.contracts.policy import ActionPreference, PolicyConstraint
-    from iris.contracts.presence import PresenceSnapshot
-    from iris.contracts.space_occupancy import SpaceOccupancySnapshot
-    from iris.contracts.spaces import InteractionSpace
-    from iris.core.ids import AccountId, ActorId, DeviceId, SpaceId
+from iris.contracts.actions import ActionPlan
+from iris.contracts.memory import MemorySearchResult
+from iris.contracts.observations import Observation
+from iris.contracts.policy import ActionPreference, PolicyConstraint
+from iris.contracts.workspace_context import (
+    ActorContextSnapshot,
+    SituationContextSnapshot,
+    SpaceContextSnapshot,
+)
 
 
-@dataclass(frozen=True)
-class InterpretedInput:
+class InterpretedInput(BaseModel):
     """観測から抽出された、解釈済みテキスト入力。"""
+
+    model_config = ConfigDict(frozen=True)
 
     text: str | None = None
     language: str | None = None
     intent_hint: str | None = None
 
 
-@dataclass(frozen=True)
-class MemorySummary:
+class MemorySummary(BaseModel):
     """現在のターンで取得したメモリ。"""
+
+    model_config = ConfigDict(frozen=True)
 
     retrieved_memories: tuple[MemorySearchResult, ...] = ()
 
 
-@dataclass(frozen=True)
-class AffectSnapshot:
+class AffectSnapshot(BaseModel):
     """現在の感情状態。"""
+
+    model_config = ConfigDict(frozen=True)
 
     mood_label: str | None = None
     arousal: float = 0.0
@@ -46,9 +45,10 @@ class AffectSnapshot:
     affect_summary: str | None = None
 
 
-@dataclass(frozen=True)
-class RelationshipSnapshot:
+class RelationshipSnapshot(BaseModel):
     """現在のアクターとの関係状態。"""
+
+    model_config = ConfigDict(frozen=True)
 
     actor_label: str | None = None
     affinity: float = 0.0
@@ -57,60 +57,34 @@ class RelationshipSnapshot:
     relationship_summary: str | None = None
 
 
-@dataclass(frozen=True)
-class GoalCandidate:
+class GoalCandidate(BaseModel):
     """認知サイクルが考慮する候補ゴール。"""
+
+    model_config = ConfigDict(frozen=True)
 
     name: str
     reason: str
     priority: int
 
 
-@dataclass(frozen=True)
-class ActorContextSnapshot:
-    """1 ターンで参照可能なアクター・アカウント・デバイスコンテキスト。"""
-
-    actor: Identity | None = None
-    account_id: AccountId | None = None
-    device_id: DeviceId | None = None
-
-
-@dataclass(frozen=True)
-class SpaceContextSnapshot:
-    """1 ターンで参照可能なスペースコンテキスト。"""
-
-    space_id: SpaceId | None = None
-    space: InteractionSpace | None = None
-    participant_actor_ids: tuple[ActorId, ...] = ()
-
-
-@dataclass(frozen=True)
-class SituationContextSnapshot:
-    """現在の認知ターン向けに、ランタイム状態から組み立てられた状況スナップショット。"""
-
-    latest_activity: ActivityEventRecord | None = None
-    presence: PresenceSnapshot | None = None
-    space_occupancy: SpaceOccupancySnapshot | None = None
-    availability: AvailabilitySnapshot | None = None
-
-
-@dataclass(frozen=True)
-class WorkspaceFrame:
+class WorkspaceFrame(BaseModel):
     """1 ターン分の、型付きで不変なワーキングメモリスナップショット。"""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     observation: Observation
     interpreted_input: InterpretedInput | None = None
-    memory_summary: MemorySummary = field(default_factory=MemorySummary)
-    affect: AffectSnapshot = field(default_factory=AffectSnapshot)
-    relationship: RelationshipSnapshot = field(default_factory=RelationshipSnapshot)
+    memory_summary: MemorySummary = Field(default_factory=MemorySummary)
+    affect: AffectSnapshot = Field(default_factory=AffectSnapshot)
+    relationship: RelationshipSnapshot = Field(default_factory=RelationshipSnapshot)
     goals: tuple[GoalCandidate, ...] = ()
     constraints: tuple[PolicyConstraint, ...] = ()
     action_preferences: tuple[ActionPreference, ...] = ()
     candidate_action_plans: tuple[ActionPlan, ...] = ()
     policy_summary: str | None = None
-    actor_context: ActorContextSnapshot = field(default_factory=ActorContextSnapshot)
-    space_context: SpaceContextSnapshot = field(default_factory=SpaceContextSnapshot)
-    situation_context: SituationContextSnapshot = field(
+    actor_context: ActorContextSnapshot = Field(default_factory=ActorContextSnapshot)
+    space_context: SpaceContextSnapshot = Field(default_factory=SpaceContextSnapshot)
+    situation_context: SituationContextSnapshot = Field(
         default_factory=SituationContextSnapshot,
     )
 
@@ -127,3 +101,6 @@ def interpreted_input_text(frame: WorkspaceFrame) -> str | None:
     if frame.interpreted_input is None:
         return None
     return frame.interpreted_input.text
+
+
+WorkspaceFrame.model_rebuild()

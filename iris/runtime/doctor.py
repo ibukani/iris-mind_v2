@@ -74,31 +74,17 @@ async def run_runtime_doctor(config_path: str | None = None) -> RuntimeDoctorRep
     Returns:
         runtime doctor report。
     """
-    checks: list[RuntimeDoctorCheck] = []
     resolved_path = _resolve_config_path(config_path)
-    checks.append(resolved_path.check)
     if resolved_path.check.status == "fail":
-        return _report(checks)
+        return _report((resolved_path.check,))
 
     loaded = _load_config(config_path)
-    checks.append(loaded.check)
     if loaded.config is None:
-        return _report(checks)
+        return _report((resolved_path.check, loaded.check))
 
-    config = loaded.config
-    checks.extend(
-        (
-            _state_backend_check(config),
-            _sqlite_state_check(config),
-            _logging_path_check(config),
-            _server_check(config),
-            _model_slots_check(config),
-            _delivery_check(config),
-            _scheduler_check(config),
-        ),
-    )
-    checks.extend(await _startup_diagnostics_checks(config))
-    return _report(checks)
+    checks = _runtime_doctor_base_checks(loaded.config)
+    checks.extend(await _startup_diagnostics_checks(loaded.config))
+    return _report((resolved_path.check, loaded.check, *checks))
 
 
 @dataclass(frozen=True)
@@ -112,13 +98,29 @@ class _LoadedConfig:
     config: IrisRuntimeConfig | None
 
 
+@dataclass(frozen=True)
+class _FilePathCheckSpec:
+    name: str
+    directory_summary: str
+    directory_issue: str
+    directory_next_action: str
+    existing_ok_summary: str
+    existing_fail_summary: str
+    existing_fail_issue: str
+    existing_fail_next_action: str
+    missing_ok_summary: str
+    missing_fail_summary: str
+    missing_fail_issue: str
+    missing_fail_next_action: str
+
+
 def _resolve_config_path(config_path: str | None) -> _ResolvedConfigPath:
     try:
         path = resolve_runtime_config_path(config_path)
     except ConfigError as exc:
         return _ResolvedConfigPath(
-            RuntimeDoctorCheck(
-                name="config-discovery",
+            _build_check(
+                "config-discovery",
                 status="fail",
                 summary="config path resolution failed",
                 issue=str(exc),
@@ -129,7 +131,7 @@ def _resolve_config_path(config_path: str | None) -> _ResolvedConfigPath:
     if path is not None:
         summary = str(path)
     return _ResolvedConfigPath(
-        RuntimeDoctorCheck(name="config-discovery", status="ok", summary=summary),
+        _build_check("config-discovery", status="ok", summary=summary),
     )
 
 
@@ -138,8 +140,8 @@ def _load_config(config_path: str | None) -> _LoadedConfig:
         config = load_runtime_config(config_path)
     except ConfigError as exc:
         return _LoadedConfig(
-            check=RuntimeDoctorCheck(
-                name="config-parse",
+            check=_build_check(
+                "config-parse",
                 status="fail",
                 summary="config parse / validation failed",
                 issue=str(exc),
@@ -148,18 +150,14 @@ def _load_config(config_path: str | None) -> _LoadedConfig:
             config=None,
         )
     return _LoadedConfig(
-        check=RuntimeDoctorCheck(
-            name="config-parse",
-            status="ok",
-            summary="config parsed and validated",
-        ),
+        check=_build_check("config-parse", status="ok", summary="config parsed and validated"),
         config=config,
     )
 
 
 def _state_backend_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
-    return RuntimeDoctorCheck(
-        name="state-backend",
+    return _build_check(
+        "state-backend",
         status="ok",
         summary=f"selected state backend: {config.state.backend.value}",
     )
@@ -167,87 +165,59 @@ def _state_backend_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
 
 def _sqlite_state_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     if config.state.backend is not RuntimeStateBackend.SQLITE:
-        return RuntimeDoctorCheck(
+        return _build_check("sqlite-state", status="skipped", summary="state.backend is not sqlite")
+    return _check_file_path(
+        Path(config.state.sqlite_path),
+        spec=_FilePathCheckSpec(
             name="sqlite-state",
-            status="skipped",
-            summary="state.backend is not sqlite",
-        )
-    path = Path(config.state.sqlite_path)
-    if path.exists():
-        return _existing_sqlite_check(path)
-    return _missing_sqlite_check(path)
-
-
-def _existing_sqlite_check(path: Path) -> RuntimeDoctorCheck:
-    if path.is_dir():
-        return RuntimeDoctorCheck(
-            name="sqlite-state",
-            status="fail",
-            summary=f"configured sqlite path is a directory: {path}",
-            issue="sqlite path must be a file path, not a directory",
-            next_action="change state.sqlite_path / IRIS_STATE_SQLITE_PATH to a file path",
-        )
-    if os.access(path, os.R_OK) and os.access(path, os.W_OK):
-        return RuntimeDoctorCheck(name="sqlite-state", status="ok", summary=str(path))
-    return RuntimeDoctorCheck(
-        name="sqlite-state",
-        status="fail",
-        summary=f"cannot access {path}",
-        issue="sqlite path is not readable and writable",
-        next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
-    )
-
-
-def _missing_sqlite_check(path: Path) -> RuntimeDoctorCheck:
-    parent = path.parent
-    if parent.exists() and os.access(parent, os.W_OK | os.X_OK):
-        return RuntimeDoctorCheck(
-            name="sqlite-state",
-            status="ok",
-            summary=f"{path} can be created",
-        )
-    return RuntimeDoctorCheck(
-        name="sqlite-state",
-        status="fail",
-        summary=f"cannot open {path}",
-        issue="sqlite parent directory is not writable",
-        next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
+            directory_summary="configured sqlite path is a directory: {path}",
+            directory_issue="sqlite path must be a file path, not a directory",
+            directory_next_action=(
+                "change state.sqlite_path / IRIS_STATE_SQLITE_PATH to a file path"
+            ),
+            existing_ok_summary="{path}",
+            existing_fail_summary="cannot access {path}",
+            existing_fail_issue="sqlite path is not readable and writable",
+            existing_fail_next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
+            missing_ok_summary="{path} can be created",
+            missing_fail_summary="cannot open {path}",
+            missing_fail_issue="sqlite parent directory is not writable",
+            missing_fail_next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
+        ),
     )
 
 
 def _logging_path_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     file_path = config.logging.file_path
     if file_path is None:
-        return RuntimeDoctorCheck(
-            name="logging-file",
+        return _build_check(
+            "logging-file",
             status="skipped",
             summary="logging.file_path is not set",
         )
-    resolved = Path(file_path)
-    if resolved.is_dir():
-        return RuntimeDoctorCheck(
+    return _check_file_path(
+        Path(file_path),
+        spec=_FilePathCheckSpec(
             name="logging-file",
-            status="fail",
-            summary=f"configured logging file path is a directory: {resolved}",
-            issue="logging file path must be a file path, not a directory",
-            next_action="change logging.file_path or delete/replace the directory",
-        )
-    parent = resolved.parent
-    if parent.exists() and os.access(parent, os.W_OK | os.X_OK):
-        return RuntimeDoctorCheck(name="logging-file", status="ok", summary=str(file_path))
-    return RuntimeDoctorCheck(
-        name="logging-file",
-        status="fail",
-        summary=f"logging parent is not writable: {parent}",
-        issue="log file parent cannot be written",
-        next_action="create directory or change logging.file_path",
+            directory_summary="configured logging file path is a directory: {path}",
+            directory_issue="logging file path must be a file path, not a directory",
+            directory_next_action="change logging.file_path or delete/replace the directory",
+            existing_ok_summary="{path}",
+            existing_fail_summary="logging parent is not writable: {parent}",
+            existing_fail_issue="log file parent cannot be written",
+            existing_fail_next_action="create directory or change logging.file_path",
+            missing_ok_summary="{path} can be created",
+            missing_fail_summary="logging parent is not writable: {parent}",
+            missing_fail_issue="log file parent cannot be written",
+            missing_fail_next_action="create directory or change logging.file_path",
+        ),
     )
 
 
 def _server_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     local = "local-only" if config.server.local_only else "network-visible"
-    return RuntimeDoctorCheck(
-        name="server",
+    return _build_check(
+        "server",
         status="ok",
         summary=f"{config.server.host}:{config.server.port} ({local})",
     )
@@ -259,17 +229,34 @@ def _model_slots_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
         f"fast_judge={config.models.fast_judge.provider.value}:{config.models.fast_judge.model}",
         f"reasoning={config.models.reasoning.provider.value}:{config.models.reasoning.model}",
     )
-    return RuntimeDoctorCheck(name="model-slots", status="ok", summary=", ".join(slots))
+    return _build_check("model-slots", status="ok", summary=", ".join(slots))
 
 
 def _delivery_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     status = "enabled" if config.delivery.enabled else "disabled"
-    return RuntimeDoctorCheck(name="delivery", status="ok", summary=status)
+    return _build_check("delivery", status="ok", summary=status)
 
 
 def _scheduler_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     status = "enabled" if config.scheduler.enabled else "disabled"
-    return RuntimeDoctorCheck(name="scheduler", status="ok", summary=status)
+    return _build_check("scheduler", status="ok", summary=status)
+
+
+def _runtime_doctor_base_checks(config: IrisRuntimeConfig) -> list[RuntimeDoctorCheck]:
+    """Runtime doctor の固定チェック群を順序付きで組み立てる。
+
+    Returns:
+        順序を保った RuntimeDoctorCheck の list。
+    """
+    return [
+        _state_backend_check(config),
+        _sqlite_state_check(config),
+        _logging_path_check(config),
+        _server_check(config),
+        _model_slots_check(config),
+        _delivery_check(config),
+        _scheduler_check(config),
+    ]
 
 
 async def _startup_diagnostics_checks(
@@ -279,8 +266,8 @@ async def _startup_diagnostics_checks(
         report = await run_startup_diagnostics(_read_only_diagnostics_config(config))
     except ConfigError as exc:
         return (
-            RuntimeDoctorCheck(
-                name="provider-readiness",
+            _build_check(
+                "provider-readiness",
                 status="fail",
                 summary="startup diagnostics failed",
                 issue=str(exc),
@@ -289,8 +276,8 @@ async def _startup_diagnostics_checks(
         )
     if not report.enabled:
         return (
-            RuntimeDoctorCheck(
-                name="provider-readiness",
+            _build_check(
+                "provider-readiness",
                 status="skipped",
                 summary="diagnostics.mode is off",
             ),
@@ -298,8 +285,8 @@ async def _startup_diagnostics_checks(
     checks = [_diagnostics_outcome_check(outcome) for outcome in report.outcomes]
     if not checks:
         checks.append(
-            RuntimeDoctorCheck(
-                name="provider-readiness",
+            _build_check(
+                "provider-readiness",
                 status="skipped",
                 summary="all model slots use fake provider",
             ),
@@ -319,14 +306,99 @@ def _read_only_diagnostics_config(config: IrisRuntimeConfig) -> IrisRuntimeConfi
     )
 
 
+def _check_file_path(path: Path, *, spec: _FilePathCheckSpec) -> RuntimeDoctorCheck:
+    if path.is_dir():
+        return _directory_file_path_check(path, spec=spec)
+    if path.exists():
+        return _existing_file_path_check(path, spec=spec)
+    return _missing_file_path_check(path, spec=spec)
+
+
+def _directory_file_path_check(path: Path, *, spec: _FilePathCheckSpec) -> RuntimeDoctorCheck:
+    return _build_file_path_check(
+        spec,
+        status="fail",
+        summary=spec.directory_summary.format(path=path),
+        issue=spec.directory_issue,
+        next_action=spec.directory_next_action,
+    )
+
+
+def _existing_file_path_check(path: Path, *, spec: _FilePathCheckSpec) -> RuntimeDoctorCheck:
+    if os.access(path, os.R_OK) and os.access(path, os.W_OK):
+        return _build_file_path_check(
+            spec,
+            status="ok",
+            summary=spec.existing_ok_summary.format(path=path, parent=path.parent),
+        )
+    return _build_file_path_check(
+        spec,
+        status="fail",
+        summary=spec.existing_fail_summary.format(path=path, parent=path.parent),
+        issue=spec.existing_fail_issue,
+        next_action=spec.existing_fail_next_action,
+    )
+
+
+def _missing_file_path_check(path: Path, *, spec: _FilePathCheckSpec) -> RuntimeDoctorCheck:
+    parent = path.parent
+    if parent.exists() and os.access(parent, os.W_OK | os.X_OK):
+        return _build_file_path_check(
+            spec,
+            status="ok",
+            summary=spec.missing_ok_summary.format(path=path, parent=parent),
+        )
+    return _build_file_path_check(
+        spec,
+        status="fail",
+        summary=spec.missing_fail_summary.format(path=path, parent=parent),
+        issue=spec.missing_fail_issue,
+        next_action=spec.missing_fail_next_action,
+    )
+
+
+def _build_file_path_check(
+    spec: _FilePathCheckSpec,
+    *,
+    status: str,
+    summary: str,
+    issue: str | None = None,
+    next_action: str | None = None,
+) -> RuntimeDoctorCheck:
+    return _build_check(
+        spec.name,
+        status=status,
+        summary=summary,
+        issue=issue,
+        next_action=next_action,
+    )
+
+
 def _diagnostics_outcome_check(outcome: DiagnosticsCheckOutcome) -> RuntimeDoctorCheck:
     stage = _worst_diagnostics_stage(outcome.readiness, outcome.warmup)
     status = stage.status.value
     issue = stage.issue_code
     next_action = stage.next_action
     summary = _diagnostics_summary(outcome, stage)
+    return _build_check(
+        "provider-readiness",
+        status=status,
+        summary=summary,
+        issue=issue,
+        next_action=next_action,
+    )
+
+
+def _build_check(
+    name: str,
+    *,
+    status: str,
+    summary: str,
+    issue: str | None = None,
+    next_action: str | None = None,
+) -> RuntimeDoctorCheck:
     return RuntimeDoctorCheck(
-        name="provider-readiness",
+        name=name,
         status=status,
         summary=summary,
         issue=issue,
@@ -390,37 +462,43 @@ def _diagnostics_summary(
     )
 
 
-def _report(checks: list[RuntimeDoctorCheck]) -> RuntimeDoctorReport:
+def _report(
+    checks: tuple[RuntimeDoctorCheck, ...] | list[RuntimeDoctorCheck],
+) -> RuntimeDoctorReport:
     ok = all(check.status != "fail" for check in checks)
     return RuntimeDoctorReport(ok=ok, checks=tuple(checks))
 
 
 def _format_json(report: RuntimeDoctorReport) -> str:
-    payload = {
-        "ok": report.ok,
-        "checks": [
-            {
-                "name": check.name,
-                "status": check.status,
-                "summary": check.summary,
-                "issue": check.issue,
-                "next_action": check.next_action,
-            }
-            for check in report.checks
-        ],
-    }
+    payload = {"ok": report.ok, "checks": [_check_payload(check) for check in report.checks]}
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
 def _format_text(report: RuntimeDoctorReport) -> str:
     lines = ["Runtime doctor ok:"] if report.ok else ["Runtime doctor failed:"]
     for check in report.checks:
-        lines.extend(("", f"* {check.name}: {check.summary} [{check.status}]"))
-        if check.issue is not None:
-            lines.append(f"  issue: {check.issue}")
-        if check.next_action is not None:
-            lines.append(f"  next: {check.next_action}")
+        lines.extend(_format_check_block(check))
     return "\n".join(lines) + "\n"
+
+
+def _check_payload(check: RuntimeDoctorCheck) -> dict[str, str | None]:
+    return {
+        "name": check.name,
+        "status": check.status,
+        "summary": check.summary,
+        "issue": check.issue,
+        "next_action": check.next_action,
+    }
+
+
+def _format_check_block(check: RuntimeDoctorCheck) -> list[str]:
+    lines = ("", f"* {check.name}: {check.summary} [{check.status}]")
+    block = [*lines]
+    if check.issue is not None:
+        block.append(f"  issue: {check.issue}")
+    if check.next_action is not None:
+        block.append(f"  next: {check.next_action}")
+    return block
 
 
 if __name__ == "__main__":

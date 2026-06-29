@@ -54,6 +54,7 @@ RECOMMENDATIONS: dict[str, str] = {
     "pyright": "make pyright  OR  uv run pyright .",
     "architecture": "make static-arch OR make arch OR uv run pytest tests/architecture -q",
     "tests+coverage": ("make ai-test-target TARGET=<failing_test>  OR  make coverage"),
+    "e2e": "make e2e  OR  uv run pytest tests/e2e -m 'e2e and not llm_live'",
     "environment": "Check uv environment and tool versions with make doctor",
     "debt-registry": (
         "Revert accidental registry changes; for an approved update, set "
@@ -99,7 +100,7 @@ CHECKS: tuple[Check, ...] = (
             "python",
             "scripts/check_suppression_debt_changes.py",
         ),
-        failure_class="architecture",
+        failure_class="debt-registry",
     ),
     Check(
         "architecture",
@@ -112,6 +113,12 @@ CHECKS: tuple[Check, ...] = (
         full_only=True,
         failure_class="tests+coverage",
         stream_output=True,
+    ),
+    Check(
+        "e2e",
+        ("uv", "run", "pytest", "tests/e2e", "-m", "e2e and not llm_live"),
+        full_only=True,
+        failure_class="e2e",
     ),
 )
 

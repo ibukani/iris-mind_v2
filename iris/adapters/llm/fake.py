@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.adapters.llm.ports import LLMRequest, LLMResponse
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -17,7 +18,7 @@ class FakeLLMClient:
         self,
         responses: Sequence[str] | None = None,
         *,
-        model: str = "fake-llm",
+        model: str = DEFAULT_FAKE_LLM_MODEL,
     ) -> None:
         """オプションの応答リストで初期化する。
 

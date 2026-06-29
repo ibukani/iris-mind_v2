@@ -12,7 +12,9 @@ from iris.runtime.config.parsing import (
     parse_int,
     parse_optional_string,
     parse_string,
+    table_or_empty,
 )
+from iris.runtime.config.validation import require_zero_or_greater
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -75,18 +77,17 @@ def validate_server_config(config: RuntimeServerConfig) -> RuntimeServerConfig:
 
     Returns:
         RuntimeServerConfig: 検証済みサーバー設定。
-
-    Raises:
-        ConfigError: 設定が制約に違反している場合。
     """
     validate_server_port(config.port, source="server.port")
-    if config.local_only and config.host not in {"127.0.0.1", "localhost", "::1"}:
-        message = f"server.local_only=true requires a loopback host, got: {config.host}"
-        raise ConfigError(message)
-    if config.tls.enabled and (not config.tls.cert_chain_path or not config.tls.private_key_path):
-        message = "server.tls.enabled=true requires cert_chain_path and private_key_path"
-        raise ConfigError(message)
-    return config
+    _validate_loopback_host(config)
+    return replace(
+        config,
+        shutdown_grace_seconds=require_zero_or_greater(
+            config.shutdown_grace_seconds,
+            "server.shutdown_grace_seconds",
+        ),
+        tls=_validate_tls_config(config.tls),
+    )
 
 
 def apply_server_toml(
@@ -101,47 +102,8 @@ def apply_server_toml(
 
     Returns:
         更新後のサーバー設定。
-
-    Raises:
-        ConfigError: 設定値が不正な場合。
     """
-    host = config.host
-    if "host" in table:
-        host = parse_string(table["host"], "server.host")
-
-    port = config.port
-    if "port" in table:
-        port = parse_int(table["port"], "server.port")
-        port = validate_server_port(port, source="server.port")
-
-    local_only = _local_only_from_toml(default=config.local_only, table=table)
-
-    shutdown_grace = config.shutdown_grace_seconds
-    if "shutdown_grace_seconds" in table:
-        shutdown_grace = parse_float(
-            table["shutdown_grace_seconds"],
-            "server.shutdown_grace_seconds",
-        )
-        if shutdown_grace < 0:
-            message = "server.shutdown_grace_seconds must be zero or greater"
-            raise ConfigError(message)
-
-    tls = config.tls
-    if "tls" in table:
-        tls_table = table["tls"]
-        if not isinstance(tls_table, dict):
-            message = "server.tls must be a table"
-            raise ConfigError(message)
-        tls = _apply_tls_toml(tls, tls_table)
-
-    return replace(
-        config,
-        host=host,
-        port=port,
-        local_only=local_only,
-        shutdown_grace_seconds=shutdown_grace,
-        tls=tls,
-    )
+    return _ServerConfigPatch.from_table(table).apply(config)
 
 
 def apply_server_env(
@@ -156,82 +118,208 @@ def apply_server_env(
 
     Returns:
         更新後のサーバー設定。
+    """
+    return _ServerConfigPatch.from_env(env).apply(config)
+
+
+def _validate_loopback_host(config: RuntimeServerConfig) -> RuntimeServerConfig:
+    """local_only と host の組を検証する。
+
+    Args:
+        config: 検証対象のサーバー設定。
+
+    Returns:
+        検証済みのサーバー設定。
 
     Raises:
-        ConfigError: 環境変数の値が不正な場合。
+        ConfigError: local_only が有効なのに host が loopback でない場合。
     """
-    host = config.host
-    if "IRIS_SERVER_HOST" in env:
-        host = env["IRIS_SERVER_HOST"]
-
-    port = config.port
-    if "IRIS_SERVER_PORT" in env:
-        try:
-            port = int(env["IRIS_SERVER_PORT"])
-        except ValueError as err:
-            message = f"Invalid IRIS_SERVER_PORT: {env['IRIS_SERVER_PORT']}"
-            raise ConfigError(message) from err
-        port = validate_server_port(port, source="IRIS_SERVER_PORT")
-
-    return replace(config, host=host, port=port)
+    if config.local_only and config.host not in {"127.0.0.1", "localhost", "::1"}:
+        message = f"server.local_only=true requires a loopback host, got: {config.host}"
+        raise ConfigError(message)
+    return config
 
 
-def _local_only_from_toml(*, default: bool, table: TomlTable) -> bool:
-    """server.local_only TOML 値を取り出す。
+def _validate_tls_config(config: RuntimeServerTlsConfig) -> RuntimeServerTlsConfig:
+    """TLS 設定の必須フィールドを検証する。
+
+    Args:
+        config: 検証対象の TLS 設定。
 
     Returns:
-        更新後の local_only 値。
+        検証済みの TLS 設定。
+
+    Raises:
+        ConfigError: enabled が true なのに必須 path がない場合。
     """
-    if "local_only" not in table:
-        return default
-    return parse_bool(table["local_only"], "server.local_only")
+    if config.enabled and (not config.cert_chain_path or not config.private_key_path):
+        message = "server.tls.enabled=true requires cert_chain_path and private_key_path"
+        raise ConfigError(message)
+    return config
 
 
-def _apply_tls_toml(
-    config: RuntimeServerTlsConfig,
-    table: TomlTable,
-) -> RuntimeServerTlsConfig:
-    """TOML の ``[server.tls]`` 設定を適用する。
+def _parse_env_int(env: Mapping[str, str], key: str) -> int | None:
+    """環境変数の整数 override を解析する。
 
     Returns:
-        更新後の TLS 設定。
+        解析済みの整数。key が無い場合は None。
+
+    Raises:
+        ConfigError: 整数として解釈できない場合。
     """
-    value = config
-    if "enabled" in table:
-        value = replace(
-            value,
-            enabled=parse_bool(table["enabled"], "server.tls.enabled"),
-        )
-    if "cert_chain_path" in table:
-        value = replace(
-            value,
+    if key not in env:
+        return None
+    try:
+        return int(env[key])
+    except ValueError as err:
+        message = f"Invalid {key}: {env[key]}"
+        raise ConfigError(message) from err
+
+
+@dataclass(frozen=True)
+class _ServerTlsPatch:
+    """server.tls の optional 更新値を束ねる。"""
+
+    enabled: bool | None = None
+    cert_chain_path: str | None = None
+    cert_chain_path_set: bool = False
+    private_key_path: str | None = None
+    private_key_path_set: bool = False
+    client_ca_path: str | None = None
+    client_ca_path_set: bool = False
+    require_client_cert: bool | None = None
+
+    @classmethod
+    def from_table(cls, table: TomlTable) -> _ServerTlsPatch:
+        """TOML テーブルから TLS patch を組み立てる。
+
+        Returns:
+            組み立てた TLS patch。
+        """
+        return cls(
+            enabled=parse_bool(table["enabled"], "server.tls.enabled")
+            if "enabled" in table
+            else None,
             cert_chain_path=parse_optional_string(
                 table["cert_chain_path"],
                 "server.tls.cert_chain_path",
-            ),
-        )
-    if "private_key_path" in table:
-        value = replace(
-            value,
+            )
+            if "cert_chain_path" in table
+            else None,
+            cert_chain_path_set="cert_chain_path" in table,
             private_key_path=parse_optional_string(
                 table["private_key_path"],
                 "server.tls.private_key_path",
-            ),
-        )
-    if "client_ca_path" in table:
-        value = replace(
-            value,
+            )
+            if "private_key_path" in table
+            else None,
+            private_key_path_set="private_key_path" in table,
             client_ca_path=parse_optional_string(
                 table["client_ca_path"],
                 "server.tls.client_ca_path",
-            ),
-        )
-    if "require_client_cert" in table:
-        value = replace(
-            value,
+            )
+            if "client_ca_path" in table
+            else None,
+            client_ca_path_set="client_ca_path" in table,
             require_client_cert=parse_bool(
                 table["require_client_cert"],
                 "server.tls.require_client_cert",
+            )
+            if "require_client_cert" in table
+            else None,
+        )
+
+    def apply(self, config: RuntimeServerTlsConfig) -> RuntimeServerTlsConfig:
+        """TLS 設定へ patch を適用する。
+
+        Returns:
+            更新後の TLS 設定。
+        """
+        value = config
+        if self.enabled is not None:
+            value = replace(value, enabled=self.enabled)
+        if self.cert_chain_path_set:
+            value = replace(value, cert_chain_path=self.cert_chain_path)
+        if self.private_key_path_set:
+            value = replace(value, private_key_path=self.private_key_path)
+        if self.client_ca_path_set:
+            value = replace(value, client_ca_path=self.client_ca_path)
+        if self.require_client_cert is not None:
+            value = replace(value, require_client_cert=self.require_client_cert)
+        return _validate_tls_config(value)
+
+
+@dataclass(frozen=True)
+class _ServerConfigPatch:
+    """server の optional 更新値を束ねる。"""
+
+    host: str | None = None
+    port: int | None = None
+    local_only: bool | None = None
+    shutdown_grace_seconds: float | None = None
+    tls: _ServerTlsPatch | None = None
+
+    @classmethod
+    def from_table(cls, table: TomlTable) -> _ServerConfigPatch:
+        """TOML テーブルから server patch を組み立てる。
+
+        Returns:
+            組み立てた server patch。
+        """
+        return cls(
+            host=parse_string(table["host"], "server.host") if "host" in table else None,
+            port=parse_int(table["port"], "server.port") if "port" in table else None,
+            local_only=(
+                parse_bool(table["local_only"], "server.local_only")
+                if "local_only" in table
+                else None
+            ),
+            shutdown_grace_seconds=(
+                parse_float(
+                    table["shutdown_grace_seconds"],
+                    "server.shutdown_grace_seconds",
+                )
+                if "shutdown_grace_seconds" in table
+                else None
+            ),
+            tls=_ServerTlsPatch.from_table(
+                table_or_empty(table, "tls", path="server.tls"),
             ),
         )
-    return value
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str]) -> _ServerConfigPatch:
+        """環境変数から server patch を組み立てる。
+
+        Returns:
+            組み立てた server patch。
+        """
+        return cls(
+            host=env.get("IRIS_SERVER_HOST", None),
+            port=_parse_env_int(env, "IRIS_SERVER_PORT"),
+        )
+
+    def apply(self, config: RuntimeServerConfig) -> RuntimeServerConfig:
+        """Server 設定へ patch を適用して検証する。
+
+        Returns:
+            検証済みの server 設定。
+        """
+        value = config
+        if self.host is not None:
+            value = replace(value, host=self.host)
+        if self.port is not None:
+            value = replace(value, port=self.port)
+        if self.local_only is not None:
+            value = replace(value, local_only=self.local_only)
+        if self.shutdown_grace_seconds is not None:
+            value = replace(
+                value,
+                shutdown_grace_seconds=require_zero_or_greater(
+                    self.shutdown_grace_seconds,
+                    "server.shutdown_grace_seconds",
+                ),
+            )
+        if self.tls is not None:
+            value = replace(value, tls=self.tls.apply(value.tls))
+        return validate_server_config(value)

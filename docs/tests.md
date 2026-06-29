@@ -28,14 +28,18 @@ make check
 
 両方とも `scripts/verify.py` を実行し、以下を順番に検証する。
 
-```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy iris tests scripts main.py
-uv run pyright .
-uv run pytest tests/architecture -q
-uv run pytest tests/
-```
+1. `ruff check .` — lint
+2. `ruff format --check .` — format
+3. `mypy iris tests scripts main.py` — type check
+4. `pyright .` — type check
+5. `scripts/check_suppression_debt_changes.py` — debt-registry
+6. `make static-arch` — architecture tests
+7. デフォルトテスト対象（`tests/e2e` を除く） + coverage gate（90%）
+8. `pytest tests/e2e -m "e2e and not llm_live"` — process-level E2E
+
+通常の coverage 対象は `tests/e2e` を含まない。E2E は `make check` の一部として別途実行される。
+Live LLM テスト（`llm_live` マーカー）はデフォルトゲートから除外されている。
+`make e2e` で E2E のみを単独実行できる。
 
 開発途中の軽量確認には以下を使う。
 
@@ -43,7 +47,7 @@ uv run pytest tests/
 make quick
 ```
 
-`make quick` は lint、format check、mypy、pyright、architecture tests を実行する。全テストと coverage gate は実行しないため、完了報告の代替にはしない。
+`make quick` は lint、format check、mypy、pyright、debt-registry、architecture tests を実行する。全テスト、coverage gate、E2E は実行しないため、完了報告の代替にはしない。
 
 ---
 
@@ -67,6 +71,9 @@ make test
 
 # Full coverage gate (90% threshold)
 make coverage
+
+# Process-level E2E tests (no live LLM)
+make e2e
 ```
 
 AI harness 用ショートカット:
@@ -85,8 +92,10 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy iris tests scripts main.py
 uv run pyright .
+uv run python scripts/check_suppression_debt_changes.py
 uv run pytest tests/architecture -q
 uv run pytest tests/ --cov=iris --cov-branch --cov-report=term-missing:skip-covered --cov-report=html --cov-fail-under=90
+uv run pytest tests/e2e -m "e2e and not llm_live"
 ```
 
 ---

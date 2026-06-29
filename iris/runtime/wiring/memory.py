@@ -11,13 +11,13 @@ from iris.cognitive.memory.hybrid import HybridMemoryRetriever
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from iris.adapters.memory.ports import MemoryStore
-    from iris.adapters.memory.sqlite import SQLiteMemoryStore
     from iris.adapters.memory.vector_index import EmbeddingFunction
+    from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
     from iris.cognitive.memory.retrieval import MemoryRetriever
     from iris.contracts.memory import (
         MemoryQuery,
         MemorySearchResult,
+        MemoryStore,
         VectorMemoryIndex,
     )
 
@@ -107,13 +107,14 @@ def wire_sqlite_hybrid_memory_retriever(
         tuple[HybridMemoryRetriever, InMemoryVectorMemoryIndex]:
             ハイブリッドレトリーバーとベクトルインデックスのタプル。
     """
-    fts = SQLiteFTS5MemoryRetriever(store)
     vector = InMemoryVectorMemoryIndex(embed_text)
-    hybrid = wire_hybrid_memory_retriever(
-        fts_retriever=fts,
-        vector_index=vector,
-        store=store,
-        fts_limit=fts_limit,
-        vector_limit=vector_limit,
+    return (
+        wire_hybrid_memory_retriever(
+            fts_retriever=SQLiteFTS5MemoryRetriever(store),
+            vector_index=vector,
+            store=store,
+            fts_limit=fts_limit,
+            vector_limit=vector_limit,
+        ),
+        vector,
     )
-    return hybrid, vector

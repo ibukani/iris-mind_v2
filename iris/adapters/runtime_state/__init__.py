@@ -1,1 +1,0 @@
-"""Runtime state storage adapters."""

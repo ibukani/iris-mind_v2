@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from iris.cognitive.cycle.models import (
@@ -20,19 +20,23 @@ from iris.cognitive.cycle.models import (
     StepStatus,
 )
 from iris.cognitive.workspace.frame import (
-    ActorContextSnapshot,
     AffectSnapshot,
     GoalCandidate,
     InterpretedInput,
     MemorySummary,
     RelationshipSnapshot,
+    WorkspaceFrame,
+)
+from iris.contracts.workspace_context import (
+    ActorContextSnapshot,
     SituationContextSnapshot,
     SpaceContextSnapshot,
-    WorkspaceFrame,
 )
 
 if TYPE_CHECKING:
+    from iris.contracts.actions import ActionPlan
     from iris.contracts.observations import Observation
+    from iris.contracts.policy import ActionPreference, PolicyConstraint
 
 
 class FrameBuilder:
@@ -67,29 +71,31 @@ class FrameBuilder:
 
     @staticmethod
     def _apply_perception(frame: WorkspaceFrame, result: PerceptionResult) -> WorkspaceFrame:
-        return replace(
-            frame,
+        updates = replace(
+            _current_updates(frame),
             interpreted_input=InterpretedInput(
                 text=result.text,
                 language=result.language,
                 intent_hint=result.intent_hint,
             ),
         )
+        return _rebuild_frame(frame, updates)
 
     @staticmethod
     def _apply_memory_retrieval(
         frame: WorkspaceFrame,
         result: MemoryRetrievalResult,
     ) -> WorkspaceFrame:
-        return replace(
-            frame,
+        updates = replace(
+            _current_updates(frame),
             memory_summary=MemorySummary(retrieved_memories=result.memories),
         )
+        return _rebuild_frame(frame, updates)
 
     @staticmethod
     def _apply_appraisal(frame: WorkspaceFrame, result: AppraisalResult) -> WorkspaceFrame:
-        return replace(
-            frame,
+        updates = replace(
+            _current_updates(frame),
             affect=AffectSnapshot(
                 mood_label=result.mood_label,
                 arousal=result.arousal,
@@ -98,6 +104,7 @@ class FrameBuilder:
                 affect_summary=result.affect_summary,
             ),
         )
+        return _rebuild_frame(frame, updates)
 
     @staticmethod
     def _apply_affect_baseline_load(
@@ -106,8 +113,8 @@ class FrameBuilder:
     ) -> WorkspaceFrame:
         if result.status is not StepStatus.OK:
             return frame
-        return replace(
-            frame,
+        updates = replace(
+            _current_updates(frame),
             affect=AffectSnapshot(
                 mood_label=result.mood_label,
                 valence=result.valence,
@@ -116,11 +123,12 @@ class FrameBuilder:
                 affect_summary=result.affect_summary,
             ),
         )
+        return _rebuild_frame(frame, updates)
 
     @staticmethod
     def _apply_relationship(frame: WorkspaceFrame, result: RelationshipResult) -> WorkspaceFrame:
-        return replace(
-            frame,
+        updates = replace(
+            _current_updates(frame),
             relationship=RelationshipSnapshot(
                 actor_label=result.actor_label,
                 affinity=result.affinity,
@@ -129,53 +137,61 @@ class FrameBuilder:
                 relationship_summary=result.relationship_summary,
             ),
         )
+        return _rebuild_frame(frame, updates)
 
     @staticmethod
     def _apply_motivation(frame: WorkspaceFrame, result: MotivationResult) -> WorkspaceFrame:
-        return replace(
-            frame,
+        updates = replace(
+            _current_updates(frame),
             goals=tuple(
                 GoalCandidate(name=goal, reason="pipeline", priority=index)
                 for index, goal in enumerate(result.goals)
             ),
         )
+        return _rebuild_frame(frame, updates)
 
     @staticmethod
     def _apply_policy(frame: WorkspaceFrame, result: PolicyResult) -> WorkspaceFrame:
-        return replace(
-            frame,
+        updates = replace(
+            _current_updates(frame),
             constraints=result.constraints,
             action_preferences=result.action_preferences,
             policy_summary=result.policy_summary,
         )
+        return _rebuild_frame(frame, updates)
 
     @staticmethod
     def _apply_action_selection(
         frame: WorkspaceFrame,
         result: ActionSelectionResult,
     ) -> WorkspaceFrame:
-        return replace(frame, candidate_action_plans=result.action_plans)
+        updates = replace(
+            _current_updates(frame),
+            candidate_action_plans=frame.candidate_action_plans + result.action_plans,
+        )
+        return _rebuild_frame(frame, updates)
 
     @staticmethod
     def _dispatch(frame: WorkspaceFrame, result: PipelineStepResult) -> WorkspaceFrame:
         updated: WorkspaceFrame | None = None
-        if isinstance(result, PerceptionResult):
-            updated = FrameBuilder._apply_perception(frame, result)
-        elif isinstance(result, MemoryRetrievalResult):
-            updated = FrameBuilder._apply_memory_retrieval(frame, result)
-        elif isinstance(result, AppraisalResult):
-            updated = FrameBuilder._apply_appraisal(frame, result)
-        elif isinstance(result, RelationshipResult):
-            updated = FrameBuilder._apply_relationship(frame, result)
-        elif isinstance(result, MotivationResult):
-            updated = FrameBuilder._apply_motivation(frame, result)
-        elif isinstance(result, PolicyResult):
-            updated = FrameBuilder._apply_policy(frame, result)
-        elif isinstance(result, ActionSelectionResult):
-            updated = FrameBuilder._apply_action_selection(frame, result)
-        else:
-            msg = f"Unsupported pipeline step result: {type(result).__name__}"
-            raise TypeError(msg)
+        match result:
+            case PerceptionResult():
+                updated = FrameBuilder._apply_perception(frame, result)
+            case MemoryRetrievalResult():
+                updated = FrameBuilder._apply_memory_retrieval(frame, result)
+            case AppraisalResult():
+                updated = FrameBuilder._apply_appraisal(frame, result)
+            case RelationshipResult():
+                updated = FrameBuilder._apply_relationship(frame, result)
+            case MotivationResult():
+                updated = FrameBuilder._apply_motivation(frame, result)
+            case PolicyResult():
+                updated = FrameBuilder._apply_policy(frame, result)
+            case ActionSelectionResult():
+                updated = FrameBuilder._apply_action_selection(frame, result)
+            case _:
+                msg = f"Unsupported pipeline step result: {type(result).__name__}"
+                raise TypeError(msg)
         return updated
 
     @staticmethod
@@ -185,8 +201,65 @@ class FrameBuilder:
         Returns:
             更新されたワークスペースフレーム。
         """
-        if isinstance(result, AffectBaselineLoadResult):
-            return FrameBuilder._apply_affect_baseline_load(frame, result)
-        if isinstance(result, (AffectPersistenceResult, MemoryWriteResult)):
-            return frame
-        return FrameBuilder._dispatch(frame, result)
+        match result:
+            case AffectBaselineLoadResult():
+                return FrameBuilder._apply_affect_baseline_load(frame, result)
+            case AffectPersistenceResult() | MemoryWriteResult():
+                return frame
+            case _:
+                return FrameBuilder._dispatch(frame, result)
+
+
+@dataclass(frozen=True)
+class _FrameUpdates:
+    """FrameBuilderが適用できる型付き差分。"""
+
+    interpreted_input: InterpretedInput | None
+    memory_summary: MemorySummary
+    affect: AffectSnapshot
+    relationship: RelationshipSnapshot
+    goals: tuple[GoalCandidate, ...]
+    constraints: tuple[PolicyConstraint, ...]
+    action_preferences: tuple[ActionPreference, ...]
+    candidate_action_plans: tuple[ActionPlan, ...]
+    policy_summary: str | None
+
+
+def _current_updates(frame: WorkspaceFrame) -> _FrameUpdates:
+    return _FrameUpdates(
+        interpreted_input=frame.interpreted_input,
+        memory_summary=frame.memory_summary,
+        affect=frame.affect,
+        relationship=frame.relationship,
+        goals=frame.goals,
+        constraints=frame.constraints,
+        action_preferences=frame.action_preferences,
+        candidate_action_plans=frame.candidate_action_plans,
+        policy_summary=frame.policy_summary,
+    )
+
+
+def _rebuild_frame(
+    frame: WorkspaceFrame,
+    updates: _FrameUpdates,
+) -> WorkspaceFrame:
+    """型付き差分を適用し、検証済みframeを再構築する。
+
+    Returns:
+        再検証された新しいframe。
+    """
+    return WorkspaceFrame(
+        observation=frame.observation,
+        interpreted_input=updates.interpreted_input,
+        memory_summary=updates.memory_summary,
+        affect=updates.affect,
+        relationship=updates.relationship,
+        goals=updates.goals,
+        constraints=updates.constraints,
+        action_preferences=updates.action_preferences,
+        candidate_action_plans=updates.candidate_action_plans,
+        policy_summary=updates.policy_summary,
+        actor_context=frame.actor_context,
+        space_context=frame.space_context,
+        situation_context=frame.situation_context,
+    )

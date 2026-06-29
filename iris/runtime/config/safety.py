@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.parsing import env_optional_int, parse_int, parse_string
+from iris.runtime.config.validation import require_greater_than_zero
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -30,7 +31,7 @@ def apply_safety_toml(
     config: RuntimeSafetyConfig,
     table: TomlTable,
 ) -> RuntimeSafetyConfig:
-    """TOMLからsafety設定を適用する。
+    """TOML から safety 設定を適用する。
 
     Returns:
         検証済みのsafety設定。
@@ -40,8 +41,13 @@ def apply_safety_toml(
     if "mode" in table:
         mode = _validate_mode(parse_string(table["mode"], "safety.mode"))
     if "max_output_chars" in table:
-        max_output_chars = parse_int(table["max_output_chars"], "safety.max_output_chars")
-    return _validate_config(RuntimeSafetyConfig(mode=mode, max_output_chars=max_output_chars))
+        max_output_chars = parse_int(
+            table["max_output_chars"],
+            "safety.max_output_chars",
+        )
+    return _validate_config(
+        RuntimeSafetyConfig(mode=mode, max_output_chars=max_output_chars),
+    )
 
 
 def apply_safety_env(
@@ -58,9 +64,11 @@ def apply_safety_env(
         環境変数値を反映した安全性設定。
 
     Raises:
-        ConfigError: modeまたは最大文字数が不正な場合。
+        ConfigError: 環境変数値が不正な場合。
     """
-    mode = _validate_mode(env.get("IRIS_SAFETY_MODE", config.mode))
+    mode = config.mode
+    if "IRIS_SAFETY_MODE" in env:
+        mode = _validate_mode(env["IRIS_SAFETY_MODE"])
     max_output_chars = env_optional_int(
         env,
         "IRIS_SAFETY_MAX_OUTPUT_CHARS",
@@ -69,7 +77,9 @@ def apply_safety_env(
     if max_output_chars is None:
         message = "IRIS_SAFETY_MAX_OUTPUT_CHARS must be an integer"
         raise ConfigError(message)
-    return _validate_config(RuntimeSafetyConfig(mode=mode, max_output_chars=max_output_chars))
+    return _validate_config(
+        RuntimeSafetyConfig(mode=mode, max_output_chars=max_output_chars),
+    )
 
 
 def _validate_mode(value: str) -> str:
@@ -80,7 +90,10 @@ def _validate_mode(value: str) -> str:
 
 
 def _validate_config(config: RuntimeSafetyConfig) -> RuntimeSafetyConfig:
-    if config.max_output_chars <= 0:
-        message = "safety.max_output_chars must be greater than zero"
-        raise ConfigError(message)
-    return config
+    return replace(
+        config,
+        max_output_chars=require_greater_than_zero(
+            config.max_output_chars,
+            "safety.max_output_chars",
+        ),
+    )

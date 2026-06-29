@@ -59,12 +59,18 @@ def load_toml(file: BinaryIO) -> TomlTable:
     return _load_toml(file)
 
 
-def table_or_empty(table: TomlTable, key: str) -> TomlTable:
+def table_or_empty(
+    table: TomlTable,
+    key: str,
+    *,
+    path: str | None = None,
+) -> TomlTable:
     """ネストしたテーブルを返し、存在しない場合は空テーブルを返す。
 
     Args:
         table: 親 TOML テーブル。
         key: 読み取るネストテーブルキー。
+        path: 型エラーに含める任意の完全な設定パス。
 
     Returns:
         ネスト TOML テーブル。キーが無い場合は空テーブル。
@@ -77,7 +83,11 @@ def table_or_empty(table: TomlTable, key: str) -> TomlTable:
         return {}
     if isinstance(value, dict):
         return value
-    message = f"Runtime config section '{key}' must be a table"
+    message = (
+        f"{path} must be a table"
+        if path is not None
+        else f"Runtime config section '{key}' must be a table"
+    )
     raise ConfigError(message)
 
 

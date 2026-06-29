@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.contracts.actions import ActionResult
-    from iris.contracts.observations import Observation
+    from iris.contracts.availability import AvailabilitySnapshot
+    from iris.contracts.event_reaction import EventReactionDecision
+    from iris.contracts.observations import ActivityEventObservation, Observation
+    from iris.contracts.presentation import ActionPlanPresenter
 
 
 class ObservationSource(Protocol):
@@ -37,12 +38,27 @@ class BackgroundJob(Protocol):
         """バックグラウンドジョブの1イテレーションを実行する。"""
 
 
+class ActivityReactionPlanner(Protocol):
+    """アクティビティに対するリアクションを計画するプロトコル。"""
+
+    def plan(
+        self,
+        observation: ActivityEventObservation,
+        *,
+        availability: AvailabilitySnapshot | None,
+    ) -> EventReactionDecision:
+        """リアクションを計画する。"""
+        ...
+
+
 @dataclass(frozen=True)
 class FeatureDefinition:
     """パイプラインステップ、観測ソース、フックを持つ垂直フィーチャースライス。"""
 
     name: str
-    pipeline_steps: Sequence[PipelineStep[PipelineStepResult]] = ()
-    observation_sources: Sequence[ObservationSource] = ()
-    learning_hooks: Sequence[LearningHook] = ()
-    background_jobs: Sequence[BackgroundJob] = ()
+    cognitive_steps: tuple[PipelineStep[PipelineStepResult], ...] = ()
+    activity_reaction_planners: tuple[ActivityReactionPlanner, ...] = ()
+    observation_sources: tuple[ObservationSource, ...] = ()
+    learning_hooks: tuple[LearningHook, ...] = ()
+    background_jobs: tuple[BackgroundJob, ...] = ()
+    action_plan_presenters: tuple[ActionPlanPresenter, ...] = ()

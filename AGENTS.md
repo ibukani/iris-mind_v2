@@ -2,6 +2,24 @@
 
 This repository is **Iris**, an AI companion cognitive runtime MVP. Treat this file as the entry point for Codex, OpenCode, and other coding agents.
 
+## Subagent coding policy
+
+Use subagents in three tiers:
+
+1. Read-only exploration agents
+   Use gpt-5.4-mini for codebase mapping, dependency tracing, architecture scouting, and log summarization.
+
+2. Read-only patch proposal agents
+   Use gpt-5.4-mini patch-writing agents to propose concrete code snippets, test changes, and unified diffs.
+   The parent GPT-5.5 agent should review and apply the final changes.
+
+3. Narrow implementation agents
+   Use gpt-5.4-mini write-capable agents only for small, isolated, low-risk changes.
+   Do not let multiple write-capable subagents edit overlapping files.
+   The parent GPT-5.5 agent owns final architecture decisions and final review.
+
+Prefer patch proposals over direct subagent edits for large refactors.
+
 ## Must-follow token, language, and output compression policy
 
 These rules are embedded here, not delegated to another file, because they must be loaded at the start of every agent session.
@@ -198,7 +216,11 @@ Observation
 - Preserve layer boundaries between `contracts`, `core`, `cognitive`, `features`, `adapters`, `presentation`, `safety`, and `runtime`.
 - `cognitive/` must not import from `adapters/`, `runtime/`, or `features/`.
 - `contracts/` must not import from `cognitive/`, `adapters/`, or `runtime`.
-- `features/` must extend through `FeatureDefinition`; do not patch cognitive internals directly.
+- `features/` must extend through `FeatureDefinition`; do not patch cognitive internals directly. Organize features as **Vertical Slices**: encapsulate feature-specific `ports`, `models`, and `services` inside the feature directory.
+- Use **Pydantic V2** `BaseModel` for boundary models, contracts, and data transfer to enforce type safety and runtime validation. `dataclass` is not abolished, but Pydantic is preferred for boundaries.
+- Keep `WorkspaceFrame` clean. Define only the minimally shared context types in `contracts/`. Feature-specific data must remain encapsulated within the feature slice.
+- Maintain **manual constructor injection** in `runtime/wiring/`. Do not introduce DI containers (e.g., dependency-injector).
+- Consolidate SQLite persistence stores in `adapters/persistence/sqlite/stores/`. Stable domain ports (like `MemoryStore`) remain in `contracts/`.
 - `CognitiveCycle` is a pipeline coordinator, not a God Service.
 - `PipelineStep` implementations return typed results and do not mutate `WorkspaceFrame` directly.
 - Keep runtime boundary behavior split by responsibility: integration, context assembly, routing, reaction planning, presentation, safety filtering, and cognitive processing must not collapse into one service.

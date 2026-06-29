@@ -49,7 +49,12 @@ async def test_empty_output_is_blocked() -> None:
 
 async def test_missing_provider_is_blocked() -> None:
     """Empty provider is blocked."""
-    target = DeliveryTarget("", ExternalRef("user-1"), None, SessionId("session-1"))
+    target = DeliveryTarget(
+        provider="",
+        provider_subject=ExternalRef("user-1"),
+        provider_space_ref=None,
+        session_id=SessionId("session-1"),
+    )
     decision = await BasicDeliverySafetyGate().check(
         target=target,
         output=PresentedOutput(text="hello"),
@@ -61,7 +66,12 @@ async def test_missing_provider_is_blocked() -> None:
 
 async def test_missing_route_is_blocked() -> None:
     """Missing subject and space route is blocked."""
-    target = DeliveryTarget("discord", None, None, SessionId("session-1"))
+    target = DeliveryTarget(
+        provider="discord",
+        provider_subject=None,
+        provider_space_ref=None,
+        session_id=SessionId("session-1"),
+    )
     decision = await BasicDeliverySafetyGate().check(
         target=target,
         output=PresentedOutput(text="hello"),

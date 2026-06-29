@@ -464,7 +464,15 @@ def _with_timeout(config: IrisRuntimeConfig, timeout_seconds: float) -> IrisRunt
     Returns:
         A new config with the timeout overridden.
     """
-    return replace(config, diagnostics=replace(config.diagnostics, timeout_seconds=timeout_seconds))
+    return replace(
+        config,
+        diagnostics=replace(
+            config.diagnostics,
+            timeout_seconds=timeout_seconds,
+            readiness_timeout_seconds=timeout_seconds,
+            warmup_timeout_seconds=timeout_seconds,
+        ),
+    )
 
 
 @pytest.mark.anyio
@@ -473,7 +481,7 @@ async def test_run_startup_diagnostics_warn_mode_converts_timeout_to_fail(
 ) -> None:
     """Warn mode: hanging readiness probe becomes a FAIL outcome, not a crash.
 
-    A probe that exceeds ``diagnostics.timeout_seconds`` must not
+    A probe that exceeds ``diagnostics.readiness_timeout_seconds`` must not
     propagate the raw :class:`asyncio.TimeoutError` to the runner. The
     runner converts the timeout into a synthetic
     :class:`ProviderReadinessResult` with status ``FAIL`` and a
@@ -503,7 +511,7 @@ async def test_run_startup_diagnostics_warn_mode_converts_timeout_to_fail(
     outcome = report.outcomes[0]
     assert outcome.readiness.status is ReadinessStatus.FAIL
     assert outcome.readiness.issues[0].code == "readiness_timeout"
-    assert "diagnostics.timeout_seconds" in outcome.readiness.issues[0].message
+    assert "diagnostics.readiness_timeout_seconds" in outcome.readiness.issues[0].message
     assert "0.01" in outcome.readiness.issues[0].message
 
 
@@ -544,7 +552,7 @@ async def test_run_startup_diagnostics_warmup_timeout_produces_warmup_fail(
 ) -> None:
     """Warmup timeout produces a warmup-stage FAIL outcome.
 
-    A warmup probe that exceeds ``diagnostics.timeout_seconds`` must
+    A warmup probe that exceeds ``diagnostics.warmup_timeout_seconds`` must
     produce a synthetic :class:`ProviderReadinessResult` with status
     ``FAIL`` and a ``warmup_timeout`` issue. The readiness probe
     itself must remain ``OK`` when only the warmup hangs.
@@ -631,11 +639,11 @@ async def test_run_startup_diagnostics_off_mode_does_not_call_factory() -> None:
 async def test_run_startup_diagnostics_uses_configured_timeout_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The runner applies the configured ``timeout_seconds`` from the config.
+    """The runner applies the configured timeouts from the config.
 
     A very small timeout must cause the probe to fail; a large one
     must let the probe complete normally. This proves the runner
-    reads the value from ``runtime_config.diagnostics.timeout_seconds``
+    reads the value from ``runtime_config.diagnostics.readiness_timeout_seconds``
     rather than hardcoding it.
     """
     config = _with_providers(

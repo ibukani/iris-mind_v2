@@ -6,11 +6,10 @@
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING, override
 
-from iris.adapters.memory.ports import MutableMemoryStore
 from iris.adapters.memory.utils import matches_query, rank_text_matches
+from iris.contracts.memory import MutableMemoryStore
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -81,7 +80,7 @@ class InMemoryMemoryStore(MutableMemoryStore):
             if existing.id == memory_id:
                 if existing.archived == archived:
                     return existing
-                updated = dataclasses.replace(existing, archived=archived)
+                updated = existing.model_copy(update={"archived": archived})
                 self._records[index] = updated
                 return updated
         return None

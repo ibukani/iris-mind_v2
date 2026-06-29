@@ -14,10 +14,15 @@ from iris.contracts.observations import IdleTickObservation, ObservationContext,
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.features import wire_proactive_talk_cognitive_cycle
+from tests.helpers.output_pipeline import make_output_pipeline
 
 
 class FailingPresenter:
-    """Presenter stub that raises if called."""
+    """意図的に失敗するPresenter。"""
+
+    def can_present(self, plan: ActionPlan) -> bool:
+        _ = plan
+        return True
 
     async def present(self, plan: ActionPlan) -> PresentedOutput:
         """Raise an error to verify presenter is not invoked.
@@ -31,11 +36,15 @@ class FailingPresenter:
 
 
 class SpyPresenter:
-    """Presenter stub that records calls."""
+    """プレゼンテーション呼び出しを記録する。"""
 
     def __init__(self) -> None:
         """Initialize empty call log."""
         self.calls: list[ActionPlan] = []
+
+    def can_present(self, plan: ActionPlan) -> bool:
+        _ = plan
+        return True
 
     async def present(self, plan: ActionPlan) -> PresentedOutput:
         """Record the plan and return a PresentedOutput.
@@ -65,7 +74,7 @@ async def test_no_action_skips_presenter() -> None:
     """Verify the presenter is not called for a no_action plan."""
     app = IrisApp(
         cycle=wire_proactive_talk_cognitive_cycle(),
-        presenter=FailingPresenter(),
+        output_pipeline=make_output_pipeline(presenter=FailingPresenter()),
     )
     output = await app.process_observation(_idle_tick(10.0))
     assert output.text is None
@@ -74,7 +83,10 @@ async def test_no_action_skips_presenter() -> None:
 @pytest.mark.anyio
 async def test_no_action_returns_non_sendable_output() -> None:
     """Verify a no_action flow returns a non-sendable PresentedOutput."""
-    app = IrisApp(cycle=wire_proactive_talk_cognitive_cycle())
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_proactive_talk_cognitive_cycle(),
+    )
     output = await app.process_observation(_idle_tick(10.0))
     assert output.is_sendable is False
     assert output.text is None
@@ -84,7 +96,10 @@ async def test_no_action_returns_non_sendable_output() -> None:
 async def test_proactive_speak_calls_presenter() -> None:
     """Verify the presenter is called for a proactive_talk plan."""
     spy = SpyPresenter()
-    app = IrisApp(cycle=wire_proactive_talk_cognitive_cycle(), presenter=spy)
+    app = IrisApp(
+        cycle=wire_proactive_talk_cognitive_cycle(),
+        output_pipeline=make_output_pipeline(presenter=spy),
+    )
     output = await app.process_observation(_idle_tick(600.0))
     assert len(spy.calls) == 1
     called_plan = spy.calls[0]
@@ -95,7 +110,10 @@ async def test_proactive_speak_calls_presenter() -> None:
 @pytest.mark.anyio
 async def test_no_action_does_not_produce_actor_visible_text() -> None:
     """Verify no_action produces PresentedOutput with text=None and is_sendable=False."""
-    app = IrisApp(cycle=wire_proactive_talk_cognitive_cycle())
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_proactive_talk_cognitive_cycle(),
+    )
     output = await app.process_observation(_idle_tick(10.0))
     assert output.text is None
     assert output.is_sendable is False
@@ -124,7 +142,10 @@ async def test_fallback_plan_is_no_action_and_skips_presenter() -> None:
             turn_intent="no_action", candidate_text=None, should_respond=False, priority=-1
         ),
     )
-    app = IrisApp(cycle=cycle, presenter=FailingPresenter())
+    app = IrisApp(
+        cycle=cycle,
+        output_pipeline=make_output_pipeline(presenter=FailingPresenter()),
+    )
     output = await app.process_observation(_idle_tick(10.0))
     assert output.is_sendable is False
     assert output.text is None

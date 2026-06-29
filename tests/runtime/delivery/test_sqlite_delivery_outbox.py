@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
 
+from iris.adapters.persistence.sqlite.stores.delivery_outbox import SQLiteDeliveryOutbox
 from iris.contracts.actions import ActionResult, ActionStatus, NoAction, SendMessageAction
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTarget
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, SessionId
 from iris.runtime.delivery.outbox import DeliveryOutboxError
-from iris.runtime.delivery.sqlite import SQLiteDeliveryOutbox
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -77,6 +76,7 @@ async def test_sqlite_enqueue_lease_and_reopen_persists_item(tmp_path: Path) -> 
     db_path = tmp_path / "state.sqlite3"
     outbox = SQLiteDeliveryOutbox(str(db_path))
     await outbox.enqueue(_envelope())
+    await outbox.close()
 
     reopened = SQLiteDeliveryOutbox(str(db_path))
     leased = await reopened.lease_due(
@@ -89,18 +89,20 @@ async def test_sqlite_enqueue_lease_and_reopen_persists_item(tmp_path: Path) -> 
     assert len(leased) == 1
     assert leased[0].delivery_id == DeliveryId("delivery-1")
     assert leased[0].status is DeliveryStatus.LEASED
+    await reopened.close()
 
 
 async def test_sqlite_enqueue_idempotent_by_idempotency_key(tmp_path: Path) -> None:
     """SQLite outbox returns the first envelope for repeated idempotency key."""
     outbox = SQLiteDeliveryOutbox(str(tmp_path / "state.sqlite3"))
     first = await outbox.enqueue(_envelope("1"))
-    duplicate = replace(_envelope("2"), idempotency_key=first.idempotency_key)
+    duplicate = _envelope("2").model_copy(update={"idempotency_key": first.idempotency_key})
 
     stored = await outbox.enqueue(duplicate)
 
     assert stored.delivery_id == first.delivery_id
     assert stored.action.action_id == first.action.action_id
+    await outbox.close()
 
 
 async def test_sqlite_completed_report_is_idempotent_after_reopen(tmp_path: Path) -> None:
@@ -123,6 +125,7 @@ async def test_sqlite_completed_report_is_idempotent_after_reopen(tmp_path: Path
         result=result,
         completed_at=datetime(2026, 1, 1, 0, 0, 2, tzinfo=UTC),
     )
+    await outbox.close()
 
     reopened = SQLiteDeliveryOutbox(str(db_path))
     repeated = await reopened.complete(
@@ -134,6 +137,7 @@ async def test_sqlite_completed_report_is_idempotent_after_reopen(tmp_path: Path
 
     assert completed.status is DeliveryStatus.SUCCEEDED
     assert repeated == completed
+    await reopened.close()
 
 
 async def test_sqlite_same_lease_different_report_conflicts_after_reopen(
@@ -157,6 +161,7 @@ async def test_sqlite_same_lease_different_report_conflicts_after_reopen(
         result=_result(ActionStatus.SUCCEEDED, external_message_id="external-1"),
         completed_at=datetime(2026, 1, 1, 0, 0, 2, tzinfo=UTC),
     )
+    await outbox.close()
 
     reopened = SQLiteDeliveryOutbox(str(db_path))
     with pytest.raises(DeliveryOutboxError, match="delivery_report_conflict"):
@@ -166,12 +171,13 @@ async def test_sqlite_same_lease_different_report_conflicts_after_reopen(
             result=_result(ActionStatus.SUCCEEDED, external_message_id="external-2"),
             completed_at=datetime(2026, 1, 1, 0, 0, 3, tzinfo=UTC),
         )
+    await reopened.close()
 
 
 async def test_sqlite_failed_release_retries_then_permanent(tmp_path: Path) -> None:
     """FAILED reports retry until max attempts, then become permanent."""
     outbox = SQLiteDeliveryOutbox(str(tmp_path / "state.sqlite3"))
-    await outbox.enqueue(replace(_envelope(), max_attempts=2))
+    await outbox.enqueue(_envelope().model_copy(update={"max_attempts": 2}))
     first = (
         await outbox.lease_due(
             provider="discord",
@@ -206,6 +212,7 @@ async def test_sqlite_failed_release_retries_then_permanent(tmp_path: Path) -> N
     assert released.status is DeliveryStatus.PENDING
     assert released.not_before == datetime(2026, 1, 1, 0, 0, 5, tzinfo=UTC)
     assert permanent.status is DeliveryStatus.FAILED_PERMANENT
+    await outbox.close()
 
 
 async def test_sqlite_depth_limit_and_no_action_match_contract(tmp_path: Path) -> None:
@@ -216,23 +223,25 @@ async def test_sqlite_depth_limit_and_no_action_match_contract(tmp_path: Path) -
     with pytest.raises(DeliveryOutboxError, match="outbox_depth_exceeded"):
         await outbox.enqueue(_envelope("2"))
 
-    no_action = replace(
-        _envelope("3", provider="slack"),
-        action=NoAction(
-            action_id=ActionId("action-no"),
-            session_id=SessionId("session-1"),
-            correlation_id=CorrelationId("corr-no"),
-            reason="silent",
-        ),
+    no_action = _envelope("3", provider="slack").model_copy(
+        update={
+            "action": NoAction(
+                action_id=ActionId("action-no"),
+                session_id=SessionId("session-1"),
+                correlation_id=CorrelationId("corr-no"),
+                reason="silent",
+            )
+        }
     )
     with pytest.raises(DeliveryOutboxError, match="no_action_not_deliverable"):
         await outbox.enqueue(no_action)
+    await outbox.close()
 
 
 async def test_sqlite_expired_max_attempt_lease_becomes_permanent(tmp_path: Path) -> None:
     """Expired leases at max attempts become permanent and are not returned."""
     outbox = SQLiteDeliveryOutbox(str(tmp_path / "state.sqlite3"))
-    await outbox.enqueue(replace(_envelope(), max_attempts=1))
+    await outbox.enqueue(_envelope().model_copy(update={"max_attempts": 1}))
     first = await outbox.lease_due(
         provider="discord",
         now=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
@@ -250,6 +259,7 @@ async def test_sqlite_expired_max_attempt_lease_becomes_permanent(tmp_path: Path
 
     assert second == ()
     assert stored.status is DeliveryStatus.FAILED_PERMANENT
+    await outbox.close()
 
 
 async def test_sqlite_stale_failed_report_after_release_is_idempotent(
@@ -291,6 +301,7 @@ async def test_sqlite_stale_failed_report_after_release_is_idempotent(
 
     assert duplicate.status is DeliveryStatus.LEASED
     assert duplicate != released
+    await outbox.close()
 
 
 async def test_sqlite_concurrent_lease_due_single_item(tmp_path: Path) -> None:
@@ -312,6 +323,10 @@ async def test_sqlite_concurrent_lease_due_single_item(tmp_path: Path) -> None:
     leased = next(result[0] for result in results if result)
     assert leased.status is DeliveryStatus.LEASED
     assert leased.attempts == 1
+
+    await outbox.close()
+    await outbox1.close()
+    await outbox2.close()
 
 
 async def test_sqlite_concurrent_lease_due_from_two_instances(tmp_path: Path) -> None:
@@ -337,6 +352,10 @@ async def test_sqlite_concurrent_lease_due_from_two_instances(tmp_path: Path) ->
     assert len(leased1) == 1
     assert len(leased2) == 1
     assert leased1[0].delivery_id != leased2[0].delivery_id
+
+    await outbox.close()
+    await outbox1.close()
+    await outbox2.close()
 
 
 async def test_sqlite_lease_expiry_and_re_lease_by_another_instance(tmp_path: Path) -> None:
@@ -376,6 +395,9 @@ async def test_sqlite_lease_expiry_and_re_lease_by_another_instance(tmp_path: Pa
     assert second[0].delivery_id == first[0].delivery_id
     assert second[0].attempts == 2
 
+    await outbox1.close()
+    await outbox2.close()
+
 
 async def test_sqlite_completed_report_visible_to_another_instance(tmp_path: Path) -> None:
     """One instance completes, another instance does not poll the terminal item."""
@@ -409,6 +431,8 @@ async def test_sqlite_completed_report_visible_to_another_instance(tmp_path: Pat
     )
 
     assert len(empty) == 0
+    await outbox1.close()
+    await outbox2.close()
 
 
 async def test_sqlite_conflicting_report_from_another_instance(tmp_path: Path) -> None:
@@ -442,6 +466,8 @@ async def test_sqlite_conflicting_report_from_another_instance(tmp_path: Path) -
             result=_result(ActionStatus.SUCCEEDED, external_message_id="ext-2"),
             completed_at=datetime(2026, 1, 1, 0, 0, 3, tzinfo=UTC),
         )
+    await outbox1.close()
+    await outbox2.close()
 
 
 async def test_sqlite_repeated_identical_report_from_another_instance_idempotent(
@@ -479,3 +505,5 @@ async def test_sqlite_repeated_identical_report_from_another_instance_idempotent
     )
 
     assert completed1 == completed2
+    await outbox1.close()
+    await outbox2.close()

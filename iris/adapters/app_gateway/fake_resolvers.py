@@ -4,17 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, override
 
-from iris.adapters.accounts.memory import InMemoryAccountStore
-from iris.adapters.app_gateway.ports import AccountStore, IdentityResolver, SpaceResolver
-from iris.adapters.app_gateway.stable_ids import stable_account_id, stable_actor_id, stable_space_id
-from iris.contracts.accounts import AccountProfile
+from iris.adapters.app_gateway.ports import IdentityResolver
+from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
+from iris.adapters.app_gateway.stable_ids import stable_account_id, stable_actor_id
+from iris.contracts.accounts import AccountProfile, AccountStore
 from iris.contracts.identity import Identity
-from iris.contracts.spaces import InteractionSpace
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
+    from iris.contracts.external_refs import ExternalAccountRef
     from iris.core.ids import ActorId, DeviceId
 
 
@@ -29,7 +28,8 @@ class FakeIdentityResolver(IdentityResolver):
     ) -> None:
         """テスト用のリンクリストを使ってresolverを初期化する。"""
         self._linked_actor_ids = dict(linked_actor_ids or {})
-        self._account_store = account_store or InMemoryAccountStore()
+        self._account_store = account_store
+        self._local_accounts_by_ref: dict[tuple[str, str], AccountProfile] = {}
 
     @override
     async def resolve_identity(
@@ -43,11 +43,15 @@ class FakeIdentityResolver(IdentityResolver):
         Returns:
             Identity: 外部refから決定論的に解決されたIdentity。
         """
-        # Look up AccountProfile
-        profile = await self._account_store.get_by_external_ref(
-            provider=account_ref.provider,
-            provider_subject=account_ref.provider_subject,
-        )
+        # Look up AccountProfile.
+        link_key = (account_ref.provider, str(account_ref.provider_subject))
+        if self._account_store is None:
+            profile = self._local_accounts_by_ref.get(link_key)
+        else:
+            profile = await self._account_store.get_by_external_ref(
+                provider=account_ref.provider,
+                provider_subject=account_ref.provider_subject,
+            )
 
         if not profile:
             # Create a deterministic AccountProfile
@@ -61,16 +65,19 @@ class FakeIdentityResolver(IdentityResolver):
                 display_name=account_ref.display_name,
                 metadata=dict(account_ref.metadata),
             )
-            profile = await self._account_store.put(profile)
+            if self._account_store is None:
+                self._local_accounts_by_ref[link_key] = profile
+            else:
+                profile = await self._account_store.put(profile)
 
         # Check explicit links from constructor mapping
-        link_key = (account_ref.provider, str(account_ref.provider_subject))
         link_target = self._linked_actor_ids.get(link_key)
         if link_target and profile.linked_actor_id != link_target:
-            profile = await self._account_store.link_account_to_actor(
-                account_id=profile.account_id,
-                actor_id=link_target,
-            )
+            profile = profile.model_copy(update={"linked_actor_id": link_target})
+            if self._account_store is None:
+                self._local_accounts_by_ref[link_key] = profile
+            else:
+                profile = await self._account_store.put(profile)
 
         # Determine actor_id
         actor_id = profile.linked_actor_id or stable_actor_id(profile.account_id)
@@ -87,23 +94,5 @@ class FakeIdentityResolver(IdentityResolver):
         )
 
 
-class FakeSpaceResolver(SpaceResolver):
-    """テストとローカル配線向けの決定論的SpaceResolver。"""
-
-    @override
-    async def resolve_space(
-        self,
-        space_ref: ExternalSpaceRef,
-    ) -> InteractionSpace:
-        """同じprovider/provider_space_refから同じSpaceIdを持つInteractionSpaceを返す。
-
-        Returns:
-            InteractionSpace: 外部refから決定論的に解決されたInteractionSpace。
-        """
-        space_id = stable_space_id(space_ref.provider, space_ref.provider_space_ref)
-        return InteractionSpace(
-            space_id=space_id,
-            space_kind=space_ref.space_kind,
-            display_name=space_ref.display_name,
-            metadata=dict(space_ref.metadata),
-        )
+class FakeSpaceResolver(EphemeralSpaceResolver):
+    """テスト向けの決定論的 EphemeralSpaceResolver。"""

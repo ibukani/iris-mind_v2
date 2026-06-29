@@ -2,23 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import Protocol
 
-from iris.core.metadata import EMPTY_METADATA, immutable_metadata
+from pydantic import BaseModel, ConfigDict, Field
 
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from iris.core.ids import AccountId, ActorId, ExternalRef
+from iris.contracts.metadata import ImmutableMetadata
+from iris.core.ids import AccountId, ActorId, ExternalRef
+from iris.core.metadata import immutable_metadata
 
 
 class AccountStoreError(ValueError):
     """Account ストレージまたはリンクのエラー。"""
 
 
-@dataclass(frozen=True)
-class AccountProfile:
+class AccountProfile(BaseModel):
     """外部プロバイダのアカウントバインディング。
 
     AccountProfile は外部プロバイダのアカウントバインディングを表す。
@@ -33,13 +30,42 @@ class AccountProfile:
     metadata: プロバイダから渡された追加コンテキスト。
     """
 
+    model_config = ConfigDict(frozen=True)
+
     account_id: AccountId
     provider: str
     provider_subject: ExternalRef
     display_name: str
     linked_actor_id: ActorId | None = None
-    metadata: Mapping[str, str] = EMPTY_METADATA
+    metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
 
-    def __post_init__(self) -> None:
-        """メタデータを不変な mapping proxy として防御的にコピーする。"""
-        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+
+class AccountStore(Protocol):
+    """External account profile storage and linking protocol.
+
+    This is a pure data access interface. Domain logic such as validating
+    account links or resolving identities should be performed by the caller.
+    """
+
+    async def get_by_external_ref(
+        self,
+        *,
+        provider: str,
+        provider_subject: ExternalRef,
+    ) -> AccountProfile | None:
+        """Get an account profile by provider and subject."""
+        ...
+
+    async def get_by_account_id(
+        self,
+        account_id: AccountId,
+    ) -> AccountProfile | None:
+        """Get an account profile by its internal AccountId."""
+        ...
+
+    async def put(
+        self,
+        account: AccountProfile,
+    ) -> AccountProfile:
+        """Create or update an account profile."""
+        ...

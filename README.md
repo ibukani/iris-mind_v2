@@ -21,7 +21,7 @@ configだけをロードする。
 
 config が見つからない場合はエラーにしない。組み込み defaults、環境変数、CLI overrides だけで起動する。`--config PATH` は default discovery を無効化して指定 TOML を直接使う。`--config PATH` が存在しない場合、または `$IRIS_MIND_CONFIG` が存在しない path を指す場合は `ConfigError`。
 
-**Note:** `iris-mind_v2` はサーバ専用ランタイムである。ユーザ向け CLI 機能 は `iris-cli_v2` 側に属する。以前のワンターン CLI エントリポイント (`iris/runtime/cli.py`) は意図的に削除済み。外部クライアントは gRPC Runtime API を利用する。CLI 向けの `SubmitObservation` 契約は [`docs/runtime-api.md`](docs/runtime-api.md) を参照。モデルとプロバイダの設定は TOML または環境変数で行う。
+**Note:** `iris-mind` はサーバ専用ランタイムである。ユーザ向け CLI 機能 は `iris-cli` 側に属する。以前のワンターン CLI エントリポイント (`iris/runtime/cli.py`) は意図的に削除済み。外部クライアントは gRPC Runtime API を利用する。CLI 向けの `SubmitObservation` 契約は [`docs/runtime-api.md`](docs/runtime-api.md) を参照。モデルとプロバイダの設定は TOML または環境変数で行う。
 
 - `--config`: default discovery を無効化し、指定 TOML を直接読み込む。
 - `--host`: `server.host` を上書きする。
@@ -217,40 +217,22 @@ iris.runtime.server / main.py
 ## プロジェクト構成
 
 ```text
-iris/
-├── core/               ID、基底型
-├── contracts/          ドメイン契約 (actions, observations, memory, identity, policy, spaces)
-├── cognitive/          認知サイクル、パイプライン、ワークスペース
-│   ├── action/         応答生成
-│   ├── affect/         appraisal, mood, relationship
-│   ├── cycle/          CognitiveCycle コーディネータ、pipeline protocol、frame builder
-│   ├── memory/         Memory retrieval step
-│   ├── perception/     Observation 解析
-│   ├── policy/         Inhibition / 行動制約
-│   └── workspace/      WorkspaceFrame (1 ターンの typed snapshot)
-├── presentation/       ActionPlan → PresentedOutput 変換
-├── safety/             Action gate, output filter
-├── features/           Feature 拡張 (proactive_talk)
-│   └── proactive_talk/ Salience scoring, goal proposal, proactive policy
-├── adapters/           外部統合
-│   ├── app_gateway/    外部アプリ protocol 境界
-│   ├── llm/            FakeLLM, OpenAI, Ollama クライアント
-│   └── memory/         Fake, vector, LangChain memory store
-└── runtime/            アプリ構成、サーバエントリポイント、wiring
-    ├── server.py       gRPC サーバエントリポイント
-    └── wiring/         Constructor-injection wiring (app, cognitive, features, llm, memory, presentation)
-├── tests/
-│   ├── architecture/   Guard tests (18+ files)
-│   ├── adapters/
-│   ├── cognitive/
-│   ├── contracts/
-│   ├── features/
-│   ├── helpers/
-│   └── runtime/
-├── scripts/
-│   ├── verify.py       リポジトリ検証エントリポイント
-│   ├── ai_context.py   AI harness context ダンプ
-│   └── ai_report.py    完了レポート skeleton
+├── iris/               認知ランタイム中核
+│   ├── core/           ID、基底型
+│   ├── contracts/      ドメイン契約 (actions, observations, memory, identity, policy, spaces)
+│   ├── cognitive/      認知サイクル、パイプライン、ワークスペース
+│   ├── presentation/   ActionPlan → PresentedOutput 変換
+│   ├── safety/         Action gate, output filter
+│   ├── features/       Feature 拡張 (proactive_talk, event_reaction)
+│   ├── adapters/       外部統合 (llm, memory, app_gateway, sqlite_journal)
+│   └── runtime/        アプリ構成、サーバエントリポイント、wiring
+├── proto/              gRPC プロトコル定義
+├── docs/               アーキテクチャドキュメント、ADR
+├── examples/           設定サンプル
+├── tests/              テストスイート
+│   ├── architecture/   Guard tests
+│   └── ...
+├── scripts/            ユーティリティスクリプト
 └── main.py             iris.runtime.server へのリダイレクト
 ```
 
@@ -290,26 +272,9 @@ make coverage     # full coverage gate (90% threshold + HTML report)
 
 ## AI Harness
 
-AI コーディングエージェントは `AGENTS.md` から始める。Claude Code は `CLAUDE.md` から始めるが、共通ルールは `AGENTS.md` と `.agents/` に委譲されている。
+For AI-assisted development, see `AGENTS.md`.
 
-エージェント向けコマンド:
-
-```bash
-make ai-context           # アクティブな harness パスを表示
-make ai-quick             # 高速 strict ループ (失敗しても継続)
-make ai-check             # フル strict ループ (失敗しても継続)
-make ai-arch              # architecture guard tests
-make ai-test-target TARGET=tests/path.py::test_name  # 個別テスト
-make ai-report            # 日本語完了レポート skeleton
-```
-
-エージェント作業の最終検証:
-
-```bash
-make check
-```
-
-環境を実行できない場合、エージェントは正確なコマンド、失敗理由、可能だった限定チェック、残リスクを報告する。
+開発時の検証には `make check` や `make quick` を使用する。
 
 ## ライセンス
 

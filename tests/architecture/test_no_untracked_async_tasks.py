@@ -9,9 +9,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 SCAN_ROOTS: tuple[str, ...] = ("iris", "tests", "scripts")
 EXCLUDED_ROOTS: frozenset[str] = frozenset({"iris/generated"})
-ALLOWED_EVENT_LOOP_CONTROLS: frozenset[tuple[str, int, str]] = frozenset(
+ALLOWED_EVENT_LOOP_CONTROLS: frozenset[tuple[str, str]] = frozenset(
     {
-        ("iris/runtime/server.py", 361, "asyncio.run"),
+        ("iris/runtime/cli.py", "asyncio.run"),
     }
 )
 
@@ -110,7 +110,7 @@ def test_production_code_does_not_control_nested_event_loops() -> None:
     violations: list[str] = []
     for path in _python_files():
         for finding in _collect_async_findings(path):
-            key = (finding.path, finding.line, finding.call)
+            key = (finding.path, finding.call)
             if finding.call in {"asyncio.run", "loop.run_until_complete"} and (
                 key not in ALLOWED_EVENT_LOOP_CONTROLS
             ):

@@ -17,6 +17,7 @@ from iris.core.ids import AccountId
 from tests.e2e.helpers import (
     assert_invalid_request,
     build_cli_submit_observation_request,
+    build_external_submit_observation_request,
     find_free_port,
     start_runtime_process,
     stop_runtime_process,
@@ -188,20 +189,19 @@ async def _submit_identity_messages(
     correlation_ids: Sequence[str],
     *,
     provider: str = "cli",
+    provider_subject: str = "subject-1",
     display_name: str = "Local User",
 ) -> None:
     """Submit a sequence of identity-bearing actor_message requests."""
     for index, correlation_id in enumerate(correlation_ids, start=1):
-        request = build_cli_submit_observation_request(
+        request = build_external_submit_observation_request(
+            provider=provider,
+            provider_subject=provider_subject,
+            display_name=display_name,
             correlation_id=correlation_id,
-            observation_id=f"id-obs-{correlation_id}",
             session_id="identity-contract-session",
-            external_message_id=f"id-msg-{correlation_id}",
             text=f"identity {index}",
         )
-        request.observation.context.account_ref.provider = provider
-        request.observation.context.account_ref.provider_subject = "subject-1"
-        request.observation.context.account_ref.display_name = display_name
         await submit_observation(port=port, request=request)
 
 

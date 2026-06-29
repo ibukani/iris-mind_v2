@@ -2,21 +2,36 @@
 
 from __future__ import annotations
 
-import time
+import asyncio
 from typing import TYPE_CHECKING
 
-from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
+import pytest
+
+from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
 from iris.contracts.relationship import RelationshipSnapshotRecord
 from iris.core.ids import ActorId, ObservationId
 from tests.helpers.approx import approx
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
     from pathlib import Path
 
 
-def test_sqlite_relationship_store_upserts_and_gets(tmp_path: Path) -> None:
-    """Upsert then get returns the stored relationship record."""
+@pytest.fixture
+async def store(tmp_path: Path) -> AsyncGenerator[SQLiteRelationshipStore]:
+    """Fixture for SQLiteRelationshipStore.
+
+    Yields:
+        The store.
+    """
     store = SQLiteRelationshipStore(tmp_path / "state.db")
+    yield store
+    await store.close()
+
+
+@pytest.mark.anyio
+async def test_sqlite_relationship_store_upserts_and_gets(store: SQLiteRelationshipStore) -> None:
+    """Upsert then get returns the stored relationship record."""
     record = RelationshipSnapshotRecord(
         actor_id=ActorId("actor-1"),
         actor_label="Mina",
@@ -26,8 +41,8 @@ def test_sqlite_relationship_store_upserts_and_gets(tmp_path: Path) -> None:
         source_observation_id=ObservationId("obs-1"),
     )
 
-    stored = store.upsert(record)
-    loaded = store.get(ActorId("actor-1"))
+    stored = await store.upsert(record)
+    loaded = await store.get(ActorId("actor-1"))
 
     assert loaded == stored
     assert loaded is not None
@@ -35,7 +50,8 @@ def test_sqlite_relationship_store_upserts_and_gets(tmp_path: Path) -> None:
     assert loaded.updated_at is not None
 
 
-def test_sqlite_relationship_store_creates_parent_directory(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_sqlite_relationship_store_creates_parent_directory(tmp_path: Path) -> None:
     """Nested DB path parent directory is created during initialization."""
     store = SQLiteRelationshipStore(tmp_path / "nested" / "state.db")
     record = RelationshipSnapshotRecord(
@@ -47,21 +63,22 @@ def test_sqlite_relationship_store_creates_parent_directory(tmp_path: Path) -> N
         source_observation_id=ObservationId("obs-nested"),
     )
 
-    stored = store.upsert(record)
-    loaded = store.get(ActorId("actor-nested"))
+    stored = await store.upsert(record)
+    loaded = await store.get(ActorId("actor-nested"))
 
     assert loaded == stored
     assert (tmp_path / "nested" / "state.db").exists()
+    await store.close()
 
 
-def test_sqlite_relationship_update_preserves_created_at_and_advances_updated_at(
-    tmp_path: Path,
+@pytest.mark.anyio
+async def test_sqlite_relationship_update_preserves_created_at_and_advances_updated_at(
+    store: SQLiteRelationshipStore,
 ) -> None:
     """Update preserves created_at and advances updated_at for the same actor."""
-    store = SQLiteRelationshipStore(tmp_path / "state.db")
-    first = store.upsert(RelationshipSnapshotRecord(actor_id=ActorId("actor-1")))
-    time.sleep(0.001)
-    second = store.upsert(
+    first = await store.upsert(RelationshipSnapshotRecord(actor_id=ActorId("actor-1")))
+    await asyncio.sleep(0.001)
+    second = await store.upsert(
         RelationshipSnapshotRecord(
             actor_id=ActorId("actor-1"),
             affinity=0.4,
@@ -77,26 +94,31 @@ def test_sqlite_relationship_update_preserves_created_at_and_advances_updated_at
     assert second.affinity == approx(0.4)
 
 
-def test_sqlite_relationship_survives_new_store_instance(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_sqlite_relationship_survives_new_store_instance(tmp_path: Path) -> None:
     """Relationship state survives a new store instance using the same DB path."""
     db_path = tmp_path / "state.db"
-    SQLiteRelationshipStore(db_path).upsert(
+    store1 = SQLiteRelationshipStore(db_path)
+    await store1.upsert(
         RelationshipSnapshotRecord(actor_id=ActorId("actor-1"), familiarity=0.5),
     )
+    await store1.close()
 
-    loaded = SQLiteRelationshipStore(db_path).get(ActorId("actor-1"))
+    store2 = SQLiteRelationshipStore(db_path)
+    loaded = await store2.get(ActorId("actor-1"))
 
     assert loaded is not None
     assert loaded.familiarity == approx(0.5)
+    await store2.close()
 
 
-def test_sqlite_relationship_actor_uniqueness(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_sqlite_relationship_actor_uniqueness(store: SQLiteRelationshipStore) -> None:
     """Relationship state is unique by actor_id."""
-    store = SQLiteRelationshipStore(tmp_path / "state.db")
-    store.upsert(RelationshipSnapshotRecord(actor_id=ActorId("actor-1"), affinity=0.1))
-    store.upsert(RelationshipSnapshotRecord(actor_id=ActorId("actor-1"), affinity=0.3))
+    await store.upsert(RelationshipSnapshotRecord(actor_id=ActorId("actor-1"), affinity=0.1))
+    await store.upsert(RelationshipSnapshotRecord(actor_id=ActorId("actor-1"), affinity=0.3))
 
-    loaded = store.get(ActorId("actor-1"))
+    loaded = await store.get(ActorId("actor-1"))
 
     assert loaded is not None
     assert loaded.affinity == approx(0.3)

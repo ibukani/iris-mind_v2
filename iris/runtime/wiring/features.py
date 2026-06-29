@@ -2,24 +2,78 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
-from iris.cognitive.affect.appraisal import AppraisalStep
-from iris.cognitive.affect.relationship import RelationshipStep
-from iris.cognitive.memory.retrieval import MemoryRetrievalStep
-from iris.cognitive.perception.basic import SimplePerceptionStep
-from iris.cognitive.policy.inhibition import PolicyInhibitionStep
-from iris.features.proactive_talk import define_proactive_talk_feature
-from iris.runtime.wiring.cognitive import wire_cognitive_cycle
+from iris.features.basic_action.definition import define_basic_action_feature
+from iris.features.event_reaction.definition import define_event_reaction_feature
+from iris.features.proactive_talk.definition import define_proactive_talk_feature
+from iris.runtime.wiring.cognitive import (
+    CognitiveCycleStores,
+    wire_core_cognitive_cycle,
+)
 
 if TYPE_CHECKING:
-    from iris.adapters.memory.ports import MemoryStore
+    from collections.abc import Sequence
+
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.cognitive.cycle.service import CognitiveCycle
+    from iris.contracts.memory import MemoryStore
+    from iris.contracts.presentation import ActionPlanPresenter
     from iris.contracts.relationship import RelationshipStore
     from iris.features.definition import FeatureDefinition
+
+
+@dataclass(frozen=True)
+class RuntimeFeatureCatalog:
+    """標準ランタイムで有効なフィーチャー定義の集合。"""
+
+    features: tuple[FeatureDefinition, ...]
+
+
+def wire_runtime_features() -> RuntimeFeatureCatalog:
+    """標準ランタイムのフィーチャー集合を組み立てる。
+
+    Returns:
+        明示注入するフィーチャー定義の集合。
+    """
+    return RuntimeFeatureCatalog(
+        features=(
+            define_basic_action_feature(),
+            define_event_reaction_feature(),
+        ),
+    )
+
+
+def collect_cognitive_steps(
+    features: Sequence[FeatureDefinition],
+) -> tuple[PipelineStep[PipelineStepResult], ...]:
+    """有効なフィーチャーの認知ステップを登録順に収集する。
+
+    Args:
+        features: composition root で有効化されたフィーチャー定義。
+
+    Returns:
+        CognitiveCycle の拡張位置へ注入する認知ステップ。
+    """
+    return collect_feature_items(tuple(feature.cognitive_steps for feature in features))
+
+
+def collect_action_plan_presenters(
+    features: Sequence[FeatureDefinition],
+) -> tuple[ActionPlanPresenter, ...]:
+    """有効なフィーチャーのプレゼンターを登録順に収集する。
+
+    Args:
+        features: composition root で有効化されたフィーチャー定義。
+
+    Returns:
+        PresentationSuite へ注入するプレゼンター。
+    """
+    return collect_feature_items(
+        tuple(feature.action_plan_presenters for feature in features),
+    )
 
 
 def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefinition:
@@ -32,6 +86,17 @@ def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefin
         proactive talk 用の FeatureDefinition。
     """
     return define_proactive_talk_feature(salience_threshold=salience_threshold)
+
+
+def collect_feature_items[FeatureItemT](
+    feature_item_groups: Sequence[Sequence[FeatureItemT]],
+) -> tuple[FeatureItemT, ...]:
+    """FeatureDefinition 群の属性列を順序どおりに平坦化する。
+
+    Returns:
+        順序を保って連結した要素列。
+    """
+    return tuple(item for group in feature_item_groups for item in group)
 
 
 def wire_proactive_talk_cognitive_cycle(
@@ -50,15 +115,10 @@ def wire_proactive_talk_cognitive_cycle(
         知覚・メモリ・感情・ポリシー・proactive talk パイプラインステップを含む CognitiveCycle。
     """
     feature = wire_proactive_talk_feature(salience_threshold=salience_threshold)
-    steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
-    if memory_store is not None:
-        steps.append(MemoryRetrievalStep(memory_store))
-    steps.extend(
-        (
-            AppraisalStep(),
-            RelationshipStep(relationship_store or InMemoryRelationshipStore()),
-            PolicyInhibitionStep(),
-            *feature.pipeline_steps,
-        )
+    return wire_core_cognitive_cycle(
+        stores=CognitiveCycleStores(
+            memory_store=memory_store,
+            relationship_store=relationship_store,
+        ),
+        extension_steps=collect_cognitive_steps((feature,)),
     )
-    return wire_cognitive_cycle(steps=tuple(steps))

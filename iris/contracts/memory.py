@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, NewType, Protocol, override, runtime_checkable
 
-from iris.core.metadata import EMPTY_METADATA, immutable_metadata
+from pydantic import BaseModel, ConfigDict, Field
+
+from iris.contracts.metadata import ImmutableMetadata
+from iris.core.ids import ActorId, ObservationId, SpaceId
+from iris.core.metadata import immutable_metadata
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
-    from datetime import datetime
-
-    from iris.core.ids import ActorId, ObservationId, SpaceId
 
 MemoryId = NewType("MemoryId", str)
 
@@ -33,9 +34,10 @@ class MemoryKind(StrEnum):
     NOTE = "note"
 
 
-@dataclass(frozen=True)
-class MemoryRecord:
+class MemoryRecord(BaseModel):
     """単一のメモリレコード。"""
+
+    model_config = ConfigDict(frozen=True)
 
     id: MemoryId
     text: str
@@ -48,16 +50,13 @@ class MemoryRecord:
     created_at: datetime | None = None
     updated_at: datetime | None = None
     archived: bool = False
-    metadata: Mapping[str, str] = EMPTY_METADATA
-
-    def __post_init__(self) -> None:
-        """メタデータを不変な mapping proxy として防御的にコピーする。"""
-        object.__setattr__(self, "metadata", immutable_metadata(self.metadata))
+    metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
 
 
-@dataclass(frozen=True)
-class MemoryQuery:
+class MemoryQuery(BaseModel):
     """メモリレコード検索のクエリ。"""
+
+    model_config = ConfigDict(frozen=True)
 
     text: str
     actor_id: ActorId | None = None
@@ -67,17 +66,19 @@ class MemoryQuery:
     include_archived: bool = False
 
 
-@dataclass(frozen=True)
-class MemorySearchResult:
+class MemorySearchResult(BaseModel):
     """関連性スコア付きのメモリレコード。"""
+
+    model_config = ConfigDict(frozen=True)
 
     record: MemoryRecord
     score: float
 
 
-@dataclass(frozen=True)
-class VectorMemorySearchResult:
+class VectorMemorySearchResult(BaseModel):
     """ベクトル類似度スコア付きのメモリ検索結果。"""
+
+    model_config = ConfigDict(frozen=True)
 
     memory_id: MemoryId
     score: float

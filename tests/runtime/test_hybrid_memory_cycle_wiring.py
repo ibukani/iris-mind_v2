@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
+from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.memory.write import MemoryWriteStep
 from iris.contracts.memory import (
@@ -17,8 +17,8 @@ from iris.contracts.memory import (
 )
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
-    wire_affect_memory_aware_text_response_cognitive_cycle,
-    wire_policy_affect_memory_aware_text_response_cognitive_cycle,
+    wire_affect_memory_aware_cognitive_cycle,
+    wire_core_cognitive_cycle,
 )
 from iris.runtime.wiring.memory import (
     SQLiteFTS5MemoryRetriever,
@@ -86,7 +86,7 @@ def test_wire_affect_cycle_uses_injected_memory_retriever() -> None:
             ),
         ),
     )
-    cycle = wire_affect_memory_aware_text_response_cognitive_cycle(
+    cycle = wire_affect_memory_aware_cognitive_cycle(
         stores=CognitiveCycleStores(memory_store=store, memory_retriever=fake),
     )
 
@@ -101,7 +101,7 @@ def test_wire_policy_cycle_passes_vector_index_to_write_step() -> None:
     """vector_index 指定時に MemoryWriteStep に渡される。"""
     store = InMemoryMemoryStore()
     vector_index = InMemoryVectorMemoryIndex(embed_text)
-    cycle = wire_policy_affect_memory_aware_text_response_cognitive_cycle(
+    cycle = wire_core_cognitive_cycle(
         stores=CognitiveCycleStores(memory_store=store, vector_index=vector_index),
     )
 

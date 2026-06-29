@@ -78,13 +78,7 @@ def create_grpc_server(
     Raises:
         RuntimeError: gRPC port bind に失敗した場合。
     """
-    if auth_config is not None and token_verifier is None:
-        message = "auth_config provided without token_verifier"
-        raise RuntimeError(message)
-    if token_verifier is not None and auth_config is None:
-        message = "token_verifier provided without auth_config"
-        raise RuntimeError(message)
-
+    _validate_auth_wiring(auth_config, token_verifier)
     if (
         host not in {"127.0.0.1", "localhost", "::1"}
         and auth_config is not None
@@ -119,6 +113,23 @@ def create_grpc_server(
         message = f"failed to bind gRPC port {host}:{port}"
         raise RuntimeError(message)
     return server
+
+
+def _validate_auth_wiring(
+    auth_config: RuntimeAuthConfig | None,
+    token_verifier: StaticBearerTokenVerifier | None,
+) -> None:
+    """auth_config と token_verifier の依存関係を先に検証する。
+
+    Raises:
+        RuntimeError: 片方だけが指定された場合。
+    """
+    if auth_config is not None and token_verifier is None:
+        message = "auth_config provided without token_verifier"
+        raise RuntimeError(message)
+    if token_verifier is not None and auth_config is None:
+        message = "token_verifier provided without auth_config"
+        raise RuntimeError(message)
 
 
 def _require_secure_remote_bind(host: str, auth_config: RuntimeAuthConfig | None) -> None:

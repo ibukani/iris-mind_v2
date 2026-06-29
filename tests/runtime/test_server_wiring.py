@@ -9,12 +9,12 @@ from typing import Any
 
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.server import build_runtime_components
-from iris.runtime.wiring.app import build_app_from_config
+from iris.runtime.wiring.app import AppStateDependencies, build_app_from_config
 from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
 from tests.helpers.private_access import get_private_attr_as, get_private_attr_path_as
 
@@ -102,20 +102,15 @@ def test_build_app_from_config_does_not_import_fake_memory_store() -> None:
     )
 
 
-def test_build_app_from_config_requires_memory_store() -> None:
-    """build_app_from_config must require a memory_store argument typed as MemoryStore."""
+def test_build_app_from_config_requires_typed_state_dependencies() -> None:
+    """build_app_from_config は型付き state 依存を必須引数として受け取る。"""
     signature = inspect.signature(build_app_from_config)
     parameters = signature.parameters
 
-    assert "memory_store" in parameters, (
-        "build_app_from_config must declare a memory_store parameter"
-    )
-    memory_store_param = parameters["memory_store"]
-    assert memory_store_param.default is inspect.Parameter.empty, (
-        "memory_store must be a required argument (no default value)"
-    )
-    annotation = memory_store_param.annotation
+    assert "state" in parameters
+    state_param = parameters["state"]
+    assert state_param.default is inspect.Parameter.empty
+    annotation = state_param.annotation
     annotation_text = annotation if isinstance(annotation, str) else str(annotation)
-    assert annotation_text == "MemoryStore", (
-        f"memory_store must be typed as MemoryStore, got: {annotation_text}"
-    )
+    assert annotation_text == "AppStateDependencies"
+    assert AppStateDependencies.__dataclass_fields__["memory_store"].type == "MemoryStore"

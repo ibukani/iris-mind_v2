@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -48,10 +47,11 @@ async def test_policy_step_returns_typed_result_without_mutating_frame() -> None
     frame = WorkspaceFrame(observation=_observation("I feel unsafe"))
     builder = FrameBuilder()
     frame = builder.apply(frame, await SimplePerceptionStep().run(frame))
-    enriched = replace(
-        frame,
-        affect=AffectSnapshot(mood_label="negative", arousal=0.9, valence=-0.8),
-        relationship=RelationshipSnapshot(actor_label="Mina", familiarity=0.0),
+    enriched = frame.model_copy(
+        update={
+            "affect": AffectSnapshot(mood_label="negative", arousal=0.9, valence=-0.8),
+            "relationship": RelationshipSnapshot(actor_label="Mina", familiarity=0.0),
+        }
     )
 
     result = await PolicyInhibitionStep().run(enriched)

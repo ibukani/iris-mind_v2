@@ -54,11 +54,11 @@ def validate_level(value: str) -> LogLevel:
         ConfigError: ログレベルが不正な場合。
     """
     upper_value = value.upper()
-    for level in LogLevel:
-        if upper_value == level.value:
-            return level
-    msg = f"Invalid log level: {value}"
-    raise ConfigError(msg)
+    try:
+        return LogLevel(upper_value)
+    except ValueError as exc:
+        msg = f"Invalid log level: {value}"
+        raise ConfigError(msg) from exc
 
 
 def validate_format(value: str) -> LogFormat:
@@ -70,11 +70,11 @@ def validate_format(value: str) -> LogFormat:
     Raises:
         ConfigError: ログフォーマットが不正な場合。
     """
-    for fmt in LogFormat:
-        if value == fmt.value:
-            return fmt
-    msg = f"Invalid log format: {value}"
-    raise ConfigError(msg)
+    try:
+        return LogFormat(value)
+    except ValueError as exc:
+        msg = f"Invalid log format: {value}"
+        raise ConfigError(msg) from exc
 
 
 def apply_logging_toml(base: RuntimeLoggingConfig, table: TomlTable) -> RuntimeLoggingConfig:
@@ -88,7 +88,7 @@ def apply_logging_toml(base: RuntimeLoggingConfig, table: TomlTable) -> RuntimeL
         if "level" in table
         else base.level
     )
-    format_val = (
+    format_value = (
         validate_format(parse_string(table["format"], "logging.format"))
         if "format" in table
         else base.format
@@ -98,8 +98,6 @@ def apply_logging_toml(base: RuntimeLoggingConfig, table: TomlTable) -> RuntimeL
         if "file_path" in table
         else base.file_path
     )
-    if not file_path:
-        file_path = None
     rotation = (
         parse_string(table["rotation"], "logging.rotation")
         if "rotation" in table
@@ -110,12 +108,11 @@ def apply_logging_toml(base: RuntimeLoggingConfig, table: TomlTable) -> RuntimeL
         if "retention" in table
         else base.retention
     )
-
     return replace(
         base,
         level=level,
-        format=format_val,
-        file_path=file_path,
+        format=format_value,
+        file_path=file_path or None,
         rotation=rotation,
         retention=retention,
     )
@@ -128,14 +125,13 @@ def apply_logging_env(base: RuntimeLoggingConfig, env: Mapping[str, str]) -> Run
         RuntimeLoggingConfig: 環境変数を反映した新しいインスタンス。
     """
     level = validate_level(env["IRIS_LOG_LEVEL"]) if "IRIS_LOG_LEVEL" in env else base.level
-    format_val = (
+    format_value = (
         validate_format(env["IRIS_LOG_FORMAT"]) if "IRIS_LOG_FORMAT" in env else base.format
     )
     file_path = env.get("IRIS_LOG_FILE", base.file_path)
-
     return replace(
         base,
         level=level,
-        format=format_val,
-        file_path=file_path,
+        format=format_value,
+        file_path=file_path or None,
     )

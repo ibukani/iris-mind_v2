@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.app_gateway.ports import IdentityResolver
@@ -11,7 +10,7 @@ from iris.contracts.accounts import AccountProfile
 from iris.contracts.identity import Identity
 
 if TYPE_CHECKING:
-    from iris.adapters.app_gateway.ports import AccountStore
+    from iris.contracts.accounts import AccountStore
     from iris.contracts.external_refs import ExternalAccountRef
     from iris.core.ids import DeviceId
 
@@ -55,7 +54,7 @@ class AccountBackedIdentityResolver(IdentityResolver):
             )
             profile = await self._account_store.put(profile)
         elif profile.display_name != account_ref.display_name:
-            profile = dataclasses.replace(profile, display_name=account_ref.display_name)
+            profile = profile.model_copy(update={"display_name": account_ref.display_name})
             profile = await self._account_store.put(profile)
 
         # Determine actor_id

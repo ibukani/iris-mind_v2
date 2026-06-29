@@ -18,6 +18,7 @@ from iris.adapters.llm.diagnostics import (
     LLMProviderTimeoutError,
 )
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL, DEFAULT_OLLAMA_MODEL
 
 type _JsonPrimitive = str | int | float | bool | None
 type _JsonValue = _JsonPrimitive | _JsonObject | list[_JsonValue]
@@ -28,7 +29,7 @@ type _JsonObject = dict[str, _JsonValue]
 class OllamaConfig:
     """Configuration for the local Ollama LLM adapter."""
 
-    model: str = "qwen3:8b"
+    model: str = DEFAULT_OLLAMA_MODEL
     base_url: str = "http://localhost:11434"
     timeout_seconds: float = 120.0
     temperature: float = 0.0
@@ -93,7 +94,7 @@ class OllamaLLMClient(LLMClient):
         return _to_llm_response(body, fallback_model=model)
 
     def _request_model(self, request: LLMRequest) -> str:
-        if request.model == "fake-llm":
+        if request.model == DEFAULT_FAKE_LLM_MODEL:
             return self._config.model
         return request.model or self._config.model
 
@@ -214,20 +215,14 @@ def _to_llm_response(body: _JsonObject, *, fallback_model: str) -> LLMResponse:
         raise LLMProviderInvalidResponseError(error_message)
 
     content = message.get("content")
-    if isinstance(content, str) and content.strip():
-        text = content
-    else:
-        thinking = message.get("thinking")
-        if isinstance(thinking, str) and thinking.strip():
-            text = thinking
-        else:
-            error_message = "Ollama response is missing message content"
-            raise LLMProviderInvalidResponseError(error_message)
+    if not isinstance(content, str) or not content.strip():
+        error_message = "Ollama response is missing message content"
+        raise LLMProviderInvalidResponseError(error_message)
 
     provider_model = body.get("model")
     model = provider_model if isinstance(provider_model, str) else fallback_model
     finish_reason = _finish_reason(body)
-    return LLMResponse(text=text, model=model, finish_reason=finish_reason)
+    return LLMResponse(text=content, model=model, finish_reason=finish_reason)
 
 
 def _finish_reason(body: _JsonObject) -> str:

@@ -49,6 +49,12 @@ def test_table_or_empty_raises_when_value_is_not_table() -> None:
         table_or_empty({"section": "not-a-table"}, "section")
 
 
+def test_table_or_empty_raises_with_explicit_path() -> None:
+    """table_or_empty は指定時に完全な設定 path で型エラーを返す。"""
+    with pytest.raises(ConfigError, match=r"root\.section must be a table"):
+        table_or_empty({"section": "invalid"}, "section", path="root.section")
+
+
 def test_parse_string_returns_string() -> None:
     """parse_string returns the string value."""
     assert parse_string("hello", "path") == "hello"

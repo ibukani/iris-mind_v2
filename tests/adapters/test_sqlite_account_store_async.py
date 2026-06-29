@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.accounts.sqlite import SQLiteAccountStore
+from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
 from iris.contracts.accounts import AccountProfile
 from iris.core.ids import AccountId, ActorId, ExternalRef
-from tests.helpers.private_access import get_private_attr_matching, is_callable
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -56,6 +54,7 @@ async def test_sqlite_account_store_does_not_block_event_loop(
     )
 
     assert ticks > 0
+    await store.close()
 
 
 @pytest.mark.anyio
@@ -80,65 +79,23 @@ async def test_concurrent_account_operations_complete_correctly(
     fetched = await asyncio.gather(*(store.get_by_account_id(p.account_id) for p in profiles))
     for original, result in zip(profiles, fetched, strict=True):
         assert result == original
+    await store.close()
 
 
 @pytest.mark.anyio
-async def test_slow_backend_does_not_block_event_loop(
-    tmp_path: Path,
-    profile: AccountProfile,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """人工的な遅延バックエンドがイベントループをブロックしないことを確認する。"""
-    store = SQLiteAccountStore(tmp_path / "slow.sqlite3")
-
-    original_sync: Any = get_private_attr_matching(store, "_put_sync", is_callable)
-
-    def slow_put(account: AccountProfile) -> AccountProfile:
-        time.sleep(0.1)
-        result: object = original_sync(account)
-        assert isinstance(result, AccountProfile)
-        return result
-
-    monkeypatch.setattr(store, "_put_sync", slow_put)
-
-    ticks = 0
-
-    async def ticker() -> None:
-        nonlocal ticks
-        for _ in range(20):
-            await asyncio.sleep(0.01)
-            ticks += 1
-
-    await asyncio.gather(
-        ticker(),
-        store.put(profile),
-        store.put(
-            AccountProfile(
-                account_id=AccountId("acct-slow-2"),
-                provider="github",
-                provider_subject=ExternalRef("slow-456"),
-                display_name="Slow User",
-            )
-        ),
-    )
-
-    assert ticks > 0, "ティッカーがイベントループ上で進行しているべき"
-
-
-@pytest.mark.anyio
-async def test_link_and_unlink_account_async(
+async def test_update_linked_actor_id_async(
     tmp_path: Path,
     profile: AccountProfile,
 ) -> None:
-    """link_account_to_actor と unlink_account が非同期で正しく動作することを確認する。"""
+    """Updating linked_actor_id via put should work correctly asynchronously."""
     store = SQLiteAccountStore(tmp_path / "link.sqlite3")
 
     await store.put(profile)
-    linked = await store.link_account_to_actor(
-        account_id=profile.account_id,
-        actor_id=ActorId("actor-link-1"),
-    )
+    updated = profile.model_copy(update={"linked_actor_id": ActorId("actor-link-1")})
+    linked = await store.put(updated)
     assert linked.linked_actor_id == ActorId("actor-link-1")
 
-    unlinked = await store.unlink_account(profile.account_id)
+    unlinked_profile = linked.model_copy(update={"linked_actor_id": None})
+    unlinked = await store.put(unlinked_profile)
     assert unlinked.linked_actor_id is None
+    await store.close()

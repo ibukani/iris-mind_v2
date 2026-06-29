@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.affect.memory import InMemoryAffectStore
 from iris.cognitive.affect.appraisal import classify_appraisal
 from iris.cognitive.affect.persistence import AffectBaselineLoadStep, AffectPersistenceStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
@@ -20,6 +19,7 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from tests.helpers.approx import approx
 
 if TYPE_CHECKING:
@@ -98,7 +98,7 @@ async def test_affect_baseline_load_skips_when_store_empty() -> None:
 async def test_affect_baseline_load_populates_frame_affect() -> None:
     """保存済み global baseline を frame.affect に反映する。"""
     store = InMemoryAffectStore()
-    store.upsert_global(
+    await store.upsert_global(
         AffectBaselineRecord(
             scope=AffectScope.GLOBAL,
             mood_label="positive",
@@ -130,7 +130,7 @@ async def test_appraisal_affect_is_persisted_to_global_baseline() -> None:
         _frame(observation_id="obs-affect-persist"),
     )
 
-    stored = store.get_global()
+    stored = await store.get_global()
     assert result.status == StepStatus.OK
     assert result.persisted
     assert stored is not None
@@ -155,7 +155,7 @@ async def test_affect_baseline_uses_conservative_smoothing() -> None:
         ),
     )
 
-    stored = store.get_global()
+    stored = await store.get_global()
     assert result.status == StepStatus.OK
     assert stored is not None
     assert stored.valence == approx(0.5)
@@ -181,7 +181,8 @@ async def test_missing_interpreted_input_skips_affect_persistence() -> None:
 
     assert result.status == StepStatus.SKIPPED
     assert result.reason == "missing_interpreted_input"
-    assert store.get_global() is None
+    loaded = await store.get_global()
+    assert loaded is None
 
 
 @pytest.mark.anyio
@@ -195,7 +196,8 @@ async def test_no_affect_skips_affect_persistence() -> None:
 
     assert result.status == StepStatus.SKIPPED
     assert result.reason == "no_meaningful_affect"
-    assert store.get_global() is None
+    loaded = await store.get_global()
+    assert loaded is None
 
 
 @pytest.mark.anyio
@@ -222,4 +224,5 @@ async def test_neutral_appraisal_summary_does_not_persist_affect() -> None:
 
     assert result.status == StepStatus.SKIPPED
     assert result.reason == "no_meaningful_affect"
-    assert store.get_global() is None
+    loaded = await store.get_global()
+    assert loaded is None

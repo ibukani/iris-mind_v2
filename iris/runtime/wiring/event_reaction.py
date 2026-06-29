@@ -1,25 +1,30 @@
-"""EventReactionRunnerのwiring helper。"""
+"""Event reaction wiring helper."""
 
 from __future__ import annotations
 
-from iris.features.event_reaction.planner import EventReactionPlanner
-from iris.features.event_reaction.policy import default_event_reaction_policy
-from iris.features.event_reaction.templates import EventReactionTemplateProvider
-from iris.presentation.event_reaction import EventReactionPresenter
-from iris.runtime.ingress.activity_event_reaction_runner import EventReactionRunner
+from typing import TYPE_CHECKING
+
+from iris.runtime.ingress.event_reaction_decision_pipeline import EventReactionDecisionPipeline
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from iris.features.definition import ActivityReactionPlanner, FeatureDefinition
 
 
-def wire_event_reaction_runner() -> EventReactionRunner:
-    """デフォルトポリシーでEventReactionRunnerを組み立てる。
+def wire_event_reaction_decision_pipeline(
+    features: Sequence[FeatureDefinition],
+) -> EventReactionDecisionPipeline:
+    """FeatureDefinitions から EventReactionDecisionPipeline を組み立てる。
+
+    Args:
+        features: 登録されたフィーチャーのリスト。
 
     Returns:
-        EventReactionRunner: 配線済みのrunner。
+        EventReactionDecisionPipeline: 配線済みの decision pipeline。
     """
-    template_provider = EventReactionTemplateProvider()
-    return EventReactionRunner(
-        planner=EventReactionPlanner(
-            policy=default_event_reaction_policy(),
-            template_provider=template_provider,
-        ),
-        presenter=EventReactionPresenter(),
-    )
+    planners: list[ActivityReactionPlanner] = []
+    for feature in features:
+        planners.extend(feature.activity_reaction_planners)
+
+    return EventReactionDecisionPipeline(planners=tuple(planners))

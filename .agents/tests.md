@@ -14,16 +14,19 @@ make check
 
 Both commands call `scripts/verify.py` and run:
 
-```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy iris tests scripts main.py
-uv run pyright .
-uv run pytest tests/architecture -q
-uv run pytest tests/
-```
+1. `ruff check .`
+2. `ruff format --check .`
+3. `mypy iris tests scripts main.py`
+4. `pyright .`
+5. `scripts/check_suppression_debt_changes.py` (debt-registry)
+6. `make static-arch` (architecture tests)
+7. Default tests with coverage (non-E2E)
+8. `pytest tests/e2e -m "e2e and not llm_live"` (process-level E2E)
 
-Use `make quick` only while iterating. It skips the full test suite and coverage gate.
+Default coverage targets exclude `tests/e2e`. E2E runs separately as part of full `make check`.
+Live LLM tests are excluded from the default gate.
+
+Use `make quick` only while iterating. It skips the full test suite, coverage gate, and E2E.
 
 ## Targeted checks
 

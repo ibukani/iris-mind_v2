@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from datetime import datetime
+from pydantic import BaseModel, ConfigDict
 
-    from iris.contracts.actions import ActionResult, AppAction
-    from iris.core.ids import (
-        AccountId,
-        ActorId,
-        DeliveryId,
-        ExternalRef,
-        LeaseId,
-        SessionId,
-        SpaceId,
-    )
+from iris.contracts.actions import ActionResult, AppAction
+from iris.core.ids import (
+    AccountId,
+    ActorId,
+    DeliveryId,
+    ExternalRef,
+    LeaseId,
+    SessionId,
+    SpaceId,
+)
 
 
 class DeliveryStatus(StrEnum):
@@ -46,9 +44,10 @@ class DeliveryOutboxError(RuntimeError):
     """Delivery outbox state transition failed."""
 
 
-@dataclass(frozen=True)
-class DeliveryRouteHint:
+class DeliveryRouteHint(BaseModel):
     """Ingress 境界で保存する外部 provider routing hint。"""
+
+    model_config = ConfigDict(frozen=True)
 
     provider: str
     provider_subject: ExternalRef | None
@@ -56,9 +55,10 @@ class DeliveryRouteHint:
     display_name: str | None = None
 
 
-@dataclass(frozen=True)
-class SchedulerTarget:
+class SchedulerTarget(BaseModel):
     """Scheduler が IdleTickObservation を作る候補 target。"""
+
+    model_config = ConfigDict(frozen=True)
 
     actor_id: ActorId | None
     account_id: AccountId | None
@@ -71,9 +71,10 @@ class SchedulerTarget:
     stale_after: datetime | None = None
 
 
-@dataclass(frozen=True)
-class DeliveryTarget:
+class DeliveryTarget(BaseModel):
     """外部 client が配送先を復元するための provider-neutral target。"""
+
+    model_config = ConfigDict(frozen=True)
 
     provider: str
     provider_subject: ExternalRef | None
@@ -84,9 +85,10 @@ class DeliveryTarget:
     space_id: SpaceId | None = None
 
 
-@dataclass(frozen=True)
-class DeliveryEnvelope:
+class DeliveryEnvelope(BaseModel):
     """DeliveryOutbox に保存・lease される配送 item。"""
+
+    model_config = ConfigDict(frozen=True)
 
     delivery_id: DeliveryId
     action: AppAction
@@ -104,9 +106,10 @@ class DeliveryEnvelope:
     last_error_reason: str | None = None
 
 
-@dataclass(frozen=True)
-class DeliveryLease:
+class DeliveryLease(BaseModel):
     """外部 client へ渡す配送 lease。"""
+
+    model_config = ConfigDict(frozen=True)
 
     delivery_id: DeliveryId
     lease_id: LeaseId
@@ -114,9 +117,10 @@ class DeliveryLease:
     lease_expires_at: datetime
 
 
-@dataclass(frozen=True)
-class DeliveryReport:
+class DeliveryReport(BaseModel):
     """外部 client が ActionResult を報告するための契約。"""
+
+    model_config = ConfigDict(frozen=True)
 
     delivery_id: DeliveryId
     lease_id: LeaseId | None

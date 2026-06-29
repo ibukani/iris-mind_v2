@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import sqlite3
 from typing import TYPE_CHECKING
 
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import MISSING, fields
 from datetime import UTC, datetime
 
 from iris.contracts.identity import ActorKind, Identity
@@ -89,10 +88,7 @@ def test_idle_tick_observation_uses_observation_context() -> None:
 
 def test_observation_requires_context_argument() -> None:
     """Observation subclasses require ObservationContext."""
-    field_by_name = {field.name: field for field in fields(ActorMessageObservation)}
-
-    assert field_by_name["context"].default is MISSING
-    assert field_by_name["context"].default_factory is MISSING
+    assert ActorMessageObservation.model_fields["context"].is_required()
 
 
 def test_observation_has_no_direct_actor_or_space_fields() -> None:

@@ -11,6 +11,7 @@ from iris.contracts.observations import IdleTickObservation, ObservationContext,
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.features import wire_proactive_talk_cognitive_cycle
+from tests.helpers.output_pipeline import make_output_pipeline
 
 
 def _idle_tick(idle_seconds: float) -> IdleTickObservation:
@@ -40,7 +41,9 @@ async def test_low_idle_tick_flow_selects_no_action() -> None:
 @pytest.mark.anyio
 async def test_high_idle_tick_flow_represents_proactive_talk_without_sending() -> None:
     """Verify a high idle tick duration produces proactive_talk without sending."""
-    app = IrisApp(cycle=wire_proactive_talk_cognitive_cycle())
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(), cycle=wire_proactive_talk_cognitive_cycle()
+    )
 
     output = await app.process_observation(_idle_tick(600.0))
 

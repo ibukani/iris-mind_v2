@@ -23,6 +23,7 @@ Implementation anchors
 | [0006](0006-proactive-scheduler-delivery-safety.md) | Accepted | Scheduler は typed observation を発行し、配送は safety と outbox を通す。 |
 | [0007](0007-runtime-boundary-guard.md) | Accepted | `IrisRuntimeService` を薄い coordinator に保ち、境界を architecture tests で守る。 |
 | [0008](0008-runtime-observability-and-diagnostics.md) | Accepted | Runtime observability は typed boundary API と safe metadata に限定する。 |
+| [0009](0009-public-remote-auth-boundary.md) | Accepted | Runtime auth は RemoteAuthBoundary を介して provider payload から context を検証する。 |
 
 ## 現在の横断方針
 

@@ -124,6 +124,29 @@ def test_invalid_safety_mode_is_rejected(tmp_path: Path) -> None:
         )
 
 
+def test_safety_env_is_applied() -> None:
+    """Safety env overrides are applied to the runtime config."""
+    config = load_runtime_config(
+        None,
+        env={
+            "IRIS_SAFETY_MODE": "basic",
+            "IRIS_SAFETY_MAX_OUTPUT_CHARS": "1200",
+        },
+    )
+
+    assert config.safety.mode == "basic"
+    assert config.safety.max_output_chars == 1200
+
+
+def test_invalid_safety_env_max_output_chars_is_rejected() -> None:
+    """Safety env max_output_chars must be an integer."""
+    with pytest.raises(ConfigError, match="IRIS_SAFETY_MAX_OUTPUT_CHARS"):
+        load_runtime_config(
+            None,
+            env={"IRIS_SAFETY_MAX_OUTPUT_CHARS": "invalid"},
+        )
+
+
 @pytest.mark.parametrize(
     ("content", "path"),
     [

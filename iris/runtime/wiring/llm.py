@@ -11,7 +11,8 @@ from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
-from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator, ResponsePrompt
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
+from iris.features.chat.definition import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
 from iris.runtime.config.llm import LLMProvider
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
@@ -20,13 +21,16 @@ if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
 
 
+_KNOWN_LLM_PROVIDERS: frozenset[LLMProvider] = frozenset(LLMProvider)
+
+
 class LLMResponseGenerator(ResponseGenerator):
     """LLM クライアントをバックエンドとする ResponseGenerator。"""
 
     def __init__(
         self,
         client: LLMClient,
-        model: str = "fake-llm",
+        model: str = DEFAULT_FAKE_LLM_MODEL,
         *,
         temperature: float = 0.0,
         max_tokens: int | None = None,
@@ -57,7 +61,7 @@ class LLMResponseGenerator(ResponseGenerator):
         request = LLMRequest(
             model=self._model,
             messages=(
-                LLMMessage(role=LLMRole.SYSTEM, content=prompt.system_instruction),
+                LLMMessage(role=LLMRole.SYSTEM, content=_build_system_content(prompt)),
                 LLMMessage(role=LLMRole.USER, content=_build_user_content(prompt)),
             ),
             temperature=self._temperature,
@@ -82,7 +86,7 @@ def wire_fake_llm_client(responses: tuple[str, ...] | None = None) -> FakeLLMCli
 def wire_response_generator(
     client: LLMClient | None = None,
     *,
-    model: str = "fake-llm",
+    model: str = DEFAULT_FAKE_LLM_MODEL,
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> LLMResponseGenerator:
@@ -135,8 +139,8 @@ class LLMClientFactory:
     """プロバイダ固有の LLM クライアントを組み立てる明示的なランタイムファクトリ。"""
 
     def __init__(self) -> None:
-        """明示的な LLM クライアントファクトリを作成する。"""
-        self._known_providers = frozenset(LLMProvider)
+        """既知の LLM provider 集合を共有参照する。"""
+        self._known_providers = _KNOWN_LLM_PROVIDERS
 
     def create_client(
         self,
@@ -151,22 +155,14 @@ class LLMClientFactory:
 
         Returns:
             プロバイダ中立な LLM クライアント。
-
-        Raises:
-            ConfigError: 設定されたプロバイダが未知の場合。
         """
-        if model_config.provider not in self._known_providers:
-            message = f"Unknown LLM provider: {model_config.provider}"
-            raise ConfigError(message)
-        if model_config.provider == LLMProvider.FAKE:
-            return _wrap_with_observer(FakeLLMClient(model=model_config.model))
-        if model_config.provider == LLMProvider.OLLAMA:
-            return _wrap_with_observer(
-                OllamaLLMClient(ollama_adapter_config(model_config, runtime_config)),
-            )
-        return _wrap_with_observer(
-            OpenAILLMClient(openai_adapter_config(model_config, runtime_config)),
+        provider = _require_known_provider(
+            model_config.provider,
+            "Unknown LLM provider",
+            self._known_providers,
         )
+        client = _build_llm_client(provider, model_config, runtime_config)
+        return _wrap_with_observer(client)
 
     def resolve_model(
         self,
@@ -181,17 +177,16 @@ class LLMClientFactory:
 
         Returns:
             応答生成に渡すモデル名。
-
-        Raises:
-            ConfigError: 設定されたプロバイダが未知の場合。
         """
-        if model_config.provider not in self._known_providers:
-            message = f"Unknown LLM provider: {model_config.provider}"
-            raise ConfigError(message)
-        if model_config.provider == LLMProvider.OLLAMA:
-            return ollama_adapter_config(model_config, runtime_config).model
-        if model_config.provider == LLMProvider.OPENAI:
-            return openai_adapter_config(model_config, runtime_config).model
+        provider = _require_known_provider(
+            model_config.provider,
+            "Unknown LLM provider",
+            self._known_providers,
+        )
+        if provider == LLMProvider.OLLAMA:
+            return _resolve_ollama_model(model_config.model)
+        if provider == LLMProvider.OPENAI:
+            return _resolve_openai_model(model_config.model, runtime_config)
         return model_config.model
 
 
@@ -214,18 +209,86 @@ def build_provider_diagnostics(
     Returns:
         組み立てた診断インスタンス。 fake プロバイダなら ``None``。
 
-    Raises:
-        ConfigError: 未知のプロバイダ名、もしくは adapter 構築失敗時。
     """
-    if model_config.provider not in frozenset(LLMProvider):
-        message = f"Unknown LLM provider for diagnostics: {model_config.provider}"
+    provider = _require_known_provider(
+        model_config.provider,
+        "Unknown LLM provider for diagnostics",
+    )
+    return _build_provider_diagnostics(provider, model_config, runtime_config)
+
+
+def _require_known_provider(
+    provider: LLMProvider,
+    message_prefix: str,
+    known_providers: frozenset[LLMProvider] = _KNOWN_LLM_PROVIDERS,
+) -> LLMProvider:
+    """既知のプロバイダか検証する。
+
+    Args:
+        provider: 検証対象のプロバイダ。
+        message_prefix: エラーメッセージの先頭。
+        known_providers: 許可する provider の集合。
+
+    Returns:
+        検証済みプロバイダ。
+
+    Raises:
+        ConfigError: provider が未対応の場合。
+    """
+    if provider not in known_providers:
+        message = f"{message_prefix}: {provider}"
         raise ConfigError(message)
-    if model_config.provider == LLMProvider.FAKE:
-        return None
+    return provider
+
+
+def _build_llm_client(
+    provider: LLMProvider,
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> LLMClient:
+    """Provider ごとの LLM client を組み立てる。
+
+    Returns:
+        構成済みの LLM client。
+    """
+    match provider:
+        case LLMProvider.FAKE:
+            return FakeLLMClient(model=model_config.model)
+        case LLMProvider.OLLAMA:
+            return wire_ollama_llm_client(
+                ollama_adapter_config(model_config, runtime_config),
+            )
+        case LLMProvider.OPENAI:
+            return wire_openai_llm_client(
+                openai_adapter_config(model_config, runtime_config),
+            )
+
+
+def _build_provider_diagnostics(
+    provider: LLMProvider,
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> LLMProviderDiagnostics | None:
+    """Provider ごとの診断を組み立てる。
+
+    Returns:
+        構成済みの provider diagnostics。 fake provider なら None。
+
+    Raises:
+        ConfigError: openai diagnostics 構築失敗時。
+    """
     try:
-        if model_config.provider == LLMProvider.OLLAMA:
-            return OllamaDiagnostics(ollama_adapter_config(model_config, runtime_config))
-        return OpenAIDiagnostics(openai_adapter_config(model_config, runtime_config))
+        match provider:
+            case LLMProvider.FAKE:
+                return None
+            case LLMProvider.OLLAMA:
+                return OllamaDiagnostics(
+                    ollama_adapter_config(model_config, runtime_config),
+                )
+            case LLMProvider.OPENAI:
+                return OpenAIDiagnostics(
+                    openai_adapter_config(model_config, runtime_config),
+                )
     except OpenAIAdapterError as exc:
         message = f"Failed to build openai provider diagnostics: {exc}"
         raise ConfigError(message) from exc
@@ -244,9 +307,7 @@ def ollama_adapter_config(
     Returns:
         ``OllamaLLMClient`` / ``OllamaDiagnostics`` が受け取る ``OllamaConfig``。
     """
-    model = model_config.model
-    if model == "fake-llm":
-        model = OllamaConfig().model
+    model = _resolve_ollama_model(model_config.model)
     return OllamaConfig(
         model=model,
         base_url=runtime_config.ollama.base_url,
@@ -254,6 +315,7 @@ def ollama_adapter_config(
         temperature=model_config.temperature,
         max_output_tokens=model_config.max_output_tokens,
         keep_alive=runtime_config.ollama.keep_alive,
+        think=runtime_config.ollama.think,
     )
 
 
@@ -271,9 +333,7 @@ def openai_adapter_config(
         ``OpenAILLMClient`` / ``OpenAIDiagnostics`` が受け取る ``OpenAIConfig``。
         API key は環境変数 ``OPENAI_API_KEY`` から解決される。
     """
-    model = model_config.model
-    if model == "fake-llm":
-        model = runtime_config.openai.model
+    model = _resolve_openai_model(model_config.model, runtime_config)
     max_output_tokens = model_config.max_output_tokens
     if max_output_tokens is None:
         max_output_tokens = runtime_config.openai.max_output_tokens
@@ -303,20 +363,74 @@ def _wrap_with_observer(client: LLMClient) -> LLMClient:
     return ObservableLLMClient(client, RuntimeLLMRequestObserver())
 
 
-def _build_user_content(prompt: ResponsePrompt) -> str:
+def _is_fake_llm_model(model: str) -> bool:
+    """Fake LLM sentinel model か判定する。
+
+    Returns:
+        fake センチネルなら True。
+    """
+    return model == DEFAULT_FAKE_LLM_MODEL
+
+
+def _resolve_ollama_model(model: str) -> str:
+    """Ollama 用の実際のモデル名を解決する。
+
+    Returns:
+        実際に Ollama へ渡すモデル名。
+    """
+    if _is_fake_llm_model(model):
+        return OllamaConfig().model
+    return model
+
+
+def _resolve_openai_model(model: str, runtime_config: IrisRuntimeConfig) -> str:
+    """OpenAI 用の実際のモデル名を解決する。
+
+    Returns:
+        実際に OpenAI へ渡すモデル名。
+    """
+    if _is_fake_llm_model(model):
+        return runtime_config.openai.model
+    return model
+
+
+_INTERNAL_CONTEXT_GUARDRAIL = (
+    "Use the internal context only to shape tone and response selection. "
+    "Never mention affect scores, relationship scores, trust, familiarity, "
+    "policy constraints, memory retrieval metadata, or the response-generation process. "
+    "Respond directly as Iris."
+)
+
+
+def _build_system_content(prompt: ResponsePrompt) -> str:
+    sections = [prompt.system_instruction, _INTERNAL_CONTEXT_GUARDRAIL]
+    internal_context = _build_internal_context(prompt)
+    if internal_context is not None:
+        sections.append(f"Internal context:\n{internal_context}")
+    return "\n\n".join(section for section in sections if section.strip())
+
+
+def _build_internal_context(prompt: ResponsePrompt) -> str | None:
     sections: list[str] = []
     if prompt.memory_snippets:
         snippets = "\n".join(f"- {snippet}" for snippet in prompt.memory_snippets)
-        sections.append(f"Relevant memories:\n{snippets}")
+        sections.append(_build_context_section("Relevant memories", snippets))
     if prompt.affect_context is not None:
-        sections.append(f"Affect context:\n{prompt.affect_context}")
+        sections.append(_build_context_section("Affect context", prompt.affect_context))
     if prompt.relationship_context is not None:
-        sections.append(f"Relationship context:\n{prompt.relationship_context}")
+        sections.append(_build_context_section("Relationship context", prompt.relationship_context))
     if prompt.constraints:
-        sections.append(f"Policy constraints: {'; '.join(prompt.constraints)}")
+        sections.append(_build_context_section("Policy constraints", "; ".join(prompt.constraints)))
     if prompt.goals:
-        sections.append(f"Goals: {'; '.join(prompt.goals)}")
+        sections.append(_build_context_section("Goals", "; ".join(prompt.goals)))
     if not sections:
-        return prompt.actor_text
-    sections.append(f"Actor message:\n{prompt.actor_text}")
+        return None
     return "\n\n".join(sections)
+
+
+def _build_context_section(title: str, body: str) -> str:
+    return f"{title}:\n{body}"
+
+
+def _build_user_content(prompt: ResponsePrompt) -> str:
+    return prompt.actor_text

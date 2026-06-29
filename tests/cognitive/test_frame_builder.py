@@ -5,17 +5,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from iris.cognitive.cycle.frame_builder import FrameBuilder
-from iris.cognitive.workspace.frame import (
-    ActorContextSnapshot,
-    SituationContextSnapshot,
-    SpaceContextSnapshot,
-)
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActorMessageObservation,
     ObservationContext,
     ObservationKind,
+)
+from iris.contracts.workspace_context import (
+    ActorContextSnapshot,
+    SituationContextSnapshot,
+    SpaceContextSnapshot,
 )
 from iris.core.ids import (
     AccountId,

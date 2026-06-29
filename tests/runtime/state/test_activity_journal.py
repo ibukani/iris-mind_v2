@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -50,7 +49,7 @@ async def test_activity_journal_rejects_duplicate_provider_event() -> None:
     """同じsource/provider event IDの重複eventを受理しない。"""
     journal = InMemoryActivityJournal()
     first = _event()
-    duplicate = replace(first, activity_id=ActivityId("activity:obs-2"))
+    duplicate = first.model_copy(update={"activity_id": ActivityId("activity:obs-2")})
 
     await journal.append(first)
     result = await journal.append(duplicate)
@@ -66,11 +65,12 @@ async def test_activity_projection_updates_only_after_accepted_event() -> None:
     journal = InMemoryActivityJournal()
     projections = InMemoryActivityProjectionStore()
     first = _event()
-    duplicate = replace(
-        first,
-        activity_id=ActivityId("activity:obs-2"),
-        observation_id=ObservationId("obs-2"),
-        kind=ActivityKind.VOICE_LEFT,
+    duplicate = first.model_copy(
+        update={
+            "activity_id": ActivityId("activity:obs-2"),
+            "observation_id": ObservationId("obs-2"),
+            "kind": ActivityKind.VOICE_LEFT,
+        }
     )
 
     first_result = await journal.append(first)

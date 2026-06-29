@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import fields
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.adapters.affect.sqlite import SQLiteAffectStore
 from iris.adapters.llm.fake import FakeLLMClient
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
-from iris.adapters.relationship.sqlite import SQLiteRelationshipStore
+from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
+from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
 from iris.contracts.affect import AffectBaselineRecord
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryQuery
@@ -22,13 +22,18 @@ from iris.contracts.observations import (
 )
 from iris.contracts.relationship import RelationshipSnapshotRecord
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
-    wire_policy_affect_memory_aware_text_response_cognitive_cycle,
+    wire_core_cognitive_cycle,
 )
+from iris.runtime.wiring.features import collect_cognitive_steps
+from iris.runtime.wiring.llm import wire_response_generator
+from tests.helpers.output_pipeline import make_output_pipeline
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
     from pathlib import Path
 
 
@@ -56,21 +61,33 @@ def _message(observation_id: str, text: str) -> ActorMessageObservation:
     )
 
 
-def _app(
+@asynccontextmanager
+async def _app_with_stores(
     *,
     db_path: Path,
     llm: FakeLLMClient,
-) -> IrisApp:
-    return IrisApp(
-        cycle=wire_policy_affect_memory_aware_text_response_cognitive_cycle(
-            stores=CognitiveCycleStores(
-                memory_store=SQLiteMemoryStore(db_path),
-                relationship_store=SQLiteRelationshipStore(db_path),
-                affect_store=SQLiteAffectStore(db_path),
+) -> AsyncGenerator[IrisApp]:
+    memory_store = SQLiteMemoryStore(db_path)
+    relationship_store = SQLiteRelationshipStore(db_path)
+    affect_store = SQLiteAffectStore(db_path)
+    try:
+        yield IrisApp(
+            output_pipeline=make_output_pipeline(),
+            cycle=wire_core_cognitive_cycle(
+                stores=CognitiveCycleStores(
+                    memory_store=memory_store,
+                    relationship_store=relationship_store,
+                    affect_store=affect_store,
+                ),
+                extension_steps=collect_cognitive_steps(
+                    [define_chat_feature(wire_response_generator(llm))]
+                ),
             ),
-            llm_client=llm,
-        ),
-    )
+        )
+    finally:
+        memory_store.close()
+        await relationship_store.close()
+        await affect_store.close()
 
 
 @pytest.mark.anyio
@@ -81,22 +98,24 @@ async def test_memory_relationship_affect_survive_sqlite_turn_reload(
     db_path = tmp_path / "state.db"
     llm = FakeLLMClient(responses=("stored", "retrieved"))
 
-    output1 = await _app(db_path=db_path, llm=llm).process_observation(
-        _message("obs-durable-1", "覚えて: jasmine tea favorite. thanks"),
-    )
+    async with _app_with_stores(db_path=db_path, llm=llm) as app1:
+        output1 = await app1.process_observation(
+            _message("obs-durable-1", "覚えて: jasmine tea favorite. thanks"),
+        )
 
     reloaded_memory = SQLiteMemoryStore(db_path)
     reloaded_relationship = SQLiteRelationshipStore(db_path)
     reloaded_affect = SQLiteAffectStore(db_path)
     records = reloaded_memory.filter(MemoryQuery(text="", include_archived=True))
-    relationship = reloaded_relationship.get(_ACTOR_ID)
-    affect = reloaded_affect.get_global()
+    relationship = await reloaded_relationship.get(_ACTOR_ID)
+    affect = await reloaded_affect.get_global()
 
-    output2 = await _app(db_path=db_path, llm=llm).process_observation(
-        _message("obs-durable-2", "what tea do I like?"),
-    )
+    async with _app_with_stores(db_path=db_path, llm=llm) as app2:
+        output2 = await app2.process_observation(
+            _message("obs-durable-2", "what tea do I like?"),
+        )
 
-    second_prompt = llm.requests[1].messages[-1].content
+    second_system_prompt = llm.requests[1].messages[0].content
 
     assert output1.text == "stored"
     assert output2.text == "retrieved"
@@ -110,7 +129,11 @@ async def test_memory_relationship_affect_survive_sqlite_turn_reload(
     assert affect.scope == "global"
     assert affect.actor_id is None
     assert affect.source_observation_id == ObservationId("obs-durable-1")
-    assert "jasmine tea" in second_prompt
+    assert "jasmine tea" in second_system_prompt
+
+    reloaded_memory.close()
+    await reloaded_relationship.close()
+    await reloaded_affect.close()
 
 
 @pytest.mark.anyio
@@ -120,19 +143,26 @@ async def test_reloaded_affect_baseline_is_visible_to_response_prompt(
     """SQLite に保存された affect baseline は runtime reload 後の prompt に入る。"""
     db_path = tmp_path / "state.db"
 
-    await _app(
+    async with _app_with_stores(
         db_path=db_path,
         llm=FakeLLMClient(responses=("stored",)),
-    ).process_observation(_message("obs-affect-reload-1", "thanks, I am happy"))
+    ) as app1:
+        await app1.process_observation(_message("obs-affect-reload-1", "thanks, I am happy"))
 
-    baseline = SQLiteAffectStore(db_path).get_global()
+    store = SQLiteAffectStore(db_path)
+    baseline = await store.get_global()
     assert baseline is not None
     assert baseline.affect_summary is not None
+    await store.close()
 
     reloaded_llm = FakeLLMClient(responses=("reloaded",))
-    await _app(db_path=db_path, llm=reloaded_llm).process_observation(
-        _message("obs-affect-reload-2", "what tea do I like?"),
-    )
+    async with _app_with_stores(
+        db_path=db_path,
+        llm=reloaded_llm,
+    ) as app2:
+        await app2.process_observation(
+            _message("obs-affect-reload-2", "what tea do I like?"),
+        )
 
     assert reloaded_llm.requests
     prompt_text = "\n".join(message.content for message in reloaded_llm.requests[-1].messages)
@@ -142,8 +172,8 @@ async def test_reloaded_affect_baseline_is_visible_to_response_prompt(
 
 def test_relationship_and_affect_records_are_not_space_owned() -> None:
     """Relationship / affect durable state は space_id を owner field にしない。"""
-    relationship_fields = {field.name for field in fields(RelationshipSnapshotRecord)}
-    affect_fields = {field.name for field in fields(AffectBaselineRecord)}
+    relationship_fields = set(RelationshipSnapshotRecord.model_fields)
+    affect_fields = set(AffectBaselineRecord.model_fields)
 
     assert "space_id" not in relationship_fields
     assert "space_id" not in affect_fields

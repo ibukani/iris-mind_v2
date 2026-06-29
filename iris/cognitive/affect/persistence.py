@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, override
 
 from iris.cognitive.affect.common import clamp_value
@@ -40,7 +39,7 @@ class AffectBaselineLoadStep(PipelineStep[AffectBaselineLoadResult]):
             保存済み baseline の値、または skip 理由を持つ結果。
         """
         del frame
-        current = await asyncio.to_thread(self._store.get_global)
+        current = await self._store.get_global()
         if current is None:
             return AffectBaselineLoadResult(
                 step_name=self.name,
@@ -88,13 +87,13 @@ class AffectPersistenceStep(PipelineStep[AffectPersistenceResult]):
                 reason="no_meaningful_affect",
             )
 
-        current = await asyncio.to_thread(self._store.get_global)
+        current = await self._store.get_global()
         updated = _update_baseline(
             current=current,
             affect=frame.affect,
             source_observation_id=frame.observation.observation_id,
         )
-        stored = await asyncio.to_thread(self._store.upsert_global, updated)
+        stored = await self._store.upsert_global(updated)
         return AffectPersistenceResult(
             step_name=self.name,
             status=StepStatus.OK,

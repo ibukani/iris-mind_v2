@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING, Protocol, override
+
+from iris.contracts.delivery import SchedulerTarget
 
 if TYPE_CHECKING:
     from datetime import datetime
-
-    from iris.contracts.delivery import SchedulerTarget
 
 
 class SchedulerTargetStore(Protocol):
@@ -51,10 +50,7 @@ class InMemorySchedulerTargetStore(SchedulerTargetStore):
         if existing is None:
             self._targets[key] = target
             return
-        self._targets[key] = replace(
-            target,
-            last_scheduler_attempt_at=existing.last_scheduler_attempt_at,
-        )
+        self._targets[key] = _with_scheduler_attempt(target, existing.last_scheduler_attempt_at)
 
     @override
     async def list_targets(
@@ -80,10 +76,7 @@ class InMemorySchedulerTargetStore(SchedulerTargetStore):
         """Update one target's scheduler attempt timestamp."""
         key = _target_key(target)
         if key in self._targets:
-            self._targets[key] = replace(
-                self._targets[key],
-                last_scheduler_attempt_at=attempted_at,
-            )
+            self._targets[key] = _with_scheduler_attempt(self._targets[key], attempted_at)
 
 
 def _target_key(target: SchedulerTarget) -> tuple[str, str, str, str]:
@@ -97,4 +90,26 @@ def _target_key(target: SchedulerTarget) -> tuple[str, str, str, str]:
         str(target.route.provider_subject or ""),
         str(target.route.provider_space_ref or ""),
         str(target.session_id),
+    )
+
+
+def _with_scheduler_attempt(
+    target: SchedulerTarget,
+    attempted_at: datetime | None,
+) -> SchedulerTarget:
+    """Scheduler attempt時刻を更新し、targetを再検証する。
+
+    Returns:
+        再構築したtarget。
+    """
+    return SchedulerTarget(
+        actor_id=target.actor_id,
+        account_id=target.account_id,
+        space_id=target.space_id,
+        session_id=target.session_id,
+        route=target.route,
+        display_name=target.display_name,
+        last_observed_at=target.last_observed_at,
+        last_scheduler_attempt_at=attempted_at,
+        stale_after=target.stale_after,
     )

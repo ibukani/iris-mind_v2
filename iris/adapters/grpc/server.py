@@ -17,7 +17,7 @@ from iris.adapters.grpc.mappers import (
     delivery_id_from_report_proto,
     delivery_report_from_proto,
     map_exception_to_grpc,
-    runtime_response_to_proto,
+    presented_output_to_proto,
 )
 from iris.adapters.llm.diagnostics import LLMProviderError
 from iris.core.datetime_utils import now_utc
@@ -128,7 +128,10 @@ class IrisRuntimeGrpcServicer(runtime_pb2_grpc.IrisRuntimeServiceServicer):
                 has_space_ref=request.observation.context.HasField("space_ref"),
                 latency_ms=round(latency_ms, 2),
             ).info("SubmitObservation: completed")
-            return runtime_response_to_proto(response)
+            return runtime_pb2.SubmitObservationResponse(
+                correlation_id=str(response.correlation_id or ""),
+                output=presented_output_to_proto(response.output),
+            )
         except RuntimePermissionDeniedError as exc:
             logger.warning("SubmitObservation: permission_denied - {}", exc)
             await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))

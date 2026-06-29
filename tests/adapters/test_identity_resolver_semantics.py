@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from iris.adapters.accounts.memory import InMemoryAccountStore
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.contracts.accounts import AccountProfile, AccountStoreError
 from iris.contracts.external_refs import ExternalAccountRef
 from iris.contracts.identity import ActorKind
 from iris.core.ids import AccountId, ActorId, ExternalRef
+from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
 
 
 @pytest.mark.anyio
@@ -64,12 +64,18 @@ async def test_linked_actor_id_takes_precedence_and_unlink_restores_provisional(
     account_id = initial.account_id
     assert account_id is not None
 
-    await store.link_account_to_actor(
-        account_id=account_id,
-        actor_id=ActorId("actor-linked"),
-    )
+    profile = await store.get_by_account_id(account_id)
+    assert profile is not None
+    linked_profile = profile.model_copy(update={"linked_actor_id": ActorId("actor-linked")})
+    await store.put(linked_profile)
+
     linked = await resolver.resolve_identity(_account_ref())
-    await store.unlink_account(account_id)
+
+    profile = await store.get_by_account_id(account_id)
+    assert profile is not None
+    unlinked_profile = profile.model_copy(update={"linked_actor_id": None})
+    await store.put(unlinked_profile)
+
     unlinked = await resolver.resolve_identity(_account_ref())
 
     assert linked.actor_id == ActorId("actor-linked")

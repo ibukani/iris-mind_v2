@@ -19,6 +19,7 @@ from iris.adapters.llm.diagnostics import (
     ProviderDiagnosticIssue,
     ProviderReadinessResult,
     ReadinessStatus,
+    build_provider_readiness_result,
 )
 from iris.adapters.llm.openai import (
     OpenAIAdapterError,
@@ -26,6 +27,7 @@ from iris.adapters.llm.openai import (
     openai_sdk,
 )
 from iris.adapters.llm.type_utils import is_object_sequence
+from iris.contracts.llm import DEFAULT_OPENAI_MODEL
 
 _OPENAI_DIAGNOSTICS_PROVIDER = "openai"
 
@@ -81,7 +83,7 @@ class OpenAIDiagnostics(LLMProviderDiagnostics):
             config: Adapter-local OpenAI configuration.
             client: Optional injected client for tests.
         """
-        self._config = config or OpenAIConfig(model="gpt-5-mini")
+        self._config = config or OpenAIConfig(model=DEFAULT_OPENAI_MODEL)
         self._client = client or _build_client(self._config)
 
     @override
@@ -245,37 +247,19 @@ def _build_result(
 ) -> ProviderReadinessResult:
     """Assemble a :class:`ProviderReadinessResult` from raw inputs.
 
-    Args:
-        model: Model name being probed.
-        issues: Tuple of issues found.
-        available_count: Optional count of available models for metadata.
-
     Returns:
-        A typed readiness result with status, capabilities and metadata.
+        A typed readiness result with aggregate status and optional metadata.
     """
-    severity = _aggregate_severity(issues)
     metadata: dict[str, str] | None = None
     if available_count is not None:
         metadata = {"available_models": str(available_count)}
-    return ProviderReadinessResult(
+    return build_provider_readiness_result(
         provider=_OPENAI_DIAGNOSTICS_PROVIDER,
         model=model,
-        status=severity,
         capabilities=_OPENAI_DIAGNOSTICS_CAPABILITIES,
         issues=issues,
         metadata=metadata,
     )
-
-
-def _aggregate_severity(issues: tuple[ProviderDiagnosticIssue, ...]) -> ReadinessStatus:
-    if not issues:
-        return ReadinessStatus.OK
-    severities = {issue.severity for issue in issues}
-    if ReadinessStatus.FAIL in severities:
-        return ReadinessStatus.FAIL
-    if ReadinessStatus.WARN in severities:
-        return ReadinessStatus.WARN
-    return ReadinessStatus.SKIPPED
 
 
 def _extract_model_ids(listed: object) -> frozenset[str] | None:

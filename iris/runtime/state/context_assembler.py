@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.cognitive.workspace.frame import SituationContextSnapshot
+from iris.contracts.workspace_context import SituationContextSnapshot
 
 if TYPE_CHECKING:
     from collections.abc import Callable

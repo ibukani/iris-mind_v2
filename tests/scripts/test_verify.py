@@ -82,6 +82,7 @@ class TestCheckDefinitions:
             "debt-registry",
             "architecture",
             "tests+coverage",
+            "e2e",
         }
         assert names == expected
 
@@ -249,4 +250,24 @@ class TestSelectedChecks:
             "debt-registry",
             "architecture",
             "tests+coverage",
+            "e2e",
         }
+
+    def test_full_includes_e2e(self) -> None:
+        """Full モードでは e2e チェックが含まれる。"""
+        checks = selected_checks(quick=False)
+        names = {check.name for check in checks}
+        assert "e2e" in names
+
+    def test_quick_excludes_e2e(self) -> None:
+        """--quick では e2e が除外される。"""
+        checks = selected_checks(quick=True)
+        names = {check.name for check in checks}
+        assert "e2e" not in names
+
+    def test_e2e_command_uses_tests_e2e_and_excludes_llm_live(self) -> None:
+        """e2e チェックのコマンドは tests/e2e を使い llm_live を除外する。"""
+        e2e_check = next(c for c in CHECKS if c.name == "e2e")
+        command_str = " ".join(e2e_check.command)
+        assert "tests/e2e" in command_str
+        assert "not llm_live" in command_str

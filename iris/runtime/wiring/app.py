@@ -2,37 +2,54 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from iris.adapters.memory.sqlite import SQLiteMemoryStore
+from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
+from iris.features.basic_action.definition import define_basic_action_feature
+from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
-    CognitiveResponseOptions,
-    wire_policy_affect_memory_aware_text_response_cognitive_cycle,
-    wire_text_response_cognitive_cycle,
+    wire_basic_cognitive_cycle,
+    wire_core_cognitive_cycle,
 )
-from iris.runtime.wiring.llm import LLMClientFactory
-from iris.runtime.wiring.memory import (
-    SQLiteFTS5MemoryRetriever,
-    wire_sqlite_hybrid_memory_retriever,
+from iris.runtime.wiring.features import (
+    collect_action_plan_presenters,
+    collect_cognitive_steps,
+    collect_feature_items,
 )
-from iris.runtime.wiring.presentation import wire_action_safety_gate, wire_output_safety_gate
+from iris.runtime.wiring.llm import LLMClientFactory, wire_response_generator
+from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
+from iris.runtime.wiring.presentation import wire_output_pipeline
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from iris.adapters.llm.ports import LLMClient
-    from iris.adapters.memory.vector_index import EmbeddingFunction
     from iris.cognitive.memory.retrieval import MemoryRetriever
     from iris.contracts.affect import AffectStore
-    from iris.contracts.memory import MemoryStore, VectorMemoryIndex
+    from iris.contracts.memory import MemoryStore
     from iris.contracts.relationship import RelationshipStore
+    from iris.features.definition import FeatureDefinition
     from iris.runtime.config import IrisRuntimeConfig
+    from iris.runtime.output_pipeline import RuntimeOutputPipeline
+
+
+@dataclass(frozen=True)
+class AppStateDependencies:
+    """標準 IrisApp の認知サイクルへ注入する state 依存。"""
+
+    memory_store: MemoryStore
+    relationship_store: RelationshipStore
+    affect_store: AffectStore
 
 
 def wire_default_app(
     llm_client: LLMClient,
     *,
-    model: str = "fake-llm",
+    model: str = DEFAULT_FAKE_LLM_MODEL,
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> IrisApp:
@@ -41,23 +58,31 @@ def wire_default_app(
     Returns:
         完全に組み立てられた IrisApp。
     """
-    cycle = wire_text_response_cognitive_cycle(
+    chat_feature = _wire_chat_feature(
         llm_client,
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
     )
-    return IrisApp(cycle=cycle)
+    features = collect_feature_items(
+        ((chat_feature,), (define_basic_action_feature(),)),
+    )
+    cycle = wire_basic_cognitive_cycle(
+        extension_steps=collect_cognitive_steps(features),
+    )
+    output_pipeline = wire_output_pipeline(
+        extension_presenters=collect_action_plan_presenters(features),
+    )
+    return IrisApp(cycle=cycle, output_pipeline=output_pipeline)
 
 
 def build_app_from_config(
     config: IrisRuntimeConfig,
     *,
     client_factory: LLMClientFactory | None = None,
-    memory_store: MemoryStore,
-    relationship_store: RelationshipStore,
-    affect_store: AffectStore,
-    embed_text: EmbeddingFunction | None = None,
+    state: AppStateDependencies,
+    output_pipeline: RuntimeOutputPipeline,
+    features: Sequence[FeatureDefinition] = (),
 ) -> IrisApp:
     """ランタイム設定から IrisApp を構築する。
 
@@ -73,33 +98,46 @@ def build_app_from_config(
     model = factory.resolve_model(model_config, config)
 
     memory_retriever: MemoryRetriever | None = None
-    vector_index: VectorMemoryIndex | None = None
-    if isinstance(memory_store, SQLiteMemoryStore):
-        if embed_text is not None:
-            memory_retriever, vector_index = wire_sqlite_hybrid_memory_retriever(
-                store=memory_store,
-                embed_text=embed_text,
-            )
-        else:
-            memory_retriever = SQLiteFTS5MemoryRetriever(memory_store)
+    if isinstance(state.memory_store, SQLiteMemoryStore):
+        memory_retriever = SQLiteFTS5MemoryRetriever(state.memory_store)
 
-    cycle = wire_policy_affect_memory_aware_text_response_cognitive_cycle(
-        stores=CognitiveCycleStores(
-            memory_store=memory_store,
-            relationship_store=relationship_store,
-            affect_store=affect_store,
-            memory_retriever=memory_retriever,
-            vector_index=vector_index,
-        ),
-        llm_client=client,
-        response_options=CognitiveResponseOptions(
-            model=model,
-            temperature=model_config.temperature,
-            max_tokens=model_config.max_output_tokens,
-        ),
+    chat_feature = _wire_chat_feature(
+        client,
+        model=model,
+        temperature=model_config.temperature,
+        max_tokens=model_config.max_output_tokens,
     )
-    return IrisApp(
-        cycle=cycle,
-        action_safety_gate=wire_action_safety_gate(),
-        output_safety_gate=wire_output_safety_gate(safety_config=config.safety),
+    all_features = collect_feature_items((features, (chat_feature,)))
+    cycle = wire_core_cognitive_cycle(
+        stores=CognitiveCycleStores(
+            memory_store=state.memory_store,
+            relationship_store=state.relationship_store,
+            affect_store=state.affect_store,
+            memory_retriever=memory_retriever,
+            vector_index=None,
+        ),
+        extension_steps=collect_cognitive_steps(all_features),
+    )
+    return IrisApp(cycle=cycle, output_pipeline=output_pipeline)
+
+
+def _wire_chat_feature(
+    llm_client: LLMClient,
+    *,
+    model: str,
+    temperature: float,
+    max_tokens: int | None,
+) -> FeatureDefinition:
+    """Chat feature を再利用可能な形で組み立てる。
+
+    Returns:
+        構成済みの chat feature。
+    """
+    return define_chat_feature(
+        wire_response_generator(
+            llm_client,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
     )

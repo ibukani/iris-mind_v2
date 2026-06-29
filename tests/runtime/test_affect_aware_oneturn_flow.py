@@ -6,10 +6,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.adapters.affect.memory import InMemoryAffectStore
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.memory.fake import FakeMemoryStore
-from iris.adapters.relationship.memory import InMemoryRelationshipStore
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryId, MemoryRecord
 from iris.contracts.observations import (
@@ -18,11 +16,16 @@ from iris.contracts.observations import (
     ObservationKind,
 )
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
+from iris.features.chat.definition import ResponseGenerationStep
 from iris.runtime.app import IrisApp
+from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
+from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
-    wire_affect_memory_aware_text_response_cognitive_cycle,
+    wire_affect_memory_aware_cognitive_cycle,
 )
+from iris.runtime.wiring.llm import wire_response_generator
+from tests.helpers.output_pipeline import make_output_pipeline
 
 
 def actor_message(text: str) -> ActorMessageObservation:
@@ -59,24 +62,25 @@ async def test_affect_aware_one_turn_flow_includes_affect_relationship_and_memor
     )
     llm = FakeLLMClient(responses=("affect-aware reply",))
     app = IrisApp(
-        cycle=wire_affect_memory_aware_text_response_cognitive_cycle(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_affect_memory_aware_cognitive_cycle(
             stores=CognitiveCycleStores(
                 memory_store=memory_store,
                 relationship_store=InMemoryRelationshipStore(),
                 affect_store=InMemoryAffectStore(),
             ),
-            llm_client=llm,
+            extension_steps=(ResponseGenerationStep(wire_response_generator(llm)),),
         ),
     )
 
     output = await app.process_observation(
         actor_message("jasmine tea ありがとう、急ぎで助かった"),
     )
-    prompt = llm.requests[0].messages[-1].content
+    system_prompt = llm.requests[0].messages[0].content
 
     assert output.text == "affect-aware reply"
-    assert "Mina likes jasmine tea." in prompt
-    assert "Affect context:" in prompt
-    assert "positive VAD" in prompt
-    assert "Relationship context:" in prompt
-    assert "Mina: neutral relationship" in prompt
+    assert "Mina likes jasmine tea." in system_prompt
+    assert "Affect context:" in system_prompt
+    assert "positive VAD" in system_prompt
+    assert "Relationship context:" in system_prompt
+    assert "Mina: neutral relationship" in system_prompt

@@ -45,6 +45,15 @@ def test_apply_logging_toml() -> None:
     assert config.retention == "3 days"
 
 
+def test_apply_logging_toml_clears_file_path() -> None:
+    """明示的な null は既存のログ出力先を解除する。"""
+    base = RuntimeLoggingConfig(file_path=".iris/runtime.log")
+
+    config = apply_logging_toml(base, {"file_path": None})
+
+    assert config.file_path is None
+
+
 def test_apply_logging_env() -> None:
     """Test applying env vars to logging config."""
     base = RuntimeLoggingConfig()

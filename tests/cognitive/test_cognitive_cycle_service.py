@@ -8,7 +8,12 @@ from typing import Any
 import pytest
 
 from iris.cognitive.cycle.frame_builder import FrameBuilder
-from iris.cognitive.cycle.models import PerceptionResult, PipelineStepResult, StepStatus
+from iris.cognitive.cycle.models import (
+    ActionSelectionResult,
+    PerceptionResult,
+    PipelineStepResult,
+    StepStatus,
+)
 from iris.cognitive.cycle.service import CognitiveCycle
 from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.actions import ActionPlan
@@ -154,3 +159,56 @@ async def test_run_executes_steps_in_order() -> None:
     result = await cycle.run(_observation("test"))
     assert result.frame.interpreted_input is not None
     assert result.frame.interpreted_input.text == "world"
+
+
+@pytest.mark.anyio
+async def test_run_accumulates_action_candidates_across_feature_steps() -> None:
+    """複数のaction selection step候補を保持し、priorityで選択する。"""
+    low = ActionPlan(
+        turn_intent="respond",
+        candidate_text="low",
+        should_respond=True,
+        priority=1,
+    )
+    high = ActionPlan(
+        turn_intent="proactive_talk",
+        candidate_text=None,
+        should_respond=True,
+        priority=70,
+    )
+    cycle = CognitiveCycle(
+        steps=(
+            _DummyStep(
+                ActionSelectionResult(
+                    step_name="first",
+                    status=StepStatus.OK,
+                    action_plans=(low,),
+                ),
+            ),
+            _DummyStep(
+                ActionSelectionResult(
+                    step_name="second",
+                    status=StepStatus.OK,
+                    action_plans=(high,),
+                ),
+            ),
+            _DummyStep(
+                ActionSelectionResult(
+                    step_name="skipped",
+                    status=StepStatus.SKIPPED,
+                ),
+            ),
+        ),
+        frame_builder=FrameBuilder(),
+        fallback_plan=ActionPlan(
+            turn_intent="no_action",
+            candidate_text=None,
+            should_respond=False,
+            priority=-1,
+        ),
+    )
+
+    result = await cycle.run(_observation("test"))
+
+    assert result.frame.candidate_action_plans == (low, high)
+    assert result.selected_plan is high

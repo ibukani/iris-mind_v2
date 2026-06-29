@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.parsing import (
     TomlTable,
     env_optional_float,
@@ -16,6 +15,7 @@ from iris.runtime.config.parsing import (
     parse_float,
     parse_int,
 )
+from iris.runtime.config.validation import require_greater_than_zero, require_zero_or_greater
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,10 @@ def apply_scheduler_toml(
     if "interval_seconds" in table:
         value = replace(
             value,
-            interval_seconds=parse_float(table["interval_seconds"], "scheduler.interval_seconds"),
+            interval_seconds=parse_float(
+                table["interval_seconds"],
+                "scheduler.interval_seconds",
+            ),
         )
     if "idle_threshold_seconds" in table:
         value = replace(
@@ -78,7 +81,10 @@ def apply_scheduler_toml(
     if "max_due_per_run" in table:
         value = replace(
             value,
-            max_due_per_run=parse_int(table["max_due_per_run"], "scheduler.max_due_per_run"),
+            max_due_per_run=parse_int(
+                table["max_due_per_run"],
+                "scheduler.max_due_per_run",
+            ),
         )
     return validate_scheduler_config(value)
 
@@ -96,13 +102,19 @@ def apply_scheduler_env(
     Returns:
         更新後のスケジューラー設定。
     """
-    value = config
-
-    stale_after = env_optional_float(env, "IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS", None)
-    if stale_after is not None:
-        value = replace(value, target_stale_after_seconds=stale_after)
-
-    return validate_scheduler_config(value)
+    target_stale_after_seconds = env_optional_float(
+        env,
+        "IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS",
+        None,
+    )
+    if target_stale_after_seconds is None:
+        return validate_scheduler_config(config)
+    return validate_scheduler_config(
+        replace(
+            config,
+            target_stale_after_seconds=target_stale_after_seconds,
+        ),
+    )
 
 
 def validate_scheduler_config(config: RuntimeSchedulerConfig) -> RuntimeSchedulerConfig:
@@ -113,23 +125,27 @@ def validate_scheduler_config(config: RuntimeSchedulerConfig) -> RuntimeSchedule
 
     Returns:
         RuntimeSchedulerConfig: 検証済みスケジューラー設定。
-
-    Raises:
-        ConfigError: 設定が制約に違反している場合。
     """
-    if config.interval_seconds <= 0:
-        msg = "scheduler.interval_seconds must be > 0"
-        raise ConfigError(msg)
-    if config.idle_threshold_seconds < 0:
-        msg = "scheduler.idle_threshold_seconds must be >= 0"
-        raise ConfigError(msg)
-    if config.min_interval_per_target_seconds < 0:
-        msg = "scheduler.min_interval_per_target_seconds must be >= 0"
-        raise ConfigError(msg)
-    if config.target_stale_after_seconds <= 0:
-        msg = "scheduler.target_stale_after_seconds must be > 0"
-        raise ConfigError(msg)
-    if config.max_due_per_run <= 0:
-        msg = "scheduler.max_due_per_run must be > 0"
-        raise ConfigError(msg)
-    return config
+    return replace(
+        config,
+        interval_seconds=require_greater_than_zero(
+            config.interval_seconds,
+            "scheduler.interval_seconds",
+        ),
+        idle_threshold_seconds=require_zero_or_greater(
+            config.idle_threshold_seconds,
+            "scheduler.idle_threshold_seconds",
+        ),
+        min_interval_per_target_seconds=require_zero_or_greater(
+            config.min_interval_per_target_seconds,
+            "scheduler.min_interval_per_target_seconds",
+        ),
+        target_stale_after_seconds=require_greater_than_zero(
+            config.target_stale_after_seconds,
+            "scheduler.target_stale_after_seconds",
+        ),
+        max_due_per_run=require_greater_than_zero(
+            config.max_due_per_run,
+            "scheduler.max_due_per_run",
+        ),
+    )

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True)
-class PolicyConstraint:
+class PolicyConstraint(BaseModel):
     """応答動作をブロックまたは変更するポリシー制約。"""
+
+    model_config = ConfigDict(frozen=True)
 
     name: str
     reason: str
@@ -15,9 +16,10 @@ class PolicyConstraint:
     blocks_response: bool = False
 
 
-@dataclass(frozen=True)
-class ActionPreference:
+class ActionPreference(BaseModel):
     """アクション優先度に影響するプリファレンス。"""
+
+    model_config = ConfigDict(frozen=True)
 
     name: str
     reason: str
