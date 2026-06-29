@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, override
 
-from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
-from iris.adapters.app_gateway.stable_ids import stable_account_id, stable_actor_id, stable_space_id
+from iris.adapters.app_gateway.ports import IdentityResolver
+from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
+from iris.adapters.app_gateway.stable_ids import stable_account_id, stable_actor_id
 from iris.contracts.accounts import AccountProfile, AccountStore
 from iris.contracts.identity import Identity
-from iris.contracts.spaces import InteractionSpace
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from iris.contracts.external_refs import ExternalAccountRef, ExternalSpaceRef
+    from iris.contracts.external_refs import ExternalAccountRef
     from iris.core.ids import ActorId, DeviceId
 
 
@@ -94,23 +94,5 @@ class FakeIdentityResolver(IdentityResolver):
         )
 
 
-class FakeSpaceResolver(SpaceResolver):
-    """テストとローカル配線向けの決定論的SpaceResolver。"""
-
-    @override
-    async def resolve_space(
-        self,
-        space_ref: ExternalSpaceRef,
-    ) -> InteractionSpace:
-        """同じprovider/provider_space_refから同じSpaceIdを持つInteractionSpaceを返す。
-
-        Returns:
-            InteractionSpace: 外部refから決定論的に解決されたInteractionSpace。
-        """
-        space_id = stable_space_id(space_ref.provider, space_ref.provider_space_ref)
-        return InteractionSpace(
-            space_id=space_id,
-            space_kind=space_ref.space_kind,
-            display_name=space_ref.display_name,
-            metadata=dict(space_ref.metadata),
-        )
+class FakeSpaceResolver(EphemeralSpaceResolver):
+    """テスト向けの決定論的 EphemeralSpaceResolver。"""
