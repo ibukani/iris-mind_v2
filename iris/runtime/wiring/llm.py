@@ -253,11 +253,15 @@ def _build_llm_client(
     """
     match provider:
         case LLMProvider.FAKE:
-            return _build_fake_llm_client(model_config)
+            return FakeLLMClient(model=model_config.model)
         case LLMProvider.OLLAMA:
-            return _build_ollama_llm_client(model_config, runtime_config)
+            return wire_ollama_llm_client(
+                ollama_adapter_config(model_config, runtime_config),
+            )
         case LLMProvider.OPENAI:
-            return _build_openai_llm_client(model_config, runtime_config)
+            return wire_openai_llm_client(
+                openai_adapter_config(model_config, runtime_config),
+            )
 
 
 def _build_provider_diagnostics(
@@ -276,50 +280,18 @@ def _build_provider_diagnostics(
     try:
         match provider:
             case LLMProvider.FAKE:
-                return _build_fake_provider_diagnostics()
+                return None
             case LLMProvider.OLLAMA:
-                return _build_ollama_provider_diagnostics(model_config, runtime_config)
+                return OllamaDiagnostics(
+                    ollama_adapter_config(model_config, runtime_config),
+                )
             case LLMProvider.OPENAI:
-                return _build_openai_provider_diagnostics(model_config, runtime_config)
+                return OpenAIDiagnostics(
+                    openai_adapter_config(model_config, runtime_config),
+                )
     except OpenAIAdapterError as exc:
         message = f"Failed to build openai provider diagnostics: {exc}"
         raise ConfigError(message) from exc
-
-
-def _build_fake_llm_client(model_config: RuntimeModelConfig) -> LLMClient:
-    return FakeLLMClient(model=model_config.model)
-
-
-def _build_ollama_llm_client(
-    model_config: RuntimeModelConfig,
-    runtime_config: IrisRuntimeConfig,
-) -> LLMClient:
-    return wire_ollama_llm_client(ollama_adapter_config(model_config, runtime_config))
-
-
-def _build_openai_llm_client(
-    model_config: RuntimeModelConfig,
-    runtime_config: IrisRuntimeConfig,
-) -> LLMClient:
-    return wire_openai_llm_client(openai_adapter_config(model_config, runtime_config))
-
-
-def _build_fake_provider_diagnostics() -> LLMProviderDiagnostics | None:
-    return None
-
-
-def _build_ollama_provider_diagnostics(
-    model_config: RuntimeModelConfig,
-    runtime_config: IrisRuntimeConfig,
-) -> LLMProviderDiagnostics:
-    return OllamaDiagnostics(ollama_adapter_config(model_config, runtime_config))
-
-
-def _build_openai_provider_diagnostics(
-    model_config: RuntimeModelConfig,
-    runtime_config: IrisRuntimeConfig,
-) -> LLMProviderDiagnostics:
-    return OpenAIDiagnostics(openai_adapter_config(model_config, runtime_config))
 
 
 def ollama_adapter_config(
