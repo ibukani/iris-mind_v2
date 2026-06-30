@@ -20,8 +20,12 @@ class MemoryCandidateSource(StrEnum):
     """メモリ候補が生成された経路。"""
 
     EXPLICIT_USER_REQUEST = "explicit_user_request"
+    EXPLICIT_PROFILE_STATEMENT = "explicit_profile_statement"
+    EXPLICIT_PREFERENCE_STATEMENT = "explicit_preference_statement"
+    EXPLICIT_USER_INSTRUCTION = "explicit_user_instruction"
     EXPLICIT_PREFERENCE = "explicit_preference"
     IMPLICIT_CONVERSATION = "implicit_conversation"
+    SYSTEM_EVENT = "system_event"
     ACTION_RESULT = "action_result"
     REFLECTION = "reflection"
     CONSOLIDATION = "consolidation"
@@ -33,10 +37,23 @@ class MemoryRetentionPolicy(StrEnum):
     """候補の保存期間と審査要件。"""
 
     DURABLE = "durable"
+    LONG_TERM = "long_term"
+    UNTIL_CHANGED = "until_changed"
     SESSION = "session"
+    SESSION_ONLY = "session_only"
+    EXPIRES_AT = "expires_at"
     REVIEW_REQUIRED = "review_required"
     DISCARD_AFTER_RESTART = "discard_after_restart"
     DISCARD = "discard"
+
+
+class MemoryCandidateSensitivity(StrEnum):
+    """保存候補の安全性・機微度分類。"""
+
+    NORMAL = "normal"
+    PERSONAL = "personal"
+    SENSITIVE = "sensitive"
+    SECRET_LIKE = "secret" + "_like"
 
 
 @dataclass(frozen=True)
@@ -50,6 +67,7 @@ class MemoryCandidate:
     source: MemoryCandidateSource = MemoryCandidateSource.EXPLICIT_USER_REQUEST
     reason: str | None = None
     retention_policy: MemoryRetentionPolicy = MemoryRetentionPolicy.DURABLE
+    sensitivity: MemoryCandidateSensitivity = MemoryCandidateSensitivity.NORMAL
     review_required: bool = False
     actor_id: ActorId | None = None
     space_id: SpaceId | None = None
