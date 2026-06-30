@@ -139,6 +139,26 @@ class WorkspaceContextProvider(Protocol):
         ...
 
 
+class ConversationTurnRuntime(Protocol):
+    """Cognitive route前後の短期会話context境界。"""
+
+    async def load_context(
+        self,
+        observation: Observation,
+        base: SituationContextSnapshot | None,
+    ) -> SituationContextSnapshot:
+        """過去会話を状況contextへ追加する。"""
+        ...
+
+    async def record_response(
+        self,
+        observation: Observation,
+        output: PresentedOutput,
+    ) -> None:
+        """成功したsendable turnを記録する。"""
+        ...
+
+
 class ActivityEventReactionPipeline(Protocol):
     """Activity event reaction の runtime 境界。"""
 
@@ -179,6 +199,7 @@ class IrisRuntimeService:
         workspace_context_assembler: WorkspaceContextProvider | None = None,
         activity_event_reaction_handler: ActivityEventReactionPipeline | None = None,
         observation_observer: RuntimeObservationObserver | None = None,
+        conversation_runtime: ConversationTurnRuntime | None = None,
     ) -> None:
         """明示的に注入されたappとoptional observation pipelineでserviceを生成する。"""
         self._app = app
@@ -186,6 +207,7 @@ class IrisRuntimeService:
         self._workspace_context_assembler = workspace_context_assembler
         self._activity_event_reaction_handler = activity_event_reaction_handler
         self._observation_observer = observation_observer
+        self._conversation_runtime = conversation_runtime
 
     async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
         """State integration後、必要な観測だけをIrisApp経由で処理する。
@@ -258,6 +280,10 @@ class IrisRuntimeService:
             return response
 
         self._record("runtime.cognitive.start", route=route_name)
+        situation_context = await self._load_conversation_context(
+            route.observation,
+            situation_context,
+        )
         output = await self._app.process_observation(
             route.observation,
             situation_context=situation_context,
@@ -267,6 +293,7 @@ class IrisRuntimeService:
             route=route_name,
             output_present=output.is_sendable,
         )
+        await self._record_conversation_response(route.observation, output)
         self._record(
             "runtime.observation.success",
             route=route_name,
@@ -274,6 +301,29 @@ class IrisRuntimeService:
             output_present=output.is_sendable,
         )
         return RuntimeResponse(output=output, correlation_id=envelope.correlation_id)
+
+    async def _load_conversation_context(
+        self,
+        observation: Observation,
+        situation_context: SituationContextSnapshot | None,
+    ) -> SituationContextSnapshot | None:
+        """Optional conversation runtimeから直近会話を取得する。
+
+        Returns:
+            会話windowを含む状況context。未配線時は元のcontext。
+        """
+        if self._conversation_runtime is None:
+            return situation_context
+        return await self._conversation_runtime.load_context(observation, situation_context)
+
+    async def _record_conversation_response(
+        self,
+        observation: Observation,
+        output: PresentedOutput,
+    ) -> None:
+        """Optional conversation runtimeへ成功出力を渡す。"""
+        if self._conversation_runtime is not None:
+            await self._conversation_runtime.record_response(observation, output)
 
     async def _run_integrators(
         self,

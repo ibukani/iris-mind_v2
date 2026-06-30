@@ -11,6 +11,7 @@ from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
+from iris.contracts.conversation import ConversationRole
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.features.chat.definition import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
@@ -19,6 +20,7 @@ from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 
 if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
+    from iris.contracts.conversation import ConversationRecord
 
 
 _KNOWN_LLM_PROVIDERS: frozenset[LLMProvider] = frozenset(LLMProvider)
@@ -62,6 +64,7 @@ class LLMResponseGenerator(ResponseGenerator):
             model=self._model,
             messages=(
                 LLMMessage(role=LLMRole.SYSTEM, content=_build_system_content(prompt)),
+                *tuple(_conversation_message(record) for record in prompt.conversation_history),
                 LLMMessage(role=LLMRole.USER, content=_build_user_content(prompt)),
             ),
             temperature=self._temperature,
@@ -401,9 +404,19 @@ _INTERNAL_CONTEXT_GUARDRAIL = (
     "Respond directly as Iris."
 )
 
+_LANGUAGE_GUARDRAIL = (
+    "Respond in the same natural language as the user's latest message. "
+    "If the latest user message is Japanese, respond in natural Japanese only. "
+    "Do not mix Chinese unless the user explicitly asks for Chinese."
+)
+
 
 def _build_system_content(prompt: ResponsePrompt) -> str:
-    sections = [prompt.system_instruction, _INTERNAL_CONTEXT_GUARDRAIL]
+    sections = [
+        prompt.system_instruction,
+        _INTERNAL_CONTEXT_GUARDRAIL,
+        _LANGUAGE_GUARDRAIL,
+    ]
     internal_context = _build_internal_context(prompt)
     if internal_context is not None:
         sections.append(f"Internal context:\n{internal_context}")
@@ -434,3 +447,13 @@ def _build_context_section(title: str, body: str) -> str:
 
 def _build_user_content(prompt: ResponsePrompt) -> str:
     return prompt.actor_text
+
+
+def _conversation_message(record: ConversationRecord) -> LLMMessage:
+    """短期会話recordをLLM messageへ変換する。
+
+    Returns:
+        roleを保持したLLM message。
+    """
+    role = LLMRole.USER if record.role is ConversationRole.USER else LLMRole.ASSISTANT
+    return LLMMessage(role=role, content=record.content)

@@ -67,6 +67,11 @@ class FrameBuilder:
             ),
             space_context=SpaceContextSnapshot(space_id=context.space_id),
             situation_context=situation_context or SituationContextSnapshot(),
+            conversation_history=(
+                situation_context.conversation_window.records
+                if situation_context is not None
+                else ()
+            ),
         )
 
     @staticmethod
@@ -262,4 +267,5 @@ def _rebuild_frame(
         actor_context=frame.actor_context,
         space_context=frame.space_context,
         situation_context=frame.situation_context,
+        conversation_history=frame.conversation_history,
     )

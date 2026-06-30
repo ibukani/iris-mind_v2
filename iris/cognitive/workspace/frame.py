@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from iris.contracts.actions import ActionPlan
+from iris.contracts.conversation import ConversationRecord
 from iris.contracts.memory import MemorySearchResult
 from iris.contracts.observations import Observation
 from iris.contracts.policy import ActionPreference, PolicyConstraint
@@ -87,6 +88,7 @@ class WorkspaceFrame(BaseModel):
     situation_context: SituationContextSnapshot = Field(
         default_factory=SituationContextSnapshot,
     )
+    conversation_history: tuple[ConversationRecord, ...] = ()
 
 
 def interpreted_input_text(frame: WorkspaceFrame) -> str | None:
