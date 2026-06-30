@@ -2,6 +2,10 @@
 
 Iris runtime foundation の主要ドキュメント入口。
 
+## Character
+
+- [`character.md`](character.md): Iris のキャラクター個性・人格・設定。PersonaPatch / SystemPrompt の参照元。
+
 ## Architecture
 
 - [`architecture.md`](architecture.md): 現在の層構造、runtime flow、scheduler、delivery、state、observability の実装状態。
