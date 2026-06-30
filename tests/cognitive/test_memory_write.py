@@ -12,6 +12,7 @@ from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import PerceptionResult, StepStatus
 from iris.cognitive.memory.candidates import (
     MemoryCandidate,
+    MemoryCandidateSensitivity,
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
@@ -117,6 +118,7 @@ def test_memory_write_policy_rejects_low_confidence() -> None:
         (MemoryCandidateSource.IMPLICIT_CONVERSATION, MemoryRetentionPolicy.DURABLE, False),
         (MemoryCandidateSource.EXPLICIT_USER_REQUEST, MemoryRetentionPolicy.DURABLE, True),
         (MemoryCandidateSource.EXPLICIT_USER_REQUEST, MemoryRetentionPolicy.DISCARD, False),
+        (MemoryCandidateSource.EXPLICIT_USER_REQUEST, MemoryRetentionPolicy.SESSION_ONLY, False),
     ],
 )
 def test_memory_write_policy_rejects_non_hot_path_candidates(
@@ -157,8 +159,12 @@ async def test_memory_write_step_writes_candidates_to_store() -> None:
         assert record.metadata["candidate_source"] in {
             MemoryCandidateSource.EXPLICIT_USER_REQUEST.value,
             MemoryCandidateSource.EXPLICIT_PREFERENCE.value,
+            MemoryCandidateSource.EXPLICIT_PREFERENCE_STATEMENT.value,
+            MemoryCandidateSource.EXPLICIT_PROFILE_STATEMENT.value,
+            MemoryCandidateSource.EXPLICIT_USER_INSTRUCTION.value,
         }
         assert record.metadata["retention_policy"] == MemoryRetentionPolicy.DURABLE.value
+        assert record.metadata["sensitivity"] == MemoryCandidateSensitivity.NORMAL.value
         assert record.metadata["review_required"] == "false"
         assert record.metadata["reason"]
 
@@ -191,6 +197,7 @@ async def test_memory_write_step_preserves_existing_candidate_metadata() -> None
         "custom": "kept",
         "candidate_source": MemoryCandidateSource.EXPLICIT_USER_REQUEST.value,
         "retention_policy": MemoryRetentionPolicy.DURABLE.value,
+        "sensitivity": MemoryCandidateSensitivity.NORMAL.value,
         "review_required": "false",
         "reason": "explicit test memory",
     }
@@ -256,3 +263,103 @@ async def test_memory_write_step_rejects_by_policy() -> None:
     assert result.rejected_count >= 1
     assert result.written_ids == ()
     assert result.status == StepStatus.SKIPPED
+
+
+def test_memory_write_policy_accepts_safe_explicit_profile_statement() -> None:
+    """安全な明示 profile 候補は保存対象として許可される。"""
+    policy = MemoryWritePolicy()
+    candidate = MemoryCandidate(
+        text="ユーザーの名前は「太郎」。",
+        kind=MemoryKind.FACT,
+        salience=0.9,
+        confidence=0.95,
+        source=MemoryCandidateSource.EXPLICIT_PROFILE_STATEMENT,
+        reason="user stated their name",
+        retention_policy=MemoryRetentionPolicy.UNTIL_CHANGED,
+        sensitivity=MemoryCandidateSensitivity.PERSONAL,
+    )
+    assert policy.accept(candidate) is True
+
+
+def test_memory_write_policy_accepts_safe_explicit_preference_statement() -> None:
+    """安全な明示 preference 候補は保存対象として許可される。"""
+    policy = MemoryWritePolicy()
+    candidate = MemoryCandidate(
+        text="ユーザーは「クールなキャラクター」が好き。",
+        kind=MemoryKind.PREFERENCE,
+        salience=0.75,
+        confidence=0.88,
+        source=MemoryCandidateSource.EXPLICIT_PREFERENCE_STATEMENT,
+        reason="user stated a stable preference",
+        retention_policy=MemoryRetentionPolicy.LONG_TERM,
+        sensitivity=MemoryCandidateSensitivity.NORMAL,
+    )
+    assert policy.accept(candidate) is True
+
+
+def test_memory_write_policy_accepts_safe_explicit_user_instruction() -> None:
+    """安全な明示 user instruction 候補は保存対象として許可される。"""
+    policy = MemoryWritePolicy()
+    candidate = MemoryCandidate(
+        text="ユーザーは日本語での応答を希望している。",
+        kind=MemoryKind.PREFERENCE,
+        salience=0.8,
+        confidence=0.9,
+        source=MemoryCandidateSource.EXPLICIT_USER_INSTRUCTION,
+        reason="user stated a language preference",
+        retention_policy=MemoryRetentionPolicy.UNTIL_CHANGED,
+        sensitivity=MemoryCandidateSensitivity.NORMAL,
+    )
+    assert policy.accept(candidate) is True
+
+
+def test_memory_write_policy_rejects_low_confidence_by_default() -> None:
+    """低 confidence の曖昧候補はデフォルトでも拒否される。"""
+    policy = MemoryWritePolicy()
+    candidate = MemoryCandidate(
+        text="たぶん何かが好きかもしれない",
+        kind=MemoryKind.PREFERENCE,
+        salience=0.8,
+        confidence=0.4,
+        source=MemoryCandidateSource.EXPLICIT_PREFERENCE_STATEMENT,
+        retention_policy=MemoryRetentionPolicy.LONG_TERM,
+    )
+    assert policy.accept(candidate) is False
+
+
+def test_memory_write_policy_rejects_secret_like_candidate_by_sensitivity() -> None:
+    """secret_like sensitivity の候補は内容に関係なく拒否される。"""
+    policy = MemoryWritePolicy()
+    candidate = MemoryCandidate(
+        text="ユーザーが明示的に秘密扱いした情報",
+        kind=MemoryKind.NOTE,
+        salience=0.8,
+        confidence=0.9,
+        source=MemoryCandidateSource.EXPLICIT_USER_REQUEST,
+        retention_policy=MemoryRetentionPolicy.DURABLE,
+        sensitivity=MemoryCandidateSensitivity.SECRET_LIKE,
+    )
+    assert policy.accept(candidate) is False
+
+
+@pytest.mark.anyio
+async def test_memory_write_step_persists_explicit_profile_sensitivity_metadata() -> None:
+    """明示 profile 候補の source / retention / sensitivity metadata を保存する。"""
+    store = InMemoryMemoryStore()
+    step = MemoryWriteStep(store=store)
+    frame = _build_frame("私の名前は太郎です")
+
+    result = await step.run(frame)
+
+    assert result.status == StepStatus.OK
+    assert len(result.written_ids) == 1
+    record = store.get(MemoryId(result.written_ids[0]))
+    assert record is not None
+    assert record.text == "ユーザーの名前は「太郎」。"
+    assert record.metadata["candidate_source"] == (
+        MemoryCandidateSource.EXPLICIT_PROFILE_STATEMENT.value
+    )
+    assert record.metadata["retention_policy"] == MemoryRetentionPolicy.UNTIL_CHANGED.value
+    assert record.metadata["sensitivity"] == MemoryCandidateSensitivity.PERSONAL.value
+    assert record.metadata["review_required"] == "false"
+    assert record.metadata["reason"] == "user stated their name"

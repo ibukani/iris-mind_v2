@@ -5,7 +5,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from iris.cognitive.memory.candidates import MemoryCandidateSource, MemoryRetentionPolicy
+from iris.cognitive.memory.candidates import (
+    MemoryCandidateSensitivity,
+    MemoryCandidateSource,
+    MemoryRetentionPolicy,
+)
 
 if TYPE_CHECKING:
     from iris.cognitive.memory.candidates import MemoryCandidate
@@ -29,6 +33,31 @@ _SECRET_PATTERNS = (
     r"api\s*キー",
 )
 
+_EXPLICIT_SOURCES = frozenset(
+    {
+        MemoryCandidateSource.EXPLICIT_USER_REQUEST,
+        MemoryCandidateSource.EXPLICIT_PROFILE_STATEMENT,
+        MemoryCandidateSource.EXPLICIT_PREFERENCE_STATEMENT,
+        MemoryCandidateSource.EXPLICIT_USER_INSTRUCTION,
+        MemoryCandidateSource.EXPLICIT_PREFERENCE,
+    }
+)
+
+_ACCEPTED_RETENTION_POLICIES = frozenset(
+    {
+        MemoryRetentionPolicy.DURABLE,
+        MemoryRetentionPolicy.LONG_TERM,
+        MemoryRetentionPolicy.UNTIL_CHANGED,
+    }
+)
+
+_ACCEPTED_SENSITIVITY = frozenset(
+    {
+        MemoryCandidateSensitivity.NORMAL,
+        MemoryCandidateSensitivity.PERSONAL,
+    }
+)
+
 
 class MemoryWritePolicy:
     """保存候補を受け入れまたは拒否するポリシー。"""
@@ -37,7 +66,7 @@ class MemoryWritePolicy:
         self,
         *,
         min_salience: float = 0.0,
-        min_confidence: float = 0.0,
+        min_confidence: float = 0.6,
         max_text_length: int = 5000,
     ) -> None:
         """しきい値と制約で初期化する。
@@ -61,22 +90,36 @@ class MemoryWritePolicy:
             bool: 保存を許可する場合は True。
         """
         text = candidate.text.strip()
-        explicit_source = candidate.source in {
-            MemoryCandidateSource.EXPLICIT_USER_REQUEST,
-            MemoryCandidateSource.EXPLICIT_PREFERENCE,
-        }
-        invalid_content = (
+        if self._has_invalid_content(text, candidate):
+            return False
+        if self._has_invalid_provenance(candidate):
+            return False
+        lowered = text.casefold()
+        return not any(re.search(pattern, lowered, re.IGNORECASE) for pattern in _SECRET_PATTERNS)
+
+    def _has_invalid_content(self, text: str, candidate: MemoryCandidate) -> bool:
+        """内容・しきい値の観点で保存不可か判定する。
+
+        Returns:
+            bool: 保存不可の場合は True。
+        """
+        return (
             not text
             or len(text) > self._max_text_length
             or candidate.salience < self._min_salience
             or candidate.confidence < self._min_confidence
         )
-        invalid_provenance = (
-            candidate.retention_policy is MemoryRetentionPolicy.DISCARD
+
+    @staticmethod
+    def _has_invalid_provenance(candidate: MemoryCandidate) -> bool:
+        """生成経路・保存方針・機微度の観点で保存不可か判定する。
+
+        Returns:
+            bool: 保存不可の場合は True。
+        """
+        return (
+            candidate.source not in _EXPLICIT_SOURCES
+            or candidate.retention_policy not in _ACCEPTED_RETENTION_POLICIES
+            or candidate.sensitivity not in _ACCEPTED_SENSITIVITY
             or candidate.review_required
-            or not explicit_source
         )
-        if invalid_content or invalid_provenance:
-            return False
-        lowered = text.casefold()
-        return not any(re.search(pattern, lowered, re.IGNORECASE) for pattern in _SECRET_PATTERNS)

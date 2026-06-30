@@ -54,6 +54,7 @@ class DeterministicMemoryConsolidationWorker:
             source=payload.source,
             reason=payload.reason,
             retention_policy=payload.retention_policy,
+            sensitivity=payload.sensitivity,
             review_required=payload.review_required,
             actor_id=payload.actor_id,
             space_id=payload.space_id,
@@ -78,6 +79,8 @@ class DeterministicMemoryConsolidationWorker:
                     {
                         "candidate_source": candidate.source.value,
                         "retention_policy": candidate.retention_policy.value,
+                        "sensitivity": candidate.sensitivity.value,
+                        "review_required": "true" if candidate.review_required else "false",
                         "reason": candidate.reason or "",
                     }
                 ),
