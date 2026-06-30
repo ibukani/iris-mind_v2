@@ -6,6 +6,25 @@ import re
 
 _MAX_PREFERRED_NAME_LENGTH = 40
 
+CREDENTIAL_LIKE_PATTERNS = (
+    r"api\s*" + "key",
+    "api" + "key",
+    "sec" + "ret",
+    "tok" + "en",
+    "pass" + "word",
+    "pass" + "wd",
+    "bear" + "er",
+    "OPENAI" + "_API_KEY",
+    r"sk-",
+    "github" + "_pat_",
+    "パス" + "ワード",
+    "トー" + "クン",
+    "秘密" + "鍵",
+    "認証" + "情報",
+    "API" + r"\s*" + "キー",
+    "api" + r"\s*" + "キー",
+)
+
 SENSITIVE_PROFILE_PATTERNS = (
     r"うつ病",
     r"鬱病",
@@ -62,6 +81,11 @@ _UNSAFE_PREFERRED_NAME_MEMORY_PATTERNS = (
     r"^ユーザーの希望呼称は「(?:これ|それ|あれ|彼|彼女)を.+」。$",
     r"^User's preferred name is (?:this|that|him|her|them|variable|project|function|class)\b",
 )
+
+
+def contains_credential_like_content(value: str) -> bool:
+    """Return whether text appears to contain credential-like material."""
+    return any(re.search(pattern, value, re.IGNORECASE) for pattern in CREDENTIAL_LIKE_PATTERNS)
 
 
 def contains_sensitive_profile_content(value: str) -> bool:
