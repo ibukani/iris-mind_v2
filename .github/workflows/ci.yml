@@ -38,29 +38,8 @@ jobs:
             - name: Install dependencies
               run: uv sync --all-groups
 
-            - name: Run lint
-              run: make lint
-
-            - name: Run format check
-              run: make format
-
-            - name: Run mypy
-              run: make type
-
-            - name: Run pyright
-              run: make pyright
-
-            - name: Run import linter
-              run: make imports
-
-            - name: Run semgrep
-              run: make semgrep
-
-            - name: Run debt registry
-              run: make debt-registry
-
-            - name: Run architecture tests
-              run: make arch
+            - name: Run quick verification
+              run: make quick
 
     test-coverage:
         name: Tests and coverage
