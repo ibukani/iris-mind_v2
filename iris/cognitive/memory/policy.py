@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from iris.cognitive.memory.candidates import MemoryCandidateSource, MemoryRetentionPolicy
+
 if TYPE_CHECKING:
     from iris.cognitive.memory.candidates import MemoryCandidate
 
@@ -59,11 +61,22 @@ class MemoryWritePolicy:
             bool: 保存を許可する場合は True。
         """
         text = candidate.text.strip()
-        if not text or len(text) > self._max_text_length:
-            return False
-        if candidate.salience < self._min_salience:
-            return False
-        if candidate.confidence < self._min_confidence:
+        explicit_source = candidate.source in {
+            MemoryCandidateSource.EXPLICIT_USER_REQUEST,
+            MemoryCandidateSource.EXPLICIT_PREFERENCE,
+        }
+        invalid_content = (
+            not text
+            or len(text) > self._max_text_length
+            or candidate.salience < self._min_salience
+            or candidate.confidence < self._min_confidence
+        )
+        invalid_provenance = (
+            candidate.retention_policy is MemoryRetentionPolicy.DISCARD
+            or candidate.review_required
+            or not explicit_source
+        )
+        if invalid_content or invalid_provenance:
             return False
         lowered = text.casefold()
         return not any(re.search(pattern, lowered, re.IGNORECASE) for pattern in _SECRET_PATTERNS)

@@ -540,7 +540,7 @@ REQUIRED_FEATURE_DEFINITION_FIELDS: set[str] = {
     "cognitive_steps",
     "observation_sources",
     "learning_hooks",
-    "background_jobs",
+    "background_loop_tasks",
 }
 
 

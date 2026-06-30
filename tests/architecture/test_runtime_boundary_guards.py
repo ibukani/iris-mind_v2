@@ -32,6 +32,7 @@ def test_runtime_service_does_not_import_side_effect_boundaries() -> None:
     forbidden_prefixes = (
         "iris.runtime.scheduler",
         "iris.runtime.delivery",
+        "iris.runtime.learning",
         "iris.adapters",
         "iris.presentation",
         "iris.safety",

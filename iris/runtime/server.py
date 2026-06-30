@@ -20,6 +20,7 @@ from iris.runtime.config import (
 )
 from iris.runtime.config.auth import load_token_verifier_from_runtime_env
 from iris.runtime.config.root import all_model_slots_are_fake
+from iris.runtime.lifecycle.background_job_loop import run_background_job_loop
 from iris.runtime.lifecycle.scheduler_loop import run_scheduler_loop
 from iris.runtime.observability.diagnostics import run_startup_diagnostics
 from iris.runtime.observability.logging import configure_runtime_logging
@@ -98,9 +99,29 @@ def _start_scheduler_task(
     )
 
 
+def _start_background_job_task(
+    components: RuntimeComponents,
+    config: IrisRuntimeConfig,
+) -> asyncio.Task[None] | None:
+    """設定で有効な場合だけ background job loop を起動する。
+
+    Returns:
+        起動した task。無効時は None。
+    """
+    if not config.learning.enabled or not config.learning.background_jobs_enabled:
+        return None
+    return asyncio.create_task(
+        run_background_job_loop(
+            components.background_job_runner,
+            interval_seconds=config.learning.background_job_interval_seconds,
+        )
+    )
+
+
 async def _shutdown(
     server: grpc.aio.Server,
     scheduler_task: asyncio.Task[None] | None,
+    background_job_task: asyncio.Task[None] | None,
     grace: float,
 ) -> None:
     """Scheduler task と gRPC server を安全に停止する。
@@ -108,6 +129,7 @@ async def _shutdown(
     Args:
         server: 起動中の gRPC server。
         scheduler_task: 起動中の scheduler task。無ければ None。
+        background_job_task: 起動中の background job task。無ければ None。
         grace: server stop の grace 秒。
     """
     if scheduler_task is not None:
@@ -116,6 +138,12 @@ async def _shutdown(
             await scheduler_task
         except asyncio.CancelledError:
             logger.info("scheduler loop cancelled")
+    if background_job_task is not None:
+        background_job_task.cancel()
+        try:
+            await background_job_task
+        except asyncio.CancelledError:
+            logger.info("background job loop cancelled")
     await server.stop(grace=grace)
     logger.info("shutdown complete")
 
@@ -150,13 +178,19 @@ async def _run_runtime_server(
     """Scheduler task と gRPC server の待受けを管理する。"""
     await server.start()
     scheduler_task = _start_scheduler_task(components, config)
+    background_job_task = _start_background_job_task(components, config)
 
     try:
         await server.wait_for_termination()
     except asyncio.CancelledError:
         logger.info("shutdown requested")
     finally:
-        await _shutdown(server, scheduler_task, config.server.shutdown_grace_seconds)
+        await _shutdown(
+            server,
+            scheduler_task,
+            background_job_task,
+            config.server.shutdown_grace_seconds,
+        )
 
 
 async def serve(

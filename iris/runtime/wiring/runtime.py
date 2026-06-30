@@ -10,6 +10,9 @@ from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.core.datetime_utils import now_utc
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
+from iris.runtime.learning.hooks import LearningHookRunner
+from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
+from iris.runtime.learning.runner import BackgroundJobRunner
 from iris.runtime.observability.events import LoggingRuntimeObservationObserver
 from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
 from iris.runtime.service import IntegratingObservationPipeline, IrisRuntimeService
@@ -25,6 +28,7 @@ from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipe
 from iris.runtime.wiring.features import (
     RuntimeFeatureCatalog,
     collect_action_plan_presenters,
+    collect_learning_hooks,
     wire_runtime_features,
 )
 from iris.runtime.wiring.presentation import wire_output_pipeline
@@ -52,6 +56,7 @@ class RuntimeComponents:
     space_resolver: EphemeralSpaceResolver
     app_action_broker: AppActionBroker | None
     scheduler_runner: SchedulerRunner
+    background_job_runner: BackgroundJobRunner
 
 
 @dataclass(frozen=True)
@@ -154,7 +159,12 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         output_pipeline=output_pipeline,
         target_stale_after_seconds=config.scheduler.target_stale_after_seconds,
     )
-    gateway_components = _wire_runtime_gateway_components(config, stores)
+    gateway_components = _wire_runtime_gateway_components(config, stores, feature_catalog)
+    background_job_runner = BackgroundJobRunner(
+        stores.background_job_queue,
+        (DeterministicMemoryConsolidationWorker(stores.memory_store),),
+        max_jobs_per_run=config.learning.max_jobs_per_run,
+    )
     scheduler_runner = wire_scheduler_runner(
         runtime_service=runtime_service,
         scheduler=wire_runtime_scheduler(stores.scheduler_target_store, config),
@@ -170,6 +180,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         space_resolver=gateway_components.space_resolver,
         app_action_broker=gateway_components.app_action_broker,
         scheduler_runner=scheduler_runner,
+        background_job_runner=background_job_runner,
     )
 
 
@@ -237,6 +248,7 @@ def _wire_activity_event_reaction_handler(
 def _wire_runtime_gateway_components(
     config: IrisRuntimeConfig,
     stores: RuntimeStateStores,
+    feature_catalog: RuntimeFeatureCatalog,
 ) -> _RuntimeGatewayComponents:
     """App gateway と delivery 周辺の依存をまとめて組み立てる。
 
@@ -246,7 +258,18 @@ def _wire_runtime_gateway_components(
     identity_resolver = AccountBackedIdentityResolver(account_store=stores.account_store)
     space_resolver = EphemeralSpaceResolver()
     app_action_broker = (
-        wire_app_action_broker(stores.delivery_outbox, config.delivery)
+        wire_app_action_broker(
+            stores.delivery_outbox,
+            config.delivery,
+            learning_hook_runner=(
+                LearningHookRunner(collect_learning_hooks(feature_catalog.features))
+                if config.learning.enabled
+                else None
+            ),
+            learning_dispatch_store=(
+                stores.learning_dispatch_store if config.learning.enabled else None
+            ),
+        )
         if config.delivery.enabled
         else None
     )

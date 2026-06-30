@@ -52,6 +52,56 @@
       "description": "gRPCサーバー停止時の猶予秒数。"
     },
     {
+      "path": "learning.enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "配送結果後の学習 dispatch を有効化する。"
+    },
+    {
+      "path": "learning.background_jobs_enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "バックグラウンドジョブループを有効化する。"
+    },
+    {
+      "path": "learning.background_job_interval_seconds",
+      "type": "float",
+      "default": 10.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "バックグラウンドジョブ実行間隔秒数。"
+    },
+    {
+      "path": "learning.max_jobs_per_run",
+      "type": "int",
+      "default": 5,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "1回のバックグラウンド処理上限件数。"
+    },
+    {
+      "path": "learning.max_attempts",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "学習ジョブの既定最大試行回数。"
+    },
+    {
       "path": "server.tls.enabled",
       "type": "bool",
       "default": false,

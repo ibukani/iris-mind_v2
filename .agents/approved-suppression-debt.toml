@@ -36,9 +36,9 @@ path = "scripts/_subprocess_runner.py"
 line = 9
 kind = "noqa"
 rule_or_error_code = "S404"
-reason = "subprocess は固定コマンドタプルのみを実行する audited process runner 境界内"
-alternative_attempted = "型付きプロセスラッパー導入"
-expires = "2026-06-30"
+reason = "subprocess は scripts 用の監査済み process runner 境界に閉じ込め、固定コマンドタプルのみを実行する"
+alternative_attempted = "型付きプロセスラッパーに集約済み。subprocess import の完全排除は verify harness の実行責務と矛盾するため、期限付きで継続承認"
+expires = "2026-12-31"
 owner = "team"
 
 # ---------------------------------------------------------------------------
@@ -55,9 +55,9 @@ path = "tests/e2e/runtime_process.py"
 line = 18
 kind = "noqa"
 rule_or_error_code = "S404"
-reason = "tests/e2e/runtime_process.py は E2E 用の監査済み subprocess ポート。E2E テスト群が使う subprocess 呼び出しはこのファイルに閉じ込められている"
-alternative_attempted = "os.posix_spawn 等の非 subprocess API への全面移行は実装コストが高く未着手"
-expires = "2026-06-30"
+reason = "E2E runtime process 起動を監査済み subprocess ポートに閉じ込めている。利用者は RuntimeProcess API のみを扱う"
+alternative_attempted = "E2E の subprocess 利用をこの port に集約済み。非 subprocess API への全面移行は現時点では過剰"
+expires = "2026-12-31"
 owner = "team"
 
 [[debt]]
@@ -65,7 +65,7 @@ path = "tests/e2e/runtime_process.py"
 line = 145
 kind = "noqa"
 rule_or_error_code = "S603"
-reason = "E2E 用 subprocess ポートが固定 uv コマンドタプルを実行。ユーザー入力は介在しない"
-alternative_attempted = "typed command builder 化は port 自体の責務範囲を超えるため未着手"
-expires = "2026-06-30"
+reason = "E2E 用 subprocess ポートが固定 uv コマンドタプルを実行する。shell=True は使わず、ユーザー入力由来の任意コマンド文字列も介在しない"
+alternative_attempted = "typed command builder により command 構築範囲は限定済み。E2E process 起動のため期限付きで継続承認"
+expires = "2026-12-31"
 owner = "team"

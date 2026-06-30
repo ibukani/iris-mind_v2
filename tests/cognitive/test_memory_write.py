@@ -10,7 +10,11 @@ import pytest
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import PerceptionResult, StepStatus
-from iris.cognitive.memory.candidates import MemoryCandidate
+from iris.cognitive.memory.candidates import (
+    MemoryCandidate,
+    MemoryCandidateSource,
+    MemoryRetentionPolicy,
+)
 from iris.cognitive.memory.policy import MemoryWritePolicy
 from iris.cognitive.memory.write import MemoryWriteStep
 from iris.contracts.identity import ActorKind, Identity
@@ -107,6 +111,34 @@ def test_memory_write_policy_rejects_low_confidence() -> None:
     assert policy.accept(candidate) is False
 
 
+@pytest.mark.parametrize(
+    ("source", "retention_policy", "review_required"),
+    [
+        (MemoryCandidateSource.IMPLICIT_CONVERSATION, MemoryRetentionPolicy.DURABLE, False),
+        (MemoryCandidateSource.EXPLICIT_USER_REQUEST, MemoryRetentionPolicy.DURABLE, True),
+        (MemoryCandidateSource.EXPLICIT_USER_REQUEST, MemoryRetentionPolicy.DISCARD, False),
+    ],
+)
+def test_memory_write_policy_rejects_non_hot_path_candidates(
+    source: MemoryCandidateSource,
+    retention_policy: MemoryRetentionPolicy,
+    *,
+    review_required: bool,
+) -> None:
+    """暗黙・要審査・破棄候補を hot path から除外する。"""
+    policy = MemoryWritePolicy()
+    candidate = MemoryCandidate(
+        text="候補",
+        kind=MemoryKind.NOTE,
+        salience=0.8,
+        confidence=0.9,
+        source=source,
+        retention_policy=retention_policy,
+        review_required=review_required,
+    )
+    assert policy.accept(candidate) is False
+
+
 @pytest.mark.anyio
 async def test_memory_write_step_writes_candidates_to_store() -> None:
     """MemoryWriteStep が候補をストアに書き込むことを確認する。"""
@@ -122,6 +154,46 @@ async def test_memory_write_step_writes_candidates_to_store() -> None:
         record = store.get(MemoryId(memory_id))
         assert record is not None
         assert "ジャスミン茶" in record.text
+        assert record.metadata["candidate_source"] in {
+            MemoryCandidateSource.EXPLICIT_USER_REQUEST.value,
+            MemoryCandidateSource.EXPLICIT_PREFERENCE.value,
+        }
+        assert record.metadata["retention_policy"] == MemoryRetentionPolicy.DURABLE.value
+        assert record.metadata["review_required"] == "false"
+        assert record.metadata["reason"]
+
+
+@pytest.mark.anyio
+async def test_memory_write_step_preserves_existing_candidate_metadata() -> None:
+    """Hot-path write は任意 metadata と provenance を同時に保存する。"""
+
+    class _Extractor:
+        def extract(self, frame: WorkspaceFrame) -> tuple[MemoryCandidate, ...]:
+            _ = frame
+            return (
+                MemoryCandidate(
+                    text="明示メモ",
+                    kind=MemoryKind.NOTE,
+                    salience=0.8,
+                    confidence=0.9,
+                    reason="explicit test memory",
+                    metadata={"custom": "kept"},
+                ),
+            )
+
+    store = InMemoryMemoryStore()
+    result = await MemoryWriteStep(store=store, extractor=_Extractor()).run(
+        _build_frame("覚えて: 明示メモ")
+    )
+    record = store.get(MemoryId(result.written_ids[0]))
+    assert record is not None
+    assert record.metadata == {
+        "custom": "kept",
+        "candidate_source": MemoryCandidateSource.EXPLICIT_USER_REQUEST.value,
+        "retention_policy": MemoryRetentionPolicy.DURABLE.value,
+        "review_required": "false",
+        "reason": "explicit test memory",
+    }
 
 
 @pytest.mark.anyio

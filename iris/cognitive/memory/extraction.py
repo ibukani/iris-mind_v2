@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, override
 
-from iris.cognitive.memory.candidates import MemoryCandidate, MemoryCandidateExtractor
+from iris.cognitive.memory.candidates import (
+    MemoryCandidate,
+    MemoryCandidateExtractor,
+    MemoryCandidateSource,
+    MemoryRetentionPolicy,
+)
 from iris.contracts.memory import MemoryKind
 
 if TYPE_CHECKING:
@@ -96,6 +101,10 @@ def _extract_remember(
                         kind=MemoryKind.NOTE,
                         salience=0.8,
                         confidence=0.9,
+                        source=MemoryCandidateSource.EXPLICIT_USER_REQUEST,
+                        reason="user explicitly requested durable memory",
+                        retention_policy=MemoryRetentionPolicy.DURABLE,
+                        review_required=False,
                         actor_id=actor_id,
                         space_id=space_id,
                         source_observation_id=source_observation_id,
@@ -130,6 +139,10 @@ def _extract_preferences(
                         kind=MemoryKind.PREFERENCE,
                         salience=0.7,
                         confidence=0.85,
+                        source=MemoryCandidateSource.EXPLICIT_PREFERENCE,
+                        reason="user stated an explicit preference",
+                        retention_policy=MemoryRetentionPolicy.DURABLE,
+                        review_required=False,
                         actor_id=actor_id,
                         space_id=space_id,
                         source_observation_id=source_observation_id,

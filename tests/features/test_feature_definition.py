@@ -9,13 +9,16 @@ from iris.features.definition import ActivityReactionPlanner, FeatureDefinition
 from iris.features.proactive_talk import define_proactive_talk_feature
 from iris.runtime.wiring.features import (
     collect_action_plan_presenters,
+    collect_background_loop_tasks,
     collect_cognitive_steps,
+    collect_learning_hooks,
     wire_runtime_features,
 )
 
 if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot
     from iris.contracts.event_reaction import EventReactionDecision
+    from iris.contracts.learning import LearningEvent
     from iris.contracts.observations import ActivityEventObservation
 
 
@@ -27,7 +30,7 @@ def test_feature_definition_defaults_are_empty_tuples() -> None:
     assert feature.activity_reaction_planners == ()
     assert feature.observation_sources == ()
     assert feature.learning_hooks == ()
-    assert feature.background_jobs == ()
+    assert feature.background_loop_tasks == ()
 
 
 def test_feature_definition_can_attach_activity_reaction_planner() -> None:
@@ -59,6 +62,7 @@ def test_runtime_features_register_event_reaction_through_feature_definition() -
     assert tuple(feature.name for feature in catalog.features) == ("basic_action", "event_reaction")
     event_reaction_feature = next(f for f in catalog.features if f.name == "event_reaction")
     assert len(event_reaction_feature.activity_reaction_planners) == 1
+    assert collect_learning_hooks(catalog.features) == ()
 
 
 def test_collect_cognitive_steps_preserves_feature_registration_order() -> None:
@@ -95,3 +99,36 @@ def test_collect_action_plan_presenters_preserves_feature_registration_order() -
     assert len(presenters) == 2
     assert presenters[0] is first
     assert presenters[1] is second
+
+
+def test_learning_collectors_preserve_feature_registration_order() -> None:
+    """Learning hooks と background loop tasks は feature 登録順を維持する。"""
+
+    class _Hook:
+        async def after_action_result(self, event: LearningEvent) -> None:
+            _ = event
+
+    class _Job:
+        name = "test"
+
+        async def run_once(self) -> None:
+            return None
+
+    first_hook = _Hook()
+    second_hook = _Hook()
+    first_job = _Job()
+    second_job = _Job()
+    features = (
+        FeatureDefinition(
+            name="first",
+            learning_hooks=(first_hook,),
+            background_loop_tasks=(first_job,),
+        ),
+        FeatureDefinition(
+            name="second",
+            learning_hooks=(second_hook,),
+            background_loop_tasks=(second_job,),
+        ),
+    )
+    assert collect_learning_hooks(features) == (first_hook, second_hook)
+    assert collect_background_loop_tasks(features) == (first_job, second_job)

@@ -48,6 +48,13 @@ max_attempts = 3
 retry_backoff_seconds = 30.0
 rate_limit_window_seconds = 1800.0
 
+[learning]
+enabled = true
+background_jobs_enabled = true
+background_job_interval_seconds = 10.0
+max_jobs_per_run = 5
+max_attempts = 3
+
 [delivery.quiet_hours]
 enabled = false
 start = "22:00"

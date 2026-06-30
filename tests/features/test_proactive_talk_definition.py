@@ -24,7 +24,7 @@ def test_proactive_talk_feature_definition_is_explicit_and_provider_neutral() ->
         "proactive_action_selection",
     ]
     assert feature.observation_sources == ()
-    assert feature.background_jobs == ()
+    assert feature.background_loop_tasks == ()
 
 
 def test_idle_tick_observation_is_typed_and_provider_neutral() -> None:

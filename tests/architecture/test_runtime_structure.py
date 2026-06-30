@@ -18,6 +18,7 @@ ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
         "delivery",
         "ingress",
         "lifecycle",
+        "learning",
         "observability",
         "scheduler",
         "state",

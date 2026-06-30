@@ -17,6 +17,8 @@ from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelations
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
+from iris.runtime.learning.dispatch import InMemoryLearningDispatchStore
+from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
 from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
@@ -62,6 +64,8 @@ class RuntimeStateStores:
     space_occupancy_store: SpaceOccupancyStore
     delivery_outbox: DeliveryOutbox
     scheduler_target_store: SchedulerTargetStore
+    background_job_queue: InMemoryBackgroundJobQueue
+    learning_dispatch_store: InMemoryLearningDispatchStore
     sqlite_context: SQLitePersistenceContext | None = None
     memory_lifecycle: SyncLifecycle | None = None
 
@@ -88,6 +92,9 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
 def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     """SQLite backend 用の永続状態ストア群を組み立てる。
 
+    Learning dispatch と background job queue は foundation 段階では明示的に
+    process-local。SQLite 永続化を追加するまで restart を越えて保持しない。
+
     Returns:
         SQLite backend に対応した RuntimeStateStores。
     """
@@ -110,6 +117,8 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
             max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
         ),
         scheduler_target_store=SQLiteSchedulerTargetStore(ctx),
+        background_job_queue=InMemoryBackgroundJobQueue(),
+        learning_dispatch_store=InMemoryLearningDispatchStore(),
         sqlite_context=ctx,
         memory_lifecycle=sqlite_memory_store,
     )
@@ -134,6 +143,8 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
             max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
         ),
         scheduler_target_store=InMemorySchedulerTargetStore(),
+        background_job_queue=InMemoryBackgroundJobQueue(),
+        learning_dispatch_store=InMemoryLearningDispatchStore(),
         sqlite_context=None,
         memory_lifecycle=None,
     )
