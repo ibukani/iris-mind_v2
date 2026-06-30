@@ -100,7 +100,7 @@ imports:
 	uv run lint-imports
 
 semgrep:
-	uv run semgrep scan --config semgrep.yml --error
+	uv run semgrep scan --config semgrep.yml --error --metrics=off --disable-version-check
 
 debt-registry:
 	uv run python scripts/check_suppression_debt_changes.py
