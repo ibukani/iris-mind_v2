@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 import inspect
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, TypeGuard
 
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
@@ -53,6 +53,15 @@ class _NoOpLearningHook:
     async def after_action_result(self, event: LearningEvent) -> None:
         """Accept a learning event without side effects."""
         _ = event
+
+
+def _is_wire_action_result_hooks(value: object) -> TypeGuard[_WireActionResultHooks]:
+    """Return whether a private import has the expected callable shape.
+
+    The runtime check can only validate callability; the protocol signature is
+    enforced statically at the call site after TypeGuard narrowing.
+    """
+    return callable(value)
 
 
 def _read_app_wiring_source() -> str:
@@ -164,14 +173,12 @@ def test_action_result_hook_wiring_keeps_delivery_history_when_learning_disabled
             ),
         )
     )
-    wire_action_result_hooks = cast(
-        "_WireActionResultHooks",
-        import_private_as(
-            "iris.runtime.wiring.runtime",
-            "_wire_action_result_hooks",
-            object,
-        ),
+    wire_action_result_hooks = import_private_as(
+        "iris.runtime.wiring.runtime",
+        "_wire_action_result_hooks",
+        object,
     )
+    assert _is_wire_action_result_hooks(wire_action_result_hooks)
 
     hooks = wire_action_result_hooks(config, stores, feature_catalog)
 
