@@ -9,13 +9,15 @@ import pytest
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ports import LLMRole
 from iris.contracts.actions import PresentedOutput
+from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.conversation import ConversationRecord, ConversationRole
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
+from iris.contracts.workspace_context import SituationContextSnapshot
 from iris.core.ids import AccountId, ActorId, ExternalRef, ObservationId, SessionId, SpaceId
 from iris.features.chat.definition import ResponseGenerationStep
 from iris.runtime.app import IrisApp
-from iris.runtime.conversation import ShortTermConversationRuntime
+from iris.runtime.conversation import ConversationHistoryPolicy, ShortTermConversationRuntime
 from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
 from iris.runtime.state.conversation import (
     ConversationKey,
@@ -48,6 +50,7 @@ def _message(
     session_id: str,
     actor_id: str = "actor-1",
     space_id: str = "space-1",
+    account_id: str | None = None,
 ) -> ActorMessageObservation:
     return ActorMessageObservation(
         observation_id=ObservationId(observation_id),
@@ -60,6 +63,7 @@ def _message(
                 provider="test",
                 provider_subject=ExternalRef(actor_id),
             ),
+            account_id=AccountId(account_id) if account_id is not None else None,
             space_id=SpaceId(space_id),
         ),
         occurred_at=datetime(2026, 6, 30, tzinfo=UTC),
@@ -81,6 +85,32 @@ async def test_store_returns_chronological_limited_windows_without_key_leakage()
     assert tuple(
         record.content for record in (await store.recent_window(other_key, 5)).records
     ) == ("other",)
+
+
+def test_history_policy_applies_record_limit() -> None:
+    """Policyはstore上限とは別にLLM window件数を制限する。"""
+    records = tuple(_record(str(index), index) for index in range(4))
+    trimmed = ConversationHistoryPolicy(
+        max_window_records=2,
+        max_history_chars=100,
+    ).trim(records)
+    assert tuple(record.content for record in trimmed) == ("2", "3")
+
+
+def test_history_policy_removes_older_records_before_newer_records() -> None:
+    """文字budget超過時は古いrecordから除外する。"""
+    records = (_record("old", 1), _record("recent", 2), _record("new", 3))
+    trimmed = ConversationHistoryPolicy(
+        max_window_records=10,
+        max_history_chars=9,
+    ).trim(records)
+    assert tuple(record.content for record in trimmed) == ("recent", "new")
+
+
+@pytest.mark.parametrize("budget", [0, -1])
+def test_history_policy_disables_history_for_non_positive_budget(budget: int) -> None:
+    """Zero/negative文字budgetでは過去会話を渡さない。"""
+    assert ConversationHistoryPolicy(max_history_chars=budget).trim((_record("past"),)) == ()
 
 
 async def test_runtime_history_uses_actor_and_space_across_session_changes() -> None:
@@ -121,6 +151,35 @@ async def test_runtime_history_uses_actor_and_space_across_session_changes() -> 
     assert conversation_key_for(first) == conversation_key_for(second)
 
 
+async def test_runtime_history_messages_respect_character_budget() -> None:
+    """LLMへ変換された過去message内容が設定文字budgetを超えない。"""
+    llm = FakeLLMClient(responses=("reply",))
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_core_cognitive_cycle(
+            extension_steps=(ResponseGenerationStep(wire_response_generator(llm)),)
+        ),
+    )
+    store = InMemoryConversationHistoryStore()
+    current = _message("current", observation_id="obs-current", session_id="session-current")
+    await store.append(
+        conversation_key_for(current),
+        (_record("older-long", 1), _record("recent", 2)),
+    )
+    service = IrisRuntimeService(
+        app,
+        conversation_runtime=ShortTermConversationRuntime(
+            store,
+            policy=ConversationHistoryPolicy(max_window_records=10, max_history_chars=6),
+        ),
+    )
+    await service.handle_observation(ObservationEnvelope.external_client(observation=current))
+    prior_messages = llm.requests[0].messages[1:-1]
+    assert tuple(message.content for message in prior_messages) == ("recent",)
+    assert sum(len(message.content) for message in prior_messages) <= 6
+    assert sum(message.content == "current" for message in llm.requests[0].messages) == 1
+
+
 async def test_different_actor_or_space_does_not_share_history() -> None:
     """Actorまたはspaceが異なる会話へ履歴を漏らさない。"""
     store = InMemoryConversationHistoryStore()
@@ -152,8 +211,33 @@ async def test_empty_output_does_not_record_turn() -> None:
     assert not (await store.recent_window(conversation_key_for(observation), 10)).records
 
 
-def test_conversation_key_prefers_account_then_falls_back_to_session() -> None:
-    """Actor不在時はaccount、identity不在時だけsessionを使う。"""
+async def test_load_context_preserves_existing_snapshot_fields() -> None:
+    """Conversation window差替え時に既存situation fieldを保持する。"""
+    now = datetime(2026, 6, 30, tzinfo=UTC)
+    availability = AvailabilitySnapshot(
+        actor_id=ActorId("actor-1"),
+        status=AvailabilityStatus.AVAILABLE,
+        reason="test",
+        observed_at=now,
+        computed_at=now,
+    )
+    observation = _message("current", observation_id="obs-context", session_id="s-context")
+    runtime = ShortTermConversationRuntime(InMemoryConversationHistoryStore())
+    updated = await runtime.load_context(
+        observation,
+        SituationContextSnapshot(availability=availability),
+    )
+    assert updated.availability == availability
+
+
+def test_conversation_key_priority_is_actor_then_account_then_session() -> None:
+    """Actorを最優先し、account、sessionの順でfallbackする。"""
+    actor_and_account = _message(
+        "actor turn",
+        observation_id="obs-actor-account",
+        session_id="session-actor-account",
+        account_id="account-ignored",
+    )
     account_observation = ActorMessageObservation(
         observation_id=ObservationId("obs-account"),
         session_id=SessionId("session-account"),
@@ -172,6 +256,11 @@ def test_conversation_key_prefers_account_then_falls_back_to_session() -> None:
         occurred_at=datetime(2026, 6, 30, tzinfo=UTC),
         kind=ObservationKind.ACTOR_MESSAGE,
         text="fallback turn",
+    )
+    assert conversation_key_for(actor_and_account) == ConversationKey(
+        ConversationSubjectKind.ACTOR,
+        "actor-1",
+        "space-1",
     )
     assert conversation_key_for(account_observation) == ConversationKey(
         ConversationSubjectKind.ACCOUNT,

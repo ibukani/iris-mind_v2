@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
-from iris.contracts.conversation import ConversationRecord, ConversationRole
+from iris.contracts.conversation import ConversationRecord, ConversationRole, ConversationWindow
 from iris.contracts.workspace_context import SituationContextSnapshot
 from iris.core.datetime_utils import now_utc
 from iris.runtime.observation_router import actor_message_observation
@@ -21,11 +21,47 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class ConversationHistoryPolicy:
+    """LLMへ渡す短期会話windowの決定論的budget。"""
+
+    max_window_records: int = 20
+    max_history_chars: int = 8000
+
+    def trim(self, records: tuple[ConversationRecord, ...]) -> tuple[ConversationRecord, ...]:
+        """最新側の連続したrecordを件数・文字数budget内で返す。
+
+        Recordは切断せず、budgetを超える古いrecord以降を除外する。
+
+        Returns:
+            時系列順を保ったtrim済みrecord。
+        """
+        if self.max_window_records <= 0 or self.max_history_chars <= 0:
+            return ()
+        selected: list[ConversationRecord] = []
+        used_chars = 0
+        candidates = records[-self.max_window_records :]
+        for record in reversed(candidates):
+            record_chars = len(record.content)
+            if used_chars + record_chars > self.max_history_chars:
+                break
+            selected.append(record)
+            used_chars += record_chars
+        selected.reverse()
+        return tuple(selected)
+
+
+class _SituationContextUpdate(TypedDict):
+    """SituationContextSnapshot.model_copy用の型付き差分。"""
+
+    conversation_window: ConversationWindow
+
+
+@dataclass(frozen=True)
 class ShortTermConversationRuntime:
     """会話履歴のload/record責務をruntime serviceから分離する。"""
 
     store: ConversationHistoryStore
-    window_limit: int = 20
+    policy: ConversationHistoryPolicy = ConversationHistoryPolicy()
     now: Callable[[], datetime] = now_utc
 
     async def load_context(
@@ -40,16 +76,12 @@ class ShortTermConversationRuntime:
         """
         window = await self.store.recent_window(
             conversation_key_for(observation),
-            self.window_limit,
+            self.policy.max_window_records,
         )
+        window = ConversationWindow(records=self.policy.trim(window.records))
         current = base or SituationContextSnapshot()
-        return SituationContextSnapshot(
-            latest_activity=current.latest_activity,
-            presence=current.presence,
-            space_occupancy=current.space_occupancy,
-            availability=current.availability,
-            conversation_window=window,
-        )
+        update = _SituationContextUpdate(conversation_window=window)
+        return current.model_copy(update=update)
 
     async def record_response(
         self,

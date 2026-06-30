@@ -82,7 +82,11 @@ class InMemoryConversationHistoryStore:
 
 
 def conversation_key_for(observation: Observation) -> ConversationKey:
-    """解決済みidentityを優先して安定会話keyを作る。
+    """解決済みactor、account、sessionの順で安定会話keyを作る。
+
+    ActorはIrisの会話主体なのでaccountと両方ある場合も優先する。actor未解決時は
+    accountを使い、identity未解決時だけsessionへfallbackする。Spaceは同じ主体の
+    同時会話を分離するためactor/account keyに含め、session fallbackには含めない。
 
     Returns:
         actor、account、sessionの優先順で作ったkey。
