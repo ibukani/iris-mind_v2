@@ -8,22 +8,43 @@ import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ports import LLMRole
-from iris.contracts.actions import PresentedOutput
+from iris.contracts.actions import (
+    ActionResult,
+    ActionStatus,
+    PresentedOutput,
+    SendMessageAction,
+)
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.conversation import ConversationRecord, ConversationRole
+from iris.contracts.delivery import DeliveryTarget
 from iris.contracts.identity import ActorKind, Identity
+from iris.contracts.learning import LearningEvent
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.contracts.workspace_context import SituationContextSnapshot
-from iris.core.ids import AccountId, ActorId, ExternalRef, ObservationId, SessionId, SpaceId
+from iris.core.ids import (
+    AccountId,
+    ActionId,
+    ActorId,
+    CorrelationId,
+    ExternalRef,
+    ObservationId,
+    SessionId,
+    SpaceId,
+)
 from iris.features.chat.definition import ResponseGenerationStep
 from iris.runtime.app import IrisApp
-from iris.runtime.conversation import ConversationHistoryPolicy, ShortTermConversationRuntime
+from iris.runtime.conversation import (
+    ConversationHistoryPolicy,
+    DeliveryConversationHistoryHook,
+    ShortTermConversationRuntime,
+)
 from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
 from iris.runtime.state.conversation import (
     ConversationKey,
     ConversationSubjectKind,
     InMemoryConversationHistoryStore,
     conversation_key_for,
+    conversation_key_for_delivery_target,
 )
 from iris.runtime.wiring.cognitive import wire_core_cognitive_cycle
 from iris.runtime.wiring.llm import wire_response_generator
@@ -271,3 +292,108 @@ def test_conversation_key_priority_is_actor_then_account_then_session() -> None:
         ConversationSubjectKind.SESSION,
         "session-fallback",
     )
+
+
+def _delivery_event(
+    status: ActionStatus,
+    *,
+    text: str = "delivered reply",
+    actor_id: str = "actor-1",
+    space_id: str = "space-1",
+) -> LearningEvent:
+    reported_at = datetime(2026, 6, 30, 0, 0, 5, tzinfo=UTC)
+    action = SendMessageAction(
+        action_id=ActionId("action-delivery"),
+        session_id=SessionId("session-delivery"),
+        correlation_id=CorrelationId("corr-delivery"),
+        text=text,
+    )
+    target = DeliveryTarget(
+        provider="discord",
+        provider_subject=ExternalRef(actor_id),
+        provider_space_ref=ExternalRef(space_id),
+        session_id=SessionId("session-delivery"),
+        actor_id=ActorId(actor_id),
+        space_id=SpaceId(space_id),
+    )
+    return LearningEvent(
+        result=ActionResult(
+            action_id=action.action_id,
+            correlation_id=action.correlation_id,
+            status=status,
+            delivered_at=reported_at if status is ActionStatus.SUCCEEDED else None,
+            external_message_id=(
+                ExternalRef("message-delivery") if status is ActionStatus.SUCCEEDED else None
+            ),
+            error_reason="not delivered" if status is ActionStatus.FAILED else None,
+        ),
+        delivery=None,
+        action=action,
+        target=target,
+        reported_at=reported_at,
+        source_observation_id=ObservationId("obs-delivery"),
+    )
+
+
+async def test_delivery_success_confirms_assistant_history_only() -> None:
+    """成功配送後だけ confirmed assistant turn を短期履歴へ追加する。"""
+    store = InMemoryConversationHistoryStore()
+    hook = DeliveryConversationHistoryHook(store)
+    event = _delivery_event(ActionStatus.SUCCEEDED)
+
+    await hook.after_action_result(event)
+
+    assert event.target is not None
+    window = await store.recent_window(conversation_key_for_delivery_target(event.target), 10)
+    assert len(window.records) == 1
+    record = window.records[0]
+    assert record.role is ConversationRole.ASSISTANT
+    assert record.content == "delivered reply"
+    assert record.observation_id == ObservationId("obs-delivery")
+    assert record.actor_id == ActorId("actor-1")
+    assert record.space_id == SpaceId("space-1")
+
+
+@pytest.mark.parametrize(
+    "status",
+    [ActionStatus.BLOCKED, ActionStatus.FAILED, ActionStatus.CANCELLED],
+)
+async def test_delivery_unsuccessful_result_is_not_confirmed_history(
+    status: ActionStatus,
+) -> None:
+    """blocked/failed/cancelled delivery は通常の assistant turn にしない。"""
+    store = InMemoryConversationHistoryStore()
+    hook = DeliveryConversationHistoryHook(store)
+    event = _delivery_event(status)
+
+    await hook.after_action_result(event)
+
+    assert event.target is not None
+    window = await store.recent_window(conversation_key_for_delivery_target(event.target), 10)
+    assert window.records == ()
+
+
+async def test_delivery_confirmed_history_isolated_by_actor_and_space() -> None:
+    """配送成功で確定した履歴もactor/space境界を越えて漏らさない。"""
+    store = InMemoryConversationHistoryStore()
+    hook = DeliveryConversationHistoryHook(store)
+    event = _delivery_event(ActionStatus.SUCCEEDED, actor_id="actor-1", space_id="space-1")
+    same_actor_other_space = _delivery_event(
+        ActionStatus.SUCCEEDED,
+        actor_id="actor-1",
+        space_id="space-2",
+    )
+
+    await hook.after_action_result(event)
+
+    assert event.target is not None
+    assert same_actor_other_space.target is not None
+    assert (
+        await store.recent_window(conversation_key_for_delivery_target(event.target), 10)
+    ).records
+    assert (
+        await store.recent_window(
+            conversation_key_for_delivery_target(same_actor_other_space.target),
+            10,
+        )
+    ).records == ()
