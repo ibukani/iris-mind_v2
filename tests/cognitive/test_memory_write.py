@@ -154,6 +154,46 @@ async def test_memory_write_step_writes_candidates_to_store() -> None:
         record = store.get(MemoryId(memory_id))
         assert record is not None
         assert "ジャスミン茶" in record.text
+        assert record.metadata["candidate_source"] in {
+            MemoryCandidateSource.EXPLICIT_USER_REQUEST.value,
+            MemoryCandidateSource.EXPLICIT_PREFERENCE.value,
+        }
+        assert record.metadata["retention_policy"] == MemoryRetentionPolicy.DURABLE.value
+        assert record.metadata["review_required"] == "false"
+        assert record.metadata["reason"]
+
+
+@pytest.mark.anyio
+async def test_memory_write_step_preserves_existing_candidate_metadata() -> None:
+    """Hot-path write は任意 metadata と provenance を同時に保存する。"""
+
+    class _Extractor:
+        def extract(self, frame: WorkspaceFrame) -> tuple[MemoryCandidate, ...]:
+            _ = frame
+            return (
+                MemoryCandidate(
+                    text="明示メモ",
+                    kind=MemoryKind.NOTE,
+                    salience=0.8,
+                    confidence=0.9,
+                    reason="explicit test memory",
+                    metadata={"custom": "kept"},
+                ),
+            )
+
+    store = InMemoryMemoryStore()
+    result = await MemoryWriteStep(store=store, extractor=_Extractor()).run(
+        _build_frame("覚えて: 明示メモ")
+    )
+    record = store.get(MemoryId(result.written_ids[0]))
+    assert record is not None
+    assert record.metadata == {
+        "custom": "kept",
+        "candidate_source": MemoryCandidateSource.EXPLICIT_USER_REQUEST.value,
+        "retention_policy": MemoryRetentionPolicy.DURABLE.value,
+        "review_required": "false",
+        "reason": "explicit test memory",
+    }
 
 
 @pytest.mark.anyio

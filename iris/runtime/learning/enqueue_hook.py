@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class ExplicitMemoryPayloadResolver(Protocol):
     """配送文脈から推測せず明示 payload を解決する境界。"""
 
-    def resolve(self, event: LearningEvent) -> MemoryBackgroundJobPayload | None:
+    def build_payload(self, event: LearningEvent) -> MemoryBackgroundJobPayload | None:
         """十分な明示文脈がなければ None を返す。"""
         ...
 
@@ -47,7 +47,7 @@ class EnqueueExplicitMemoryLearningHook:
         """成功以外や不十分な文脈を安全に無視する。"""
         if event.result.status is not ActionStatus.SUCCEEDED:
             return
-        payload = self._resolver.resolve(event)
+        payload = self._resolver.build_payload(event)
         if payload is None:
             return
         key = _job_key(event, payload)

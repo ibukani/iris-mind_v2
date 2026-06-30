@@ -11,6 +11,7 @@ from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.memory.extraction import RuleBasedMemoryCandidateExtractor
 from iris.cognitive.memory.policy import MemoryWritePolicy
 from iris.contracts.memory import MemoryId, MemoryRecord
+from iris.core.metadata import immutable_metadata
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from iris.cognitive.memory.candidates import MemoryCandidate, MemoryCandidateExtractor
     from iris.cognitive.workspace.frame import WorkspaceFrame
     from iris.contracts.memory import MutableMemoryStore, VectorMemoryIndex
+    from iris.contracts.metadata import ImmutableMetadata
 
 
 def _generate_memory_id(candidate: MemoryCandidate) -> MemoryId:
@@ -37,6 +39,21 @@ def _generate_memory_id(candidate: MemoryCandidate) -> MemoryId:
     content = f"{scope}:{normalized}"
     digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:32]
     return MemoryId(f"memory:{digest}")
+
+
+def _candidate_metadata(candidate: MemoryCandidate) -> ImmutableMetadata:
+    """既存値を保ちつつ候補 provenance を正規化する。
+
+    Returns:
+        保存用の不変 metadata。
+    """
+    values = dict(candidate.metadata)
+    values.setdefault("candidate_source", candidate.source.value)
+    values.setdefault("retention_policy", candidate.retention_policy.value)
+    values.setdefault("review_required", "true" if candidate.review_required else "false")
+    if candidate.reason is not None:
+        values.setdefault("reason", candidate.reason)
+    return immutable_metadata(values)
 
 
 class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
@@ -102,7 +119,7 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
                 kind=candidate.kind,
                 confidence=candidate.confidence,
                 source_observation_id=candidate.source_observation_id,
-                metadata=candidate.metadata,
+                metadata=_candidate_metadata(candidate),
             )
 
             await asyncio.to_thread(self._store.update, record)

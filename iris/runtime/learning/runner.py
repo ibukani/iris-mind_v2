@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING, Protocol
 
@@ -73,7 +74,7 @@ class BackgroundJobRunner:
                 continue
             failure = _CaptureWorkerFailure()
             with failure:
-                worker.run(job)
+                await asyncio.to_thread(worker.run, job)
             if failure.exception is not None:
                 failed_at = self._now()
                 await self._queue.mark_retryable_failure(

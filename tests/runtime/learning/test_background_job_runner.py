@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import threading
 
 from loguru import logger
 import pytest
@@ -25,10 +26,12 @@ class _Worker:
 
     def __init__(self, *, fail: bool = False) -> None:
         self.calls: list[BackgroundJobId] = []
+        self.thread_ids: list[int] = []
         self._fail = fail
 
     def run(self, job: BackgroundJobRecord) -> None:
         self.calls.append(job.job_id)
+        self.thread_ids.append(threading.get_ident())
         if self._fail:
             message = "worker failed"
             raise RuntimeError(message)
@@ -52,9 +55,12 @@ async def test_known_worker_succeeds() -> None:
     queue = InMemoryBackgroundJobQueue()
     job = await queue.enqueue(_job("ok"))
     worker = _Worker()
+    event_loop_thread_id = threading.get_ident()
     runner = BackgroundJobRunner(queue, (worker,), now=lambda: job.not_before)
     assert await runner.run_once() == 1
     assert (await queue.get(job.job_id)).status is BackgroundJobStatus.SUCCEEDED
+    assert len(worker.thread_ids) == 1
+    assert worker.thread_ids[0] != event_loop_thread_id
 
 
 async def test_worker_failure_is_retryable_and_does_not_stop_batch() -> None:
