@@ -12,6 +12,10 @@ from iris.cognitive.memory.candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.cognitive.memory.safety import (
+    contains_sensitive_profile_content,
+    is_safe_preferred_name,
+)
 from iris.contracts.memory import MemoryKind
 
 if TYPE_CHECKING:
@@ -19,8 +23,6 @@ if TYPE_CHECKING:
 
     from iris.cognitive.workspace.frame import WorkspaceFrame
     from iris.core.ids import ActorId, ObservationId, SpaceId
-
-_MAX_PREFERRED_NAME_LENGTH = 40
 
 _REMEMBER_PATTERNS = (
     r"覚えて[:\uff1a]\s*(.+)",
@@ -42,59 +44,16 @@ _PREFERRED_NAME_PATTERNS = (
     r"^call me\s+(.+?)[\.!]?$",
     r"^please call me\s+(.+?)[\.!]?$",
 )
-_UNSAFE_PREFERRED_NAME_PATTERNS = (
-    r"[をにへで]",
-    r"^(?:この|その|あの|これ|それ|あれ|彼|彼女|変数|プロジェクト|関数|クラス)",
-    r"\b(?:this|that|him|her|them|variable|project|function|class)\b",
-)
-_SENSITIVE_PROFILE_PATTERNS = (
-    r"うつ病",
-    r"鬱病",
-    r"統合失調症",
-    r"双極性障害",
-    r"発達障害",
-    r"ADHD",
-    r"自閉",
-    r"癌",
-    r"がん患者",
-    r"キリスト教徒",
-    r"イスラム教徒",
-    r"ユダヤ教徒",
-    r"仏教徒",
-    r"右翼",
-    r"左翼",
-    r"保守派",
-    r"リベラル",
-    r"自民党支持",
-    r"共産党支持",
-    r"ゲイ",
-    r"レズビアン",
-    r"バイセクシュアル",
-    r"トランスジェンダー",
-    r"LGBT",
-    r"depression",
-    r"depressed",
-    r"schizophrenia",
-    r"bipolar",
-    r"autistic",
-    r"cancer",
-    r"Christian",
-    r"Muslim",
-    r"Jewish",
-    r"Buddhist",
-    r"conservative",
-    r"liberal",
-    r"Democrat",
-    r"Republican",
-    r"gay",
-    r"lesbian",
-    r"bisexual",
-    r"transgender",
-)
 _JA_STABLE_PREFERENCE_PATTERNS = (
-    (r"^(?:私は|わたしは|僕は|俺は|自分は)(.+?)(?:が|を)好き(?:です|だ)?[。.!]?$", "好き"),
+    (
+        r"^(?:私は|わたしは|僕は|俺は|自分は)(.+?)(?:が|を)好き(?:です|だ)?[。.!]?$",
+        "好き",
+    ),
     (r"^(?:私は|わたしは|僕は|俺は|自分は)(.+?)(?:が|を)好む[。.!]?$", "好む"),
-    (r"^(?:私は|わたしは|僕は|俺は|自分は)(.+?)(?:が|を)嫌い(?:です|だ)?[。.!]?$", "嫌い"),
+    (
+        r"^(?:私は|わたしは|僕は|俺は|自分は)(.+?)(?:が|を)嫌い(?:です|だ)?[。.!]?$",
+        "嫌い",
+    ),
 )
 _EN_STABLE_PREFERENCE_PATTERNS = (
     (r"^I (?:like|love)\s+(.+?)[\.!]?$", "like"),
@@ -153,11 +112,15 @@ class RuleBasedMemoryCandidateExtractor(MemoryCandidateExtractor):
         candidates.extend(
             _extract_profile_statements(text, actor_id, space_id, source_observation_id)
         )
-        candidates.extend(_extract_preferred_names(text, actor_id, space_id, source_observation_id))
+        candidates.extend(
+            _extract_preferred_names(text, actor_id, space_id, source_observation_id)
+        )
         candidates.extend(
             _extract_stable_preferences(text, actor_id, space_id, source_observation_id)
         )
-        candidates.extend(_extract_response_style(text, actor_id, space_id, source_observation_id))
+        candidates.extend(
+            _extract_response_style(text, actor_id, space_id, source_observation_id)
+        )
         candidates.extend(
             _extract_language_preferences(text, actor_id, space_id, source_observation_id)
         )
@@ -234,7 +197,7 @@ def _extract_profile_statements(
     self_identification = _first_capture(text, _SELF_IDENTIFICATION_PATTERNS)
     if not self_identification:
         return []
-    is_sensitive = _contains_sensitive_profile_content(self_identification)
+    is_sensitive = contains_sensitive_profile_content(self_identification)
     return [
         MemoryCandidate(
             text=f"ユーザーは「{self_identification}」と自己紹介した。",
@@ -277,7 +240,7 @@ def _extract_preferred_names(
         list[MemoryCandidate]: 抽出された候補リスト。
     """
     preferred_name = _first_capture(text, _PREFERRED_NAME_PATTERNS)
-    if not preferred_name or not _is_safe_preferred_name(preferred_name):
+    if not preferred_name or not is_safe_preferred_name(preferred_name):
         return []
     return [
         MemoryCandidate(
@@ -427,29 +390,6 @@ def _en_preference_text(text: str) -> str | None:
         if target:
             return f"User {disposition}s {target}."
     return None
-
-
-def _is_safe_preferred_name(value: str) -> bool:
-    """希望呼称として保存してよい最小限の自己呼称値か判定する。
-
-    Returns:
-        bool: object-call 文脈ではなく、短い呼称らしい場合は True。
-    """
-    stripped = value.strip()
-    if not stripped or len(stripped) > _MAX_PREFERRED_NAME_LENGTH:
-        return False
-    return not any(
-        re.search(pattern, stripped, re.IGNORECASE) for pattern in _UNSAFE_PREFERRED_NAME_PATTERNS
-    )
-
-
-def _contains_sensitive_profile_content(value: str) -> bool:
-    """自己紹介文がセンシティブ属性を含むか保守的に判定する。
-
-    Returns:
-        bool: hot path 保存を避けるべき可能性がある場合は True。
-    """
-    return any(re.search(pattern, value, re.IGNORECASE) for pattern in _SENSITIVE_PROFILE_PATTERNS)
 
 
 def _first_capture(text: str, patterns: tuple[str, ...]) -> str | None:
