@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from iris.contracts.conversation import ConversationRecord
+    from iris.contracts.delivery import DeliveryTarget
     from iris.contracts.observations import Observation
 
 
@@ -98,3 +99,19 @@ def conversation_key_for(observation: Observation) -> ConversationKey:
     if context.account_id is not None:
         return ConversationKey(ConversationSubjectKind.ACCOUNT, str(context.account_id), space_id)
     return ConversationKey(ConversationSubjectKind.SESSION, str(observation.session_id))
+
+
+def conversation_key_for_delivery_target(target: DeliveryTarget) -> ConversationKey:
+    """Delivery target から confirmed assistant turn 用の会話keyを作る。
+
+    Actor/account を優先し、同一主体の並行会話は space で分離する。
+
+    Returns:
+        actor、account、sessionの優先順で作ったkey。
+    """
+    space_id = str(target.space_id) if target.space_id is not None else None
+    if target.actor_id is not None:
+        return ConversationKey(ConversationSubjectKind.ACTOR, str(target.actor_id), space_id)
+    if target.account_id is not None:
+        return ConversationKey(ConversationSubjectKind.ACCOUNT, str(target.account_id), space_id)
+    return ConversationKey(ConversationSubjectKind.SESSION, str(target.session_id))
