@@ -189,6 +189,7 @@ def _rebuild_delivery(item: DeliveryEnvelope, state: _DeliveryState) -> Delivery
         lease_expires_at=state.lease_expires_at,
         blocked_reason=state.blocked_reason,
         last_error_reason=state.last_error_reason,
+        source_observation_id=item.source_observation_id,
     )
 
 
