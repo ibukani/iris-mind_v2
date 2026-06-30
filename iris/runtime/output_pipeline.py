@@ -35,7 +35,10 @@ class RuntimeOutputPipeline:
         # 1. Action Safety
         action_decision = await self.action_safety_gate.check_plan(plan)
         if action_decision.decision is GateDecision.BLOCK:
-            return PresentedOutput(text=None)
+            return PresentedOutput(
+                text=None,
+                safety_block_reason=action_decision.reason or "action_safety_blocked",
+            )
 
         # 2. Presentation
         output = await self.presentation.present_action_plan(plan)
@@ -44,6 +47,9 @@ class RuntimeOutputPipeline:
         if output.is_sendable:
             out_decision = await self.output_safety_gate.check_output(output)
             if out_decision.decision is GateDecision.BLOCK:
-                return PresentedOutput(text=None)
+                return PresentedOutput(
+                    text=None,
+                    safety_block_reason=out_decision.reason or "output_safety_blocked",
+                )
 
         return output

@@ -48,7 +48,7 @@ def wire_output_safety_gate(
     Returns:
         設定に対応するoutput safety gate。
     """
-    if safety_config is not None and safety_config.mode == "basic":
+    if safety_config is not None and safety_config.mode in {"basic", "strict"}:
         return BasicOutputSafetyGate(max_output_chars=safety_config.max_output_chars)
     return AllowAllOutputGate()
 

@@ -26,6 +26,7 @@ from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.state.presence import InMemoryPresenceStore
+from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
     from iris.runtime.state.activity_journal import ActivityJournal
     from iris.runtime.state.activity_projection import ActivityProjectionStore
     from iris.runtime.state.presence import PresenceStore
+    from iris.runtime.state.safety_audit import SafetyAuditJournal
     from iris.runtime.state.scheduler_targets import SchedulerTargetStore
     from iris.runtime.state.space_occupancy import SpaceOccupancyStore
 
@@ -60,6 +62,7 @@ class RuntimeStateStores:
     relationship_store: RelationshipStore
     affect_store: AffectStore
     activity_journal: ActivityJournal
+    safety_audit_journal: SafetyAuditJournal
     activity_projection_store: ActivityProjectionStore
     presence_store: PresenceStore
     space_occupancy_store: SpaceOccupancyStore
@@ -111,6 +114,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         relationship_store=SQLiteRelationshipStore(ctx),
         affect_store=SQLiteAffectStore(ctx),
         activity_journal=SQLiteActivityJournal(ctx),
+        safety_audit_journal=InMemorySafetyAuditJournal(),
         activity_projection_store=InMemoryActivityProjectionStore(),
         presence_store=InMemoryPresenceStore(),
         space_occupancy_store=InMemorySpaceOccupancyStore(),
@@ -139,6 +143,7 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
         relationship_store=InMemoryRelationshipStore(),
         affect_store=InMemoryAffectStore(),
         activity_journal=InMemoryActivityJournal(),
+        safety_audit_journal=InMemorySafetyAuditJournal(),
         activity_projection_store=InMemoryActivityProjectionStore(),
         presence_store=InMemoryPresenceStore(),
         space_occupancy_store=InMemorySpaceOccupancyStore(),

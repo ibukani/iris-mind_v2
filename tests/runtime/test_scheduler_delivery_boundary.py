@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from iris.contracts.delivery import DeliveryEnvelope
     from iris.runtime.scheduler.ports import DeliveryAvailabilityProvider
     from iris.safety.delivery_gate import DeliverySafetyGate
+    from iris.safety.policy_engine import SafetyPolicyContext
 
 
 pytestmark = pytest.mark.anyio
@@ -268,8 +269,9 @@ class _BlockingGate:
         output: PresentedOutput,
         availability: AvailabilitySnapshot | None,
         now: datetime,
+        policy_context: SafetyPolicyContext | None = None,
     ) -> DeliverySafetyDecision:
-        _ = target, output, availability, now
+        _ = target, output, availability, now, policy_context
         return DeliverySafetyDecision(allowed=False, reason="blocked_for_test")
 
 
@@ -284,8 +286,9 @@ class _RecordingGate:
         output: PresentedOutput,
         availability: AvailabilitySnapshot | None,
         now: datetime,
+        policy_context: SafetyPolicyContext | None = None,
     ) -> DeliverySafetyDecision:
-        _ = target, output, now
+        _ = target, output, now, policy_context
         self.availability = availability
         return DeliverySafetyDecision(allowed=True, reason="allowed_for_test")
 

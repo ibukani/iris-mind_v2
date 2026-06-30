@@ -1,0 +1,107 @@
+"""Scheduler strict safety integration tests。"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
+import pytest
+
+from iris.contracts.actions import PresentedOutput
+from iris.contracts.delivery import DeliveryTarget
+from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
+from iris.core.ids import ExternalRef, ObservationId, SessionId
+from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
+from iris.runtime.scheduler.models import ScheduledObservation
+from iris.runtime.scheduler.runner import SchedulerRunner
+from iris.runtime.service import ObservationEnvelope, RuntimeResponse
+from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
+from iris.safety.delivery_gate import StrictDeliverySafetyGate
+
+pytestmark = pytest.mark.anyio
+_NOW = datetime(2026, 1, 1, 12, tzinfo=UTC)
+
+
+@dataclass
+class _Runtime:
+    output: PresentedOutput
+
+    async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
+        return RuntimeResponse(output=self.output, correlation_id=envelope.correlation_id)
+
+
+class _Scheduler:
+    async def due_observations(self, now: datetime) -> tuple[ScheduledObservation, ...]:
+        return (
+            ScheduledObservation(
+                observation=IdleTickObservation(
+                    observation_id=ObservationId("obs-strict"),
+                    session_id=SessionId("session-1"),
+                    context=ObservationContext(),
+                    occurred_at=now,
+                    kind=ObservationKind.IDLE_TICK,
+                    reason="test",
+                    idle_seconds=1000.0,
+                ),
+                correlation_id=None,
+                reason="test",
+                target=DeliveryTarget(
+                    provider="discord",
+                    provider_subject=ExternalRef("user-1"),
+                    provider_space_ref=None,
+                    session_id=SessionId("session-1"),
+                ),
+            ),
+        )
+
+    async def mark_dispatched(
+        self, observation_id: ObservationId, *, dispatched_at: datetime
+    ) -> None:
+        _ = observation_id, dispatched_at
+
+    async def mark_failed(
+        self, observation_id: ObservationId, *, failed_at: datetime, reason: str
+    ) -> None:
+        _ = observation_id, failed_at, reason
+
+
+async def test_idle_tick_sensitive_context_is_blocked_audited_and_not_enqueued() -> None:
+    """IdleTick strict block は reason を保持し outbox enqueue しない。"""
+    outbox = InMemoryDeliveryOutbox()
+    audit = InMemorySafetyAuditJournal()
+    runner = SchedulerRunner(
+        scheduler=_Scheduler(),
+        runtime_service=_Runtime(
+            PresentedOutput(
+                text="generated output",
+                policy_constraint_names=("sensitive_safety_context",),
+            )
+        ),
+        delivery_gate=StrictDeliverySafetyGate(),
+        outbox=outbox,
+        safety_audit_journal=audit,
+    )
+    result = await runner.run_once(_NOW)
+    assert result.results[0].status == "blocked"
+    assert result.results[0].reason == "proactive_sensitive_safety_context"
+    assert audit.records()[0].reason == "proactive_sensitive_safety_context"
+    assert (
+        await outbox.lease_due(provider="discord", now=_NOW, max_items=10, lease_seconds=30) == ()
+    )
+
+
+async def test_output_safety_reason_is_retained_and_audited() -> None:
+    """Output safety block reason は no-send result と audit に残る。"""
+    audit = InMemorySafetyAuditJournal()
+    runner = SchedulerRunner(
+        scheduler=_Scheduler(),
+        runtime_service=_Runtime(
+            PresentedOutput(text=None, safety_block_reason="output contains a secret-like pattern")
+        ),
+        delivery_gate=StrictDeliverySafetyGate(),
+        outbox=InMemoryDeliveryOutbox(),
+        safety_audit_journal=audit,
+    )
+    result = await runner.run_once(_NOW)
+    assert result.results[0].reason == "output contains a secret-like pattern"
+    assert audit.records()[0].stage.value == "output"

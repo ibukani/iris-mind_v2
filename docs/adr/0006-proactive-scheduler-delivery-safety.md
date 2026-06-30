@@ -41,7 +41,11 @@ Scheduler lifecycle は default disabled とする。現 phase の outbox / targ
 
 `SchedulerRunner` は `DeliveryAvailabilityProvider` protocol を通じて `DeliverySafetyGate` へ `AvailabilitySnapshot` を渡す。`IrisRuntimeService` に situation context を追加せず、availability safety を runtime scheduler path で有効にする。BUSY / UNAVAILABLE は enqueue を block する。
 
-`DeliverySafetyGate` の runtime-level rate limit は現 phase では未実装とする。プロアクティブ送信頻度は `IdleTickSource` が `min_interval_per_target_seconds` で制御する。`delivery.rate_limit_window_seconds` は予約済み config として残すが gate へ渡さない。
+`DeliverySafetyGate` の runtime-level rate limit は現 phase では未実装とする。プロアクティブ送信頻度は `IdleTickSource` が `min_interval_per_target_seconds` で制御する。`delivery.rate_limit_window_seconds` は送信rate limitには使わず、strict policyが同一targetの直近blockを数える時間窓として使う。
+
+`safety.mode = "strict"` は決定論的な配送安全規則を追加する。包括的なproduction moderationを意味しない。`IdleTickObservation` によるproactive配送では、`sensitive_safety_context`、BUSY / UNAVAILABLE、quiet hours、同一targetの直近反復blockを配送blockとする。通常のuser-initiated応答は、`sensitive_safety_context`の存在だけではblockしない。decisionはreason、risk level、not-before、raw contentを含まないaudit metadataを保持する。
+
+Output safetyとdelivery safetyのblock reasonはscheduler結果とruntime safety auditに保持する。Auditにはuser textや生成output本文を保存しない。
 
 ## Forbidden Paths
 

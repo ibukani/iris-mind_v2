@@ -655,7 +655,8 @@
       "default": "development",
       "allowedValues": [
         "development",
-        "basic"
+        "basic",
+        "strict"
       ],
       "env": "IRIS_SAFETY_MODE",
       "secret": false,

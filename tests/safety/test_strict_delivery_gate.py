@@ -1,0 +1,100 @@
+"""StrictDeliverySafetyGate tests。"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, time
+
+import pytest
+
+from iris.contracts.actions import PresentedOutput
+from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
+from iris.contracts.delivery import DeliveryTarget
+from iris.core.ids import ExternalRef, SessionId
+from iris.safety.delivery_gate import (
+    BasicDeliverySafetyGate,
+    QuietHoursPolicy,
+    StrictDeliverySafetyGate,
+)
+from iris.safety.policy_engine import DeliverySource, SafetyPolicyContext
+
+pytestmark = pytest.mark.anyio
+_NOW = datetime(2026, 1, 1, 23, tzinfo=UTC)
+
+
+def _target() -> DeliveryTarget:
+    return DeliveryTarget(
+        provider="discord",
+        provider_subject=ExternalRef("user-1"),
+        provider_space_ref=None,
+        session_id=SessionId("session-1"),
+    )
+
+
+async def test_strict_gate_blocks_sensitive_proactive_output() -> None:
+    """Sensitive policy provenance blocks proactive delivery。"""
+    decision = await StrictDeliverySafetyGate().check(
+        target=_target(),
+        output=PresentedOutput(text="safe rendered text"),
+        availability=None,
+        now=_NOW,
+        policy_context=SafetyPolicyContext(
+            source=DeliverySource.PROACTIVE_IDLE_TICK,
+            target_key="target",
+            policy_constraint_names=("sensitive_safety_context",),
+        ),
+    )
+    assert decision.allowed is False
+    assert decision.reason == "proactive_sensitive_safety_context"
+    assert decision.audit is not None
+
+
+async def test_strict_gate_does_not_block_user_response_for_sensitive_context_alone() -> None:
+    """User-initiated response は sensitive context だけでは block しない。"""
+    decision = await StrictDeliverySafetyGate().check(
+        target=_target(),
+        output=PresentedOutput(text="supportive response"),
+        availability=None,
+        now=_NOW,
+        policy_context=SafetyPolicyContext(
+            source=DeliverySource.USER_INITIATED,
+            target_key="target",
+            policy_constraint_names=("sensitive_safety_context",),
+        ),
+    )
+    assert decision.allowed is True
+
+
+async def test_strict_gate_blocks_proactive_busy_and_quiet_hours() -> None:
+    """Busy と quiet hours は proactive delivery を block する。"""
+    gate = StrictDeliverySafetyGate(
+        basic=BasicDeliverySafetyGate(
+            quiet_hours=QuietHoursPolicy(enabled=True, start=time(22), end=time(8), timezone="UTC")
+        )
+    )
+    availability = AvailabilitySnapshot(
+        actor_id=None,
+        status=AvailabilityStatus.BUSY,
+        reason="busy",
+        observed_at=_NOW,
+        computed_at=_NOW,
+    )
+    context = SafetyPolicyContext(
+        source=DeliverySource.PROACTIVE_IDLE_TICK,
+        target_key="target",
+    )
+    busy = await gate.check(
+        target=_target(),
+        output=PresentedOutput(text="hello"),
+        availability=availability,
+        now=datetime(2026, 1, 1, 12, tzinfo=UTC),
+        policy_context=context,
+    )
+    quiet = await gate.check(
+        target=_target(),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+        policy_context=context,
+    )
+    assert busy.reason == "availability_busy"
+    assert quiet.reason == "quiet_hours"

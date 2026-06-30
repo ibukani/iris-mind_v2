@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from iris.contracts.actions import SendMessageAction
@@ -10,6 +11,8 @@ from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTa
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ObservationId
 from iris.runtime.ingress.observation_ingress import ObservationCapability
 from iris.runtime.service import ObservationEnvelope, ObservationRuntimeService, RuntimeResponse
+from iris.runtime.state.safety_audit import SafetyAuditRecord, SafetyAuditStage
+from iris.safety.policy_engine import DeliverySource, SafetyPolicyContext, SafetyRiskLevel
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -18,6 +21,7 @@ if TYPE_CHECKING:
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.scheduler.models import ScheduledObservation
     from iris.runtime.scheduler.ports import DeliveryAvailabilityProvider, RuntimeScheduler
+    from iris.runtime.state.safety_audit import SafetyAuditJournal
     from iris.safety.delivery_gate import DeliverySafetyDecision, DeliverySafetyGate
 
 
@@ -51,6 +55,8 @@ class SchedulerRunner:
     availability_provider: DeliveryAvailabilityProvider | None = None
     delivery_enabled: bool = True
     max_attempts: int = 3
+    safety_audit_journal: SafetyAuditJournal | None = None
+    recent_block_window_seconds: float = 1800.0
 
     async def run_once(self, now: datetime) -> SchedulerRunResult:
         """Dispatch due observations once without sleeping.
@@ -108,7 +114,23 @@ class SchedulerRunner:
         observation_id = scheduled.observation.observation_id
         if not response.output.is_sendable:
             await self.scheduler.mark_dispatched(observation_id, dispatched_at=now)
-            return ScheduledObservationResult(observation_id, "no_send", "output_not_sendable")
+            reason = response.output.safety_block_reason or "output_not_sendable"
+            if response.output.safety_block_reason is not None:
+                await self._audit(
+                    SafetyAuditRecord(
+                        observation_id=observation_id,
+                        occurred_at=now,
+                        stage=SafetyAuditStage.OUTPUT,
+                        allowed=False,
+                        reason=reason,
+                        source=_delivery_source(scheduled),
+                        target_key=_optional_target_key(scheduled.target),
+                        risk_level=SafetyRiskLevel.HIGH,
+                        policy="output_safety",
+                        policy_version="1",
+                    )
+                )
+            return ScheduledObservationResult(observation_id, "no_send", reason)
         target = scheduled.target
         block_reason = _delivery_block_reason(
             delivery_enabled=self.delivery_enabled,
@@ -121,16 +143,51 @@ class SchedulerRunner:
             msg = "delivery target required after delivery block check"
             raise RuntimeError(msg)
         availability = await self._availability_for(target, now)
+        target_key = _target_key(target)
+        recent_block_count = await self._recent_block_count(target_key, now)
         decision = await self.delivery_gate.check(
             target=target,
             output=response.output,
             availability=availability,
             now=now,
+            policy_context=SafetyPolicyContext(
+                source=_delivery_source(scheduled),
+                target_key=target_key,
+                policy_constraint_names=response.output.policy_constraint_names,
+                recent_block_count=recent_block_count,
+            ),
+        )
+        await self._audit(
+            SafetyAuditRecord(
+                observation_id=observation_id,
+                occurred_at=now,
+                stage=SafetyAuditStage.DELIVERY,
+                allowed=decision.allowed,
+                reason=decision.reason,
+                source=_delivery_source(scheduled),
+                target_key=target_key,
+                risk_level=decision.risk_level,
+                policy=(decision.audit.policy if decision.audit is not None else "basic_delivery"),
+                policy_version=(
+                    decision.audit.policy_version if decision.audit is not None else "1"
+                ),
+            )
         )
         if not decision.allowed:
             await self.scheduler.mark_dispatched(observation_id, dispatched_at=now)
             return ScheduledObservationResult(observation_id, "blocked", decision.reason)
         return await self._enqueue_sendable(scheduled, response, decision, target, now)
+
+    async def _recent_block_count(self, target_key: str, now: datetime) -> int:
+        if self.safety_audit_journal is None:
+            return 0
+        since = now - timedelta(seconds=self.recent_block_window_seconds)
+        return await self.safety_audit_journal.recent_block_count(target_key, since=since)
+
+    async def _audit(self, record: SafetyAuditRecord) -> None:
+        if self.safety_audit_journal is None:
+            return
+        await self.safety_audit_journal.append(record)
 
     async def _availability_for(
         self,
@@ -203,6 +260,18 @@ def _idempotency_key(observation_id: ObservationId, target: DeliveryTarget) -> s
         f"proactive:{observation_id}:{target.provider}:"
         f"{target.provider_subject}:{target.provider_space_ref}"
     )
+
+
+def _delivery_source(scheduled: ScheduledObservation) -> DeliverySource:
+    return scheduled.delivery_source or DeliverySource.PROACTIVE_IDLE_TICK
+
+
+def _target_key(target: DeliveryTarget) -> str:
+    return f"{target.provider}:{target.provider_subject or ''}:{target.provider_space_ref or ''}"
+
+
+def _optional_target_key(target: DeliveryTarget | None) -> str:
+    return _target_key(target) if target is not None else "unresolved"
 
 
 def _delivery_block_reason(*, delivery_enabled: bool, has_target: bool) -> str | None:

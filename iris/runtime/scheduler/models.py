@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from iris.contracts.delivery import DeliveryTarget
     from iris.contracts.observations import Observation
     from iris.core.ids import CorrelationId
+    from iris.safety.policy_engine import DeliverySource
 
 
 @dataclass(frozen=True)
@@ -19,3 +20,4 @@ class ScheduledObservation:
     correlation_id: CorrelationId | None
     reason: str
     target: DeliveryTarget | None = None
+    delivery_source: DeliverySource | None = None
