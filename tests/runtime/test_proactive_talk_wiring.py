@@ -23,7 +23,7 @@ def test_wire_proactive_talk_feature_returns_explicit_feature_definition() -> No
     assert isinstance(feature, FeatureDefinition)
     assert feature.name == "proactive_talk"
     assert feature.observation_sources == ()
-    assert feature.background_jobs == ()
+    assert feature.background_loop_tasks == ()
 
 
 @pytest.mark.anyio

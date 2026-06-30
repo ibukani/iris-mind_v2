@@ -92,6 +92,9 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
 def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     """SQLite backend 用の永続状態ストア群を組み立てる。
 
+    Learning dispatch と background job queue は foundation 段階では明示的に
+    process-local。SQLite 永続化を追加するまで restart を越えて保持しない。
+
     Returns:
         SQLite backend に対応した RuntimeStateStores。
     """

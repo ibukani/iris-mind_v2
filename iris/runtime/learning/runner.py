@@ -82,7 +82,10 @@ class BackgroundJobRunner:
                     str(failure.exception),
                     failed_at + timedelta(seconds=self._retry_backoff_seconds),
                 )
-                logger.exception("background job failed: {}", job.job_id)
+                logger.opt(exception=failure.exception).error(
+                    "background job failed: {}",
+                    job.job_id,
+                )
                 continue
             await self._queue.mark_succeeded(job.job_id, self._now())
         return len(jobs)

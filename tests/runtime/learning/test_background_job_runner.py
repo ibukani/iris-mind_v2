@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from loguru import logger
 import pytest
 
 from iris.runtime.learning.jobs import (
@@ -68,9 +69,15 @@ async def test_worker_failure_is_retryable_and_does_not_stop_batch() -> None:
         retry_backoff_seconds=0.0,
         now=lambda: first.not_before,
     )
-    assert await runner.run_once() == 2
+    messages: list[str] = []
+    sink_id = logger.add(lambda message: messages.append(str(message)))
+    try:
+        assert await runner.run_once() == 2
+    finally:
+        logger.remove(sink_id)
     assert worker.calls == [first.job_id, second.job_id]
     assert (await queue.get(first.job_id)).status is BackgroundJobStatus.FAILED_RETRYABLE
+    assert any("RuntimeError: worker failed" in message for message in messages)
 
 
 async def test_missing_worker_is_permanent_failure() -> None:

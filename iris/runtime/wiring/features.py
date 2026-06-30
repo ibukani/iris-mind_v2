@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from iris.contracts.memory import MemoryStore
     from iris.contracts.presentation import ActionPlanPresenter
     from iris.contracts.relationship import RelationshipStore
-    from iris.features.definition import BackgroundJob, FeatureDefinition, LearningHook
+    from iris.features.definition import BackgroundLoopTask, FeatureDefinition, LearningHook
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,10 @@ class RuntimeFeatureCatalog:
 
 def wire_runtime_features() -> RuntimeFeatureCatalog:
     """標準ランタイムのフィーチャー集合を組み立てる。
+
+    配送結果だけでは明示的ユーザー入力を復元できないため、標準 catalog は
+    memory enqueue hook を登録しない。十分な typed context を持つ integration が
+    `LearningHook` として明示注入する。
 
     Returns:
         明示注入するフィーチャー定義の集合。
@@ -87,15 +91,15 @@ def collect_learning_hooks(
     return collect_feature_items(tuple(feature.learning_hooks for feature in features))
 
 
-def collect_background_jobs(
+def collect_background_loop_tasks(
     features: Sequence[FeatureDefinition],
-) -> tuple[BackgroundJob, ...]:
-    """バックグラウンドジョブをフィーチャー登録順に収集する。
+) -> tuple[BackgroundLoopTask, ...]:
+    """Feature-owned periodic task をフィーチャー登録順に収集する。
 
     Returns:
-        登録順のバックグラウンドジョブ。
+        登録順の periodic task。
     """
-    return collect_feature_items(tuple(feature.background_jobs for feature in features))
+    return collect_feature_items(tuple(feature.background_loop_tasks for feature in features))
 
 
 def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefinition:

@@ -29,8 +29,8 @@ class LearningHook(Protocol):
         """実行されたアクションの結果を処理する。"""
 
 
-class BackgroundJob(Protocol):
-    """バックグラウンドジョブのプロトコル。"""
+class BackgroundLoopTask(Protocol):
+    """独自周期で1 iterationずつ動く feature-owned loop task。"""
 
     name: str
 
@@ -60,5 +60,5 @@ class FeatureDefinition:
     activity_reaction_planners: tuple[ActivityReactionPlanner, ...] = ()
     observation_sources: tuple[ObservationSource, ...] = ()
     learning_hooks: tuple[LearningHook, ...] = ()
-    background_jobs: tuple[BackgroundJob, ...] = ()
+    background_loop_tasks: tuple[BackgroundLoopTask, ...] = ()
     action_plan_presenters: tuple[ActionPlanPresenter, ...] = ()
