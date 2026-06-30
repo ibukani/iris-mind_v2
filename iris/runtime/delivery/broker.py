@@ -138,6 +138,7 @@ class RuntimeAppActionBroker(AppActionBroker):
                 action=delivery.action,
                 target=delivery.target,
                 reported_at=report.reported_at,
+                source_observation_id=delivery.source_observation_id,
             )
         )
 

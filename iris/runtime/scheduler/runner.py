@@ -182,6 +182,7 @@ class SchedulerRunner:
             attempts=0,
             max_attempts=self.max_attempts,
             idempotency_key=_idempotency_key(observation_id, target),
+            source_observation_id=observation_id,
         )
         stored = await self.outbox.enqueue(envelope)
         await self.scheduler.mark_dispatched(observation_id, dispatched_at=now)

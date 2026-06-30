@@ -11,7 +11,14 @@ import pytest
 from iris.adapters.persistence.sqlite.stores.delivery_outbox import SQLiteDeliveryOutbox
 from iris.contracts.actions import ActionResult, ActionStatus, NoAction, SendMessageAction
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTarget
-from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, SessionId
+from iris.core.ids import (
+    ActionId,
+    CorrelationId,
+    DeliveryId,
+    ExternalRef,
+    ObservationId,
+    SessionId,
+)
 from iris.runtime.delivery.outbox import DeliveryOutboxError
 
 if TYPE_CHECKING:
@@ -51,6 +58,7 @@ def _envelope(suffix: str = "1", *, provider: str = "discord") -> DeliveryEnvelo
         lease_expires_at=None,
         blocked_reason=None,
         last_error_reason=None,
+        source_observation_id=ObservationId(f"obs-{suffix}"),
     )
 
 
@@ -89,6 +97,7 @@ async def test_sqlite_enqueue_lease_and_reopen_persists_item(tmp_path: Path) -> 
     assert len(leased) == 1
     assert leased[0].delivery_id == DeliveryId("delivery-1")
     assert leased[0].status is DeliveryStatus.LEASED
+    assert leased[0].source_observation_id == ObservationId("obs-1")
     await reopened.close()
 
 

@@ -10,7 +10,7 @@ import pytest
 from iris.adapters.app_gateway.ports import AppActionBrokerError
 from iris.contracts.actions import ActionResult, ActionStatus
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryReport
-from iris.core.ids import ExternalRef
+from iris.core.ids import ExternalRef, ObservationId
 from iris.runtime.delivery.broker import RuntimeAppActionBroker
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
 from iris.runtime.learning.dispatch import InMemoryLearningDispatchStore
@@ -43,7 +43,9 @@ async def _leased_broker(hook: _EventHook) -> tuple[RuntimeAppActionBroker, Deli
         learning_dispatch_store=InMemoryLearningDispatchStore(),
     )
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    await outbox.enqueue(envelope())
+    await outbox.enqueue(
+        envelope().model_copy(update={"source_observation_id": ObservationId("obs-delivery")})
+    )
     leased = (await broker.poll_actions(provider="discord", now=now, max_items=1))[0]
     return broker, leased
 
@@ -83,6 +85,7 @@ async def test_accepted_report_emits_learning_event(status: ActionStatus) -> Non
     assert hook.events[0].delivery == updated
     assert hook.events[0].action == leased.action
     assert hook.events[0].target == leased.target
+    assert hook.events[0].source_observation_id == ObservationId("obs-delivery")
 
 
 async def test_duplicate_report_does_not_emit_duplicate_learning_event() -> None:

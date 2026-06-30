@@ -5,17 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
+from iris.contracts.actions import ActionStatus, SendMessageAction
 from iris.contracts.conversation import ConversationRecord, ConversationRole, ConversationWindow
 from iris.contracts.workspace_context import SituationContextSnapshot
 from iris.core.datetime_utils import now_utc
 from iris.runtime.observation_router import actor_message_observation
-from iris.runtime.state.conversation import conversation_key_for
+from iris.runtime.state.conversation import (
+    conversation_key_for,
+    conversation_key_for_delivery_target,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
     from iris.contracts.actions import PresentedOutput
+    from iris.contracts.learning import LearningEvent
     from iris.contracts.observations import Observation
     from iris.runtime.state.conversation import ConversationHistoryStore
 
@@ -48,6 +53,39 @@ class ConversationHistoryPolicy:
             used_chars += record_chars
         selected.reverse()
         return tuple(selected)
+
+
+@dataclass(frozen=True)
+class DeliveryConversationHistoryHook:
+    """配送成功後に confirmed assistant turn だけを短期履歴へ確定する。"""
+
+    store: ConversationHistoryStore
+
+    async def after_action_result(self, event: LearningEvent) -> None:
+        """成功配送のみ assistant turn として確定する。
+
+        Blocked/failed/cancelled delivery は、ユーザーに届いた通常の assistant turn
+        として扱わない。
+        """
+        if event.result.status is not ActionStatus.SUCCEEDED or event.target is None:
+            return
+        if not isinstance(event.action, SendMessageAction) or not event.action.text.strip():
+            return
+        await self.store.append(
+            conversation_key_for_delivery_target(event.target),
+            (
+                ConversationRecord(
+                    role=ConversationRole.ASSISTANT,
+                    content=event.action.text,
+                    occurred_at=event.result.delivered_at or event.reported_at,
+                    observation_id=event.source_observation_id,
+                    session_id=event.action.session_id,
+                    actor_id=event.target.actor_id,
+                    account_id=event.target.account_id,
+                    space_id=event.target.space_id,
+                ),
+            ),
+        )
 
 
 class _SituationContextUpdate(TypedDict):

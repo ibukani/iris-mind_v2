@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.core.datetime_utils import now_utc
-from iris.runtime.conversation import ShortTermConversationRuntime
+from iris.runtime.conversation import DeliveryConversationHistoryHook, ShortTermConversationRuntime
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.learning.hooks import LearningHookRunner
@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.adapters.app_gateway.ports import AppActionBroker
+    from iris.features.definition import LearningHook
     from iris.runtime.app import IrisApp
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.output_pipeline import RuntimeOutputPipeline
@@ -263,14 +264,10 @@ def _wire_runtime_gateway_components(
         wire_app_action_broker(
             stores.delivery_outbox,
             config.delivery,
-            learning_hook_runner=(
-                LearningHookRunner(collect_learning_hooks(feature_catalog.features))
-                if config.learning.enabled
-                else None
+            learning_hook_runner=LearningHookRunner(
+                _wire_action_result_hooks(config, stores, feature_catalog)
             ),
-            learning_dispatch_store=(
-                stores.learning_dispatch_store if config.learning.enabled else None
-            ),
+            learning_dispatch_store=stores.learning_dispatch_store,
         )
         if config.delivery.enabled
         else None
@@ -285,4 +282,26 @@ def _wire_runtime_gateway_components(
         space_resolver=space_resolver,
         app_action_broker=app_action_broker,
         availability_provider=availability_provider,
+    )
+
+
+def _wire_action_result_hooks(
+    config: IrisRuntimeConfig,
+    stores: RuntimeStateStores,
+    feature_catalog: RuntimeFeatureCatalog,
+) -> tuple[LearningHook, ...]:
+    """配送結果後に実行する hook 群を組み立てる。
+
+    History finalization は learning.enabled に関係なく配送境界の一部として
+    実行し、追加の feature-owned learning hooks だけを learning.enabled で制御する。
+
+    Returns:
+        登録順に実行する action-result hook 群。
+    """
+    feature_hooks = (
+        collect_learning_hooks(feature_catalog.features) if config.learning.enabled else ()
+    )
+    return (
+        DeliveryConversationHistoryHook(stores.conversation_history_store),
+        *feature_hooks,
     )

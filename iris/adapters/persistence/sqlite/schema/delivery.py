@@ -25,6 +25,7 @@ class DeliveryOutboxModel(Base):
     lease_expires_at: Mapped[str | None] = mapped_column(String, nullable=True)
     blocked_reason: Mapped[str | None] = mapped_column(String, nullable=True)
     last_error_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_observation_id: Mapped[str | None] = mapped_column(String, nullable=True)
     target_provider: Mapped[str] = mapped_column(String, nullable=False)
     target_provider_subject: Mapped[str | None] = mapped_column(String, nullable=True)
     target_provider_space_ref: Mapped[str | None] = mapped_column(String, nullable=True)

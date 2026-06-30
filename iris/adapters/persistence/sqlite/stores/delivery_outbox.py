@@ -50,6 +50,7 @@ from iris.core.ids import (
     DeliveryId,
     ExternalRef,
     LeaseId,
+    ObservationId,
     SessionId,
     SpaceId,
 )
@@ -438,6 +439,7 @@ def _envelope_to_model(envelope: DeliveryEnvelope) -> DeliveryOutboxModel:
         lease_expires_at=datetime_to_text(envelope.lease_expires_at),
         blocked_reason=envelope.blocked_reason,
         last_error_reason=envelope.last_error_reason,
+        source_observation_id=optional_text(envelope.source_observation_id),
         target_provider=envelope.target.provider,
         target_provider_subject=optional_text(envelope.target.provider_subject),
         target_provider_space_ref=optional_text(envelope.target.provider_space_ref),
@@ -488,4 +490,5 @@ def _model_to_envelope(row: DeliveryOutboxModel) -> DeliveryEnvelope:
         lease_expires_at=optional_datetime(row.lease_expires_at),
         blocked_reason=row.blocked_reason,
         last_error_reason=row.last_error_reason,
+        source_observation_id=optional_new_type(ObservationId, row.source_observation_id),
     )
