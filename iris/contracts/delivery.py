@@ -14,6 +14,7 @@ from iris.core.ids import (
     DeliveryId,
     ExternalRef,
     LeaseId,
+    ObservationId,
     SessionId,
     SpaceId,
 )
@@ -104,6 +105,7 @@ class DeliveryEnvelope(BaseModel):
     lease_expires_at: datetime | None = None
     blocked_reason: str | None = None
     last_error_reason: str | None = None
+    source_observation_id: ObservationId | None = None
 
 
 class DeliveryLease(BaseModel):
