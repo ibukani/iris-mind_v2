@@ -33,6 +33,57 @@ _SECRET_PATTERNS = (
     r"api\s*キー",
 )
 
+_SENSITIVE_PROFILE_PATTERNS = (
+    r"うつ病",
+    r"鬱病",
+    r"統合失調症",
+    r"双極性障害",
+    r"発達障害",
+    r"ADHD",
+    r"自閉",
+    r"癌",
+    r"がん患者",
+    r"キリスト教徒",
+    r"イスラム教徒",
+    r"ユダヤ教徒",
+    r"仏教徒",
+    r"右翼",
+    r"左翼",
+    r"保守派",
+    r"リベラル",
+    r"自民党支持",
+    r"共産党支持",
+    r"ゲイ",
+    r"レズビアン",
+    r"バイセクシュアル",
+    r"トランスジェンダー",
+    r"LGBT",
+    r"depression",
+    r"depressed",
+    r"schizophrenia",
+    r"bipolar",
+    r"autistic",
+    r"cancer",
+    r"Christian",
+    r"Muslim",
+    r"Jewish",
+    r"Buddhist",
+    r"conservative",
+    r"liberal",
+    r"Democrat",
+    r"Republican",
+    r"gay",
+    r"lesbian",
+    r"bisexual",
+    r"transgender",
+)
+
+_UNSAFE_PREFERRED_NAME_PATTERNS = (
+    r"^ユーザーの希望呼称は「.*[をに].*」。$",
+    r"^ユーザーの希望呼称は「(?:この|その|あの|これ|それ|あれ|彼|彼女|変数|プロジェクト|関数|クラス).*」。$",
+    r"^User's preferred name is (?:this|that|him|her|them|variable|project|function|class)\b",
+)
+
 _EXPLICIT_SOURCES = frozenset(
     {
         MemoryCandidateSource.EXPLICIT_USER_REQUEST,
@@ -94,8 +145,9 @@ class MemoryWritePolicy:
             return False
         if self._has_invalid_provenance(candidate):
             return False
-        lowered = text.casefold()
-        return not any(re.search(pattern, lowered, re.IGNORECASE) for pattern in _SECRET_PATTERNS)
+        if self._has_safety_rejected_content(text):
+            return False
+        return not any(re.search(pattern, text, re.IGNORECASE) for pattern in _SECRET_PATTERNS)
 
     def _has_invalid_content(self, text: str, candidate: MemoryCandidate) -> bool:
         """内容・しきい値の観点で保存不可か判定する。
@@ -123,3 +175,13 @@ class MemoryWritePolicy:
             or candidate.sensitivity not in _ACCEPTED_SENSITIVITY
             or candidate.review_required
         )
+
+    @staticmethod
+    def _has_safety_rejected_content(text: str) -> bool:
+        """正規化済み候補テキストから誤保存リスクを検出する。
+
+        Returns:
+            bool: hot path 保存を避けるべき場合は True。
+        """
+        patterns = (*_SENSITIVE_PROFILE_PATTERNS, *_UNSAFE_PREFERRED_NAME_PATTERNS)
+        return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
