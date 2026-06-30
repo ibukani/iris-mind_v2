@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.core.datetime_utils import now_utc
+from iris.runtime.conversation import ShortTermConversationRuntime
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.learning.hooks import LearningHookRunner
@@ -121,6 +122,7 @@ def build_runtime_service(
         workspace_context_assembler=workspace_context_assembler,
         activity_event_reaction_handler=activity_event_reaction_handler,
         observation_observer=LoggingRuntimeObservationObserver(),
+        conversation_runtime=ShortTermConversationRuntime(stores.conversation_history_store),
     )
 
 

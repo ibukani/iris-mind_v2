@@ -21,6 +21,7 @@ from iris.runtime.learning.dispatch import InMemoryLearningDispatchStore
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
+from iris.runtime.state.conversation import InMemoryConversationHistoryStore
 from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
@@ -66,6 +67,7 @@ class RuntimeStateStores:
     scheduler_target_store: SchedulerTargetStore
     background_job_queue: InMemoryBackgroundJobQueue
     learning_dispatch_store: InMemoryLearningDispatchStore
+    conversation_history_store: InMemoryConversationHistoryStore
     sqlite_context: SQLitePersistenceContext | None = None
     memory_lifecycle: SyncLifecycle | None = None
 
@@ -92,8 +94,8 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
 def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     """SQLite backend 用の永続状態ストア群を組み立てる。
 
-    Learning dispatch と background job queue は foundation 段階では明示的に
-    process-local。SQLite 永続化を追加するまで restart を越えて保持しない。
+    Learning dispatch、background job queue、短期会話履歴は明示的に
+    process-local。SQLite 永続化対象ではなく restart を越えて保持しない。
 
     Returns:
         SQLite backend に対応した RuntimeStateStores。
@@ -119,6 +121,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         scheduler_target_store=SQLiteSchedulerTargetStore(ctx),
         background_job_queue=InMemoryBackgroundJobQueue(),
         learning_dispatch_store=InMemoryLearningDispatchStore(),
+        conversation_history_store=InMemoryConversationHistoryStore(),
         sqlite_context=ctx,
         memory_lifecycle=sqlite_memory_store,
     )
@@ -145,6 +148,7 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
         scheduler_target_store=InMemorySchedulerTargetStore(),
         background_job_queue=InMemoryBackgroundJobQueue(),
         learning_dispatch_store=InMemoryLearningDispatchStore(),
+        conversation_history_store=InMemoryConversationHistoryStore(),
         sqlite_context=None,
         memory_lifecycle=None,
     )

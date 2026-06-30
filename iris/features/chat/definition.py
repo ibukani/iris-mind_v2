@@ -13,6 +13,7 @@ from iris.contracts.observations import ActorMessageObservation
 from iris.features.definition import FeatureDefinition
 
 if TYPE_CHECKING:
+    from iris.contracts.conversation import ConversationRecord
     from iris.contracts.policy import PolicyConstraint
 
 
@@ -27,6 +28,7 @@ class ResponsePrompt:
     relationship_context: str | None = None
     goals: tuple[str, ...] = ()
     constraints: tuple[str, ...] = ()
+    conversation_history: tuple[ConversationRecord, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,7 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
         constraints=tuple(
             _format_policy_constraint(constraint) for constraint in frame.constraints
         ),
+        conversation_history=frame.conversation_history,
     )
 
 

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from iris.contracts.observations import (
     ActivityEventObservation,
+    ActorMessageObservation,
     Observation,
     PresenceSignalObservation,
 )
@@ -70,5 +71,18 @@ def presence_signal_observation(
         PresenceSignalObservation または None。
     """
     if isinstance(observation, PresenceSignalObservation):
+        return observation
+    return None
+
+
+def actor_message_observation(
+    observation: Observation,
+) -> ActorMessageObservation | None:
+    """ActorMessageObservationならtyped observationを返す。
+
+    Returns:
+        ActorMessageObservationまたはNone。
+    """
+    if isinstance(observation, ActorMessageObservation):
         return observation
     return None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -11,6 +12,8 @@ from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.ports import LLMRole
+from iris.contracts.conversation import ConversationRecord, ConversationRole
+from iris.core.ids import ObservationId, SessionId
 from iris.features.chat.definition import ResponsePrompt
 from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime_config
 from iris.runtime.config.llm import LLMProvider
@@ -197,6 +200,43 @@ async def test_llm_response_generator_builds_request() -> None:
     result = await gen.generate_response(prompt)
     assert result.text == "reply"
     assert result.model == "test-model"
+
+
+@pytest.mark.anyio
+async def test_llm_response_generator_includes_prior_conversation_messages() -> None:
+    """LLM requestをsystem、過去会話、current userの順で構築する。"""
+    client = FakeLLMClient(responses=("reply",), model="test-model")
+    prompt = ResponsePrompt(
+        system_instruction="You are helpful.",
+        actor_text="現在の質問",
+        conversation_history=(
+            ConversationRecord(
+                role=ConversationRole.USER,
+                content="前の質問",
+                occurred_at=datetime(2026, 6, 30, tzinfo=UTC),
+                observation_id=ObservationId("obs-user"),
+                session_id=SessionId("session-old"),
+            ),
+            ConversationRecord(
+                role=ConversationRole.ASSISTANT,
+                content="前の返答",
+                occurred_at=datetime(2026, 6, 30, tzinfo=UTC),
+                observation_id=ObservationId("obs-assistant"),
+                session_id=SessionId("session-old"),
+            ),
+        ),
+    )
+    await LLMResponseGenerator(client, model="test-model").generate_response(prompt)
+    request = client.requests[0]
+    assert tuple((message.role, message.content) for message in request.messages[1:]) == (
+        (LLMRole.USER, "前の質問"),
+        (LLMRole.ASSISTANT, "前の返答"),
+        (LLMRole.USER, "現在の質問"),
+    )
+    assert sum(message.content == "現在の質問" for message in request.messages) == 1
+    assert "Respond in the same natural language" in request.messages[0].content
+    assert "natural Japanese only" in request.messages[0].content
+    assert "Do not mix Chinese" in request.messages[0].content
 
 
 @pytest.mark.anyio

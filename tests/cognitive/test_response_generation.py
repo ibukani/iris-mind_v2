@@ -10,12 +10,14 @@ from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import StepStatus
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.workspace.frame import WorkspaceFrame
+from iris.contracts.conversation import ConversationRecord, ConversationRole, ConversationWindow
 from iris.contracts.observations import (
     ActorMessageObservation,
     IdleTickObservation,
     ObservationContext,
     ObservationKind,
 )
+from iris.contracts.workspace_context import SituationContextSnapshot
 from iris.core.ids import ObservationId, SessionId
 from iris.features.chat.definition import (
     GeneratedResponse,
@@ -131,3 +133,27 @@ def test_response_generation_does_not_mutate_workspace_frame_directly() -> None:
 
     assert_frozen_field(frame, "candidate_action_plans", ())
     assert build_response_prompt(frame) is None
+
+
+@pytest.mark.anyio
+async def test_conversation_window_reaches_frame_and_response_prompt() -> None:
+    """Runtime会話windowをframe経由でresponse promptへ渡す。"""
+    previous = ConversationRecord(
+        role=ConversationRole.USER,
+        content="previous",
+        occurred_at=datetime(2026, 6, 3, tzinfo=UTC),
+        observation_id=ObservationId("obs-previous"),
+        session_id=SessionId("session-previous"),
+    )
+    builder = FrameBuilder()
+    frame = builder.build_initial(
+        actor_message("current"),
+        situation_context=SituationContextSnapshot(
+            conversation_window=ConversationWindow(records=(previous,))
+        ),
+    )
+    frame = builder.apply(frame, await SimplePerceptionStep().run(frame))
+    prompt = build_response_prompt(frame)
+    assert frame.conversation_history == (previous,)
+    assert prompt is not None
+    assert prompt.conversation_history == (previous,)

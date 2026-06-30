@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from iris.contracts.activity import ActivityEventRecord
 from iris.contracts.availability import AvailabilitySnapshot
+from iris.contracts.conversation import ConversationWindow
 from iris.contracts.identity import Identity
 from iris.contracts.presence import PresenceSnapshot
 from iris.contracts.space_occupancy import SpaceOccupancySnapshot
@@ -42,3 +43,4 @@ class SituationContextSnapshot(BaseModel):
     presence: PresenceSnapshot | None = None
     space_occupancy: SpaceOccupancySnapshot | None = None
     availability: AvailabilitySnapshot | None = None
+    conversation_window: ConversationWindow = Field(default_factory=ConversationWindow)
