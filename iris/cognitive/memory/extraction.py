@@ -112,15 +112,11 @@ class RuleBasedMemoryCandidateExtractor(MemoryCandidateExtractor):
         candidates.extend(
             _extract_profile_statements(text, actor_id, space_id, source_observation_id)
         )
-        candidates.extend(
-            _extract_preferred_names(text, actor_id, space_id, source_observation_id)
-        )
+        candidates.extend(_extract_preferred_names(text, actor_id, space_id, source_observation_id))
         candidates.extend(
             _extract_stable_preferences(text, actor_id, space_id, source_observation_id)
         )
-        candidates.extend(
-            _extract_response_style(text, actor_id, space_id, source_observation_id)
-        )
+        candidates.extend(_extract_response_style(text, actor_id, space_id, source_observation_id))
         candidates.extend(
             _extract_language_preferences(text, actor_id, space_id, source_observation_id)
         )
