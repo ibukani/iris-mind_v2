@@ -5,6 +5,7 @@ from __future__ import annotations
 from iris.cognitive.memory.candidates import (
     MemoryCandidate,
     MemoryCandidateExtractor,
+    MemoryCandidateSensitivity,
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
@@ -16,6 +17,7 @@ from iris.cognitive.memory.write import MemoryWriteStep
 __all__ = [
     "MemoryCandidate",
     "MemoryCandidateExtractor",
+    "MemoryCandidateSensitivity",
     "MemoryCandidateSource",
     "MemoryRetentionPolicy",
     "MemoryRetrievalStep",

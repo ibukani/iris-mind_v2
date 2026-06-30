@@ -50,6 +50,7 @@ def _candidate_metadata(candidate: MemoryCandidate) -> ImmutableMetadata:
     values = dict(candidate.metadata)
     values.setdefault("candidate_source", candidate.source.value)
     values.setdefault("retention_policy", candidate.retention_policy.value)
+    values.setdefault("sensitivity", candidate.sensitivity.value)
     values.setdefault("review_required", "true" if candidate.review_required else "false")
     if candidate.reason is not None:
         values.setdefault("reason", candidate.reason)

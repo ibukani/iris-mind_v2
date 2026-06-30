@@ -9,6 +9,7 @@ from typing import NewType
 from pydantic import BaseModel, ConfigDict
 
 from iris.cognitive.memory.candidates import (
+    MemoryCandidateSensitivity,
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
@@ -51,6 +52,7 @@ class MemoryBackgroundJobPayload(BaseModel):
     source: MemoryCandidateSource
     reason: str | None
     retention_policy: MemoryRetentionPolicy
+    sensitivity: MemoryCandidateSensitivity = MemoryCandidateSensitivity.NORMAL
     review_required: bool
     salience: float
     confidence: float
