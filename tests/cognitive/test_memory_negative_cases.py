@@ -84,9 +84,7 @@ async def test_memory_write_step_does_not_store_sensitive_self_identification(
 async def test_memory_write_step_ignores_ambiguous_preference_statement() -> None:
     """曖昧な好み表現は長期 preference memory として保存しない。"""
     store = InMemoryMemoryStore()
-    result = await MemoryWriteStep(store=store).run(
-        _build_frame("私は青が好きかもしれない")
-    )
+    result = await MemoryWriteStep(store=store).run(_build_frame("私は青が好きかもしれない"))
 
     assert result.status == StepStatus.SKIPPED
     assert result.written_ids == ()
