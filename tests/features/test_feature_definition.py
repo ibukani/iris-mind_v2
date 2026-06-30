@@ -9,13 +9,16 @@ from iris.features.definition import ActivityReactionPlanner, FeatureDefinition
 from iris.features.proactive_talk import define_proactive_talk_feature
 from iris.runtime.wiring.features import (
     collect_action_plan_presenters,
+    collect_background_jobs,
     collect_cognitive_steps,
+    collect_learning_hooks,
     wire_runtime_features,
 )
 
 if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot
     from iris.contracts.event_reaction import EventReactionDecision
+    from iris.contracts.learning import LearningEvent
     from iris.contracts.observations import ActivityEventObservation
 
 
@@ -95,3 +98,36 @@ def test_collect_action_plan_presenters_preserves_feature_registration_order() -
     assert len(presenters) == 2
     assert presenters[0] is first
     assert presenters[1] is second
+
+
+def test_learning_collectors_preserve_feature_registration_order() -> None:
+    """Learning hooks と background jobs は feature 登録順を維持する。"""
+
+    class _Hook:
+        async def after_action_result(self, event: LearningEvent) -> None:
+            _ = event
+
+    class _Job:
+        name = "test"
+
+        async def run_once(self) -> None:
+            return None
+
+    first_hook = _Hook()
+    second_hook = _Hook()
+    first_job = _Job()
+    second_job = _Job()
+    features = (
+        FeatureDefinition(
+            name="first",
+            learning_hooks=(first_hook,),
+            background_jobs=(first_job,),
+        ),
+        FeatureDefinition(
+            name="second",
+            learning_hooks=(second_hook,),
+            background_jobs=(second_job,),
+        ),
+    )
+    assert collect_learning_hooks(features) == (first_hook, second_hook)
+    assert collect_background_jobs(features) == (first_job, second_job)

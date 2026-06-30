@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from iris.contracts.memory import MemoryStore
     from iris.contracts.presentation import ActionPlanPresenter
     from iris.contracts.relationship import RelationshipStore
-    from iris.features.definition import FeatureDefinition
+    from iris.features.definition import BackgroundJob, FeatureDefinition, LearningHook
 
 
 @dataclass(frozen=True)
@@ -74,6 +74,28 @@ def collect_action_plan_presenters(
     return collect_feature_items(
         tuple(feature.action_plan_presenters for feature in features),
     )
+
+
+def collect_learning_hooks(
+    features: Sequence[FeatureDefinition],
+) -> tuple[LearningHook, ...]:
+    """学習フックをフィーチャー登録順に収集する。
+
+    Returns:
+        登録順の学習フック。
+    """
+    return collect_feature_items(tuple(feature.learning_hooks for feature in features))
+
+
+def collect_background_jobs(
+    features: Sequence[FeatureDefinition],
+) -> tuple[BackgroundJob, ...]:
+    """バックグラウンドジョブをフィーチャー登録順に収集する。
+
+    Returns:
+        登録順のバックグラウンドジョブ。
+    """
+    return collect_feature_items(tuple(feature.background_jobs for feature in features))
 
 
 def wire_proactive_talk_feature(salience_threshold: float = 0.5) -> FeatureDefinition:

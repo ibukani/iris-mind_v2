@@ -16,6 +16,7 @@ from iris.runtime.config.diagnostics import (
     apply_diagnostics_toml,
 )
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.learning import RuntimeLearningConfig
 from iris.runtime.config.llm import (
     LLMProvider,
     ModelSlotName,
@@ -61,6 +62,7 @@ __all__ = [
     "RuntimeConfigOverrides",
     "RuntimeDeliveryConfig",
     "RuntimeDiagnosticsConfig",
+    "RuntimeLearningConfig",
     "RuntimeLoggingConfig",
     "RuntimeModelConfig",
     "RuntimeModelsConfig",

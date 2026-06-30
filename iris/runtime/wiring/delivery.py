@@ -10,11 +10,16 @@ from iris.safety.delivery_gate import BasicDeliverySafetyGate, QuietHoursPolicy
 
 if TYPE_CHECKING:
     from iris.runtime.delivery.outbox import DeliveryOutbox
+    from iris.runtime.learning.dispatch import LearningDispatchStore
+    from iris.runtime.learning.hooks import LearningHookRunner
 
 
 def wire_app_action_broker(
     outbox: DeliveryOutbox,
     config: RuntimeDeliveryConfig,
+    *,
+    learning_hook_runner: LearningHookRunner | None = None,
+    learning_dispatch_store: LearningDispatchStore | None = None,
 ) -> RuntimeAppActionBroker:
     """DeliveryOutbox backed AppActionBroker を組み立てる。
 
@@ -25,6 +30,8 @@ def wire_app_action_broker(
         outbox=outbox,
         lease_seconds=config.lease_seconds,
         retry_backoff_seconds=config.retry_backoff_seconds,
+        learning_hook_runner=learning_hook_runner,
+        learning_dispatch_store=learning_dispatch_store,
     )
 
 

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import PerceptionResult, StepStatus
+from iris.cognitive.memory.candidates import MemoryCandidateSource, MemoryRetentionPolicy
 from iris.cognitive.memory.extraction import RuleBasedMemoryCandidateExtractor
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.memory import MemoryKind
@@ -79,6 +80,10 @@ def test_rule_based_extractor_detects_explicit_remember_request() -> None:
     assert len(candidates) >= 1
     assert any(c.text == "今日の会議は15時から" for c in candidates)
     assert any(c.kind == MemoryKind.NOTE for c in candidates)
+    assert candidates[0].source is MemoryCandidateSource.EXPLICIT_USER_REQUEST
+    assert candidates[0].retention_policy is MemoryRetentionPolicy.DURABLE
+    assert candidates[0].reason
+    assert candidates[0].review_required is False
 
 
 def test_rule_based_extractor_detects_user_preference() -> None:
@@ -90,6 +95,7 @@ def test_rule_based_extractor_detects_user_preference() -> None:
     assert len(candidates) >= 1
     assert any(c.kind == MemoryKind.PREFERENCE for c in candidates)
     assert any("ジャスミン茶" in c.text for c in candidates)
+    assert candidates[0].source is MemoryCandidateSource.EXPLICIT_PREFERENCE
 
 
 def test_rule_based_extractor_detects_project_doc_language_policy() -> None:

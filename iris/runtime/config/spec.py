@@ -128,6 +128,36 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "gRPCサーバー停止時の猶予秒数。",
         ),
         ConfigFieldSpec(
+            "learning.enabled",
+            ConfigValueType.BOOL,
+            default=True,
+            description="配送結果後の学習 dispatch を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "learning.background_jobs_enabled",
+            ConfigValueType.BOOL,
+            default=True,
+            description="バックグラウンドジョブループを有効化する。",
+        ),
+        ConfigFieldSpec(
+            "learning.background_job_interval_seconds",
+            ConfigValueType.FLOAT,
+            10.0,
+            "バックグラウンドジョブ実行間隔秒数。",
+        ),
+        ConfigFieldSpec(
+            "learning.max_jobs_per_run",
+            ConfigValueType.INT,
+            5,
+            "1回のバックグラウンド処理上限件数。",
+        ),
+        ConfigFieldSpec(
+            "learning.max_attempts",
+            ConfigValueType.INT,
+            3,
+            "学習ジョブの既定最大試行回数。",
+        ),
+        ConfigFieldSpec(
             "server.tls.enabled",
             ConfigValueType.BOOL,
             default=False,

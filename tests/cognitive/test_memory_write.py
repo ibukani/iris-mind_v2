@@ -10,7 +10,11 @@ import pytest
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import PerceptionResult, StepStatus
-from iris.cognitive.memory.candidates import MemoryCandidate
+from iris.cognitive.memory.candidates import (
+    MemoryCandidate,
+    MemoryCandidateSource,
+    MemoryRetentionPolicy,
+)
 from iris.cognitive.memory.policy import MemoryWritePolicy
 from iris.cognitive.memory.write import MemoryWriteStep
 from iris.contracts.identity import ActorKind, Identity
@@ -104,6 +108,34 @@ def test_memory_write_policy_rejects_low_confidence() -> None:
     """min_confidence を下回る候補は拒否されることを確認する。"""
     policy = MemoryWritePolicy(min_confidence=0.5)
     candidate = MemoryCandidate(text="normal", kind=MemoryKind.NOTE, salience=0.8, confidence=0.3)
+    assert policy.accept(candidate) is False
+
+
+@pytest.mark.parametrize(
+    ("source", "retention_policy", "review_required"),
+    [
+        (MemoryCandidateSource.IMPLICIT_CONVERSATION, MemoryRetentionPolicy.DURABLE, False),
+        (MemoryCandidateSource.EXPLICIT_USER_REQUEST, MemoryRetentionPolicy.DURABLE, True),
+        (MemoryCandidateSource.EXPLICIT_USER_REQUEST, MemoryRetentionPolicy.DISCARD, False),
+    ],
+)
+def test_memory_write_policy_rejects_non_hot_path_candidates(
+    source: MemoryCandidateSource,
+    retention_policy: MemoryRetentionPolicy,
+    *,
+    review_required: bool,
+) -> None:
+    """暗黙・要審査・破棄候補を hot path から除外する。"""
+    policy = MemoryWritePolicy()
+    candidate = MemoryCandidate(
+        text="候補",
+        kind=MemoryKind.NOTE,
+        salience=0.8,
+        confidence=0.9,
+        source=source,
+        retention_policy=retention_policy,
+        review_required=review_required,
+    )
     assert policy.accept(candidate) is False
 
 

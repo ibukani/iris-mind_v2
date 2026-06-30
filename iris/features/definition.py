@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
-    from iris.contracts.actions import ActionResult
     from iris.contracts.availability import AvailabilitySnapshot
     from iris.contracts.event_reaction import EventReactionDecision
+    from iris.contracts.learning import LearningEvent
     from iris.contracts.observations import ActivityEventObservation, Observation
     from iris.contracts.presentation import ActionPlanPresenter
 
@@ -25,7 +25,7 @@ class ObservationSource(Protocol):
 class LearningHook(Protocol):
     """アクション後学習フックのプロトコル。"""
 
-    async def after_action_result(self, result: ActionResult) -> None:
+    async def after_action_result(self, event: LearningEvent) -> None:
         """実行されたアクションの結果を処理する。"""
 
 

@@ -36,6 +36,11 @@ from iris.runtime.config.diagnostics import (
     apply_diagnostics_toml,
 )
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.learning import (
+    RuntimeLearningConfig,
+    apply_learning_toml,
+    validate_learning_config,
+)
 from iris.runtime.config.llm import (
     LLMProvider,
     RuntimeModelsConfig,
@@ -109,6 +114,7 @@ class IrisRuntimeConfig:
     diagnostics: RuntimeDiagnosticsConfig
     scheduler: RuntimeSchedulerConfig
     delivery: RuntimeDeliveryConfig
+    learning: RuntimeLearningConfig
 
 
 @dataclass(frozen=True)
@@ -141,6 +147,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         diagnostics=RuntimeDiagnosticsConfig(),
         scheduler=RuntimeSchedulerConfig(),
         delivery=RuntimeDeliveryConfig(),
+        learning=RuntimeLearningConfig(),
     )
 
 
@@ -377,6 +384,7 @@ def _apply_toml_sections(
         state=apply_state_toml(config.state, state_table),
         scheduler=apply_scheduler_toml(config.scheduler, scheduler_table),
         delivery=apply_delivery_toml(config.delivery, delivery_table),
+        learning=apply_learning_toml(config.learning, table_or_empty(table, "learning")),
         models=models,
         ollama=ollama,
         openai=openai,
@@ -414,6 +422,7 @@ class _RuntimeConfigSections:
     state: RuntimeStateConfig
     scheduler: RuntimeSchedulerConfig
     delivery: RuntimeDeliveryConfig
+    learning: RuntimeLearningConfig
     models: RuntimeModelsConfig
     ollama: RuntimeOllamaConfig
     openai: RuntimeOpenAIConfig
@@ -445,6 +454,7 @@ def _apply_env_sections(
         state=apply_state_env(config.state, env),
         scheduler=apply_scheduler_env(config.scheduler, env),
         delivery=config.delivery,
+        learning=config.learning,
         models=models,
         ollama=ollama,
         openai=openai,
@@ -476,6 +486,7 @@ def _compose_runtime_config(
         state=sections.state,
         scheduler=sections.scheduler,
         delivery=sections.delivery,
+        learning=sections.learning,
         models=sections.models,
         ollama=sections.ollama,
         openai=sections.openai,
@@ -504,6 +515,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
     validated_state = validate_state_config(config.state)
     validated_scheduler = validate_scheduler_config(config.scheduler)
     validated_delivery = validate_delivery_config(config.delivery)
+    validated_learning = validate_learning_config(config.learning)
     return replace(
         config,
         server=validated_server,
@@ -511,6 +523,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         state=validated_state,
         scheduler=validated_scheduler,
         delivery=validated_delivery,
+        learning=validated_learning,
     )
 
 
