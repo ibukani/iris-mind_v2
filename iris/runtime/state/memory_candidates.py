@@ -161,6 +161,9 @@ class InMemoryMemoryCandidateReviewStore:
             Existing or newly stored candidate record.
         """
         with self._lock:
+            existing_record = self._records.get(record.candidate_id)
+            if existing_record is not None:
+                return existing_record
             existing_id = self._idempotency_keys.get(record.idempotency_key)
             if existing_id is not None:
                 return self._records[existing_id]

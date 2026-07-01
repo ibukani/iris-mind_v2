@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import TYPE_CHECKING
@@ -148,7 +149,7 @@ class ApprovedMemoryCandidatePromoter:
                 reason="candidate_not_approved",
             )
         elif record.promoted_memory_id is not None:
-            result = self._already_promoted_result(record)
+            result = await self._already_promoted_result(record)
         elif not self._policy.accept(record.candidate):
             result = MemoryCandidatePromotionResult(
                 record=record,
@@ -160,11 +161,11 @@ class ApprovedMemoryCandidatePromoter:
             result = await self._promote_approved_candidate(record, candidate_id)
         return result
 
-    def _already_promoted_result(
+    async def _already_promoted_result(
         self,
         record: MemoryCandidateReviewRecord,
     ) -> MemoryCandidatePromotionResult:
-        memory = self._memory_store.get(MemoryId(record.promoted_memory_id or ""))
+        memory = await self._get_memory(MemoryId(record.promoted_memory_id or ""))
         reason = "promoted_memory_missing" if memory is None else "already_promoted"
         return MemoryCandidatePromotionResult(
             record=record,
@@ -180,8 +181,8 @@ class ApprovedMemoryCandidatePromoter:
     ) -> MemoryCandidatePromotionResult:
         now = self._now()
         memory_id = _promoted_memory_id(record)
-        memory = self._memory_store.update(_memory_record(record, memory_id, now))
-        # 現在は in-memory review store 前提の二段階更新。将来 review store を
+        memory = await self._update_memory(_memory_record(record, memory_id, now))
+        # 現在は review store と MemoryStore の二段階更新。将来 review store を
         # durable 化する段階では MemoryStore 更新と review metadata 更新の
         # transaction/compensation policy を同じ境界で定義する。
         updated = await self._review_store.update_review(
@@ -198,6 +199,22 @@ class ApprovedMemoryCandidatePromoter:
             promoted=True,
             reason=None,
         )
+
+    async def _get_memory(self, memory_id: MemoryId) -> MemoryRecord | None:
+        """同期 MemoryStore.get を async promotion 境界の外へ逃がす。
+
+        Returns:
+            MemoryRecord | None: 見つかった memory record、または None。
+        """
+        return await asyncio.to_thread(self._memory_store.get, memory_id)
+
+    async def _update_memory(self, record: MemoryRecord) -> MemoryRecord:
+        """同期 MemoryStore.update を async promotion 境界の外へ逃がす。
+
+        Returns:
+            MemoryRecord: 保存後の canonical memory record。
+        """
+        return await asyncio.to_thread(self._memory_store.update, record)
 
 
 def _promoted_memory_id(record: MemoryCandidateReviewRecord) -> MemoryId:

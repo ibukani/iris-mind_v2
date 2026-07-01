@@ -174,6 +174,46 @@ async def test_approved_candidate_cannot_be_rejected_or_discarded() -> None:
         await service.discard(record.candidate_id)
 
 
+async def test_add_same_candidate_id_with_different_idempotency_key_keeps_first_record() -> None:
+    """candidate_id collision keeps the first record instead of overwriting it."""
+    store = InMemoryMemoryCandidateReviewStore()
+    first = await store.add(_record("candidate-1"))
+    second = await store.add(
+        MemoryCandidateReviewRecord(
+            candidate_id=first.candidate_id,
+            candidate=MemoryCandidate(
+                text="ユーザーは詳細な返答を好む。",
+                kind=MemoryKind.PREFERENCE,
+                salience=0.9,
+                confidence=0.9,
+                source=MemoryCandidateSource.IMPLICIT_CONVERSATION,
+                reason="conflicting duplicate",
+                retention_policy=MemoryRetentionPolicy.REVIEW_REQUIRED,
+                review_required=True,
+                actor_id=ActorId("actor-2"),
+                space_id=SpaceId("space-2"),
+                source_observation_id=ObservationId("obs-2"),
+            ),
+            created_at=_NOW,
+            updated_at=_NOW,
+            idempotency_key="review:other-key",
+            actor_id=ActorId("actor-2"),
+            account_id=AccountId("account-2"),
+            space_id=SpaceId("space-2"),
+            source_observation_id=ObservationId("obs-2"),
+        )
+    )
+
+    stored = await store.get(first.candidate_id)
+
+    assert second == first
+    assert stored == first
+    assert stored is not None
+    assert stored.idempotency_key == "review:candidate-1"
+    assert stored.candidate.text == "ユーザーは短い返答を好む。"
+    assert await store.list_pending(actor_id=ActorId("actor-2")) == ()
+
+
 def _record(
     candidate_id: str,
     *,
