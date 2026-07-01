@@ -40,3 +40,53 @@ async def test_audit_counts_recent_blocks_without_raw_content() -> None:
     record = journal.records()[0]
     assert not hasattr(record, "text")
     assert not hasattr(record, "output")
+
+
+def test_audit_rejects_non_positive_capacity() -> None:
+    """Bounded journalは1件未満のcapacityを拒否する。"""
+    with pytest.raises(ValueError, match="max_records must be at least 1"):
+        InMemorySafetyAuditJournal(max_records=0)
+
+
+async def test_recent_block_count_ignores_other_targets_stages_allowed_and_old_records() -> None:
+    """Recent countは同一targetの期間内delivery blockだけを数える。"""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    journal = InMemorySafetyAuditJournal()
+    records = (
+        _record(now=now, target_key="other", stage=SafetyAuditStage.DELIVERY, allowed=False),
+        _record(now=now, target_key="target", stage=SafetyAuditStage.OUTPUT, allowed=False),
+        _record(now=now, target_key="target", stage=SafetyAuditStage.DELIVERY, allowed=True),
+        _record(
+            now=now - timedelta(hours=2),
+            target_key="target",
+            stage=SafetyAuditStage.DELIVERY,
+            allowed=False,
+        ),
+    )
+    for record in records:
+        await journal.append(record)
+
+    count = await journal.recent_block_count("target", since=now - timedelta(hours=1))
+
+    assert count == 0
+
+
+def _record(
+    *,
+    now: datetime,
+    target_key: str,
+    stage: SafetyAuditStage,
+    allowed: bool,
+) -> SafetyAuditRecord:
+    return SafetyAuditRecord(
+        observation_id=ObservationId(f"obs-{target_key}-{stage}-{allowed}"),
+        occurred_at=now,
+        stage=stage,
+        allowed=allowed,
+        reason="test",
+        risk_level=SafetyRiskLevel.MEDIUM,
+        source=DeliverySource.PROACTIVE_IDLE_TICK,
+        target_key=target_key,
+        policy="strict_delivery",
+        policy_version="1",
+    )

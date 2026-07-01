@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from iris.contracts.actions import ActionPlan, PresentedOutput
+from iris.contracts.actions import (
+    ActionPlan,
+    PresentedOutput,
+    presented_output_with_policy_constraints,
+)
 from tests.helpers.immutability import assert_frozen_field
 
 _ERR_INVALID_NO_ACTION = "no_action plan must not include candidate text or response intent"
@@ -117,3 +121,22 @@ def test_presented_output_is_immutable() -> None:
     """PresentedOutputが作成後に変更できないことを確認する。"""
     output = PresentedOutput(text="hello")
     assert_frozen_field(output, "text", "other")
+
+
+def test_policy_constraint_names_are_merged_stably_without_duplicates() -> None:
+    """既存output provenanceを保持し、frame constraintsを安定順でmergeする。"""
+    output = PresentedOutput(
+        text="hello",
+        policy_constraint_names=("presenter_constraint", "shared_constraint"),
+    )
+
+    merged = presented_output_with_policy_constraints(
+        output,
+        ("shared_constraint", "frame_constraint"),
+    )
+
+    assert merged.policy_constraint_names == (
+        "presenter_constraint",
+        "shared_constraint",
+        "frame_constraint",
+    )

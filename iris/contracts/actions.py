@@ -137,8 +137,22 @@ def presented_output_with_policy_constraints(
         priority=output.priority,
         interruptible=output.interruptible,
         safety_block_reason=output.safety_block_reason,
-        policy_constraint_names=constraint_names,
+        policy_constraint_names=_merge_constraint_names(
+            output.policy_constraint_names,
+            constraint_names,
+        ),
     )
+
+
+def _merge_constraint_names(
+    existing: tuple[str, ...],
+    additional: tuple[str, ...],
+) -> tuple[str, ...]:
+    merged: list[str] = []
+    for name in (*existing, *additional):
+        if name not in merged:
+            merged.append(name)
+    return tuple(merged)
 
 
 class AppAction(BaseModel):

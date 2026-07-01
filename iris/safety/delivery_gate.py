@@ -85,32 +85,29 @@ class BasicDeliverySafetyGate:
             DeliverySafetyDecision: 配送可否と理由。blocked の場合は not_before を含む。
         """
         _ = policy_context
-        reason = self._blocking_reason(target, output, availability, now)
+        precheck = self.check_target_output(target=target, output=output)
+        if not precheck.allowed:
+            return precheck
+        reason = self._availability_reason(availability) or self._quiet_hours_reason(now)
         if reason is not None:
             return DeliverySafetyDecision(allowed=False, reason=reason)
         return DeliverySafetyDecision(allowed=True, reason="allowed")
 
-    def _blocking_reason(
+    def check_target_output(
         self,
+        *,
         target: DeliveryTarget,
         output: PresentedOutput,
-        availability: AvailabilitySnapshot | None,
-        now: datetime,
-    ) -> str | None:
-        """最初に hit した block 理由を返す。
+    ) -> DeliverySafetyDecision:
+        """Availability/time前にtargetとoutputだけを検証する。
 
         Returns:
-            block 理由。全て通過する場合は None。
+            Target/outputの配送可否。
         """
-        for reason in (
-            self._output_reason(output),
-            self._target_reason(target),
-            self._availability_reason(availability),
-            self._quiet_hours_reason(now),
-        ):
+        for reason in (self._output_reason(output), self._target_reason(target)):
             if reason is not None:
-                return reason
-        return None
+                return DeliverySafetyDecision(allowed=False, reason=reason)
+        return DeliverySafetyDecision(allowed=True, reason="allowed")
 
     def is_quiet_hours(self, now: datetime) -> bool:
         """現在時刻が quiet hours 内なら True を返す。
@@ -197,18 +194,20 @@ class StrictDeliverySafetyGate:
         Returns:
             配送可否、理由、risk、audit metadata。
         """
-        basic_decision = await self.basic.check(
-            target=target,
-            output=output,
-            availability=availability,
-            now=now,
-        )
-        if not basic_decision.allowed:
-            return basic_decision
+        precheck = self.basic.check_target_output(target=target, output=output)
+        if not precheck.allowed:
+            return precheck
         context = policy_context or SafetyPolicyContext(
             source=DeliverySource.USER_INITIATED,
             target_key=_target_key(target),
         )
+        if context.source is DeliverySource.USER_INITIATED:
+            return await self.basic.check(
+                target=target,
+                output=output,
+                availability=availability,
+                now=now,
+            )
         availability_status = availability.status if availability is not None else None
         strict_context = SafetyPolicyContext(
             source=context.source,

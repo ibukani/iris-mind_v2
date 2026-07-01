@@ -12,10 +12,11 @@ from iris.contracts.delivery import DeliveryTarget
 from iris.core.ids import ExternalRef, SessionId
 from iris.safety.delivery_gate import (
     BasicDeliverySafetyGate,
+    DeliverySafetyDecision,
     QuietHoursPolicy,
     StrictDeliverySafetyGate,
 )
-from iris.safety.policy_engine import DeliverySource, SafetyPolicyContext
+from iris.safety.policy_engine import DeliverySource, SafetyPolicyContext, SafetyRiskLevel
 
 pytestmark = pytest.mark.anyio
 _NOW = datetime(2026, 1, 1, 23, tzinfo=UTC)
@@ -46,6 +47,26 @@ async def test_strict_gate_blocks_sensitive_proactive_output() -> None:
     assert decision.allowed is False
     assert decision.reason == "proactive_sensitive_safety_context"
     assert decision.audit is not None
+
+
+async def test_strict_gate_rejects_invalid_target_before_policy_engine() -> None:
+    """Strict gate はtarget/output precheck失敗をpolicy評価前に返す。"""
+    target = DeliveryTarget(
+        provider="discord",
+        provider_subject=None,
+        provider_space_ref=None,
+        session_id=SessionId("session-1"),
+    )
+    decision = await StrictDeliverySafetyGate().check(
+        target=target,
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "missing_route"
+    assert decision.audit is None
 
 
 async def test_strict_gate_does_not_block_user_response_for_sensitive_context_alone() -> None:
@@ -130,4 +151,49 @@ async def test_strict_gate_blocks_proactive_busy_and_quiet_hours() -> None:
         policy_context=context,
     )
     assert busy.reason == "availability_busy"
+    assert busy.risk_level is SafetyRiskLevel.MEDIUM
+    _assert_strict_audit(busy, source=DeliverySource.PROACTIVE_IDLE_TICK, target_key="target")
     assert quiet.reason == "quiet_hours"
+    assert quiet.risk_level is SafetyRiskLevel.MEDIUM
+    _assert_strict_audit(quiet, source=DeliverySource.PROACTIVE_IDLE_TICK, target_key="target")
+
+
+async def test_strict_proactive_unavailable_has_strict_audit_metadata() -> None:
+    """Proactive UNAVAILABLE block はstrict policy provenanceを保持する。"""
+    availability = AvailabilitySnapshot(
+        actor_id=None,
+        status=AvailabilityStatus.UNAVAILABLE,
+        reason="unavailable",
+        observed_at=_NOW,
+        computed_at=_NOW,
+    )
+    decision = await StrictDeliverySafetyGate().check(
+        target=_target(),
+        output=PresentedOutput(text="hello"),
+        availability=availability,
+        now=_NOW,
+        policy_context=SafetyPolicyContext(
+            source=DeliverySource.PROACTIVE_IDLE_TICK,
+            target_key="target",
+        ),
+    )
+    assert decision.reason == "availability_unavailable"
+    assert decision.risk_level is SafetyRiskLevel.MEDIUM
+    _assert_strict_audit(
+        decision,
+        source=DeliverySource.PROACTIVE_IDLE_TICK,
+        target_key="target",
+    )
+
+
+def _assert_strict_audit(
+    decision: DeliverySafetyDecision,
+    *,
+    source: DeliverySource,
+    target_key: str,
+) -> None:
+    assert decision.audit is not None
+    assert decision.audit.policy == "strict_delivery"
+    assert decision.audit.policy_version == "1"
+    assert decision.audit.source is source
+    assert decision.audit.target_key == target_key

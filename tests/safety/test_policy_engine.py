@@ -39,6 +39,14 @@ def test_sensitive_context_blocks_only_proactive_delivery() -> None:
     assert user.allowed is True
 
 
+def test_proactive_without_explicit_sensitive_provenance_is_not_sensitive_blocked() -> None:
+    """Idle tickは過去user textからsensitive provenanceを暗黙生成しない。"""
+    decision = SafetyPolicyEngine().evaluate_delivery(_context())
+
+    assert decision.allowed is True
+    assert decision.reason == "allowed"
+
+
 def test_proactive_availability_quiet_hours_and_repeated_blocks_are_deterministic() -> None:
     """Strict proactive rules は固定優先順で評価する。"""
     engine = SafetyPolicyEngine(repeated_block_threshold=2)

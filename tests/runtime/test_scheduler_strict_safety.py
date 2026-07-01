@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 
 import pytest
 
 from iris.contracts.actions import PresentedOutput
+from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.delivery import DeliveryTarget
 from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
 from iris.core.ids import ExternalRef, ObservationId, SessionId
@@ -20,7 +21,11 @@ from iris.runtime.state.safety_audit import (
     SafetyAuditRecord,
     SafetyAuditStage,
 )
-from iris.safety.delivery_gate import StrictDeliverySafetyGate
+from iris.safety.delivery_gate import (
+    BasicDeliverySafetyGate,
+    QuietHoursPolicy,
+    StrictDeliverySafetyGate,
+)
 from iris.safety.policy_engine import DeliverySource, SafetyRiskLevel
 
 pytestmark = pytest.mark.anyio
@@ -68,6 +73,20 @@ class _Scheduler:
         self, observation_id: ObservationId, *, failed_at: datetime, reason: str
     ) -> None:
         _ = observation_id, failed_at, reason
+
+
+@dataclass(frozen=True)
+class _AvailabilityProvider:
+    snapshot: AvailabilitySnapshot
+
+    async def availability_for_target(
+        self,
+        target: DeliveryTarget,
+        *,
+        now: datetime,
+    ) -> AvailabilitySnapshot:
+        _ = target, now
+        return self.snapshot
 
 
 async def test_idle_tick_sensitive_context_is_blocked_audited_and_not_enqueued() -> None:
@@ -146,3 +165,63 @@ async def test_recent_blocks_for_same_target_block_proactive_delivery() -> None:
     assert (
         await outbox.lease_due(provider="discord", now=_NOW, max_items=10, lease_seconds=30) == ()
     )
+
+
+async def test_scheduler_records_proactive_busy_as_strict_delivery() -> None:
+    """Scheduler audit はproactive BUSYをstrict provenanceで記録する。"""
+    audit = InMemorySafetyAuditJournal()
+    availability = AvailabilitySnapshot(
+        actor_id=None,
+        status=AvailabilityStatus.BUSY,
+        reason="busy",
+        observed_at=_NOW,
+        computed_at=_NOW,
+    )
+    runner = SchedulerRunner(
+        scheduler=_Scheduler(),
+        runtime_service=_Runtime(PresentedOutput(text="generated output")),
+        delivery_gate=StrictDeliverySafetyGate(),
+        outbox=InMemoryDeliveryOutbox(),
+        availability_provider=_AvailabilityProvider(availability),
+        safety_audit_journal=audit,
+    )
+
+    result = await runner.run_once(_NOW)
+
+    assert result.results[0].reason == "availability_busy"
+    record = audit.records()[0]
+    assert record.policy == "strict_delivery"
+    assert record.risk_level is SafetyRiskLevel.MEDIUM
+    assert record.source is DeliverySource.PROACTIVE_IDLE_TICK
+    assert record.target_key == "discord:user-1:"
+
+
+async def test_scheduler_records_proactive_quiet_hours_as_strict_delivery() -> None:
+    """Scheduler audit はproactive quiet-hoursをstrict provenanceで記録する。"""
+    audit = InMemorySafetyAuditJournal()
+    gate = StrictDeliverySafetyGate(
+        basic=BasicDeliverySafetyGate(
+            quiet_hours=QuietHoursPolicy(
+                enabled=True,
+                start=time(11),
+                end=time(13),
+                timezone="UTC",
+            )
+        )
+    )
+    runner = SchedulerRunner(
+        scheduler=_Scheduler(),
+        runtime_service=_Runtime(PresentedOutput(text="generated output")),
+        delivery_gate=gate,
+        outbox=InMemoryDeliveryOutbox(),
+        safety_audit_journal=audit,
+    )
+
+    result = await runner.run_once(_NOW)
+
+    assert result.results[0].reason == "quiet_hours"
+    record = audit.records()[0]
+    assert record.policy == "strict_delivery"
+    assert record.risk_level is SafetyRiskLevel.MEDIUM
+    assert record.source is DeliverySource.PROACTIVE_IDLE_TICK
+    assert record.target_key == "discord:user-1:"
