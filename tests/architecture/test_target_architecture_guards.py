@@ -219,6 +219,36 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
         "iris.runtime.state.activity_journal",
         "SQLite activity adapter implements the runtime-owned ActivityJournal port",
     ),
+    (
+        "iris/adapters",
+        "iris/adapters/persistence/sqlite/stores/background_jobs.py",
+        "iris.runtime.learning.jobs",
+        (
+            "SQLite background job adapter implements the runtime-owned "
+            "BackgroundJobQueue payload contract"
+        ),
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/persistence/sqlite/stores/background_jobs.py",
+        "iris.runtime.learning.queue",
+        "SQLite background job adapter implements the runtime-owned BackgroundJobQueue port",
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/persistence/sqlite/stores/memory_candidate_reviews.py",
+        "iris.cognitive.memory.candidates",
+        (
+            "SQLite review adapter persists cognitive-owned MemoryCandidate payloads "
+            "without coupling cognitive code to adapters"
+        ),
+    ),
+    (
+        "iris/adapters",
+        "iris/adapters/persistence/sqlite/stores/memory_candidate_reviews.py",
+        "iris.runtime.state.memory_candidates",
+        "SQLite review adapter implements the runtime-owned MemoryCandidateReviewStore port",
+    ),
 ]
 
 ENTRYPOINT_FILES: set[str] = {

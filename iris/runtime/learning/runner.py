@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from iris.runtime.learning.jobs import BackgroundJobKind, BackgroundJobRecord
-    from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
+    from iris.runtime.learning.queue import BackgroundJobQueue
 
 
 class BackgroundJobWorker(Protocol):
@@ -34,7 +34,7 @@ class BackgroundJobRunner:
 
     def __init__(
         self,
-        queue: InMemoryBackgroundJobQueue,
+        queue: BackgroundJobQueue,
         workers: Sequence[BackgroundJobWorker],
         *,
         max_jobs_per_run: int = 5,

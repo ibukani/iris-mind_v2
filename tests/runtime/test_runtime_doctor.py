@@ -415,8 +415,8 @@ async def test_runtime_doctor_reports_sqlite_schema_version(
 
     check = next(item for item in report.checks if item.name == "sqlite-state")
     assert check.status == "ok"
-    assert "schema_version=1" in check.summary
-    assert "latest_migration=baseline_runtime_state" in check.summary
+    assert "schema_version=2" in check.summary
+    assert "latest_migration=runtime_learning_state" in check.summary
 
 
 @pytest.mark.anyio
@@ -435,7 +435,7 @@ async def test_runtime_doctor_warns_on_pending_sqlite_migration(
 
     check = next(item for item in report.checks if item.name == "sqlite-state")
     assert check.status == "warn"
-    assert "pending=1" in check.summary
+    assert "pending=1,2" in check.summary
 
 
 @pytest.mark.anyio
@@ -456,6 +456,51 @@ async def test_runtime_doctor_reports_sqlite_backup_age_when_manifest_is_known(
     check = next(item for item in report.checks if item.name == "sqlite-state")
     assert check.status == "ok"
     assert "backup_age_seconds=" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_reports_runtime_learning_state_counts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """SQLite runtime learning state counts は read-only doctor に表示される。"""
+    db_path = tmp_path / "state.sqlite3"
+    SQLiteSchemaMigrator().ensure_current(db_path)
+    _insert_runtime_learning_state_rows(db_path)
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "runtime-learning-state")
+    assert check.status == "ok"
+    assert "background_jobs pending=1 leased=1 succeeded=0 failed_retryable=1" in check.summary
+    assert "failed_permanent=0 cancelled=0" in check.summary
+    assert (
+        "memory_candidate_reviews pending_review=1 approved=1 rejected=0 discarded=0"
+        in check.summary
+    )
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_runtime_learning_state_warns_on_pending_migration(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Runtime learning tables が未 migrate の DB では doctor が warn する。"""
+    db_path = tmp_path / "legacy.sqlite3"
+    db_path.write_bytes(b"")
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "runtime-learning-state")
+    assert check.status == "warn"
+    assert check.summary == "sqlite schema migration is pending"
+    assert check.next_action == "start Iris normally to migrate runtime learning tables"
 
 
 @pytest.mark.anyio
@@ -501,6 +546,44 @@ async def test_runtime_doctor_fails_on_future_sqlite_schema(
     assert not report.ok
     assert check.status == "fail"
     assert check.next_action == "upgrade Iris before opening this database"
+
+
+def _insert_runtime_learning_state_rows(db_path: Path) -> None:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO background_jobs (
+                job_id, kind, payload_type, payload_json, status, attempts, max_attempts,
+                not_before, leased_until, idempotency_key, created_at, updated_at, last_error
+            ) VALUES
+                ('job-pending', 'reflection', 'deferred_learning', '{}', 'pending', 0, 3,
+                 '2026-07-01T00:00:00+00:00', NULL, 'job-pending',
+                 '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00', NULL),
+                ('job-leased', 'reflection', 'deferred_learning', '{}', 'leased', 0, 3,
+                 '2026-07-01T00:00:00+00:00', '2026-07-01T00:05:00+00:00', 'job-leased',
+                 '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00', NULL),
+                ('job-retry', 'reflection', 'deferred_learning', '{}', 'failed_retryable', 1, 3,
+                 '2026-07-01T00:00:00+00:00', NULL, 'job-retry',
+                 '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00', 'retry')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO memory_candidate_reviews (
+                candidate_id, idempotency_key, status, candidate_json, candidate_text,
+                candidate_kind, candidate_source, candidate_confidence, candidate_salience,
+                candidate_retention_policy, candidate_sensitivity, candidate_review_required,
+                metadata_json, created_at, updated_at
+            ) VALUES
+                ('candidate-pending', 'candidate-pending', 'pending_review', '{}', 'pending text',
+                 'preference', 'implicit_conversation', 0.7, 0.6, 'review_required', 'normal', 1,
+                 '{}', '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00'),
+                ('candidate-approved', 'candidate-approved', 'approved', '{}', 'approved text',
+                 'preference', 'implicit_conversation', 0.8, 0.7, 'review_required', 'normal', 1,
+                 '{}', '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00')
+            """
+        )
+        conn.commit()
 
 
 async def _disabled_startup_diagnostics(

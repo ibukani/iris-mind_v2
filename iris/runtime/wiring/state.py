@@ -10,14 +10,18 @@ from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
 from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
 from iris.adapters.persistence.sqlite.stores.activity_journal import SQLiteActivityJournal
 from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
+from iris.adapters.persistence.sqlite.stores.background_jobs import SQLiteBackgroundJobQueue
 from iris.adapters.persistence.sqlite.stores.delivery_outbox import SQLiteDeliveryOutbox
 from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
+    SQLiteMemoryCandidateReviewStore,
+)
 from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
 from iris.runtime.learning.dispatch import InMemoryLearningDispatchStore
-from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
+from iris.runtime.learning.queue import BackgroundJobQueue, InMemoryBackgroundJobQueue
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
 from iris.runtime.state.conversation import InMemoryConversationHistoryStore
@@ -66,17 +70,17 @@ class RuntimeStateStores:
     space_occupancy_store: SpaceOccupancyStore
     delivery_outbox: DeliveryOutbox
     scheduler_target_store: SchedulerTargetStore
-    background_job_queue: InMemoryBackgroundJobQueue
+    background_job_queue: BackgroundJobQueue
     memory_candidate_review_store: MemoryCandidateReviewStore
     learning_dispatch_store: InMemoryLearningDispatchStore
     conversation_history_store: InMemoryConversationHistoryStore
     sqlite_context: SQLitePersistenceContext | None = None
-    memory_lifecycle: SyncLifecycle | None = None
+    sync_lifecycles: tuple[SyncLifecycle, ...] = ()
 
     async def close(self) -> None:
         """Close all persistent store connections."""
-        if self.memory_lifecycle is not None:
-            self.memory_lifecycle.close()
+        for lifecycle in self.sync_lifecycles:
+            lifecycle.close()
 
         if self.sqlite_context is not None:
             await self.sqlite_context.close()
@@ -96,8 +100,8 @@ def wire_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
 def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     """SQLite backend 用の永続状態ストア群を組み立てる。
 
-    Learning dispatch、background job queue、短期会話履歴は明示的に
-    process-local。SQLite 永続化対象ではなく restart を越えて保持しない。
+    Learning dispatch と短期会話履歴は process-local のままにする。
+    Background job queue と review candidate lifecycle は SQLite で永続化する。
 
     Returns:
         SQLite backend に対応した RuntimeStateStores。
@@ -105,6 +109,11 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     sqlite_path = config.state.sqlite_path
     ctx = SQLitePersistenceContext.open(sqlite_path)
     sqlite_memory_store = SQLiteMemoryStore(sqlite_path, ensure_schema=False)
+    sqlite_background_job_queue = SQLiteBackgroundJobQueue(sqlite_path, ensure_schema=False)
+    sqlite_candidate_review_store = SQLiteMemoryCandidateReviewStore(
+        sqlite_path,
+        ensure_schema=False,
+    )
     memory_store: MutableMemoryStore = sqlite_memory_store
     return RuntimeStateStores(
         account_store=SQLiteAccountStore(ctx),
@@ -120,12 +129,16 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
             max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
         ),
         scheduler_target_store=SQLiteSchedulerTargetStore(ctx),
-        background_job_queue=InMemoryBackgroundJobQueue(),
-        memory_candidate_review_store=InMemoryMemoryCandidateReviewStore(),
+        background_job_queue=sqlite_background_job_queue,
+        memory_candidate_review_store=sqlite_candidate_review_store,
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),
         sqlite_context=ctx,
-        memory_lifecycle=sqlite_memory_store,
+        sync_lifecycles=(
+            sqlite_memory_store,
+            sqlite_background_job_queue,
+            sqlite_candidate_review_store,
+        ),
     )
 
 
@@ -153,5 +166,5 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),
         sqlite_context=None,
-        memory_lifecycle=None,
+        sync_lifecycles=(),
     )

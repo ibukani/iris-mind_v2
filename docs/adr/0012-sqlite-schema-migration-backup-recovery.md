@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-`state.backend = "sqlite"` は Iris runtime data の durable backend である。account、memory、relationship、affect、activity journal、delivery outbox、scheduler target は restart を越えて残る state として扱う。
+`state.backend = "sqlite"` は Iris runtime data の durable backend である。account、memory、relationship、affect、activity journal、delivery outbox、scheduler target、runtime learning background job、memory candidate review lifecycle は restart を越えて残る state として扱う。
 
 過去の SQLite 初期化は bootstrap 寄りだった。
 
@@ -33,7 +33,7 @@ Schema version は二段構えにする。
 - `PRAGMA user_version`: 高速な compatibility check。
 - `schema_migrations`: migration version、name、checksum、applied_at の history。
 
-Current schema version は `CURRENT_SQLITE_SCHEMA_VERSION = 1`。runtime は supported old DB を current へ migrate するが、unknown future version は silent open しない。
+Current schema version は `CURRENT_SQLITE_SCHEMA_VERSION = 2`。runtime は supported old DB を current へ migrate するが、unknown future version は silent open しない。
 
 Baseline migration `v0001_baseline` は current SQLite schema の正本である。対象は以下。
 
@@ -49,6 +49,8 @@ Baseline migration `v0001_baseline` は current SQLite schema の正本である
 | `delivery_outbox` | source of truth | `SQLiteDeliveryOutbox` |
 | `delivery_report_fingerprints` | source of truth / idempotency metadata | `SQLiteDeliveryOutbox` |
 | `scheduler_targets` | source of truth | `SQLiteSchedulerTargetStore` |
+| `background_jobs` | source of truth | `SQLiteBackgroundJobQueue` |
+| `memory_candidate_reviews` | source of truth | `SQLiteMemoryCandidateReviewStore` |
 | future `memory_embeddings` | derived / rebuildable index metadata | vector index backend |
 
 Process-local state は SQLite schema の対象にしない。
@@ -57,8 +59,6 @@ Process-local state は SQLite schema の対象にしない。
 - `presence_store`
 - `space_occupancy_store`
 - `conversation_history_store`
-- `background_job_queue`
-- `memory_candidate_review_store`
 - `learning_dispatch_store`
 
 Migration policy:
@@ -97,10 +97,10 @@ Activity journal replay scope:
 
 - activity journal は diagnostics、provider event dedupe、future projection rebuild に使ってよい。
 - activity journal は全 durable state の canonical source ではない。
-- account links、relationships、affect baselines、delivery outbox、scheduler targets は、専用 store が source of truth。
+- account links、relationships、affect baselines、delivery outbox、scheduler targets、background jobs、memory candidate reviews は、専用 store が source of truth。
 - event が明示的に journal され test されていない限り、activity journal から完全復元できると仮定しない。
 
-Runtime doctor は read-only を維持する。SQLite backend では DB path、schema version、latest migration、pending migration、future version rejection、corrupt detection を報告する。doctor は migration を適用しない。
+Runtime doctor は read-only を維持する。SQLite backend では DB path、schema version、latest migration、pending migration、future version rejection、corrupt detection、runtime learning state counts を報告する。doctor は migration を適用しない。
 
 Runtime startup では `SQLitePersistenceContext.open()` を authoritative entrypoint として schema migration を一度だけ実行する。`AsyncDatabaseManager` と `SQLiteMemoryStore` は direct constructor 利用時の安全性のため migration 実行機能を残すが、runtime wiring では `ensure_schema=False` で開き、store-local schema mutation を増やさない。
 
@@ -128,9 +128,12 @@ Backup は restorable snapshot として扱えるが、portable export ではな
 - `iris/adapters/persistence/sqlite/migrator.py`
 - `iris/adapters/persistence/sqlite/migrator_types.py`
 - `iris/adapters/persistence/sqlite/migrations/v0001_baseline.py`
+- `iris/adapters/persistence/sqlite/migrations/v0002_runtime_learning_state.py`
 - `iris/adapters/persistence/sqlite/backup.py`
 - `iris/adapters/persistence/sqlite/engine.py`
 - `iris/adapters/persistence/sqlite/stores/memory.py`
+- `iris/adapters/persistence/sqlite/stores/background_jobs.py`
+- `iris/adapters/persistence/sqlite/stores/memory_candidate_reviews.py`
 - `iris/runtime/wiring/state.py`
 - `iris/runtime/doctor.py`
 - `tests/adapters/persistence/sqlite/test_migrations.py`

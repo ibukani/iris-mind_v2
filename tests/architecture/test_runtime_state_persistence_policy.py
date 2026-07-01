@@ -16,6 +16,8 @@ def test_sqlite_backend_does_not_make_all_runtime_state_durable() -> None:
     assert policy.activity_projection_store != PersistenceKind.DURABLE
     assert policy.presence_store != PersistenceKind.DURABLE
     assert policy.space_occupancy_store != PersistenceKind.DURABLE
+    assert policy.background_job_queue == PersistenceKind.DURABLE
+    assert policy.memory_candidate_review_store == PersistenceKind.DURABLE
 
 
 def test_presence_and_space_occupancy_are_not_marked_durable() -> None:
@@ -44,3 +46,5 @@ def test_memory_backend_marks_all_hot_state_ephemeral() -> None:
     assert policy.activity_projection_store == PersistenceKind.EPHEMERAL
     assert policy.presence_store == PersistenceKind.EPHEMERAL
     assert policy.space_occupancy_store == PersistenceKind.EPHEMERAL
+    assert policy.background_job_queue == PersistenceKind.EPHEMERAL
+    assert policy.memory_candidate_review_store == PersistenceKind.EPHEMERAL

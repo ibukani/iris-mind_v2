@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.learning import RuntimeLearningEvent
-    from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
+    from iris.runtime.learning.queue import BackgroundJobQueue
     from iris.runtime.state.memory_candidates import MemoryCandidateReviewStore
 
 _RESPONSE_STYLE_PATTERNS = (
@@ -82,7 +82,7 @@ class FilteringImplicitMemoryCandidateHook:
 
     def __init__(
         self,
-        queue: InMemoryBackgroundJobQueue,
+        queue: BackgroundJobQueue,
         *,
         max_attempts: int = 3,
     ) -> None:

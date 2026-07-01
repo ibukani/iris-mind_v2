@@ -183,14 +183,13 @@ ActionPlan
 
 実装済みの境界。
 - `LearningHookRunner` / `RuntimeLearningHookRunner` は hook failure を user-facing path へ伝搬しない。
-- `BackgroundJobQueue` は process-local queue として実装済み。
+- `BackgroundJobQueue` は runtime learning work を hot path 外で実行する queue 境界として実装済み。`state.backend = "sqlite"` では durable queue、`state.backend = "memory"` では process-local queue を使う。
 - 明示メモリ保存は `MemoryBackgroundJobPayload` から `MemoryStore` へ保存できる。
-- implicit conversation learning は保守的抽出器で `MemoryCandidateReviewStore` に review-required candidate として保存する。
+- implicit conversation learning は保守的抽出器で `MemoryCandidateReviewStore` に review-required candidate として保存する。`state.backend = "sqlite"` では review lifecycle と promotion metadata は再起動後も保持される。
 - approved implicit candidate だけが `ApprovedMemoryCandidatePromoter` 経由で durable `MemoryStore` に昇格できる。
 - promotion 済み metadata と canonical `MemoryStore` の欠損は `promoted_memory_missing` として通常の冪等 promotion と区別する。
 
 未実装または後続作業。
-- SQLite-backed BackgroundJobQueue / MemoryCandidateReviewStore。
 - LLM-based implicit extraction。
 - raw transcript persistence / retention / deletion。
 - long conversation summarization。
