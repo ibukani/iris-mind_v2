@@ -98,6 +98,7 @@ rotation = "10 MB"
 retention = "7 days"
 
 [safety]
+# development: pass-through, basic: output checks, strict: deterministic proactive policy
 mode = "development"
 max_output_chars = 4000
 

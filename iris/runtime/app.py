@@ -10,7 +10,11 @@ from typing import TYPE_CHECKING
 
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.service import CognitiveCycle
-from iris.contracts.actions import ActionPlan, PresentedOutput
+from iris.contracts.actions import (
+    ActionPlan,
+    PresentedOutput,
+    presented_output_with_policy_constraints,
+)
 from iris.runtime.wiring.presentation import wire_output_pipeline
 
 if TYPE_CHECKING:
@@ -82,4 +86,6 @@ class IrisApp:
         if plan.is_no_action:
             return PresentedOutput(text=None)
 
-        return await self._output_pipeline.present_action_plan(plan)
+        output = await self._output_pipeline.present_action_plan(plan)
+        constraint_names = tuple(item.name for item in cycle_result.frame.constraints)
+        return presented_output_with_policy_constraints(output, constraint_names)

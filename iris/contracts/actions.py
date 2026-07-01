@@ -86,6 +86,8 @@ class PresentedOutput(BaseModel):
     delay_ms: int = 0
     priority: int = 0
     interruptible: bool = True
+    safety_block_reason: str | None = None
+    policy_constraint_names: tuple[str, ...] = ()
 
     @property
     def is_sendable(self) -> bool:
@@ -115,6 +117,42 @@ def presented_output_from_plan(
         priority=plan.priority,
         interruptible=plan.interruptible,
     )
+
+
+def presented_output_with_policy_constraints(
+    output: PresentedOutput,
+    constraint_names: tuple[str, ...],
+) -> PresentedOutput:
+    """PresentedOutput に policy provenance を型安全に付与する。
+
+    Returns:
+        元の表示属性とpolicy constraint名を持つ出力。
+    """
+    return PresentedOutput(
+        text=output.text,
+        style_hint=output.style_hint,
+        emotion_hint=output.emotion_hint,
+        expression_hint=output.expression_hint,
+        delay_ms=output.delay_ms,
+        priority=output.priority,
+        interruptible=output.interruptible,
+        safety_block_reason=output.safety_block_reason,
+        policy_constraint_names=_merge_constraint_names(
+            output.policy_constraint_names,
+            constraint_names,
+        ),
+    )
+
+
+def _merge_constraint_names(
+    existing: tuple[str, ...],
+    additional: tuple[str, ...],
+) -> tuple[str, ...]:
+    merged: list[str] = []
+    for name in (*existing, *additional):
+        if name not in merged:
+            merged.append(name)
+    return tuple(merged)
 
 
 class AppAction(BaseModel):

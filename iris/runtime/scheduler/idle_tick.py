@@ -10,6 +10,7 @@ from iris.contracts.observations import IdleTickObservation, ObservationContext,
 from iris.core.ids import CorrelationId, ObservationId
 from iris.runtime.scheduler.models import ScheduledObservation
 from iris.runtime.scheduler.ports import RuntimeScheduler
+from iris.safety.policy_engine import DeliverySource
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -122,6 +123,7 @@ class IdleTickSource(RuntimeScheduler):
             observation=observation,
             correlation_id=CorrelationId(f"scheduler:{observation_id}"),
             reason="idle_threshold_exceeded",
+            delivery_source=DeliverySource.PROACTIVE_IDLE_TICK,
             target=DeliveryTarget(
                 provider=target.route.provider,
                 provider_subject=target.route.provider_subject,

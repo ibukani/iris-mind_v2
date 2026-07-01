@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, time
 from typing import TYPE_CHECKING, Protocol
 from zoneinfo import ZoneInfo
 
 from iris.contracts.availability import AvailabilityStatus
+from iris.safety.policy_engine import (
+    DeliverySource,
+    SafetyAuditMetadata,
+    SafetyPolicyContext,
+    SafetyPolicyDecision,
+    SafetyPolicyEngine,
+    SafetyRiskLevel,
+)
 
 if TYPE_CHECKING:
     from iris.contracts.actions import PresentedOutput
@@ -32,6 +40,8 @@ class DeliverySafetyDecision:
     allowed: bool
     reason: str
     not_before: datetime | None = None
+    risk_level: SafetyRiskLevel = SafetyRiskLevel.LOW
+    audit: SafetyAuditMetadata | None = None
 
 
 class DeliverySafetyGate(Protocol):
@@ -44,6 +54,7 @@ class DeliverySafetyGate(Protocol):
         output: PresentedOutput,
         availability: AvailabilitySnapshot | None,
         now: datetime,
+        policy_context: SafetyPolicyContext | None = None,
     ) -> DeliverySafetyDecision:
         """配送可否を決定する。
 
@@ -66,38 +77,45 @@ class BasicDeliverySafetyGate:
         output: PresentedOutput,
         availability: AvailabilitySnapshot | None,
         now: datetime,
+        policy_context: SafetyPolicyContext | None = None,
     ) -> DeliverySafetyDecision:
         """配送 target、availability、時刻から配送可否を返す。
 
         Returns:
             DeliverySafetyDecision: 配送可否と理由。blocked の場合は not_before を含む。
         """
-        reason = self._blocking_reason(target, output, availability, now)
+        _ = policy_context
+        precheck = self.check_target_output(target=target, output=output)
+        if not precheck.allowed:
+            return precheck
+        reason = self._availability_reason(availability) or self._quiet_hours_reason(now)
         if reason is not None:
             return DeliverySafetyDecision(allowed=False, reason=reason)
         return DeliverySafetyDecision(allowed=True, reason="allowed")
 
-    def _blocking_reason(
+    def check_target_output(
         self,
+        *,
         target: DeliveryTarget,
         output: PresentedOutput,
-        availability: AvailabilitySnapshot | None,
-        now: datetime,
-    ) -> str | None:
-        """最初に hit した block 理由を返す。
+    ) -> DeliverySafetyDecision:
+        """Availability/time前にtargetとoutputだけを検証する。
 
         Returns:
-            block 理由。全て通過する場合は None。
+            Target/outputの配送可否。
         """
-        for reason in (
-            self._output_reason(output),
-            self._target_reason(target),
-            self._availability_reason(availability),
-            self._quiet_hours_reason(now),
-        ):
+        for reason in (self._output_reason(output), self._target_reason(target)):
             if reason is not None:
-                return reason
-        return None
+                return DeliverySafetyDecision(allowed=False, reason=reason)
+        return DeliverySafetyDecision(allowed=True, reason="allowed")
+
+    def is_quiet_hours(self, now: datetime) -> bool:
+        """現在時刻が quiet hours 内なら True を返す。
+
+        Returns:
+            quiet hours 内なら True。
+        """
+        return self._quiet_hours_reason(now) is not None
 
     @staticmethod
     def _output_reason(output: PresentedOutput) -> str | None:
@@ -115,7 +133,7 @@ class BasicDeliverySafetyGate:
         """配送先 routing 不備の理由を返す。
 
         Returns:
-            block 理由または None。
+            Block reason または None。
         """
         if not target.provider:
             return "missing_provider"
@@ -128,7 +146,7 @@ class BasicDeliverySafetyGate:
         """可用性による block 理由を返す。
 
         Returns:
-            block 理由または None。
+            Block reason または None。
         """
         if availability is None:
             return None
@@ -141,7 +159,7 @@ class BasicDeliverySafetyGate:
         """静寂時間帯内なら block 理由を返す。
 
         Returns:
-            block 理由または None。
+            Block reason または None。
         """
         if not self.quiet_hours.enabled:
             return None
@@ -153,3 +171,65 @@ class BasicDeliverySafetyGate:
         if in_window:
             return "quiet_hours"
         return None
+
+
+@dataclass(frozen=True)
+class StrictDeliverySafetyGate:
+    """Basic checks と strict proactive policy を合成する gate。"""
+
+    basic: BasicDeliverySafetyGate = BasicDeliverySafetyGate()
+    engine: SafetyPolicyEngine = field(default_factory=SafetyPolicyEngine)
+
+    async def check(
+        self,
+        *,
+        target: DeliveryTarget,
+        output: PresentedOutput,
+        availability: AvailabilitySnapshot | None,
+        now: datetime,
+        policy_context: SafetyPolicyContext | None = None,
+    ) -> DeliverySafetyDecision:
+        """Basic validation 後に strict policy を評価する。
+
+        Returns:
+            配送可否、理由、risk、audit metadata。
+        """
+        precheck = self.basic.check_target_output(target=target, output=output)
+        if not precheck.allowed:
+            return precheck
+        context = policy_context or SafetyPolicyContext(
+            source=DeliverySource.USER_INITIATED,
+            target_key=_target_key(target),
+        )
+        if context.source is DeliverySource.USER_INITIATED:
+            return await self.basic.check(
+                target=target,
+                output=output,
+                availability=availability,
+                now=now,
+            )
+        availability_status = availability.status if availability is not None else None
+        strict_context = SafetyPolicyContext(
+            source=context.source,
+            target_key=context.target_key,
+            policy_constraint_names=context.policy_constraint_names,
+            availability_status=availability_status,
+            in_quiet_hours=self.basic.is_quiet_hours(now),
+            recent_block_count=context.recent_block_count,
+        )
+        decision = self.engine.evaluate_delivery(strict_context)
+        return _delivery_decision(decision)
+
+
+def _delivery_decision(decision: SafetyPolicyDecision) -> DeliverySafetyDecision:
+    return DeliverySafetyDecision(
+        allowed=decision.allowed,
+        reason=decision.reason,
+        not_before=decision.not_before,
+        risk_level=decision.risk_level,
+        audit=decision.audit,
+    )
+
+
+def _target_key(target: DeliveryTarget) -> str:
+    return f"{target.provider}:{target.provider_subject or ''}:{target.provider_space_ref or ''}"

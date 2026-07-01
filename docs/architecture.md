@@ -167,6 +167,7 @@ iris/
 - `runtime/observability/` — runtime trace context、safe lifecycle logs、LLM request observer、startup diagnostics、runtime doctor。詳細は ADR 0008。
 - `runtime/state/` — runtime-owned state ports、activity projection、presence、space occupancy、workspace context assembly。SQLite backend の永続化範囲は ADR 0002。
 - `runtime/lifecycle/` — scheduler lifecycle task の起動・停止境界。
+- `safety/policy_engine.py` — LLM/APIを使わない決定論的strict safety policy。
 
 Deferred / future phase:
 
@@ -174,7 +175,6 @@ Deferred / future phase:
 - `cognitive/learning/` — LearningHook / BackgroundJob
 - `features/memory_consolidation/`, `features/relationship_update/`, `features/persona_patch/`
 - `adapters/tools/`, `adapters/embeddings/`
-- `safety/policy_engine.py`
 
 ---
 

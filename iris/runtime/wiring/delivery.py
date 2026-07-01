@@ -6,9 +6,15 @@ from typing import TYPE_CHECKING
 
 from iris.runtime.config.delivery import RuntimeDeliveryConfig, quiet_time
 from iris.runtime.delivery.broker import RuntimeAppActionBroker
-from iris.safety.delivery_gate import BasicDeliverySafetyGate, QuietHoursPolicy
+from iris.safety.delivery_gate import (
+    BasicDeliverySafetyGate,
+    DeliverySafetyGate,
+    QuietHoursPolicy,
+    StrictDeliverySafetyGate,
+)
 
 if TYPE_CHECKING:
+    from iris.runtime.config.safety import RuntimeSafetyConfig
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.learning.dispatch import LearningDispatchStore
     from iris.runtime.learning.hooks import LearningHookRunner
@@ -35,13 +41,16 @@ def wire_app_action_broker(
     )
 
 
-def wire_delivery_safety_gate(config: RuntimeDeliveryConfig) -> BasicDeliverySafetyGate:
+def wire_delivery_safety_gate(
+    config: RuntimeDeliveryConfig,
+    safety_config: RuntimeSafetyConfig | None = None,
+) -> DeliverySafetyGate:
     """Runtime config から delivery safety gate を組み立てる。
 
     Returns:
         構成済みの BasicDeliverySafetyGate。
     """
-    return BasicDeliverySafetyGate(
+    basic = BasicDeliverySafetyGate(
         quiet_hours=QuietHoursPolicy(
             enabled=config.quiet_hours.enabled,
             start=quiet_time(config.quiet_hours.start, "delivery.quiet_hours.start"),
@@ -49,3 +58,6 @@ def wire_delivery_safety_gate(config: RuntimeDeliveryConfig) -> BasicDeliverySaf
             timezone=config.quiet_hours.timezone,
         ),
     )
+    if safety_config is not None and safety_config.mode == "strict":
+        return StrictDeliverySafetyGate(basic=basic)
+    return basic
