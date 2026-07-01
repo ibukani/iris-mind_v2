@@ -48,6 +48,12 @@ Activity journal は `state.backend = "sqlite"` で durable になる。investig
 
 Actor identity が long-term memory と relationship semantics を所有する。Space は context scope であり、memory の primary owner ではない。Presence と occupancy は current-state signal であり、process restart を越えて残さない。
 
+## Schema management
+
+SQLite backend の schema ownership、migration、backup、restore、corrupt DB recovery は ADR 0012 に従う。`state.backend = "sqlite"` の durable store は store-local `CREATE TABLE` ではなく `SQLiteSchemaMigrator` が管理する known schema を開く。
+
+Activity journal replay は projection rebuild と diagnostics の補助には使えるが、account / relationship / affect / delivery / scheduler state の完全復元元とはみなさない。
+
 ## Implementation anchors
 
 - `iris/runtime/config/state.py`

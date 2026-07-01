@@ -165,7 +165,7 @@ iris/
 - `runtime/scheduler/` — `IdleTickSource` と `SchedulerRunner` による typed internal observation 発行。詳細は ADR 0006。
 - `runtime/delivery/` — pull-based delivery outbox、lease、idempotent `ReportActionResult`。詳細は ADR 0006。
 - `runtime/observability/` — runtime trace context、safe lifecycle logs、LLM request observer、startup diagnostics、runtime doctor。詳細は ADR 0008。
-- `runtime/state/` — runtime-owned state ports、activity projection、presence、space occupancy、workspace context assembly。SQLite backend の永続化範囲は ADR 0002。
+- `runtime/state/` — runtime-owned state ports、activity projection、presence、space occupancy、workspace context assembly。SQLite backend の永続化範囲は ADR 0002、schema migration / backup / recovery は ADR 0012。
 - `runtime/lifecycle/` — scheduler lifecycle task の起動・停止境界。
 - `safety/policy_engine.py` — LLM/APIを使わない決定論的strict safety policy。
 

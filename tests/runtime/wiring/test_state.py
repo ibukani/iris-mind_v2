@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
+from iris.adapters.persistence.sqlite.migrator import SQLiteMigrationResult, SQLiteSchemaMigrator
 from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
 from iris.adapters.persistence.sqlite.stores.activity_journal import SQLiteActivityJournal
 from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
@@ -84,3 +85,32 @@ async def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqli
     await stores.affect_store.close()
     await stores.activity_journal.close()
     await stores.scheduler_target_store.close()
+
+
+@pytest.mark.anyio
+async def test_wire_runtime_state_runs_sqlite_schema_migration_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SQLite runtime wiring は context entrypoint で schema migration を一度だけ実行する。"""
+    db_path = tmp_path / "state.db"
+    config = replace(
+        default_runtime_config(),
+        state=RuntimeStateConfig(backend=RuntimeStateBackend.SQLITE, sqlite_path=str(db_path)),
+    )
+    calls: list[str] = []
+    original_ensure_current = SQLiteSchemaMigrator.ensure_current
+
+    def counted_ensure_current(
+        self: SQLiteSchemaMigrator,
+        db_path: str | Path,
+    ) -> SQLiteMigrationResult:
+        calls.append(str(db_path))
+        return original_ensure_current(self, db_path)
+
+    monkeypatch.setattr(SQLiteSchemaMigrator, "ensure_current", counted_ensure_current)
+
+    stores = wire_runtime_state(config)
+
+    assert calls == [str(db_path)]
+    await stores.close()

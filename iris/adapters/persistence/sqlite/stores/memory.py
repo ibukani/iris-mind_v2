@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, override
 
 from iris.adapters.memory.utils import matches_query, rank_text_matches
 from iris.adapters.persistence.sqlite.database import SQLiteDatabase
+from iris.adapters.persistence.sqlite.migrator import SQLiteSchemaMigrator
 from iris.adapters.persistence.sqlite.serialization import datetime_to_text, optional_text
 from iris.contracts.memory import (
     MemoryId,
@@ -33,45 +34,23 @@ class SQLiteMemoryStore(MutableMemoryStore):
     aiosqlite または asyncio.to_thread への移行を検討する。
     """
 
-    def __init__(self, db_path: str | Path) -> None:
-        """Initialize the store and create tables if missing."""
-        self._db = SQLiteDatabase(db_path, synchronous="NORMAL")
-        self._init_db()
+    def __init__(
+        self,
+        db_path: str | Path,
+        *,
+        ensure_schema: bool = True,
+        migrator: SQLiteSchemaMigrator | None = None,
+    ) -> None:
+        """Migration 済み SQLite DB に接続する。
 
-    def _init_db(self) -> None:
-        """Create the memories table, filter indexes, and FTS5 virtual table if missing."""
-        with self._db.transaction() as conn:
-            conn.execute("BEGIN IMMEDIATE;")
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS memories (
-                    memory_id TEXT PRIMARY KEY,
-                    text TEXT NOT NULL,
-                    actor_id TEXT,
-                    space_id TEXT,
-                    salience REAL NOT NULL DEFAULT 0.0,
-                    kind TEXT NOT NULL,
-                    confidence REAL NOT NULL DEFAULT 1.0,
-                    source_observation_id TEXT,
-                    created_at TEXT,
-                    updated_at TEXT,
-                    archived INTEGER NOT NULL DEFAULT 0,
-                    metadata_json TEXT NOT NULL DEFAULT '{}'
-                );
-                """
-            )
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_actor_id ON memories(actor_id);")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_space_id ON memories(space_id);")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_kind ON memories(kind);")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_archived ON memories(archived);")
-            conn.execute(
-                """
-                CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts5 USING fts5(
-                    text,
-                    memory_id UNINDEXED
-                );
-                """
-            )
+        Args:
+            db_path: SQLite database file path。
+            ensure_schema: True の場合、store 使用前に schema migration を実行する。
+            migrator: schema migration に使う runner。省略時は標準 runner。
+        """
+        if ensure_schema:
+            (migrator or SQLiteSchemaMigrator()).ensure_current(db_path)
+        self._db = SQLiteDatabase(db_path, synchronous="NORMAL")
 
     def close(self) -> None:
         """永続connectionを閉じる。"""

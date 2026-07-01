@@ -294,6 +294,8 @@ check 項目:
 - config parse / validation
 - selected state backend
 - SQLite path permission (`state.backend = "sqlite"` の場合)
+- SQLite schema version / latest migration / pending migration
+- SQLite future schema rejection / corrupt DB detection
 - logging file path parent permission (`logging.file_path` 設定時)
 - server host / port summary
 - model slot summary
@@ -301,7 +303,7 @@ check 項目:
 - delivery enabled / disabled
 - scheduler enabled / disabled
 
-失敗時は failure class、issue、recommended next action を出す。
+失敗時は failure class、issue、recommended next action を出す。SQLite DB が future schema または corrupt と判定された場合、doctor は fail し、DB を silent delete / recreate しない。migration pending は warn として表示し、通常起動時に `SQLiteSchemaMigrator` が適用する。
 
 ## Ollama diagnostics の内部動作
 

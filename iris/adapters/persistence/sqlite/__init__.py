@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from iris.adapters.persistence.sqlite.backup import SQLiteBackupService
 from iris.adapters.persistence.sqlite.database import SQLiteDatabase
+from iris.adapters.persistence.sqlite.migrator import SQLiteSchemaMigrator
 from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
 from iris.adapters.persistence.sqlite.stores.activity_journal import SQLiteActivityJournal
 from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
@@ -15,9 +17,11 @@ __all__ = [
     "SQLiteAccountStore",
     "SQLiteActivityJournal",
     "SQLiteAffectStore",
+    "SQLiteBackupService",
     "SQLiteDatabase",
     "SQLiteDeliveryOutbox",
     "SQLiteMemoryStore",
     "SQLiteRelationshipStore",
     "SQLiteSchedulerTargetStore",
+    "SQLiteSchemaMigrator",
 ]

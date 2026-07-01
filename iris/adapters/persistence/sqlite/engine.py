@@ -7,10 +7,10 @@ import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Connection, create_engine, event
+from sqlalchemy import Connection, event
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
-from iris.adapters.persistence.sqlite.schema.base import Base
+from iris.adapters.persistence.sqlite.migrator import SQLiteSchemaMigrator
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -21,12 +21,21 @@ if TYPE_CHECKING:
 class AsyncDatabaseManager:
     """Manages the lifecycle of an async SQLAlchemy engine."""
 
-    def __init__(self, db_path: str | Path, *, echo: bool = False) -> None:
+    def __init__(
+        self,
+        db_path: str | Path,
+        *,
+        echo: bool = False,
+        ensure_schema: bool = True,
+        migrator: SQLiteSchemaMigrator | None = None,
+    ) -> None:
         """Initialize the async engine.
 
         Args:
             db_path: Path to the SQLite database file.
             echo: If True, echo SQL queries for debugging.
+            ensure_schema: True の場合、engine 使用前に SQLite schema migration を実行する。
+            migrator: schema migration に使う runner。省略時は標準 runner。
         """
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -46,19 +55,18 @@ class AsyncDatabaseManager:
 
         event.listen(self.engine.sync_engine, "begin", do_begin)
 
+        if ensure_schema:
+            (migrator or SQLiteSchemaMigrator()).ensure_current(self._db_path)
+
         self.session_factory = async_sessionmaker(
             bind=self.engine,
             expire_on_commit=False,
         )
 
-        self._init_models_sync()
-
-    def _init_models_sync(self) -> None:
-        """Create all tables synchronously using a sync engine."""
-        sync_connect_str = f"sqlite:///{self._db_path.absolute()}"
-        sync_engine = create_engine(sync_connect_str)
-        Base.metadata.create_all(sync_engine)
-        sync_engine.dispose()
+    @property
+    def db_path(self) -> Path:
+        """管理対象 SQLite DB path を返す。"""
+        return self._db_path
 
     async def close(self) -> None:
         """Close the engine."""
