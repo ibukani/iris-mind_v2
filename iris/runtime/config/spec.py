@@ -449,7 +449,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "development",
             "出力safety gateの動作モード。",
             env="IRIS_SAFETY_MODE",
-            allowed_values=("development", "basic"),
+            allowed_values=("development", "basic", "strict"),
         ),
         ConfigFieldSpec(
             "safety.max_output_chars",
