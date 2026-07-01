@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import replace
 import json
+import sqlite3
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,6 +17,8 @@ from iris.adapters.llm.diagnostics import (
     ProviderReadinessResult,
     ReadinessStatus,
 )
+from iris.adapters.persistence.sqlite.backup import SQLiteBackupService
+from iris.adapters.persistence.sqlite.migrator import SQLiteSchemaMigrator
 from iris.runtime import doctor
 from iris.runtime.config import IrisRuntimeConfig, default_runtime_config
 from iris.runtime.config.llm import LLMProvider, ModelSlotName
@@ -301,7 +305,7 @@ async def test_sqlite_existing_file_reports_ok(
 ) -> None:
     """既存の readable/writable sqlite file は OK になる。"""
     sqlite_file = tmp_path / "iris.db"
-    sqlite_file.write_bytes(b"")
+    SQLiteSchemaMigrator().ensure_current(sqlite_file)
 
     config = default_runtime_config()
     sqlite_config = replace(
@@ -393,3 +397,127 @@ async def test_logging_existing_file_reports_ok(
 
     logging_check = next(c for c in report.checks if c.name == "logging-file")
     assert logging_check.status == "ok"
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_reports_sqlite_schema_version(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Current SQLite DB は schema version と latest migration を表示する。"""
+    db_path = tmp_path / "state.sqlite3"
+    SQLiteSchemaMigrator().ensure_current(db_path)
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "sqlite-state")
+    assert check.status == "ok"
+    assert "schema_version=1" in check.summary
+    assert "latest_migration=baseline_runtime_state" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_warns_on_pending_sqlite_migration(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Unversioned SQLite DB は read-only doctor で pending migration として表示する。"""
+    db_path = tmp_path / "legacy.sqlite3"
+    db_path.write_bytes(b"")
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "sqlite-state")
+    assert check.status == "warn"
+    assert "pending=1" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_reports_sqlite_backup_age_when_manifest_is_known(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """標準 backup manifest がある場合は sqlite-state に backup age を出す。"""
+    db_path = tmp_path / "state.sqlite3"
+    SQLiteSchemaMigrator().ensure_current(db_path)
+    SQLiteBackupService().create_backup(db_path, tmp_path / "backup")
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "sqlite-state")
+    assert check.status == "ok"
+    assert "backup_age_seconds=" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_fails_on_corrupt_sqlite_db(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Corrupt SQLite DB は doctor でも fail closed として表示する。"""
+    db_path = tmp_path / "corrupt.sqlite3"
+    db_path.write_bytes(b"not a sqlite database")
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "sqlite-state")
+    assert not report.ok
+    assert check.status == "fail"
+    assert check.next_action == (
+        "restore from a verified SQLite backup; do not delete the DB silently"
+    )
+    assert db_path.read_bytes() == b"not a sqlite database"
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_fails_on_future_sqlite_schema(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Future SQLite schema version は doctor でも fail closed になる。"""
+    db_path = tmp_path / "future.sqlite3"
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.execute("PRAGMA user_version = 99")
+        conn.commit()
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "sqlite-state")
+    assert not report.ok
+    assert check.status == "fail"
+    assert check.next_action == "upgrade Iris before opening this database"
+
+
+async def _disabled_startup_diagnostics(
+    config: IrisRuntimeConfig,
+) -> StartupDiagnosticsReport:
+    del config
+    await asyncio.sleep(0)
+    return StartupDiagnosticsReport(outcomes=(), enabled=False)
+
+
+def _sqlite_config(db_path: Path) -> IrisRuntimeConfig:
+    config = default_runtime_config()
+    return replace(
+        config,
+        state=replace(
+            config.state,
+            backend=RuntimeStateBackend.SQLITE,
+            sqlite_path=str(db_path),
+        ),
+    )

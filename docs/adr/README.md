@@ -25,9 +25,11 @@ Implementation anchors
 | [0008](0008-runtime-observability-and-diagnostics.md) | Accepted | Runtime observability は typed boundary API と safe metadata に限定する。 |
 | [0009](0009-public-remote-auth-boundary.md) | Accepted | Runtime auth は RemoteAuthBoundary を介して provider payload から context を検証する。 |
 | [0010](0010-runtime-learning-delivery-history-boundary.md) | Accepted | Delivery result 後に learning/history を確定し、generated output と delivered output を分離する。 |
+| [0011](0011-memory-vector-index-backend.md) | Accepted | Vector index は memory record の正本ではなく derived retrieval backend として扱う。 |
+| [0012](0012-sqlite-schema-migration-backup-recovery.md) | Accepted | SQLite backend は明示的な schema migration、backup、recovery policy で運用する。 |
 
 ## 現在の横断方針
 
-- `state.backend = "sqlite"` は account、memory、relationship、affect、activity journal を durable にする。
-- activity projection、presence、space occupancy、ephemeral space bindings、delivery outbox、scheduler target store は現 phase では process-local。
+- `state.backend = "sqlite"` は account、memory、relationship、affect、activity journal、delivery outbox、scheduler target store を durable にする。
+- activity projection、presence、space occupancy、ephemeral space bindings、conversation history、background job queue、learning dispatch は process-local。
 - ADR 0005 は欠番を埋めるため新規追加した。既存 ADR 0008 は diagnostics / observability の決定であり、LLM provider runtime policy の置き場としては広すぎる。

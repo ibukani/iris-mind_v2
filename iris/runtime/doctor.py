@@ -11,6 +11,18 @@ from pathlib import Path
 import sys
 
 from iris.adapters.llm.diagnostics import ProviderReadinessResult, ReadinessStatus
+from iris.adapters.persistence.sqlite.backup import (
+    BACKUP_MANIFEST_FILENAME,
+    SQLiteBackupError,
+    read_backup_manifest,
+)
+from iris.adapters.persistence.sqlite.migrator import (
+    SQLiteCorruptDatabaseError,
+    SQLiteSchemaError,
+    SQLiteSchemaMigrator,
+    SQLiteUnsupportedSchemaVersionError,
+)
+from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.runtime.config import (
     ConfigError,
     IrisRuntimeConfig,
@@ -166,8 +178,16 @@ def _state_backend_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
 def _sqlite_state_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     if config.state.backend is not RuntimeStateBackend.SQLITE:
         return _build_check("sqlite-state", status="skipped", summary="state.backend is not sqlite")
+    path = Path(config.state.sqlite_path)
+    path_check = _sqlite_state_path_check(path)
+    if path_check.status == "fail" or not path.exists():
+        return path_check
+    return _sqlite_schema_check(path)
+
+
+def _sqlite_state_path_check(path: Path) -> RuntimeDoctorCheck:
     return _check_file_path(
-        Path(config.state.sqlite_path),
+        path,
         spec=_FilePathCheckSpec(
             name="sqlite-state",
             directory_summary="configured sqlite path is a directory: {path}",
@@ -179,12 +199,82 @@ def _sqlite_state_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
             existing_fail_summary="cannot access {path}",
             existing_fail_issue="sqlite path is not readable and writable",
             existing_fail_next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
-            missing_ok_summary="{path} can be created",
+            missing_ok_summary="{path} can be created; schema will initialize on startup",
             missing_fail_summary="cannot open {path}",
             missing_fail_issue="sqlite parent directory is not writable",
             missing_fail_next_action="check directory permissions or set IRIS_STATE_SQLITE_PATH",
         ),
     )
+
+
+def _sqlite_schema_check(path: Path) -> RuntimeDoctorCheck:
+    try:
+        status = SQLiteSchemaMigrator().inspect(path)
+    except SQLiteSchemaError as exc:
+        return _sqlite_schema_failure_check(path, exc)
+    if status.pending_versions:
+        pending = ",".join(str(version) for version in status.pending_versions)
+        return _build_check(
+            "sqlite-state",
+            status="warn",
+            summary=(
+                f"{path} schema_version={status.user_version} "
+                f"current={status.current_version} pending={pending} "
+                f"{_sqlite_backup_summary(path)}"
+            ),
+            next_action="start Iris normally to apply supported SQLite migrations",
+        )
+    latest = status.latest_migration or "none"
+    return _build_check(
+        "sqlite-state",
+        status="ok",
+        summary=(
+            f"{path} schema_version={status.user_version} latest_migration={latest} "
+            f"quick_check={status.quick_check} {status.wal_checkpoint} "
+            f"{_sqlite_backup_summary(path)}"
+        ),
+    )
+
+
+def _sqlite_schema_failure_check(path: Path, exc: SQLiteSchemaError) -> RuntimeDoctorCheck:
+    if isinstance(exc, SQLiteUnsupportedSchemaVersionError):
+        return _build_check(
+            "sqlite-state",
+            status="fail",
+            summary=f"unsupported sqlite schema at {path}",
+            issue=str(exc),
+            next_action="upgrade Iris before opening this database",
+        )
+    if isinstance(exc, SQLiteCorruptDatabaseError):
+        return _build_check(
+            "sqlite-state",
+            status="fail",
+            summary=f"sqlite integrity check failed: {path}",
+            issue=str(exc),
+            next_action="restore from a verified SQLite backup; do not delete the DB silently",
+        )
+    return _build_check(
+        "sqlite-state",
+        status="fail",
+        summary=f"sqlite schema check failed: {path}",
+        issue=str(exc),
+        next_action=("inspect schema_migrations and restore from backup if history is not trusted"),
+    )
+
+
+def _sqlite_backup_summary(path: Path) -> str:
+    manifest_path = path.parent / "backup" / BACKUP_MANIFEST_FILENAME
+    backup_summary = "backup_age=unknown"
+    if manifest_path.exists():
+        try:
+            manifest = read_backup_manifest(manifest_path)
+        except SQLiteBackupError:
+            return backup_summary
+        created_at = parse_datetime(manifest.created_at)
+        if Path(manifest.source_db_path) == path and created_at is not None:
+            age_seconds = max(0, int((now_utc() - created_at).total_seconds()))
+            backup_summary = f"backup_age_seconds={age_seconds}"
+    return backup_summary
 
 
 def _logging_path_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
