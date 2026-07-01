@@ -12,7 +12,7 @@ from iris.core.metadata import immutable_metadata
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from iris.cognitive.memory.candidates import MemoryCandidate
+    from iris.contracts.memory_candidates import MemoryCandidate
     from iris.contracts.metadata import ImmutableMetadata
     from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 

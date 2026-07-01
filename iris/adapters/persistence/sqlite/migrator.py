@@ -10,6 +10,12 @@ import sqlite3
 from typing import TYPE_CHECKING
 
 from iris.adapters.persistence.sqlite.migrations.registry import available_migrations
+from iris.adapters.persistence.sqlite.schema.background_jobs import (
+    BACKGROUND_JOB_REQUIRED_COLUMNS,
+)
+from iris.adapters.persistence.sqlite.schema.memory_candidate_reviews import (
+    MEMORY_CANDIDATE_REVIEW_REQUIRED_COLUMNS,
+)
 from iris.adapters.persistence.sqlite.schema.version import CURRENT_SQLITE_SCHEMA_VERSION
 from iris.core.datetime_utils import now_utc
 
@@ -206,6 +212,8 @@ _REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
             "route_display_name",
         }
     ),
+    "background_jobs": BACKGROUND_JOB_REQUIRED_COLUMNS,
+    "memory_candidate_reviews": MEMORY_CANDIDATE_REVIEW_REQUIRED_COLUMNS,
 }
 
 
@@ -472,7 +480,7 @@ def _validate_current_schema(path: Path, conn: sqlite3.Connection) -> None:
         missing.extend(_missing_columns(conn, table_name, required_columns))
     if missing:
         details = ", ".join(sorted(missing))
-        message = f"SQLite schema at {path} is not compatible with v1 baseline: {details}"
+        message = f"SQLite schema at {path} is not compatible with current SQLite schema: {details}"
         raise SQLiteLegacySchemaError(message)
 
 

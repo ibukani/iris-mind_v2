@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.learning import LearningEvent
-    from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
+    from iris.runtime.learning.queue import BackgroundJobQueue
 
 
 class ExplicitMemoryPayloadResolver(Protocol):
@@ -33,7 +33,7 @@ class EnqueueExplicitMemoryLearningHook:
 
     def __init__(
         self,
-        queue: InMemoryBackgroundJobQueue,
+        queue: BackgroundJobQueue,
         resolver: ExplicitMemoryPayloadResolver,
         *,
         max_attempts: int = 3,

@@ -12,16 +12,22 @@ from iris.adapters.persistence.sqlite.migrator import SQLiteMigrationResult, SQL
 from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
 from iris.adapters.persistence.sqlite.stores.activity_journal import SQLiteActivityJournal
 from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
+from iris.adapters.persistence.sqlite.stores.background_jobs import SQLiteBackgroundJobQueue
 from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
+    SQLiteMemoryCandidateReviewStore,
+)
 from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
+from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
 from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
+from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 from iris.runtime.wiring.state import wire_runtime_state
@@ -42,6 +48,8 @@ def test_wire_runtime_state_uses_in_memory_runtime_context_stores_by_default() -
     assert isinstance(stores.activity_projection_store, InMemoryActivityProjectionStore)
     assert isinstance(stores.presence_store, InMemoryPresenceStore)
     assert isinstance(stores.space_occupancy_store, InMemorySpaceOccupancyStore)
+    assert isinstance(stores.background_job_queue, InMemoryBackgroundJobQueue)
+    assert isinstance(stores.memory_candidate_review_store, InMemoryMemoryCandidateReviewStore)
 
 
 @pytest.mark.anyio
@@ -78,13 +86,10 @@ async def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqli
     assert isinstance(stores.affect_store, SQLiteAffectStore)
     assert isinstance(stores.activity_journal, SQLiteActivityJournal)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
+    assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
+    assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
 
-    await stores.account_store.close()
-    stores.memory_store.close()
-    await stores.relationship_store.close()
-    await stores.affect_store.close()
-    await stores.activity_journal.close()
-    await stores.scheduler_target_store.close()
+    await stores.close()
 
 
 @pytest.mark.anyio

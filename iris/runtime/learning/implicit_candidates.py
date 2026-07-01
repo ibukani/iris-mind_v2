@@ -7,18 +7,18 @@ from hashlib import sha256
 import re
 from typing import TYPE_CHECKING
 
-from iris.cognitive.memory.candidates import (
-    MemoryCandidate,
-    MemoryCandidateSensitivity,
-    MemoryCandidateSource,
-    MemoryRetentionPolicy,
-)
 from iris.cognitive.memory.safety import (
     contains_credential_like_content,
     contains_sensitive_profile_content,
 )
 from iris.contracts.learning import RuntimeLearningEventKind
 from iris.contracts.memory import MemoryKind
+from iris.contracts.memory_candidates import (
+    MemoryCandidate,
+    MemoryCandidateSensitivity,
+    MemoryCandidateSource,
+    MemoryRetentionPolicy,
+)
 from iris.contracts.observations import ObservationKind, UserFeedbackKind
 from iris.core.metadata import immutable_metadata
 from iris.runtime.learning.jobs import (
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.learning import RuntimeLearningEvent
-    from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
+    from iris.runtime.learning.queue import BackgroundJobQueue
     from iris.runtime.state.memory_candidates import MemoryCandidateReviewStore
 
 _RESPONSE_STYLE_PATTERNS = (
@@ -82,7 +82,7 @@ class FilteringImplicitMemoryCandidateHook:
 
     def __init__(
         self,
-        queue: InMemoryBackgroundJobQueue,
+        queue: BackgroundJobQueue,
         *,
         max_attempts: int = 3,
     ) -> None:

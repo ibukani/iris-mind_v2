@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 from dataclasses import dataclass, replace
+from enum import StrEnum
 import json
 import os
 from pathlib import Path
+import sqlite3
 import sys
 
 from iris.adapters.llm.diagnostics import ProviderReadinessResult, ReadinessStatus
@@ -30,7 +33,9 @@ from iris.runtime.config import (
     resolve_runtime_config_path,
 )
 from iris.runtime.config.state import RuntimeStateBackend
+from iris.runtime.learning.jobs import BackgroundJobStatus
 from iris.runtime.observability.diagnostics import DiagnosticsCheckOutcome, run_startup_diagnostics
+from iris.runtime.state.memory_candidates import MemoryCandidateReviewStatus
 
 
 @dataclass(frozen=True)
@@ -277,6 +282,101 @@ def _sqlite_backup_summary(path: Path) -> str:
     return backup_summary
 
 
+def _runtime_learning_state_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
+    if config.state.backend is not RuntimeStateBackend.SQLITE:
+        return _runtime_learning_state_skipped("state.backend is not sqlite")
+    path = Path(config.state.sqlite_path)
+    if not path.exists() or path.is_dir():
+        return _runtime_learning_state_skipped("sqlite state DB is not available")
+    schema_check = _runtime_learning_schema_check(path)
+    if schema_check is not None:
+        return schema_check
+    return _sqlite_runtime_learning_counts_check(path)
+
+
+def _runtime_learning_state_skipped(summary: str) -> RuntimeDoctorCheck:
+    return _build_check("runtime-learning-state", status="skipped", summary=summary)
+
+
+def _runtime_learning_schema_check(path: Path) -> RuntimeDoctorCheck | None:
+    try:
+        schema = SQLiteSchemaMigrator().inspect(path)
+    except SQLiteSchemaError as exc:
+        return _build_check(
+            "runtime-learning-state",
+            status="fail",
+            summary="runtime learning state is not readable",
+            issue=str(exc),
+            next_action="fix sqlite-state check before inspecting learning state",
+        )
+    if schema.pending_versions:
+        return _build_check(
+            "runtime-learning-state",
+            status="warn",
+            summary="sqlite schema migration is pending",
+            next_action="start Iris normally to migrate runtime learning tables",
+        )
+    return None
+
+
+def _sqlite_runtime_learning_counts_check(path: Path) -> RuntimeDoctorCheck:
+    try:
+        summary = _runtime_learning_counts_summary(path)
+    except sqlite3.DatabaseError as exc:
+        return _build_check(
+            "runtime-learning-state",
+            status="fail",
+            summary="runtime learning state query failed",
+            issue=str(exc),
+            next_action="inspect SQLite runtime learning tables or restore from backup",
+        )
+    return _build_check("runtime-learning-state", status="ok", summary=summary)
+
+
+def _runtime_learning_counts_summary(path: Path) -> str:
+    with contextlib.closing(sqlite3.connect(path)) as conn:
+        conn.row_factory = sqlite3.Row
+        job_counts = _background_job_status_counts(conn)
+        review_counts = _candidate_review_status_counts(conn)
+    job_summary = _ordered_counts(job_counts, BackgroundJobStatus)
+    review_summary = _ordered_counts(review_counts, MemoryCandidateReviewStatus)
+    return f"background_jobs {job_summary}; memory_candidate_reviews {review_summary}"
+
+
+def _background_job_status_counts(conn: sqlite3.Connection) -> dict[str, int]:
+    rows: list[sqlite3.Row] = conn.execute(
+        "SELECT status, COUNT(*) AS count FROM background_jobs GROUP BY status"
+    ).fetchall()
+    return dict(_status_count_pair(row) for row in rows)
+
+
+def _candidate_review_status_counts(conn: sqlite3.Connection) -> dict[str, int]:
+    rows: list[sqlite3.Row] = conn.execute(
+        "SELECT status, COUNT(*) AS count FROM memory_candidate_reviews GROUP BY status"
+    ).fetchall()
+    return dict(_status_count_pair(row) for row in rows)
+
+
+def _status_count_pair(row: sqlite3.Row) -> tuple[str, int]:
+    status_value: object = row["status"]
+    count_value: object = row["count"]
+    return str(status_value), _sqlite_int(count_value)
+
+
+def _sqlite_int(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return int(value)
+    message = f"unexpected SQLite count value: {value!r}"
+    raise TypeError(message)
+
+
+def _ordered_counts[EnumT: StrEnum](counts: dict[str, int], enum_type: type[EnumT]) -> str:
+    parts = [f"{status.value}={counts.get(status.value, 0)}" for status in enum_type]
+    return " ".join(parts)
+
+
 def _logging_path_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     file_path = config.logging.file_path
     if file_path is None:
@@ -342,6 +442,7 @@ def _runtime_doctor_base_checks(config: IrisRuntimeConfig) -> list[RuntimeDoctor
         _state_backend_check(config),
         _sqlite_state_check(config),
         _logging_path_check(config),
+        _runtime_learning_state_check(config),
         _server_check(config),
         _model_slots_check(config),
         _delivery_check(config),

@@ -11,16 +11,22 @@ from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
 from iris.adapters.persistence.sqlite.stores.activity_journal import SQLiteActivityJournal
 from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
+from iris.adapters.persistence.sqlite.stores.background_jobs import SQLiteBackgroundJobQueue
 from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
+    SQLiteMemoryCandidateReviewStore,
+)
 from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
+from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
 from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
+from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 from iris.runtime.wiring.state import wire_runtime_state
@@ -48,6 +54,8 @@ def test_memory_backend_policy_marks_runtime_state_ephemeral() -> None:
     assert policy.affect_store == PersistenceKind.EPHEMERAL
     assert policy.delivery_outbox == PersistenceKind.EPHEMERAL
     assert policy.scheduler_target_store == PersistenceKind.EPHEMERAL
+    assert policy.background_job_queue == PersistenceKind.EPHEMERAL
+    assert policy.memory_candidate_review_store == PersistenceKind.EPHEMERAL
 
 
 def test_sqlite_backend_policy_marks_durable_companion_state() -> None:
@@ -61,6 +69,8 @@ def test_sqlite_backend_policy_marks_durable_companion_state() -> None:
     assert policy.activity_journal == PersistenceKind.DURABLE
     assert policy.delivery_outbox == PersistenceKind.DURABLE
     assert policy.scheduler_target_store == PersistenceKind.DURABLE
+    assert policy.background_job_queue == PersistenceKind.DURABLE
+    assert policy.memory_candidate_review_store == PersistenceKind.DURABLE
 
 
 def test_sqlite_backend_keeps_runtime_projections_ephemeral() -> None:
@@ -90,13 +100,10 @@ async def test_sqlite_runtime_wiring_uses_sqlite_durable_stores(tmp_path: Path) 
     assert isinstance(stores.affect_store, SQLiteAffectStore)
     assert isinstance(stores.activity_journal, SQLiteActivityJournal)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
+    assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
+    assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
 
-    await stores.account_store.close()
-    stores.memory_store.close()
-    await stores.relationship_store.close()
-    await stores.affect_store.close()
-    await stores.activity_journal.close()
-    await stores.scheduler_target_store.close()
+    await stores.close()
 
 
 def test_memory_runtime_wiring_uses_in_memory_state_stores() -> None:
@@ -108,6 +115,8 @@ def test_memory_runtime_wiring_uses_in_memory_state_stores() -> None:
     assert isinstance(stores.relationship_store, InMemoryRelationshipStore)
     assert isinstance(stores.affect_store, InMemoryAffectStore)
     assert isinstance(stores.activity_journal, InMemoryActivityJournal)
+    assert isinstance(stores.background_job_queue, InMemoryBackgroundJobQueue)
+    assert isinstance(stores.memory_candidate_review_store, InMemoryMemoryCandidateReviewStore)
 
 
 @pytest.mark.anyio
@@ -133,13 +142,10 @@ async def test_runtime_wiring_keeps_projection_presence_and_occupancy_in_memory(
     assert isinstance(stores.affect_store, SQLiteAffectStore)
     assert isinstance(stores.activity_journal, SQLiteActivityJournal)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
+    assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
+    assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
 
-    await stores.account_store.close()
-    stores.memory_store.close()
-    await stores.relationship_store.close()
-    await stores.affect_store.close()
-    await stores.activity_journal.close()
-    await stores.scheduler_target_store.close()
+    await stores.close()
 
 
 def test_persistence_kind_literal_values_include_deferred_for_policy_docs() -> None:

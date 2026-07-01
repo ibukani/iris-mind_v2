@@ -87,6 +87,18 @@ SQLITE_SCHEMA_OWNERSHIP: tuple[SQLiteTableOwnership, ...] = (
         notes="proactive scheduler target の永続 state。",
     ),
     SQLiteTableOwnership(
+        table_name="background_jobs",
+        owner="SQLiteBackgroundJobQueue",
+        classification=SQLiteSchemaClassification.SOURCE_OF_TRUTH,
+        notes="runtime learning job の lease / retry / failure state の正本。",
+    ),
+    SQLiteTableOwnership(
+        table_name="memory_candidate_reviews",
+        owner="SQLiteMemoryCandidateReviewStore",
+        classification=SQLiteSchemaClassification.SOURCE_OF_TRUTH,
+        notes="implicit learning candidate review lifecycle の正本。",
+    ),
+    SQLiteTableOwnership(
         table_name="memory_embeddings",
         owner="future vector index backend",
         classification=SQLiteSchemaClassification.DERIVED_INDEX,
@@ -99,7 +111,5 @@ PROCESS_LOCAL_RUNTIME_STORES: tuple[str, ...] = (
     "presence_store",
     "space_occupancy_store",
     "conversation_history_store",
-    "background_job_queue",
-    "memory_candidate_review_store",
     "learning_dispatch_store",
 )

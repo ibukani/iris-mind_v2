@@ -30,6 +30,6 @@ Implementation anchors
 
 ## 現在の横断方針
 
-- `state.backend = "sqlite"` は account、memory、relationship、affect、activity journal、delivery outbox、scheduler target store を durable にする。
-- activity projection、presence、space occupancy、ephemeral space bindings、conversation history、background job queue、learning dispatch は process-local。
+- `state.backend = "sqlite"` は account、memory、relationship、affect、activity journal、delivery outbox、scheduler target store、runtime learning background job queue、memory candidate review store を durable にする。
+- activity projection、presence、space occupancy、ephemeral space bindings、conversation history、learning dispatch は process-local。
 - ADR 0005 は欠番を埋めるため新規追加した。既存 ADR 0008 は diagnostics / observability の決定であり、LLM provider runtime policy の置き場としては広すぎる。

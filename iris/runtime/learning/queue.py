@@ -1,11 +1,11 @@
-"""インメモリのバックグラウンドジョブキュー。"""
+"""バックグラウンドジョブキュー境界とインメモリ実装。"""
 
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from iris.runtime.learning.jobs import BackgroundJobStatus
 
@@ -17,6 +17,47 @@ if TYPE_CHECKING:
 
 class BackgroundJobQueueError(RuntimeError):
     """バックグラウンドジョブ遷移エラー。"""
+
+
+class BackgroundJobQueue(Protocol):
+    """BackgroundJobRunner が利用するジョブキュー境界。"""
+
+    async def enqueue(self, job: BackgroundJobRecord) -> BackgroundJobRecord:
+        """ジョブを冪等に登録する。"""
+        ...
+
+    async def lease_due(
+        self,
+        now: datetime,
+        max_items: int,
+        lease_seconds: float,
+    ) -> tuple[BackgroundJobRecord, ...]:
+        """期限到来済みジョブを lease する。"""
+        ...
+
+    async def mark_succeeded(self, job_id: BackgroundJobId, finished_at: datetime) -> None:
+        """Lease 中ジョブを成功完了にする。"""
+        ...
+
+    async def mark_retryable_failure(
+        self,
+        job_id: BackgroundJobId,
+        failed_at: datetime,
+        reason: str,
+        retry_after: datetime,
+    ) -> None:
+        """再試行可能または恒久失敗として記録する。"""
+        ...
+
+    async def mark_permanent_failure(
+        self, job_id: BackgroundJobId, failed_at: datetime, reason: str
+    ) -> None:
+        """ジョブを恒久失敗にする。"""
+        ...
+
+    async def get(self, job_id: BackgroundJobId) -> BackgroundJobRecord:
+        """指定 ID のジョブを返す。"""
+        ...
 
 
 class InMemoryBackgroundJobQueue:
@@ -66,9 +107,9 @@ class InMemoryBackgroundJobQueue:
                 }
                 if (not ready and not lease_expired) or job.not_before > now:
                     continue
-                updated = _replace_job(
+                updated = replace_job(
                     job,
-                    _JobUpdate(
+                    JobUpdate(
                         status=BackgroundJobStatus.LEASED,
                         leased_until=now + timedelta(seconds=lease_seconds),
                         updated_at=now,
@@ -95,14 +136,10 @@ class InMemoryBackgroundJobQueue:
         async with self._lock:
             job = self._require(job_id)
             attempts = job.attempts + 1
-            status = (
-                BackgroundJobStatus.FAILED_PERMANENT
-                if attempts >= job.max_attempts
-                else BackgroundJobStatus.FAILED_RETRYABLE
-            )
-            self._jobs[job_id] = _replace_job(
+            status = retry_failure_status(attempts=attempts, max_attempts=job.max_attempts)
+            self._jobs[job_id] = replace_job(
                 job,
-                _JobUpdate(
+                JobUpdate(
                     status=status,
                     attempts=attempts,
                     not_before=retry_after,
@@ -143,9 +180,9 @@ class InMemoryBackgroundJobQueue:
     ) -> None:
         async with self._lock:
             job = self._require(job_id)
-            self._jobs[job_id] = _replace_job(
+            self._jobs[job_id] = replace_job(
                 job,
-                _JobUpdate(
+                JobUpdate(
                     status=status,
                     leased_until=None,
                     updated_at=updated_at,
@@ -154,12 +191,25 @@ class InMemoryBackgroundJobQueue:
             )
 
 
-def _job_order(job: BackgroundJobRecord) -> tuple[datetime, datetime]:
-    return job.not_before, job.created_at
+def retry_failure_status(*, attempts: int, max_attempts: int) -> BackgroundJobStatus:
+    """試行回数に応じた失敗状態を返す。
+
+    Returns:
+        再試行可能または恒久失敗の状態。
+    """
+    if attempts >= max_attempts:
+        return BackgroundJobStatus.FAILED_PERMANENT
+    return BackgroundJobStatus.FAILED_RETRYABLE
+
+
+def _job_order(job: BackgroundJobRecord) -> tuple[datetime, datetime, str]:
+    return job.not_before, job.created_at, str(job.job_id)
 
 
 @dataclass(frozen=True)
-class _JobUpdate:
+class JobUpdate:
+    """BackgroundJobRecord の状態更新値。"""
+
     status: BackgroundJobStatus
     updated_at: datetime
     attempts: int | None = None
@@ -168,7 +218,7 @@ class _JobUpdate:
     last_error: str | None = None
 
 
-def _replace_job(job: BackgroundJobRecord, update: _JobUpdate) -> BackgroundJobRecord:
+def replace_job(job: BackgroundJobRecord, update: JobUpdate) -> BackgroundJobRecord:
     """型を失わずジョブ状態を再構築する。
 
     Returns:

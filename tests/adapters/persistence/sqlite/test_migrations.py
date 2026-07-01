@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import create_engine
 
 from iris.adapters.persistence.sqlite.migrations import available_migrations
+from iris.adapters.persistence.sqlite.migrations.v0001_baseline import BASELINE_V1
 from iris.adapters.persistence.sqlite.migrator import (
     SQLiteCorruptDatabaseError,
     SQLiteLegacySchemaError,
@@ -36,14 +37,16 @@ def test_empty_db_initializes_to_current_schema(tmp_path: Path) -> None:
     assert result.status is SQLiteMigrationStatus.INITIALIZED
     assert result.previous_version == 0
     assert result.current_version == CURRENT_SQLITE_SCHEMA_VERSION
-    assert result.applied_versions == (1,)
+    assert result.applied_versions == (1, 2)
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         assert _user_version(conn) == CURRENT_SQLITE_SCHEMA_VERSION
         assert _table_exists(conn, "accounts")
         assert _table_exists(conn, "memories")
         assert _table_exists(conn, "memories_fts5")
         assert _table_exists(conn, "delivery_outbox")
-        assert _latest_migration(conn) == "baseline_runtime_state"
+        assert _table_exists(conn, "background_jobs")
+        assert _table_exists(conn, "memory_candidate_reviews")
+        assert _latest_migration(conn) == "runtime_learning_state"
 
 
 def test_existing_unversioned_memory_db_upgrades_and_rebuilds_fts5(tmp_path: Path) -> None:
@@ -105,6 +108,8 @@ def test_existing_unversioned_sqlalchemy_db_upgrades_with_manual_memory_table(
         assert _table_exists(conn, "relationship_snapshots")
         assert _table_exists(conn, "activity_events")
         assert _table_exists(conn, "delivery_outbox")
+        assert _table_exists(conn, "background_jobs")
+        assert _table_exists(conn, "memory_candidate_reviews")
         assert _table_exists(conn, "scheduler_targets")
         row = conn.execute(
             """
@@ -115,6 +120,23 @@ def test_existing_unversioned_sqlalchemy_db_upgrades_with_manual_memory_table(
         ).fetchone()
         assert row is not None
         assert row[0] == "m1"
+
+
+def test_existing_v1_db_upgrades_to_v2_runtime_learning_state(tmp_path: Path) -> None:
+    """既存 v1 DB は runtime learning state migration だけを追加適用する。"""
+    db_path = tmp_path / "v1.sqlite3"
+    _create_v1_database(db_path)
+
+    result = SQLiteSchemaMigrator().ensure_current(db_path)
+
+    assert result.status is SQLiteMigrationStatus.UPGRADED
+    assert result.previous_version == 1
+    assert result.applied_versions == (2,)
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        assert _user_version(conn) == CURRENT_SQLITE_SCHEMA_VERSION
+        assert _table_exists(conn, "background_jobs")
+        assert _table_exists(conn, "memory_candidate_reviews")
+        assert _migration_names(conn) == ("baseline_runtime_state", "runtime_learning_state")
 
 
 def test_already_current_db_does_not_reapply_migrations(tmp_path: Path) -> None:
@@ -130,7 +152,7 @@ def test_already_current_db_does_not_reapply_migrations(tmp_path: Path) -> None:
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         count = conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()
         assert count is not None
-        assert count[0] == 1
+        assert count[0] == 2
 
 
 def test_migration_order_is_stable() -> None:
@@ -138,7 +160,7 @@ def test_migration_order_is_stable() -> None:
     versions = tuple(migration.version for migration in available_migrations())
 
     assert versions == tuple(sorted(versions))
-    assert versions == (CURRENT_SQLITE_SCHEMA_VERSION,)
+    assert versions == tuple(range(1, CURRENT_SQLITE_SCHEMA_VERSION + 1))
 
 
 def test_failed_migration_does_not_advance_user_version(tmp_path: Path) -> None:
@@ -205,7 +227,7 @@ def test_current_schema_without_fts5_fails_closed(tmp_path: Path) -> None:
             )
             """,
         )
-        conn.execute("PRAGMA user_version = 1")
+        conn.execute(f"PRAGMA user_version = {CURRENT_SQLITE_SCHEMA_VERSION}")
         conn.commit()
 
     with pytest.raises(SQLiteLegacySchemaError, match="memories_fts5"):
@@ -235,6 +257,26 @@ def test_corrupt_db_fails_closed_without_recreate(tmp_path: Path) -> None:
     assert db_path.read_bytes() == b"not a sqlite database"
 
 
+def _create_v1_database(db_path: Path) -> None:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        for statement in BASELINE_V1.statements:
+            conn.execute(statement)
+        conn.execute(
+            """
+            INSERT INTO schema_migrations(version, name, checksum, applied_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                BASELINE_V1.version,
+                BASELINE_V1.name,
+                BASELINE_V1.checksum,
+                "2026-07-01T00:00:00+00:00",
+            ),
+        )
+        conn.execute("PRAGMA user_version = 1")
+        conn.commit()
+
+
 def _create_memory_table(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
@@ -260,6 +302,11 @@ def _user_version(conn: sqlite3.Connection) -> int:
     row = conn.execute("PRAGMA user_version").fetchone()
     assert row is not None
     return int(row[0])
+
+
+def _migration_names(conn: sqlite3.Connection) -> tuple[str, ...]:
+    rows = conn.execute("SELECT name FROM schema_migrations ORDER BY version").fetchall()
+    return tuple(str(row[0]) for row in rows)
 
 
 def _latest_migration(conn: sqlite3.Connection) -> str | None:
