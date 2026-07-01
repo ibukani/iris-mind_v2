@@ -62,7 +62,9 @@ Blocked / failed / cancelled delivery は、学習イベントとして観測可
 
 Proactive output は、生成時点ではなく successful delivery report 後にだけ confirmed conversation history へ入る。
 
-Implicit learning は `LearningEvent.source_observation_id` を使って traceability を持てる。ただし、implicit candidate を long-term memory に直接書くかどうかは別 policy で決める。
+Implicit learning は `LearningEvent.source_observation_id` を使って traceability を持てる。Implicit conversation candidate は review-required として `MemoryCandidateReviewStore` に保存し、long-term memory へは直接書かない。`MemoryCandidateReviewService` で approved になった candidate だけが `ApprovedMemoryCandidatePromoter` 経由で durable `MemoryStore` に昇格できる。昇格時も source / reason / confidence / retention / review metadata を保持し、credential-like / sensitive profile / unsafe candidate は promotion policy で再拒否する。
+
+Promotion は現在 in-memory review store 前提の二段階更新で、`MemoryStore.update()` 後に review record の `promoted_memory_id` を更新する。将来 `MemoryCandidateReviewStore` を SQLite などで durable 化する段階では、memory write と review metadata update の transaction boundary、または review metadata 更新失敗時の compensating behavior を同じ PR で定義・テストする。既に promotion 済みの `promoted_memory_id` が canonical `MemoryStore` で見つからない場合は通常の冪等 hit ではなく `promoted_memory_missing` として診断可能にする。
 
 SQLite delivery outbox は nullable `source_observation_id` を保存する。既存 DB migration は現 phase では扱わず、fresh schema creation を対象にする。
 

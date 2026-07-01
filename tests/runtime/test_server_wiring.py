@@ -19,6 +19,8 @@ from iris.runtime.config import IrisRuntimeConfig, default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.conversation import DeliveryConversationHistoryHook
 from iris.runtime.learning.hooks import RuntimeLearningHookRunner
+from iris.runtime.learning.review_promotion import ApprovedMemoryCandidatePromoter
+from iris.runtime.learning.review_service import MemoryCandidateReviewService
 from iris.runtime.server import build_runtime_components
 from iris.runtime.wiring.app import AppStateDependencies, build_app_from_config
 from iris.runtime.wiring.features import RuntimeFeatureCatalog
@@ -190,6 +192,26 @@ def test_build_runtime_components_uses_state_account_store_in_identity_resolver(
 
     assert get_private_attr_as(components.identity_resolver, "_account_store", object) is (
         components.stores.account_store
+    )
+
+
+def test_build_runtime_components_wires_memory_candidate_review_components() -> None:
+    """RuntimeComponents exposes review service and promoter with shared stores."""
+    components = build_runtime_components(default_runtime_config())
+
+    assert isinstance(components.memory_candidate_review_service, MemoryCandidateReviewService)
+    assert isinstance(components.memory_candidate_promoter, ApprovedMemoryCandidatePromoter)
+    assert (
+        get_private_attr_as(components.memory_candidate_review_service, "_store", object)
+        is components.stores.memory_candidate_review_store
+    )
+    assert (
+        get_private_attr_as(components.memory_candidate_promoter, "_review_store", object)
+        is components.stores.memory_candidate_review_store
+    )
+    assert (
+        get_private_attr_as(components.memory_candidate_promoter, "_memory_store", object)
+        is components.stores.memory_store
     )
 
 

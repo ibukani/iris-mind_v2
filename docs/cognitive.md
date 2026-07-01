@@ -167,42 +167,33 @@ state-onlyのactivity/presence observationはintegration後に `PresentedOutput(
 
 ---
 
-## Learning と BackgroundJob（未実装）
+## Learning と BackgroundJob（実装済み skeleton）
 
-Learning は ActionResult 後に行う設計だが、現状未実装。
+Learning は ActionResult / runtime outcome 後に行う。生成された output、実際に delivery された output、blocked / failed / cancelled を分けて観測し、cognitive hot path で重い学習を実行しない。
 
 ```text
 ActionPlan
 → Presentation
 → SafetyGate
-→ Adapter
-→ ActionResult
-→ LearningHook       ← 未実装
+→ Adapter / Runtime outcome
+→ ActionResult / RuntimeLearningEvent
+→ LearningHook / RuntimeLearningHook
+→ BackgroundJobQueue
 ```
 
-理由。
-- 送信成功したか
-- 失敗したか
-- safety で blocked されたか
+実装済みの境界。
+- `LearningHookRunner` / `RuntimeLearningHookRunner` は hook failure を user-facing path へ伝搬しない。
+- `BackgroundJobQueue` は process-local queue として実装済み。
+- 明示メモリ保存は `MemoryBackgroundJobPayload` から `MemoryStore` へ保存できる。
+- implicit conversation learning は保守的抽出器で `MemoryCandidateReviewStore` に review-required candidate として保存する。
+- approved implicit candidate だけが `ApprovedMemoryCandidatePromoter` 経由で durable `MemoryStore` に昇格できる。
+- promotion 済み metadata と canonical `MemoryStore` の欠損は `promoted_memory_missing` として通常の冪等 promotion と区別する。
 
-を見てから記憶や関係性を更新する必要がある。
-
-### LearningHook（予定）
-
-hot path で実行する軽量処理。
-- 会話ログの追加
-- working memory 更新
-- relationship の軽い更新
-- background job の enqueue
-
-### BackgroundJob（予定）
-
-hot path から外す重い処理。
-- 長期記憶抽出
-- LangMem extraction
-- persona patch proposal
-- episodic → semantic promotion
-- 重い reflection
+未実装または後続作業。
+- SQLite-backed BackgroundJobQueue / MemoryCandidateReviewStore。
+- LLM-based implicit extraction。
+- raw transcript persistence / retention / deletion。
+- long conversation summarization。
 
 ---
 
