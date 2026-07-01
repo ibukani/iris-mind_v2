@@ -21,7 +21,7 @@ from iris.runtime.wiring.features import (
     collect_feature_items,
 )
 from iris.runtime.wiring.llm import LLMClientFactory, wire_response_generator
-from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
+from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever, wire_hybrid_memory_retriever
 from iris.runtime.wiring.presentation import wire_output_pipeline
 
 if TYPE_CHECKING:
@@ -30,7 +30,8 @@ if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
     from iris.cognitive.memory.retrieval import MemoryRetriever
     from iris.contracts.affect import AffectStore
-    from iris.contracts.memory import MemoryStore
+    from iris.contracts.embeddings import EmbeddingModel
+    from iris.contracts.memory import MemoryStore, VectorMemoryIndex
     from iris.contracts.relationship import RelationshipStore
     from iris.features.definition import FeatureDefinition
     from iris.runtime.config import IrisRuntimeConfig
@@ -44,6 +45,8 @@ class AppStateDependencies:
     memory_store: MemoryStore
     relationship_store: RelationshipStore
     affect_store: AffectStore
+    vector_index: VectorMemoryIndex | None = None
+    embedding: EmbeddingModel | None = None
 
 
 def wire_default_app(
@@ -100,6 +103,13 @@ def build_app_from_config(
     memory_retriever: MemoryRetriever | None = None
     if isinstance(state.memory_store, SQLiteMemoryStore):
         memory_retriever = SQLiteFTS5MemoryRetriever(state.memory_store)
+        if state.vector_index is not None and state.embedding is not None:
+            memory_retriever = wire_hybrid_memory_retriever(
+                fts_retriever=memory_retriever,
+                vector_index=state.vector_index,
+                embedding=state.embedding,
+                store=state.memory_store,
+            )
 
     chat_feature = _wire_chat_feature(
         client,
@@ -114,7 +124,9 @@ def build_app_from_config(
             relationship_store=state.relationship_store,
             affect_store=state.affect_store,
             memory_retriever=memory_retriever,
-            vector_index=None,
+            vector_index=state.vector_index,
+            embedding=state.embedding,
+            fail_open_on_index_error=config.memory.vector.fail_open_on_index_error,
         ),
         extension_steps=collect_cognitive_steps(all_features),
     )

@@ -1,1 +1,881 @@
-{"version":1,"fields":[{"path":"config.version","type":"int","default":1,"allowedValues":[],"env":null,"secret":false,"editable":false,"description":"ランタイム設定ファイル形式のバージョン。"},{"path":"server.host","type":"str","default":"127.0.0.1","allowedValues":[],"env":"IRIS_SERVER_HOST","secret":false,"editable":true,"description":"gRPCサーバーのbind host。"},{"path":"server.port","type":"int","default":50051,"allowedValues":[],"env":"IRIS_SERVER_PORT","secret":false,"editable":true,"description":"gRPCサーバーのbind port。"},{"path":"server.local_only","type":"bool","default":true,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"loopback hostのみを許可する。"},{"path":"server.shutdown_grace_seconds","type":"float","default":5.0,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"gRPCサーバー停止時の猶予秒数。"},{"path":"learning.enabled","type":"bool","default":true,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"配送結果後の学習 dispatch を有効化する。"},{"path":"learning.background_jobs_enabled","type":"bool","default":true,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"バックグラウンドジョブループを有効化する。"},{"path":"learning.background_job_interval_seconds","type":"float","default":10.0,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"バックグラウンドジョブ実行間隔秒数。"},{"path":"learning.max_jobs_per_run","type":"int","default":5,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"1回のバックグラウンド処理上限件数。"},{"path":"learning.max_attempts","type":"int","default":3,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"学習ジョブの既定最大試行回数。"},{"path":"learning.implicit_candidates_enabled","type":"bool","default":true,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"Runtime outcome から implicit memory candidate を候補化する。"},{"path":"learning.implicit_candidate_min_confidence","type":"float","default":0.35,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"Review store に入れる implicit candidate の最小 confidence。"},{"path":"learning.implicit_candidate_max_text_length","type":"int","default":1000,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"Review store に入れる implicit candidate の最大文字数。"},{"path":"server.tls.enabled","type":"bool","default":false,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"gRPC server TLS を有効化する。"},{"path":"server.tls.cert_chain_path","type":"optional_str","default":null,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"TLS certificate chain path。"},{"path":"server.tls.private_key_path","type":"optional_str","default":null,"allowedValues":[],"env":null,"secret":true,"editable":false,"description":"TLS private key path。"},{"path":"server.tls.client_ca_path","type":"optional_str","default":null,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"Optional mTLS client CA path。"},{"path":"server.tls.require_client_cert","type":"bool","default":false,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"gRPC TLS client certificate を要求する。"},{"path":"auth.mode","type":"enum","default":"local_dev","allowedValues":["local_dev","required"],"env":"IRIS_RUNTIME_AUTH_MODE","secret":false,"editable":true,"description":"Runtime RPC auth mode。"},{"path":"auth.allow_unauthenticated_loopback","type":"bool","default":true,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"local_dev loopback の unauthenticated RPC を許可する。"},{"path":"auth.require_tls_for_remote","type":"bool","default":true,"allowedValues":[],"env":null,"secret":false,"editable":false,"description":"(非推奨) remote bind では TLS が常に要求されます。"},{"path":"auth.allow_insecure_remote","type":"bool","default":false,"allowedValues":[],"env":null,"secret":false,"editable":false,"description":"開発用に remote insecure bind を明示許可する。"},{"path":"auth.static_tokens_env","type":"str","default":"IRIS_RUNTIME_TOKENS","allowedValues":[],"env":null,"secret":true,"editable":false,"description":"Static bearer token hashes を読む環境変数名。"},{"path":"state.backend","type":"enum","default":"memory","allowedValues":["memory","sqlite"],"env":"IRIS_STATE_BACKEND","secret":false,"editable":true,"description":"ランタイム状態の永続化backend。"},{"path":"state.sqlite_path","type":"str","default":".iris/runtime/state.sqlite3","allowedValues":[],"env":"IRIS_STATE_SQLITE_PATH","secret":false,"editable":true,"description":"SQLite状態ファイルのパス。"},{"path":"scheduler.enabled","type":"bool","default":false,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"RuntimeScheduler lifecycle loop を有効化する。"},{"path":"scheduler.interval_seconds","type":"float","default":30.0,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"scheduler loop の実行間隔秒数。"},{"path":"scheduler.idle_threshold_seconds","type":"float","default":600.0,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"IdleTickObservation を発火する idle 秒数。"},{"path":"scheduler.min_interval_per_target_seconds","type":"float","default":1800.0,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"target ごとの proactive tick 最小間隔秒数。"},{"path":"scheduler.target_stale_after_seconds","type":"float","default":604800.0,"allowedValues":[],"env":"IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS","secret":false,"editable":true,"description":"target が stale になるまでの idle 秒数 (デフォルト7日)。"},{"path":"scheduler.max_due_per_run","type":"int","default":10,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"scheduler run 1回あたりの最大 due observation 数。"},{"path":"delivery.enabled","type":"bool","default":true,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"DeliveryOutbox と PollAppActions API を有効化する。"},{"path":"delivery.max_outbox_depth_per_provider","type":"int","default":100,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"provider ごとの最大 outbox depth。"},{"path":"delivery.lease_seconds","type":"float","default":30.0,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"PollAppActions が取得する lease 秒数。"},{"path":"delivery.max_attempts","type":"int","default":3,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"配送 item ごとの最大試行回数。"},{"path":"delivery.retry_backoff_seconds","type":"float","default":30.0,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"失敗後に retry 可能になるまでの秒数。"},{"path":"delivery.rate_limit_window_seconds","type":"float","default":1800.0,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"予約済み: 現在の DeliverySafetyGate では未使用。プロアクティブ送信頻度は scheduler.min_interval_per_target_seconds で制御する。"},{"path":"delivery.quiet_hours.enabled","type":"bool","default":false,"allowedValues":[],"env":null,"secret":false,"editable":true,"description":"quiet hours による配送 block を有効化する。"},{"path":"delivery.quiet_hours.start","type":"str","default":"22:00","allowedValues":[],"env":null,"secret":false,"editable":true,"description":"quiet hours 開始 HH:MM。"},{"path":"delivery.quiet_hours.end","type":"str","default":"08:00","allowedValues":[],"env":null,"secret":false,"editable":true,"description":"quiet hours 終了 HH:MM。"},{"path":"delivery.quiet_hours.timezone","type":"str","default":"Asia/Tokyo","allowedValues":[],"env":null,"secret":false,"editable":true,"description":"quiet hours 判定 timezone。"},{"path":"models.default_chat.provider","type":"enum","default":"fake","allowedValues":["fake","ollama","openai"],"env":"IRIS_DEFAULT_CHAT_PROVIDER","secret":false,"editable":true,"description":"default_chatモデルスロットのプロバイダ。"},{"path":"models.default_chat.model","type":"str","default":"fake-llm","allowedValues":[],"env":"IRIS_DEFAULT_CHAT_MODEL","secret":false,"editable":true,"description":"default_chatモデルスロットのモデル名。"},{"path":"models.default_chat.temperature","type":"float","default":0.0,"allowedValues":[],"env":"IRIS_DEFAULT_CHAT_TEMPERATURE","secret":false,"editable":true,"description":"default_chatモデルスロットのtemperature。"},{"path":"models.default_chat.max_output_tokens","type":"optional_int","default":512,"allowedValues":[],"env":"IRIS_DEFAULT_CHAT_MAX_OUTPUT_TOKENS","secret":false,"editable":true,"description":"default_chatモデルスロットの最大出力トークン数。"},{"path":"models.fast_judge.provider","type":"enum","default":"fake","allowedValues":["fake","ollama","openai"],"env":"IRIS_FAST_JUDGE_PROVIDER","secret":false,"editable":true,"description":"fast_judgeモデルスロットのプロバイダ。"},{"path":"models.fast_judge.model","type":"str","default":"fake-llm","allowedValues":[],"env":"IRIS_FAST_JUDGE_MODEL","secret":false,"editable":true,"description":"fast_judgeモデルスロットのモデル名。"},{"path":"models.fast_judge.temperature","type":"float","default":0.0,"allowedValues":[],"env":"IRIS_FAST_JUDGE_TEMPERATURE","secret":false,"editable":true,"description":"fast_judgeモデルスロットのtemperature。"},{"path":"models.fast_judge.max_output_tokens","type":"optional_int","default":128,"allowedValues":[],"env":"IRIS_FAST_JUDGE_MAX_OUTPUT_TOKENS","secret":false,"editable":true,"description":"fast_judgeモデルスロットの最大出力トークン数。"},{"path":"models.reasoning.provider","type":"enum","default":"fake","allowedValues":["fake","ollama","openai"],"env":"IRIS_REASONING_PROVIDER","secret":false,"editable":true,"description":"reasoningモデルスロットのプロバイダ。"},{"path":"models.reasoning.model","type":"str","default":"fake-llm","allowedValues":[],"env":"IRIS_REASONING_MODEL","secret":false,"editable":true,"description":"reasoningモデルスロットのモデル名。"},{"path":"models.reasoning.temperature","type":"float","default":0.0,"allowedValues":[],"env":"IRIS_REASONING_TEMPERATURE","secret":false,"editable":true,"description":"reasoningモデルスロットのtemperature。"},{"path":"models.reasoning.max_output_tokens","type":"optional_int","default":1024,"allowedValues":[],"env":"IRIS_REASONING_MAX_OUTPUT_TOKENS","secret":false,"editable":true,"description":"reasoningモデルスロットの最大出力トークン数。"},{"path":"ollama.base_url","type":"str","default":"http://localhost:11434","allowedValues":[],"env":"IRIS_OLLAMA_HOST","secret":false,"editable":true,"description":"Ollama APIのbase URL。"},{"path":"ollama.timeout_seconds","type":"float","default":120.0,"allowedValues":[],"env":"IRIS_OLLAMA_TIMEOUT_SECONDS","secret":false,"editable":true,"description":"Ollama request timeout秒数。"},{"path":"ollama.keep_alive","type":"optional_str","default":null,"allowedValues":[],"env":"IRIS_OLLAMA_KEEP_ALIVE","secret":false,"editable":true,"description":"Ollamaモデルのkeep-alive指定。"},{"path":"ollama.think","type":"optional_str","default":false,"allowedValues":[],"env":"IRIS_OLLAMA_THINK","secret":false,"editable":true,"description":"Ollamaの推論思考設定 (true/false/low/highなど)。"},{"path":"openai.model","type":"str","default":"gpt-5-mini","allowedValues":[],"env":"IRIS_OPENAI_MODEL","secret":false,"editable":true,"description":"OpenAI providerの既定モデル。"},{"path":"openai.timeout_seconds","type":"optional_float","default":null,"allowedValues":[],"env":"IRIS_OPENAI_TIMEOUT_SECONDS","secret":false,"editable":true,"description":"OpenAI request timeout秒数。"},{"path":"openai.max_output_tokens","type":"optional_int","default":null,"allowedValues":[],"env":"IRIS_OPENAI_MAX_OUTPUT_TOKENS","secret":false,"editable":true,"description":"OpenAI providerの最大出力トークン数。"},{"path":"logging.level","type":"enum","default":"INFO","allowedValues":["TRACE","DEBUG","INFO","WARNING","ERROR","CRITICAL"],"env":"IRIS_LOG_LEVEL","secret":false,"editable":true,"description":"ランタイムログレベル。"},{"path":"logging.format","type":"enum","default":"text","allowedValues":["text","json"],"env":"IRIS_LOG_FORMAT","secret":false,"editable":true,"description":"ランタイムログ形式。"},{"path":"logging.file_path","type":"optional_str","default":null,"allowedValues":[],"env":"IRIS_LOG_FILE","secret":false,"editable":true,"description":"任意のログ出力ファイルパス。"},{"path":"logging.rotation","type":"str","default":"10 MB","allowedValues":[],"env":null,"secret":false,"editable":true,"description":"ログファイルrotation指定。"},{"path":"logging.retention","type":"str","default":"7 days","allowedValues":[],"env":null,"secret":false,"editable":true,"description":"ログファイルretention指定。"},{"path":"safety.mode","type":"enum","default":"development","allowedValues":["development","basic","strict"],"env":"IRIS_SAFETY_MODE","secret":false,"editable":true,"description":"出力safety gateの動作モード。"},{"path":"safety.max_output_chars","type":"int","default":4000,"allowedValues":[],"env":"IRIS_SAFETY_MAX_OUTPUT_CHARS","secret":false,"editable":true,"description":"出力可能な最大文字数。"},{"path":"diagnostics.mode","type":"enum","default":"warn","allowedValues":["off","warn","strict"],"env":"IRIS_DIAGNOSTICS_MODE","secret":false,"editable":true,"description":"起動時 LLM プロバイダ診断の動作モード。"},{"path":"diagnostics.timeout_seconds","type":"float","default":5.0,"allowedValues":[],"env":"IRIS_DIAGNOSTICS_TIMEOUT_SECONDS","secret":false,"editable":true,"description":"診断チェック 1 件あたりのタイムアウト秒数。"},{"path":"diagnostics.readiness_timeout_seconds","type":"float","default":5.0,"allowedValues":[],"env":"IRIS_DIAGNOSTICS_READINESS_TIMEOUT_SECONDS","secret":false,"editable":true,"description":"readiness 診断チェックのタイムアウト秒数。"},{"path":"diagnostics.warmup_timeout_seconds","type":"float","default":120.0,"allowedValues":[],"env":"IRIS_DIAGNOSTICS_WARMUP_TIMEOUT_SECONDS","secret":false,"editable":true,"description":"warmup 診断チェックのタイムアウト秒数。"},{"path":"diagnostics.warmup_models","type":"bool","default":false,"allowedValues":[],"env":"IRIS_DIAGNOSTICS_WARMUP_MODELS","secret":false,"editable":true,"description":"診断後に provider 固有の warmup を実行する。"}]}
+{
+  "version": 1,
+  "fields": [
+    {
+      "path": "config.version",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": false,
+      "description": "ランタイム設定ファイル形式のバージョン。"
+    },
+    {
+      "path": "server.host",
+      "type": "str",
+      "default": "127.0.0.1",
+      "allowedValues": [],
+      "env": "IRIS_SERVER_HOST",
+      "secret": false,
+      "editable": true,
+      "description": "gRPCサーバーのbind host。"
+    },
+    {
+      "path": "server.port",
+      "type": "int",
+      "default": 50051,
+      "allowedValues": [],
+      "env": "IRIS_SERVER_PORT",
+      "secret": false,
+      "editable": true,
+      "description": "gRPCサーバーのbind port。"
+    },
+    {
+      "path": "server.local_only",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "loopback hostのみを許可する。"
+    },
+    {
+      "path": "server.shutdown_grace_seconds",
+      "type": "float",
+      "default": 5.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "gRPCサーバー停止時の猶予秒数。"
+    },
+    {
+      "path": "learning.enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "配送結果後の学習 dispatch を有効化する。"
+    },
+    {
+      "path": "learning.background_jobs_enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "バックグラウンドジョブループを有効化する。"
+    },
+    {
+      "path": "learning.background_job_interval_seconds",
+      "type": "float",
+      "default": 10.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "バックグラウンドジョブ実行間隔秒数。"
+    },
+    {
+      "path": "learning.max_jobs_per_run",
+      "type": "int",
+      "default": 5,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "1回のバックグラウンド処理上限件数。"
+    },
+    {
+      "path": "learning.max_attempts",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "学習ジョブの既定最大試行回数。"
+    },
+    {
+      "path": "learning.implicit_candidates_enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Runtime outcome から implicit memory candidate を候補化する。"
+    },
+    {
+      "path": "learning.implicit_candidate_min_confidence",
+      "type": "float",
+      "default": 0.35,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Review store に入れる implicit candidate の最小 confidence。"
+    },
+    {
+      "path": "learning.implicit_candidate_max_text_length",
+      "type": "int",
+      "default": 1000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Review store に入れる implicit candidate の最大文字数。"
+    },
+    {
+      "path": "server.tls.enabled",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "gRPC server TLS を有効化する。"
+    },
+    {
+      "path": "server.tls.cert_chain_path",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "TLS certificate chain path。"
+    },
+    {
+      "path": "server.tls.private_key_path",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": null,
+      "secret": true,
+      "editable": false,
+      "description": "TLS private key path。"
+    },
+    {
+      "path": "server.tls.client_ca_path",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Optional mTLS client CA path。"
+    },
+    {
+      "path": "server.tls.require_client_cert",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "gRPC TLS client certificate を要求する。"
+    },
+    {
+      "path": "auth.mode",
+      "type": "enum",
+      "default": "local_dev",
+      "allowedValues": [
+        "local_dev",
+        "required"
+      ],
+      "env": "IRIS_RUNTIME_AUTH_MODE",
+      "secret": false,
+      "editable": true,
+      "description": "Runtime RPC auth mode。"
+    },
+    {
+      "path": "auth.allow_unauthenticated_loopback",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_dev loopback の unauthenticated RPC を許可する。"
+    },
+    {
+      "path": "auth.require_tls_for_remote",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": false,
+      "description": "(非推奨) remote bind では TLS が常に要求されます。"
+    },
+    {
+      "path": "auth.allow_insecure_remote",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": false,
+      "description": "開発用に remote insecure bind を明示許可する。"
+    },
+    {
+      "path": "auth.static_tokens_env",
+      "type": "str",
+      "default": "IRIS_RUNTIME_TOKENS",
+      "allowedValues": [],
+      "env": null,
+      "secret": true,
+      "editable": false,
+      "description": "Static bearer token hashes を読む環境変数名。"
+    },
+    {
+      "path": "state.backend",
+      "type": "enum",
+      "default": "memory",
+      "allowedValues": [
+        "memory",
+        "sqlite"
+      ],
+      "env": "IRIS_STATE_BACKEND",
+      "secret": false,
+      "editable": true,
+      "description": "ランタイム状態の永続化backend。"
+    },
+    {
+      "path": "state.sqlite_path",
+      "type": "str",
+      "default": ".iris/runtime/state.sqlite3",
+      "allowedValues": [],
+      "env": "IRIS_STATE_SQLITE_PATH",
+      "secret": false,
+      "editable": true,
+      "description": "SQLite状態ファイルのパス。"
+    },
+    {
+      "path": "memory.vector.enabled",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "SQLite memory の hybrid vector retrieval を有効化する。"
+    },
+    {
+      "path": "memory.vector.backend",
+      "type": "enum",
+      "default": "in_memory",
+      "allowedValues": ["in_memory", "qdrant"],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "派生 vector index backend。"
+    },
+    {
+      "path": "memory.vector.collection",
+      "type": "str",
+      "default": "iris_memory",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "vector index collection 名。"
+    },
+    {
+      "path": "memory.vector.rebuild_on_startup",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "起動時に正本 MemoryStore から index を同期する。"
+    },
+    {
+      "path": "memory.vector.fail_open_on_index_error",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "index 障害時も canonical memory write を保持する。"
+    },
+    {
+      "path": "memory.embedding.provider",
+      "type": "enum",
+      "default": "fake",
+      "allowedValues": ["fake"],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory embedding provider。"
+    },
+    {
+      "path": "memory.embedding.model",
+      "type": "str",
+      "default": "fake-v1",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "embedding model 識別子。"
+    },
+    {
+      "path": "memory.embedding.dimension",
+      "type": "int",
+      "default": 32,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "embedding vector 次元数。"
+    },
+    {
+      "path": "memory.embedding.batch_size",
+      "type": "int",
+      "default": 32,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "rebuild 時の embedding batch size。"
+    },
+    {
+      "path": "memory.vector.qdrant.url",
+      "type": "str",
+      "default": "http://localhost:6333",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Qdrant REST endpoint。"
+    },
+    {
+      "path": "memory.vector.qdrant.api_key_env",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Qdrant API key を読む環境変数名。"
+    },
+    {
+      "path": "memory.vector.qdrant.prefer_grpc",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Qdrant gRPC transport 選択予約。現在は REST のみ。"
+    },
+    {
+      "path": "scheduler.enabled",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "RuntimeScheduler lifecycle loop を有効化する。"
+    },
+    {
+      "path": "scheduler.interval_seconds",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "scheduler loop の実行間隔秒数。"
+    },
+    {
+      "path": "scheduler.idle_threshold_seconds",
+      "type": "float",
+      "default": 600.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "IdleTickObservation を発火する idle 秒数。"
+    },
+    {
+      "path": "scheduler.min_interval_per_target_seconds",
+      "type": "float",
+      "default": 1800.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "target ごとの proactive tick 最小間隔秒数。"
+    },
+    {
+      "path": "scheduler.target_stale_after_seconds",
+      "type": "float",
+      "default": 604800.0,
+      "allowedValues": [],
+      "env": "IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS",
+      "secret": false,
+      "editable": true,
+      "description": "target が stale になるまでの idle 秒数 (デフォルト7日)。"
+    },
+    {
+      "path": "scheduler.max_due_per_run",
+      "type": "int",
+      "default": 10,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "scheduler run 1回あたりの最大 due observation 数。"
+    },
+    {
+      "path": "delivery.enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "DeliveryOutbox と PollAppActions API を有効化する。"
+    },
+    {
+      "path": "delivery.max_outbox_depth_per_provider",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "provider ごとの最大 outbox depth。"
+    },
+    {
+      "path": "delivery.lease_seconds",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "PollAppActions が取得する lease 秒数。"
+    },
+    {
+      "path": "delivery.max_attempts",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "配送 item ごとの最大試行回数。"
+    },
+    {
+      "path": "delivery.retry_backoff_seconds",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "失敗後に retry 可能になるまでの秒数。"
+    },
+    {
+      "path": "delivery.rate_limit_window_seconds",
+      "type": "float",
+      "default": 1800.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "予約済み: 現在の DeliverySafetyGate では未使用。プロアクティブ送信頻度は scheduler.min_interval_per_target_seconds で制御する。"
+    },
+    {
+      "path": "delivery.quiet_hours.enabled",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "quiet hours による配送 block を有効化する。"
+    },
+    {
+      "path": "delivery.quiet_hours.start",
+      "type": "str",
+      "default": "22:00",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "quiet hours 開始 HH:MM。"
+    },
+    {
+      "path": "delivery.quiet_hours.end",
+      "type": "str",
+      "default": "08:00",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "quiet hours 終了 HH:MM。"
+    },
+    {
+      "path": "delivery.quiet_hours.timezone",
+      "type": "str",
+      "default": "Asia/Tokyo",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "quiet hours 判定 timezone。"
+    },
+    {
+      "path": "models.default_chat.provider",
+      "type": "enum",
+      "default": "fake",
+      "allowedValues": [
+        "fake",
+        "ollama",
+        "openai"
+      ],
+      "env": "IRIS_DEFAULT_CHAT_PROVIDER",
+      "secret": false,
+      "editable": true,
+      "description": "default_chatモデルスロットのプロバイダ。"
+    },
+    {
+      "path": "models.default_chat.model",
+      "type": "str",
+      "default": "fake-llm",
+      "allowedValues": [],
+      "env": "IRIS_DEFAULT_CHAT_MODEL",
+      "secret": false,
+      "editable": true,
+      "description": "default_chatモデルスロットのモデル名。"
+    },
+    {
+      "path": "models.default_chat.temperature",
+      "type": "float",
+      "default": 0.0,
+      "allowedValues": [],
+      "env": "IRIS_DEFAULT_CHAT_TEMPERATURE",
+      "secret": false,
+      "editable": true,
+      "description": "default_chatモデルスロットのtemperature。"
+    },
+    {
+      "path": "models.default_chat.max_output_tokens",
+      "type": "optional_int",
+      "default": 512,
+      "allowedValues": [],
+      "env": "IRIS_DEFAULT_CHAT_MAX_OUTPUT_TOKENS",
+      "secret": false,
+      "editable": true,
+      "description": "default_chatモデルスロットの最大出力トークン数。"
+    },
+    {
+      "path": "models.fast_judge.provider",
+      "type": "enum",
+      "default": "fake",
+      "allowedValues": [
+        "fake",
+        "ollama",
+        "openai"
+      ],
+      "env": "IRIS_FAST_JUDGE_PROVIDER",
+      "secret": false,
+      "editable": true,
+      "description": "fast_judgeモデルスロットのプロバイダ。"
+    },
+    {
+      "path": "models.fast_judge.model",
+      "type": "str",
+      "default": "fake-llm",
+      "allowedValues": [],
+      "env": "IRIS_FAST_JUDGE_MODEL",
+      "secret": false,
+      "editable": true,
+      "description": "fast_judgeモデルスロットのモデル名。"
+    },
+    {
+      "path": "models.fast_judge.temperature",
+      "type": "float",
+      "default": 0.0,
+      "allowedValues": [],
+      "env": "IRIS_FAST_JUDGE_TEMPERATURE",
+      "secret": false,
+      "editable": true,
+      "description": "fast_judgeモデルスロットのtemperature。"
+    },
+    {
+      "path": "models.fast_judge.max_output_tokens",
+      "type": "optional_int",
+      "default": 128,
+      "allowedValues": [],
+      "env": "IRIS_FAST_JUDGE_MAX_OUTPUT_TOKENS",
+      "secret": false,
+      "editable": true,
+      "description": "fast_judgeモデルスロットの最大出力トークン数。"
+    },
+    {
+      "path": "models.reasoning.provider",
+      "type": "enum",
+      "default": "fake",
+      "allowedValues": [
+        "fake",
+        "ollama",
+        "openai"
+      ],
+      "env": "IRIS_REASONING_PROVIDER",
+      "secret": false,
+      "editable": true,
+      "description": "reasoningモデルスロットのプロバイダ。"
+    },
+    {
+      "path": "models.reasoning.model",
+      "type": "str",
+      "default": "fake-llm",
+      "allowedValues": [],
+      "env": "IRIS_REASONING_MODEL",
+      "secret": false,
+      "editable": true,
+      "description": "reasoningモデルスロットのモデル名。"
+    },
+    {
+      "path": "models.reasoning.temperature",
+      "type": "float",
+      "default": 0.0,
+      "allowedValues": [],
+      "env": "IRIS_REASONING_TEMPERATURE",
+      "secret": false,
+      "editable": true,
+      "description": "reasoningモデルスロットのtemperature。"
+    },
+    {
+      "path": "models.reasoning.max_output_tokens",
+      "type": "optional_int",
+      "default": 1024,
+      "allowedValues": [],
+      "env": "IRIS_REASONING_MAX_OUTPUT_TOKENS",
+      "secret": false,
+      "editable": true,
+      "description": "reasoningモデルスロットの最大出力トークン数。"
+    },
+    {
+      "path": "ollama.base_url",
+      "type": "str",
+      "default": "http://localhost:11434",
+      "allowedValues": [],
+      "env": "IRIS_OLLAMA_HOST",
+      "secret": false,
+      "editable": true,
+      "description": "Ollama APIのbase URL。"
+    },
+    {
+      "path": "ollama.timeout_seconds",
+      "type": "float",
+      "default": 120.0,
+      "allowedValues": [],
+      "env": "IRIS_OLLAMA_TIMEOUT_SECONDS",
+      "secret": false,
+      "editable": true,
+      "description": "Ollama request timeout秒数。"
+    },
+    {
+      "path": "ollama.keep_alive",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": "IRIS_OLLAMA_KEEP_ALIVE",
+      "secret": false,
+      "editable": true,
+      "description": "Ollamaモデルのkeep-alive指定。"
+    },
+    {
+      "path": "ollama.think",
+      "type": "optional_str",
+      "default": false,
+      "allowedValues": [],
+      "env": "IRIS_OLLAMA_THINK",
+      "secret": false,
+      "editable": true,
+      "description": "Ollamaの推論思考設定 (true/false/low/highなど)。"
+    },
+    {
+      "path": "openai.model",
+      "type": "str",
+      "default": "gpt-5-mini",
+      "allowedValues": [],
+      "env": "IRIS_OPENAI_MODEL",
+      "secret": false,
+      "editable": true,
+      "description": "OpenAI providerの既定モデル。"
+    },
+    {
+      "path": "openai.timeout_seconds",
+      "type": "optional_float",
+      "default": null,
+      "allowedValues": [],
+      "env": "IRIS_OPENAI_TIMEOUT_SECONDS",
+      "secret": false,
+      "editable": true,
+      "description": "OpenAI request timeout秒数。"
+    },
+    {
+      "path": "openai.max_output_tokens",
+      "type": "optional_int",
+      "default": null,
+      "allowedValues": [],
+      "env": "IRIS_OPENAI_MAX_OUTPUT_TOKENS",
+      "secret": false,
+      "editable": true,
+      "description": "OpenAI providerの最大出力トークン数。"
+    },
+    {
+      "path": "logging.level",
+      "type": "enum",
+      "default": "INFO",
+      "allowedValues": [
+        "TRACE",
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL"
+      ],
+      "env": "IRIS_LOG_LEVEL",
+      "secret": false,
+      "editable": true,
+      "description": "ランタイムログレベル。"
+    },
+    {
+      "path": "logging.format",
+      "type": "enum",
+      "default": "text",
+      "allowedValues": [
+        "text",
+        "json"
+      ],
+      "env": "IRIS_LOG_FORMAT",
+      "secret": false,
+      "editable": true,
+      "description": "ランタイムログ形式。"
+    },
+    {
+      "path": "logging.file_path",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": "IRIS_LOG_FILE",
+      "secret": false,
+      "editable": true,
+      "description": "任意のログ出力ファイルパス。"
+    },
+    {
+      "path": "logging.rotation",
+      "type": "str",
+      "default": "10 MB",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "ログファイルrotation指定。"
+    },
+    {
+      "path": "logging.retention",
+      "type": "str",
+      "default": "7 days",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "ログファイルretention指定。"
+    },
+    {
+      "path": "safety.mode",
+      "type": "enum",
+      "default": "development",
+      "allowedValues": [
+        "development",
+        "basic",
+        "strict"
+      ],
+      "env": "IRIS_SAFETY_MODE",
+      "secret": false,
+      "editable": true,
+      "description": "出力safety gateの動作モード。"
+    },
+    {
+      "path": "safety.max_output_chars",
+      "type": "int",
+      "default": 4000,
+      "allowedValues": [],
+      "env": "IRIS_SAFETY_MAX_OUTPUT_CHARS",
+      "secret": false,
+      "editable": true,
+      "description": "出力可能な最大文字数。"
+    },
+    {
+      "path": "diagnostics.mode",
+      "type": "enum",
+      "default": "warn",
+      "allowedValues": [
+        "off",
+        "warn",
+        "strict"
+      ],
+      "env": "IRIS_DIAGNOSTICS_MODE",
+      "secret": false,
+      "editable": true,
+      "description": "起動時 LLM プロバイダ診断の動作モード。"
+    },
+    {
+      "path": "diagnostics.timeout_seconds",
+      "type": "float",
+      "default": 5.0,
+      "allowedValues": [],
+      "env": "IRIS_DIAGNOSTICS_TIMEOUT_SECONDS",
+      "secret": false,
+      "editable": true,
+      "description": "診断チェック 1 件あたりのタイムアウト秒数。"
+    },
+    {
+      "path": "diagnostics.readiness_timeout_seconds",
+      "type": "float",
+      "default": 5.0,
+      "allowedValues": [],
+      "env": "IRIS_DIAGNOSTICS_READINESS_TIMEOUT_SECONDS",
+      "secret": false,
+      "editable": true,
+      "description": "readiness 診断チェックのタイムアウト秒数。"
+    },
+    {
+      "path": "diagnostics.warmup_timeout_seconds",
+      "type": "float",
+      "default": 120.0,
+      "allowedValues": [],
+      "env": "IRIS_DIAGNOSTICS_WARMUP_TIMEOUT_SECONDS",
+      "secret": false,
+      "editable": true,
+      "description": "warmup 診断チェックのタイムアウト秒数。"
+    },
+    {
+      "path": "diagnostics.warmup_models",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": "IRIS_DIAGNOSTICS_WARMUP_MODELS",
+      "secret": false,
+      "editable": true,
+      "description": "診断後に provider 固有の warmup を実行する。"
+    }
+  ]
+}

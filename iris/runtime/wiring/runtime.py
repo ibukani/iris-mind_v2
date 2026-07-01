@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import TYPE_CHECKING
 
 from iris.adapters.app_gateway.identity_resolver import AccountBackedIdentityResolver
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
+from iris.adapters.embeddings.fake import DeterministicFakeEmbedding
+from iris.adapters.memory.qdrant import QdrantVectorMemoryIndex
+from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
+from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.contracts.memory import VectorMemoryIndexError
 from iris.core.datetime_utils import now_utc
+from iris.runtime.config.memory import MemoryVectorBackend, resolve_qdrant_api_key
 from iris.runtime.conversation import DeliveryConversationHistoryHook, ShortTermConversationRuntime
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
@@ -19,6 +26,7 @@ from iris.runtime.learning.implicit_review_pipeline import (
 )
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
 from iris.runtime.learning.runner import BackgroundJobRunner
+from iris.runtime.memory_vector_rebuilder import MemoryVectorIndexRebuilder
 from iris.runtime.observability.events import LoggingRuntimeObservationObserver
 from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
 from iris.runtime.service import (
@@ -51,11 +59,15 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.adapters.app_gateway.ports import AppActionBroker
+    from iris.contracts.embeddings import EmbeddingModel
+    from iris.contracts.memory import VectorMemoryIndex
     from iris.features.definition import LearningHook
     from iris.runtime.app import IrisApp
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.output_pipeline import RuntimeOutputPipeline
     from iris.runtime.scheduler.runner import SchedulerRunner
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -161,6 +173,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         ランタイムコンポーネント。
     """
     stores = wire_runtime_state(config)
+    vector_index, embedding = _wire_memory_vector(config, stores)
     feature_catalog = wire_runtime_features()
     output_pipeline = wire_output_pipeline(
         safety_config=config.safety,
@@ -172,6 +185,8 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
             memory_store=stores.memory_store,
             relationship_store=stores.relationship_store,
             affect_store=stores.affect_store,
+            vector_index=vector_index,
+            embedding=embedding,
         ),
         output_pipeline=output_pipeline,
         features=feature_catalog.features,
@@ -220,6 +235,85 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         app_action_broker=gateway_components.app_action_broker,
         scheduler_runner=scheduler_runner,
         background_job_runner=background_job_runner,
+    )
+
+
+def _wire_memory_vector(
+    config: IrisRuntimeConfig,
+    stores: RuntimeStateStores,
+) -> tuple[VectorMemoryIndex | None, EmbeddingModel | None]:
+    """Vector-enabled SQLite memory の派生 index を構築する。
+
+    Returns:
+        Index と embedding。無効または fail-open 時は両方 None。
+
+    Raises:
+        VectorMemoryIndexError: fail-open 無効時に index 操作が失敗した場合。
+    """
+    vector_config = config.memory.vector
+    if not vector_config.enabled or not isinstance(stores.memory_store, SQLiteMemoryStore):
+        return None, None
+    embedding_config = config.memory.embedding
+    embedding = DeterministicFakeEmbedding(
+        model=embedding_config.model,
+        dimension=embedding_config.dimension,
+    )
+    try:
+        index = _create_memory_vector_index(config, dimension=embedding.dimension)
+        if vector_config.rebuild_on_startup:
+            _rebuild_memory_vector(config, stores, index, embedding)
+    except VectorMemoryIndexError:
+        if not vector_config.fail_open_on_index_error:
+            raise
+        _LOGGER.exception("memory vector index disabled after startup failure")
+        return None, None
+    return index, embedding
+
+
+def _create_memory_vector_index(config: IrisRuntimeConfig, *, dimension: int) -> VectorMemoryIndex:
+    """設定された vector backend を構築する。
+
+    Returns:
+        構成済み vector index。
+    """
+    vector_config = config.memory.vector
+    if vector_config.backend is MemoryVectorBackend.IN_MEMORY:
+        return InMemoryVectorMemoryIndex()
+    return QdrantVectorMemoryIndex(
+        url=vector_config.qdrant.url,
+        collection=vector_config.collection,
+        dimension=dimension,
+        api_key=resolve_qdrant_api_key(vector_config.qdrant),
+    )
+
+
+def _rebuild_memory_vector(
+    config: IrisRuntimeConfig,
+    stores: RuntimeStateStores,
+    index: VectorMemoryIndex,
+    embedding: EmbeddingModel,
+) -> None:
+    """正本から index を同期し、text を含まない統計を記録する。"""
+    stats = MemoryVectorIndexRebuilder(
+        store=stores.memory_store,
+        index=index,
+        embedding=embedding,
+        batch_size=config.memory.embedding.batch_size,
+    ).rebuild(remove_orphans=True)
+    _LOGGER.info(
+        "memory vector index rebuild complete",
+        extra={
+            "embedding_provider": embedding.provider,
+            "embedding_model": embedding.model_id,
+            "embedding_dimension": embedding.dimension,
+            "scanned": stats.scanned,
+            "upserted": stats.upserted,
+            "unchanged": stats.unchanged,
+            "missing": stats.missing,
+            "stale": stats.stale,
+            "incompatible": stats.incompatible,
+            "removed_orphans": stats.removed_orphans,
+        },
     )
 
 

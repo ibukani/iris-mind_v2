@@ -26,6 +26,14 @@ from iris.runtime.config.llm import (
     RuntimeOpenAIConfig,
 )
 from iris.runtime.config.logging import RuntimeLoggingConfig
+from iris.runtime.config.memory import (
+    MemoryEmbeddingProvider,
+    MemoryVectorBackend,
+    RuntimeMemoryConfig,
+    RuntimeMemoryEmbeddingConfig,
+    RuntimeMemoryVectorConfig,
+    RuntimeMemoryVectorQdrantConfig,
+)
 from iris.runtime.config.root import (
     IrisRuntimeConfig,
     RuntimeConfigMetadata,
@@ -55,6 +63,8 @@ __all__ = [
     "DiagnosticsMode",
     "IrisRuntimeConfig",
     "LLMProvider",
+    "MemoryEmbeddingProvider",
+    "MemoryVectorBackend",
     "ModelSlotName",
     "RuntimeAuthConfig",
     "RuntimeAuthMode",
@@ -64,6 +74,10 @@ __all__ = [
     "RuntimeDiagnosticsConfig",
     "RuntimeLearningConfig",
     "RuntimeLoggingConfig",
+    "RuntimeMemoryConfig",
+    "RuntimeMemoryEmbeddingConfig",
+    "RuntimeMemoryVectorConfig",
+    "RuntimeMemoryVectorQdrantConfig",
     "RuntimeModelConfig",
     "RuntimeModelsConfig",
     "RuntimeOllamaConfig",
