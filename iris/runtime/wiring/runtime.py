@@ -25,6 +25,8 @@ from iris.runtime.learning.implicit_review_pipeline import (
     FilteringImplicitMemoryCandidateHook,
 )
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
+from iris.runtime.learning.review_promotion import ApprovedMemoryCandidatePromoter
+from iris.runtime.learning.review_service import MemoryCandidateReviewService
 from iris.runtime.learning.runner import BackgroundJobRunner
 from iris.runtime.memory_vector_rebuilder import MemoryVectorIndexRebuilder
 from iris.runtime.observability.events import LoggingRuntimeObservationObserver
@@ -81,6 +83,8 @@ class RuntimeComponents:
     app_action_broker: AppActionBroker | None
     scheduler_runner: SchedulerRunner
     background_job_runner: BackgroundJobRunner
+    memory_candidate_review_service: MemoryCandidateReviewService
+    memory_candidate_promoter: ApprovedMemoryCandidatePromoter
 
 
 @dataclass(frozen=True)
@@ -206,6 +210,13 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         ),
     )
     gateway_components = _wire_runtime_gateway_components(config, stores, feature_catalog)
+    memory_candidate_review_service = MemoryCandidateReviewService(
+        stores.memory_candidate_review_store
+    )
+    memory_candidate_promoter = ApprovedMemoryCandidatePromoter(
+        stores.memory_candidate_review_store,
+        stores.memory_store,
+    )
     background_job_runner = BackgroundJobRunner(
         stores.background_job_queue,
         (
@@ -235,6 +246,8 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         app_action_broker=gateway_components.app_action_broker,
         scheduler_runner=scheduler_runner,
         background_job_runner=background_job_runner,
+        memory_candidate_review_service=memory_candidate_review_service,
+        memory_candidate_promoter=memory_candidate_promoter,
     )
 
 

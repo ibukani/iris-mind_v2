@@ -42,7 +42,23 @@ class MemoryCandidateReviewRecord:
     account_id: AccountId | None = None
     space_id: SpaceId | None = None
     source_observation_id: ObservationId | None = None
+    reviewed_at: datetime | None = None
+    reviewed_by: str | None = None
+    review_reason: str | None = None
+    promoted_memory_id: str | None = None
     metadata: ImmutableMetadata = field(default_factory=immutable_metadata)
+
+
+@dataclass(frozen=True)
+class MemoryCandidateReviewUpdate:
+    """Review lifecycle と review/promotion metadata の更新 patch。"""
+
+    status: MemoryCandidateReviewStatus
+    updated_at: datetime
+    reviewed_at: datetime | None = None
+    reviewed_by: str | None = None
+    review_reason: str | None = None
+    promoted_memory_id: str | None = None
 
 
 class MemoryCandidateReviewStore(Protocol):
@@ -78,6 +94,22 @@ class MemoryCandidateReviewStore(Protocol):
         """
         ...
 
+    async def list_by_status(
+        self,
+        status: MemoryCandidateReviewStatus,
+        *,
+        actor_id: ActorId | None = None,
+        account_id: AccountId | None = None,
+        space_id: SpaceId | None = None,
+        limit: int = 50,
+    ) -> tuple[MemoryCandidateReviewRecord, ...]:
+        """指定 status の review candidate を決定的順序で返す。
+
+        Returns:
+            作成時刻と candidate id で整列済みの matching record。
+        """
+        ...
+
     async def update_status(
         self,
         candidate_id: MemoryCandidateReviewId,
@@ -89,6 +121,18 @@ class MemoryCandidateReviewStore(Protocol):
 
         Returns:
             Updated record, or None when the candidate does not exist.
+        """
+        ...
+
+    async def update_review(
+        self,
+        candidate_id: MemoryCandidateReviewId,
+        update: MemoryCandidateReviewUpdate,
+    ) -> MemoryCandidateReviewRecord | None:
+        """Review lifecycle と review/promotion metadata を更新する。
+
+        Returns:
+            更新後の record。candidate が存在しない場合は None。
         """
         ...
 
@@ -145,11 +189,33 @@ class InMemoryMemoryCandidateReviewStore:
         Returns:
             Pending records sorted by creation time and candidate id.
         """
+        return await self.list_by_status(
+            MemoryCandidateReviewStatus.PENDING_REVIEW,
+            actor_id=actor_id,
+            account_id=account_id,
+            space_id=space_id,
+            limit=limit,
+        )
+
+    async def list_by_status(
+        self,
+        status: MemoryCandidateReviewStatus,
+        *,
+        actor_id: ActorId | None = None,
+        account_id: AccountId | None = None,
+        space_id: SpaceId | None = None,
+        limit: int = 50,
+    ) -> tuple[MemoryCandidateReviewRecord, ...]:
+        """指定 status の review candidate を決定的順序で返す。
+
+        Returns:
+            作成時刻と candidate id で整列済みの matching record。
+        """
         with self._lock:
             records = [
                 record
                 for record in self._records.values()
-                if record.status is MemoryCandidateReviewStatus.PENDING_REVIEW
+                if record.status is status
                 and (actor_id is None or record.actor_id == actor_id)
                 and (account_id is None or record.account_id == account_id)
                 and (space_id is None or record.space_id == space_id)
@@ -169,11 +235,46 @@ class InMemoryMemoryCandidateReviewStore:
         Returns:
             Updated record, or None when the candidate does not exist.
         """
+        return await self.update_review(
+            candidate_id,
+            MemoryCandidateReviewUpdate(status=status, updated_at=updated_at),
+        )
+
+    async def update_review(
+        self,
+        candidate_id: MemoryCandidateReviewId,
+        update: MemoryCandidateReviewUpdate,
+    ) -> MemoryCandidateReviewRecord | None:
+        """Review lifecycle と review/promotion metadata を更新する。
+
+        Returns:
+            更新後の record。candidate が存在しない場合は None。
+        """
         with self._lock:
             record = self._records.get(candidate_id)
             if record is None:
                 return None
-            updated = replace(record, status=status, updated_at=updated_at)
+            updated = replace(
+                record,
+                status=update.status,
+                updated_at=update.updated_at,
+                reviewed_at=update.reviewed_at
+                if update.reviewed_at is not None
+                else record.reviewed_at,
+                reviewed_by=update.reviewed_by
+                if update.reviewed_by is not None
+                else record.reviewed_by,
+                review_reason=(
+                    update.review_reason
+                    if update.review_reason is not None
+                    else record.review_reason
+                ),
+                promoted_memory_id=(
+                    update.promoted_memory_id
+                    if update.promoted_memory_id is not None
+                    else record.promoted_memory_id
+                ),
+            )
             self._records[candidate_id] = updated
             return updated
 

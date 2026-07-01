@@ -892,7 +892,7 @@ CLI / main.py / iris.runtime.server
 - Delivery は in-memory outbox 実装。`DeliveryEnvelope`、lease、idempotent `ReportActionResult`、`DeliveryStatus` state machine は durable backend へ置換可能な契約として実装済み。
 - Runtime observability は `RuntimeTraceContext`、safe lifecycle logs、LLM request observer、startup diagnostics、read-only runtime doctor を実装済み。
 - `MotivationResult` 型と `FrameBuilder` 対応は既存、step 実装は未着手
-- LearningHook / BackgroundJob は未実装
+- LearningHook / RuntimeLearningHook / BackgroundJobQueue は skeleton 実装済み。implicit candidate は review store に入り、approved candidate だけが MemoryStore へ promotion される。SQLite learning-state persistence、transcript persistence、summarization は未実装
 - 外部アプリ連携 (Discord, Voice, Twitch) は未実装
 - AppGateway は Protocol とサーバーサイドの Identity Resolver / Space Resolver を定義済み (外部アプリのidentity永続化用)
 
