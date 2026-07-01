@@ -47,7 +47,6 @@ batch_size = 32
 
 [memory.vector.qdrant]
 url = "http://localhost:6333"
-api_key_env = ""
 prefer_grpc = false
 
 [scheduler]

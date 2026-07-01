@@ -309,6 +309,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             ConfigValueType.OPTIONAL_STR,
             None,
             "Qdrant API key を読む環境変数名。",
+            example=False,
         ),
         ConfigFieldSpec(
             "memory.vector.qdrant.prefer_grpc",
