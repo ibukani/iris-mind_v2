@@ -64,6 +64,39 @@ async def test_strict_gate_does_not_block_user_response_for_sensitive_context_al
     assert decision.allowed is True
 
 
+@pytest.mark.parametrize(
+    ("status", "reason"),
+    [
+        (AvailabilityStatus.BUSY, "availability_busy"),
+        (AvailabilityStatus.UNAVAILABLE, "availability_unavailable"),
+    ],
+)
+async def test_strict_user_initiated_unavailable_status_is_blocked_like_basic(
+    status: AvailabilityStatus,
+    reason: str,
+) -> None:
+    """Strict gate は user-initiated delivery でも basic availability規則を維持する。"""
+    availability = AvailabilitySnapshot(
+        actor_id=None,
+        status=status,
+        reason=status.value,
+        observed_at=_NOW,
+        computed_at=_NOW,
+    )
+    decision = await StrictDeliverySafetyGate().check(
+        target=_target(),
+        output=PresentedOutput(text="hello"),
+        availability=availability,
+        now=_NOW,
+        policy_context=SafetyPolicyContext(
+            source=DeliverySource.USER_INITIATED,
+            target_key="target",
+        ),
+    )
+    assert decision.allowed is False
+    assert decision.reason == reason
+
+
 async def test_strict_gate_blocks_proactive_busy_and_quiet_hours() -> None:
     """Busy と quiet hours は proactive delivery を block する。"""
     gate = StrictDeliverySafetyGate(

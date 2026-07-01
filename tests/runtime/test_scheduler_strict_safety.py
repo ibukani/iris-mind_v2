@@ -15,8 +15,13 @@ from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
 from iris.runtime.scheduler.models import ScheduledObservation
 from iris.runtime.scheduler.runner import SchedulerRunner
 from iris.runtime.service import ObservationEnvelope, RuntimeResponse
-from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
+from iris.runtime.state.safety_audit import (
+    InMemorySafetyAuditJournal,
+    SafetyAuditRecord,
+    SafetyAuditStage,
+)
 from iris.safety.delivery_gate import StrictDeliverySafetyGate
+from iris.safety.policy_engine import DeliverySource, SafetyRiskLevel
 
 pytestmark = pytest.mark.anyio
 _NOW = datetime(2026, 1, 1, 12, tzinfo=UTC)
@@ -105,3 +110,39 @@ async def test_output_safety_reason_is_retained_and_audited() -> None:
     result = await runner.run_once(_NOW)
     assert result.results[0].reason == "output contains a secret-like pattern"
     assert audit.records()[0].stage.value == "output"
+
+
+async def test_recent_blocks_for_same_target_block_proactive_delivery() -> None:
+    """同一targetの直近block反復はenqueue前にproactive deliveryをblockする。"""
+    audit = InMemorySafetyAuditJournal()
+    for index in range(2):
+        await audit.append(
+            SafetyAuditRecord(
+                observation_id=ObservationId(f"previous-{index}"),
+                occurred_at=_NOW,
+                stage=SafetyAuditStage.DELIVERY,
+                allowed=False,
+                reason="quiet_hours",
+                risk_level=SafetyRiskLevel.MEDIUM,
+                source=DeliverySource.PROACTIVE_IDLE_TICK,
+                target_key="discord:user-1:",
+                policy="strict_delivery",
+                policy_version="1",
+            )
+        )
+    outbox = InMemoryDeliveryOutbox()
+    runner = SchedulerRunner(
+        scheduler=_Scheduler(),
+        runtime_service=_Runtime(PresentedOutput(text="generated output")),
+        delivery_gate=StrictDeliverySafetyGate(),
+        outbox=outbox,
+        safety_audit_journal=audit,
+    )
+
+    result = await runner.run_once(_NOW)
+
+    assert result.results[0].status == "blocked"
+    assert result.results[0].reason == "repeated_recent_blocks"
+    assert (
+        await outbox.lease_due(provider="discord", now=_NOW, max_items=10, lease_seconds=30) == ()
+    )

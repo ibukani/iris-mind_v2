@@ -200,7 +200,7 @@ class StrictDeliverySafetyGate:
         basic_decision = await self.basic.check(
             target=target,
             output=output,
-            availability=None,
+            availability=availability,
             now=now,
         )
         if not basic_decision.allowed:

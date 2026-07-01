@@ -47,6 +47,8 @@ Scheduler lifecycle は default disabled とする。現 phase の outbox / targ
 
 Output safetyとdelivery safetyのblock reasonはscheduler結果とruntime safety auditに保持する。Auditにはuser textや生成output本文を保存しない。
 
+現MVPのsafety audit journalとblocked historyはprocess-localである。`state.backend = "sqlite"` でも `InMemorySafetyAuditJournal` を使用し、output/delivery safety reasonはruntime inspection用には保持するがrestartを越えて永続化しない。SQLite safety auditのdurable実装は意図的に後続phaseへ延期する。
+
 ## Forbidden Paths
 
 ```text
