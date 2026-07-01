@@ -211,7 +211,6 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         delivery_gate=wire_delivery_safety_gate(config.delivery),
         outbox=stores.delivery_outbox,
         config=config,
-        availability_provider=gateway_components.availability_provider,
     )
     return RuntimeComponents(
         stores=stores,
