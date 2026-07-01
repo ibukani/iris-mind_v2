@@ -71,6 +71,9 @@ background_jobs_enabled = true
 background_job_interval_seconds = 10.0
 max_jobs_per_run = 5
 max_attempts = 3
+implicit_candidates_enabled = true
+implicit_candidate_min_confidence = 0.35
+implicit_candidate_max_text_length = 1000
 
 [delivery.quiet_hours]
 enabled = false

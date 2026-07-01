@@ -102,6 +102,36 @@
       "description": "学習ジョブの既定最大試行回数。"
     },
     {
+      "path": "learning.implicit_candidates_enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Runtime outcome から implicit memory candidate を候補化する。"
+    },
+    {
+      "path": "learning.implicit_candidate_min_confidence",
+      "type": "float",
+      "default": 0.35,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Review store に入れる implicit candidate の最小 confidence。"
+    },
+    {
+      "path": "learning.implicit_candidate_max_text_length",
+      "type": "int",
+      "default": 1000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Review store に入れる implicit candidate の最大文字数。"
+    },
+    {
       "path": "server.tls.enabled",
       "type": "bool",
       "default": false,

@@ -13,8 +13,10 @@ from iris.cognitive.memory.candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.learning import RuntimeLearningEventKind
 from iris.contracts.memory import MemoryKind
-from iris.core.ids import ActorId, ObservationId, SpaceId
+from iris.contracts.observations import ObservationKind, UserFeedbackKind
+from iris.core.ids import AccountId, ActorId, ObservationId, SessionId, SpaceId
 
 BackgroundJobId = NewType("BackgroundJobId", str)
 
@@ -61,6 +63,25 @@ class MemoryBackgroundJobPayload(BaseModel):
     source_observation_id: ObservationId | None = None
 
 
+class RuntimeLearningCandidateJobPayload(BaseModel):
+    """RuntimeLearningEventから候補抽出へ渡すtyped payload。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    event_kind: RuntimeLearningEventKind
+    route: str
+    observation_kind: ObservationKind
+    input_text: str | None = None
+    output_text: str | None = None
+    feedback_kind: UserFeedbackKind | None = None
+    actor_id: ActorId | None = None
+    account_id: AccountId | None = None
+    space_id: SpaceId | None = None
+    session_id: SessionId
+    source_observation_id: ObservationId
+    occurred_at: datetime
+
+
 class DeferredLearningJobPayload(BaseModel):
     """高度な将来処理向けの、不透明値を持たない最小入力。"""
 
@@ -70,7 +91,9 @@ class DeferredLearningJobPayload(BaseModel):
     reason: str | None = None
 
 
-BackgroundJobPayload = MemoryBackgroundJobPayload | DeferredLearningJobPayload
+BackgroundJobPayload = (
+    MemoryBackgroundJobPayload | RuntimeLearningCandidateJobPayload | DeferredLearningJobPayload
+)
 
 
 class BackgroundJobRecord(BaseModel):

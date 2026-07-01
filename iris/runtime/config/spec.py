@@ -158,6 +158,24 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "学習ジョブの既定最大試行回数。",
         ),
         ConfigFieldSpec(
+            path="learning.implicit_candidates_enabled",
+            value_type=ConfigValueType.BOOL,
+            default=True,
+            description="Runtime outcome から implicit memory candidate を候補化する。",
+        ),
+        ConfigFieldSpec(
+            "learning.implicit_candidate_min_confidence",
+            ConfigValueType.FLOAT,
+            0.35,
+            "Review store に入れる implicit candidate の最小 confidence。",
+        ),
+        ConfigFieldSpec(
+            "learning.implicit_candidate_max_text_length",
+            ConfigValueType.INT,
+            1000,
+            "Review store に入れる implicit candidate の最大文字数。",
+        ),
+        ConfigFieldSpec(
             "server.tls.enabled",
             ConfigValueType.BOOL,
             default=False,
