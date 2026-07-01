@@ -114,6 +114,30 @@ async def test_promotion_is_idempotent() -> None:
     assert len(memory_store.filter(MemoryQuery(text="", limit=10))) == 1
 
 
+async def test_already_promoted_candidate_reports_missing_memory_record() -> None:
+    """Review metadata corruption is distinguishable from a normal idempotent hit."""
+    store = InMemoryMemoryCandidateReviewStore()
+    first_memory_store = InMemoryMemoryStore()
+    record = await store.add(_record("candidate-1"))
+    await MemoryCandidateReviewService(store, now=lambda: _NOW).approve(record.candidate_id)
+    first = await ApprovedMemoryCandidatePromoter(
+        store,
+        first_memory_store,
+        now=lambda: _PROMOTED_AT,
+    ).promote(record.candidate_id)
+    assert first.promoted is True
+
+    result = await ApprovedMemoryCandidatePromoter(
+        store,
+        InMemoryMemoryStore(),
+        now=lambda: _PROMOTED_AT,
+    ).promote(record.candidate_id)
+
+    assert result.promoted is False
+    assert result.memory is None
+    assert result.reason == "promoted_memory_missing"
+
+
 async def test_unknown_candidate_promotion_raises_not_found() -> None:
     """Unknown candidate id is reported explicitly."""
     promoter = ApprovedMemoryCandidatePromoter(

@@ -187,6 +187,7 @@ ActionPlan
 - 明示メモリ保存は `MemoryBackgroundJobPayload` から `MemoryStore` へ保存できる。
 - implicit conversation learning は保守的抽出器で `MemoryCandidateReviewStore` に review-required candidate として保存する。
 - approved implicit candidate だけが `ApprovedMemoryCandidatePromoter` 経由で durable `MemoryStore` に昇格できる。
+- promotion 済み metadata と canonical `MemoryStore` の欠損は `promoted_memory_missing` として通常の冪等 promotion と区別する。
 
 未実装または後続作業。
 - SQLite-backed BackgroundJobQueue / MemoryCandidateReviewStore。

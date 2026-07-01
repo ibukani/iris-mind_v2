@@ -211,6 +211,7 @@ class InMemoryMemoryCandidateReviewStore:
         Returns:
             作成時刻と candidate id で整列済みの matching record。
         """
+        _validate_positive_limit(limit)
         with self._lock:
             records = [
                 record
@@ -285,3 +286,14 @@ class MemoryCandidateReviewDecision:
 
     accepted: bool
     reason: str | None = None
+
+
+def _validate_positive_limit(limit: int) -> None:
+    """Review candidate list の取得件数を検証する。
+
+    Raises:
+        ValueError: 取得件数が 1 未満の場合。
+    """
+    if limit < 1:
+        message = "memory candidate review list limit must be >= 1"
+        raise ValueError(message)

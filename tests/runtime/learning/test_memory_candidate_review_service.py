@@ -123,6 +123,19 @@ async def test_list_pending_and_status_filters_by_actor_account_and_space() -> N
     ) == (approved_second,)
 
 
+@pytest.mark.parametrize("limit", [0, -1])
+async def test_list_methods_reject_non_positive_limit(limit: int) -> None:
+    """Review listing rejects ambiguous non-positive limits."""
+    store = InMemoryMemoryCandidateReviewStore()
+    await store.add(_record("candidate-1"))
+    service = MemoryCandidateReviewService(store, now=lambda: _NOW)
+
+    with pytest.raises(ValueError, match="limit must be >= 1"):
+        await service.list_pending(limit=limit)
+    with pytest.raises(ValueError, match="limit must be >= 1"):
+        await service.list_by_status(MemoryCandidateReviewStatus.PENDING_REVIEW, limit=limit)
+
+
 async def test_rejected_candidate_cannot_be_approved() -> None:
     """Rejected candidate cannot later become approved."""
     store = InMemoryMemoryCandidateReviewStore()

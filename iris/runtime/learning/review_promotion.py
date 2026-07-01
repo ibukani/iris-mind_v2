@@ -139,32 +139,51 @@ class ApprovedMemoryCandidatePromoter:
         record = await self._review_store.get(candidate_id)
         if record is None:
             raise MemoryCandidatePromotionNotFoundError(str(candidate_id))
+
         if record.status is not MemoryCandidateReviewStatus.APPROVED:
-            return MemoryCandidatePromotionResult(
+            result = MemoryCandidatePromotionResult(
                 record=record,
                 memory=None,
                 promoted=False,
                 reason="candidate_not_approved",
             )
-        if record.promoted_memory_id is not None:
-            memory = self._memory_store.get(MemoryId(record.promoted_memory_id))
-            return MemoryCandidatePromotionResult(
-                record=record,
-                memory=memory,
-                promoted=False,
-                reason="already_promoted",
-            )
-        candidate = record.candidate
-        if not self._policy.accept(candidate):
-            return MemoryCandidatePromotionResult(
+        elif record.promoted_memory_id is not None:
+            result = self._already_promoted_result(record)
+        elif not self._policy.accept(record.candidate):
+            result = MemoryCandidatePromotionResult(
                 record=record,
                 memory=None,
                 promoted=False,
                 reason="candidate_rejected_by_promotion_policy",
             )
+        else:
+            result = await self._promote_approved_candidate(record, candidate_id)
+        return result
+
+    def _already_promoted_result(
+        self,
+        record: MemoryCandidateReviewRecord,
+    ) -> MemoryCandidatePromotionResult:
+        memory = self._memory_store.get(MemoryId(record.promoted_memory_id or ""))
+        reason = "promoted_memory_missing" if memory is None else "already_promoted"
+        return MemoryCandidatePromotionResult(
+            record=record,
+            memory=memory,
+            promoted=False,
+            reason=reason,
+        )
+
+    async def _promote_approved_candidate(
+        self,
+        record: MemoryCandidateReviewRecord,
+        candidate_id: MemoryCandidateReviewId,
+    ) -> MemoryCandidatePromotionResult:
         now = self._now()
         memory_id = _promoted_memory_id(record)
         memory = self._memory_store.update(_memory_record(record, memory_id, now))
+        # 現在は in-memory review store 前提の二段階更新。将来 review store を
+        # durable 化する段階では MemoryStore 更新と review metadata 更新の
+        # transaction/compensation policy を同じ境界で定義する。
         updated = await self._review_store.update_review(
             candidate_id,
             MemoryCandidateReviewUpdate(
