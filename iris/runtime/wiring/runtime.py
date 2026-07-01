@@ -12,10 +12,10 @@ from iris.runtime.conversation import DeliveryConversationHistoryHook, ShortTerm
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.learning.hooks import LearningHookRunner, RuntimeLearningHookRunner
-from iris.runtime.learning.implicit_candidates import (
-    EnqueueImplicitMemoryCandidateHook,
-    ImplicitCandidateAdmissionPolicy,
-    ImplicitMemoryCandidateWorker,
+from iris.runtime.learning.implicit_candidates import ImplicitCandidateAdmissionPolicy
+from iris.runtime.learning.implicit_review_pipeline import (
+    AccountAwareImplicitMemoryCandidateWorker,
+    FilteringImplicitMemoryCandidateHook,
 )
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
 from iris.runtime.learning.runner import BackgroundJobRunner
@@ -195,7 +195,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         stores.background_job_queue,
         (
             DeterministicMemoryConsolidationWorker(stores.memory_store),
-            ImplicitMemoryCandidateWorker(
+            AccountAwareImplicitMemoryCandidateWorker(
                 stores.memory_candidate_review_store,
                 policy=ImplicitCandidateAdmissionPolicy(
                     min_confidence=config.learning.implicit_candidate_min_confidence,
@@ -375,7 +375,7 @@ def _wire_runtime_learning_hook_runner(
 def _wire_builtin_runtime_learning_hooks(
     config: IrisRuntimeConfig,
     stores: RuntimeStateStores | None,
-) -> tuple[EnqueueImplicitMemoryCandidateHook, ...]:
+) -> tuple[FilteringImplicitMemoryCandidateHook, ...]:
     """Built-in runtime learning hooksを組み立てる。
 
     Returns:
@@ -389,7 +389,7 @@ def _wire_builtin_runtime_learning_hooks(
     ):
         return ()
     return (
-        EnqueueImplicitMemoryCandidateHook(
+        FilteringImplicitMemoryCandidateHook(
             stores.background_job_queue,
             max_attempts=config.learning.max_attempts,
         ),
