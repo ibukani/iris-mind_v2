@@ -21,12 +21,21 @@ if TYPE_CHECKING:
 class AsyncDatabaseManager:
     """Manages the lifecycle of an async SQLAlchemy engine."""
 
-    def __init__(self, db_path: str | Path, *, echo: bool = False) -> None:
+    def __init__(
+        self,
+        db_path: str | Path,
+        *,
+        echo: bool = False,
+        ensure_schema: bool = True,
+        migrator: SQLiteSchemaMigrator | None = None,
+    ) -> None:
         """Initialize the async engine.
 
         Args:
             db_path: Path to the SQLite database file.
             echo: If True, echo SQL queries for debugging.
+            ensure_schema: True の場合、engine 使用前に SQLite schema migration を実行する。
+            migrator: schema migration に使う runner。省略時は標準 runner。
         """
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -46,12 +55,18 @@ class AsyncDatabaseManager:
 
         event.listen(self.engine.sync_engine, "begin", do_begin)
 
-        SQLiteSchemaMigrator().ensure_current(self._db_path)
+        if ensure_schema:
+            (migrator or SQLiteSchemaMigrator()).ensure_current(self._db_path)
 
         self.session_factory = async_sessionmaker(
             bind=self.engine,
             expire_on_commit=False,
         )
+
+    @property
+    def db_path(self) -> Path:
+        """管理対象 SQLite DB path を返す。"""
+        return self._db_path
 
     async def close(self) -> None:
         """Close the engine."""

@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING, Protocol
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.persistence.sqlite.context import SQLitePersistenceContext
-from iris.adapters.persistence.sqlite.engine import AsyncDatabaseManager
-from iris.adapters.persistence.sqlite.migrator import SQLiteSchemaMigrator
 from iris.adapters.persistence.sqlite.stores.account import SQLiteAccountStore
 from iris.adapters.persistence.sqlite.stores.activity_journal import SQLiteActivityJournal
 from iris.adapters.persistence.sqlite.stores.affect import SQLiteAffectStore
@@ -105,10 +103,8 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         SQLite backend に対応した RuntimeStateStores。
     """
     sqlite_path = config.state.sqlite_path
-    SQLiteSchemaMigrator().ensure_current(sqlite_path)
-    db_manager = AsyncDatabaseManager(sqlite_path)
-    ctx = SQLitePersistenceContext(db=db_manager)
-    sqlite_memory_store = SQLiteMemoryStore(sqlite_path)
+    ctx = SQLitePersistenceContext.open(sqlite_path)
+    sqlite_memory_store = SQLiteMemoryStore(sqlite_path, ensure_schema=False)
     memory_store: MutableMemoryStore = sqlite_memory_store
     return RuntimeStateStores(
         account_store=SQLiteAccountStore(ctx),

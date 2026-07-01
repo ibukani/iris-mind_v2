@@ -81,6 +81,8 @@ Backup / restore policy:
 - backup artifact は `state.sqlite3` と `manifest.json` を含む。
 - manifest は format version、schema version、created_at、source DB path、SQLite checksum、backup DB filename、app version field を持つ。
 - restore は manifest と checksum を検証し、既存 target は `overwrite=True` なしに上書きしない。
+- restore は offline operation である。Iris runtime と他 process が target DB を閉じ、WAL / SHM sidecar が残っていない checkpoint 済み target だけを上書きできる。
+- restore は target path と同じ directory に一時 file を作り、検証済み backup を copy してから replace する。
 
 Corrupt DB / recovery policy:
 
@@ -99,6 +101,8 @@ Activity journal replay scope:
 - event が明示的に journal され test されていない限り、activity journal から完全復元できると仮定しない。
 
 Runtime doctor は read-only を維持する。SQLite backend では DB path、schema version、latest migration、pending migration、future version rejection、corrupt detection を報告する。doctor は migration を適用しない。
+
+Runtime startup では `SQLitePersistenceContext.open()` を authoritative entrypoint として schema migration を一度だけ実行する。`AsyncDatabaseManager` と `SQLiteMemoryStore` は direct constructor 利用時の安全性のため migration 実行機能を残すが、runtime wiring では `ensure_schema=False` で開き、store-local schema mutation を増やさない。
 
 ## Non-decisions
 

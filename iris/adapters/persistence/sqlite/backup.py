@@ -85,7 +85,10 @@ class SQLiteBackupService:
         *,
         overwrite: bool = False,
     ) -> SQLiteBackupManifest:
-        """Backup artifact を target DB へ復元する。
+        """Backup artifact を offline target DB へ復元する。
+
+        既存 DB を上書きする restore は、Iris と他 process が DB を閉じ、
+        WAL / SHM sidecar が残っていない checkpoint 済み状態でのみ許可する。
 
         Returns:
             SQLiteBackupManifest: 復元に使った backup manifest。
@@ -99,7 +102,7 @@ class SQLiteBackupService:
 
         target_path = Path(target_db)
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(backup_path, target_path)
+        _replace_target_db(backup_path, target_path)
         self._migrator.inspect(target_path)
         return manifest
 
@@ -205,6 +208,35 @@ def _validate_restore_target(target_path: Path, *, overwrite: bool) -> None:
     if target_path.is_dir():
         message = f"target SQLite DB path is a directory: {target_path}"
         raise SQLiteBackupError(message)
+    sidecars = _existing_sqlite_sidecars(target_path)
+    if sidecars:
+        files = ", ".join(str(path) for path in sidecars)
+        message = (
+            "target SQLite DB has WAL/SHM sidecar files; restore requires an offline "
+            f"checkpointed target before overwrite: {files}"
+        )
+        raise SQLiteBackupError(message)
+
+
+def _existing_sqlite_sidecars(target_path: Path) -> tuple[Path, ...]:
+    return tuple(
+        sidecar
+        for sidecar in (
+            target_path.with_name(f"{target_path.name}-wal"),
+            target_path.with_name(f"{target_path.name}-shm"),
+        )
+        if sidecar.exists()
+    )
+
+
+def _replace_target_db(backup_path: Path, target_path: Path) -> None:
+    temporary_path = target_path.with_name(f"{target_path.name}.restore.tmp")
+    try:
+        shutil.copy2(backup_path, temporary_path)
+        temporary_path.replace(target_path)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            temporary_path.unlink()
 
 
 def _manifest_json(manifest: SQLiteBackupManifest) -> str:

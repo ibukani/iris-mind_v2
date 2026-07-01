@@ -78,3 +78,17 @@ def test_sqlite_restore_requires_explicit_overwrite(tmp_path: Path) -> None:
         SQLiteBackupService().restore_backup(backup_dir, target_db)
 
     SQLiteBackupService().restore_backup(backup_dir, target_db, overwrite=True)
+
+
+def test_sqlite_restore_rejects_target_with_wal_sidecar(tmp_path: Path) -> None:
+    """WAL/SHM sidecar が残る target への restore は offline 前提違反として拒否する。"""
+    source_db = tmp_path / "source.sqlite3"
+    SQLiteMemoryStore(source_db).close()
+    backup_dir = tmp_path / "backup"
+    SQLiteBackupService().create_backup(source_db, backup_dir)
+    target_db = tmp_path / "target.sqlite3"
+    SQLiteMemoryStore(target_db).close()
+    target_db.with_name(f"{target_db.name}-wal").write_bytes(b"pending wal")
+
+    with pytest.raises(SQLiteBackupError, match="offline checkpointed target"):
+        SQLiteBackupService().restore_backup(backup_dir, target_db, overwrite=True)

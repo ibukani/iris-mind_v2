@@ -34,9 +34,22 @@ class SQLiteMemoryStore(MutableMemoryStore):
     aiosqlite または asyncio.to_thread への移行を検討する。
     """
 
-    def __init__(self, db_path: str | Path) -> None:
-        """Migration 済み SQLite DB に接続する。"""
-        SQLiteSchemaMigrator().ensure_current(db_path)
+    def __init__(
+        self,
+        db_path: str | Path,
+        *,
+        ensure_schema: bool = True,
+        migrator: SQLiteSchemaMigrator | None = None,
+    ) -> None:
+        """Migration 済み SQLite DB に接続する。
+
+        Args:
+            db_path: SQLite database file path。
+            ensure_schema: True の場合、store 使用前に schema migration を実行する。
+            migrator: schema migration に使う runner。省略時は標準 runner。
+        """
+        if ensure_schema:
+            (migrator or SQLiteSchemaMigrator()).ensure_current(db_path)
         self._db = SQLiteDatabase(db_path, synchronous="NORMAL")
 
     def close(self) -> None:
