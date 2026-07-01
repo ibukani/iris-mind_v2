@@ -5,7 +5,13 @@ from __future__ import annotations
 from iris.adapters.memory.fake import FakeMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.cognitive.memory.hybrid import HybridMemoryRetriever, MemoryReranker
-from iris.contracts.memory import MemoryId, MemoryQuery, MemoryRecord, MemorySearchResult
+from iris.contracts.memory import (
+    MemoryId,
+    MemoryQuery,
+    MemoryRecord,
+    MemorySearchResult,
+    VectorMemoryEntry,
+)
 from iris.core.ids import ActorId
 
 
@@ -22,6 +28,32 @@ def embed_text(text: str) -> tuple[float, float]:
         1.0 if "tea" in text.casefold() else 0.0,
         1.0 if "coffee" in text.casefold() else 0.0,
     )
+
+
+class _Embedding:
+    model_id = "test"
+    dimension = 2
+
+    def embed(self, text: str) -> tuple[float, float]:
+        return embed_text(text)
+
+    def embed_batch(self, texts: tuple[str, ...]) -> tuple[tuple[float, float], ...]:
+        return tuple(self.embed(text) for text in texts)
+
+
+def _index_for_store(store: FakeMemoryStore) -> InMemoryVectorMemoryIndex:
+    index = InMemoryVectorMemoryIndex()
+    for result in store.search(MemoryQuery(text="", limit=100)):
+        index.upsert(
+            VectorMemoryEntry(
+                memory_id=result.record.id,
+                vector=embed_text(result.record.text),
+                source_digest=result.record.text,
+                embedding_model="test",
+                embedding_dimension=2,
+            )
+        )
+    return index
 
 
 def _store_with_records() -> FakeMemoryStore:
@@ -65,13 +97,12 @@ def test_hybrid_retriever_combines_fts_and_vector() -> None:
     """ハイブリッド検索が FTS5 とベクトルの結果を統合する。"""
     store = _store_with_records()
     fts = _FtsRetriever(store)
-    vector = InMemoryVectorMemoryIndex(embed_text)
-    for record in store.search(MemoryQuery(text="", limit=100)):
-        vector.upsert(record.record.id, record.record.text, {})
+    vector = _index_for_store(store)
 
     hybrid = HybridMemoryRetriever(
         fts_retriever=fts,
         vector_index=vector,
+        embedding=_Embedding(),
         store=store,
         fts_limit=10,
         vector_limit=10,
@@ -87,13 +118,12 @@ def test_hybrid_retriever_respects_limit() -> None:
     """ハイブリッド検索が limit を尊重する。"""
     store = _store_with_records()
     fts = _FtsRetriever(store)
-    vector = InMemoryVectorMemoryIndex(embed_text)
-    for record in store.search(MemoryQuery(text="", limit=100)):
-        vector.upsert(record.record.id, record.record.text, {})
+    vector = _index_for_store(store)
 
     hybrid = HybridMemoryRetriever(
         fts_retriever=fts,
         vector_index=vector,
+        embedding=_Embedding(),
         store=store,
     )
 
@@ -110,13 +140,12 @@ def test_hybrid_retriever_filters_scope() -> None:
         )
     )
     fts = _FtsRetriever(store)
-    vector = InMemoryVectorMemoryIndex(embed_text)
-    for record in store.search(MemoryQuery(text="", limit=100)):
-        vector.upsert(record.record.id, record.record.text, {})
+    vector = _index_for_store(store)
 
     hybrid = HybridMemoryRetriever(
         fts_retriever=fts,
         vector_index=vector,
+        embedding=_Embedding(),
         store=store,
     )
 

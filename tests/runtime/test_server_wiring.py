@@ -9,8 +9,11 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeGuard
 
 from iris.adapters.app_gateway.space_resolver import EphemeralSpaceResolver
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
+from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
+from iris.cognitive.memory.hybrid import HybridMemoryRetriever
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
+from iris.cognitive.memory.write import MemoryWriteStep
 from iris.features.definition import FeatureDefinition, LearningHook
 from iris.runtime.config import IrisRuntimeConfig, default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
@@ -123,6 +126,35 @@ def test_build_runtime_components_uses_fts5_retrieval_for_sqlite(
     retriever = get_private_attr_as(retrieval_steps[0], "_retriever", object)
     assert isinstance(retriever, SQLiteFTS5MemoryRetriever)
     assert get_private_attr_as(retriever, "_store", object) is components.stores.memory_store
+
+
+def test_build_runtime_components_wires_same_vector_index_for_sqlite(
+    tmp_path: Path,
+) -> None:
+    """Vector-enabled SQLite は hybrid retrieval と write に同一 index を注入する。"""
+    config = default_runtime_config()
+    config = replace(
+        config,
+        state=RuntimeStateConfig(
+            backend=RuntimeStateBackend.SQLITE,
+            sqlite_path=str(tmp_path / "vector-state.db"),
+        ),
+        memory=replace(
+            config.memory,
+            vector=replace(config.memory.vector, enabled=True),
+        ),
+    )
+
+    components = build_runtime_components(config)
+
+    cycle = get_private_attr_path_as(components.runtime_service, ("_app", "_cycle"), object)
+    steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])
+    retrieval_step = next(step for step in steps if isinstance(step, MemoryRetrievalStep))
+    write_step = next(step for step in steps if isinstance(step, MemoryWriteStep))
+    retriever = get_private_attr_as(retrieval_step, "_retriever", HybridMemoryRetriever)
+    vector_index = get_private_attr_as(retriever, "_vector", InMemoryVectorMemoryIndex)
+
+    assert get_private_attr_as(write_step, "_vector_index", object) is vector_index
 
 
 def test_build_runtime_components_uses_in_memory_store_for_default_backend() -> None:

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.contracts.affect import AffectStore
+    from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.relationship import RelationshipStore
 
 
@@ -38,6 +39,8 @@ class CognitiveCycleStores:
     affect_store: AffectStore | None = None
     memory_retriever: MemoryRetriever | None = None
     vector_index: VectorMemoryIndex | None = None
+    embedding: EmbeddingModel | None = None
+    fail_open_on_index_error: bool = True
 
 
 @dataclass(frozen=True)
@@ -117,6 +120,8 @@ def _build_memory_steps(
             MemoryWriteStep(
                 stores.memory_store,
                 vector_index=stores.vector_index,
+                embedding=stores.embedding,
+                fail_open_on_index_error=stores.fail_open_on_index_error,
             ),
         )
     return steps

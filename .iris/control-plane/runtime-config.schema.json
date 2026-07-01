@@ -228,6 +228,126 @@
       "description": "SQLite状態ファイルのパス。"
     },
     {
+      "path": "memory.vector.enabled",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "SQLite memory の hybrid vector retrieval を有効化する。"
+    },
+    {
+      "path": "memory.vector.backend",
+      "type": "enum",
+      "default": "in_memory",
+      "allowedValues": ["in_memory", "qdrant"],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "派生 vector index backend。"
+    },
+    {
+      "path": "memory.vector.collection",
+      "type": "str",
+      "default": "iris_memory",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "vector index collection 名。"
+    },
+    {
+      "path": "memory.vector.rebuild_on_startup",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "起動時に正本 MemoryStore から index を同期する。"
+    },
+    {
+      "path": "memory.vector.fail_open_on_index_error",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "index 障害時も canonical memory write を保持する。"
+    },
+    {
+      "path": "memory.embedding.provider",
+      "type": "enum",
+      "default": "fake",
+      "allowedValues": ["fake"],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory embedding provider。"
+    },
+    {
+      "path": "memory.embedding.model",
+      "type": "str",
+      "default": "fake-v1",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "embedding model 識別子。"
+    },
+    {
+      "path": "memory.embedding.dimension",
+      "type": "int",
+      "default": 32,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "embedding vector 次元数。"
+    },
+    {
+      "path": "memory.embedding.batch_size",
+      "type": "int",
+      "default": 32,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "rebuild 時の embedding batch size。"
+    },
+    {
+      "path": "memory.vector.qdrant.url",
+      "type": "str",
+      "default": "http://localhost:6333",
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Qdrant REST endpoint。"
+    },
+    {
+      "path": "memory.vector.qdrant.api_key_env",
+      "type": "optional_str",
+      "default": null,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Qdrant API key を読む環境変数名。"
+    },
+    {
+      "path": "memory.vector.qdrant.prefer_grpc",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Qdrant gRPC transport 選択予約。現在は REST のみ。"
+    },
+    {
       "path": "scheduler.enabled",
       "type": "bool",
       "default": false,

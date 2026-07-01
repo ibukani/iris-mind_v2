@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+import hashlib
 from typing import TYPE_CHECKING, NewType, Protocol, override, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -13,9 +14,13 @@ from iris.core.ids import ActorId, ObservationId, SpaceId
 from iris.core.metadata import immutable_metadata
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
 MemoryId = NewType("MemoryId", str)
+
+
+class VectorMemoryIndexError(RuntimeError):
+    """派生 vector index の操作失敗。"""
 
 
 class MemoryKind(StrEnum):
@@ -53,6 +58,16 @@ class MemoryRecord(BaseModel):
     metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
 
 
+def memory_record_digest(record: MemoryRecord) -> str:
+    """Vector entry の鮮度判定用 digest を返す。
+
+    Returns:
+        SHA-256 digest。
+    """
+    payload = record.model_dump_json()
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
 class MemoryQuery(BaseModel):
     """メモリレコード検索のクエリ。"""
 
@@ -84,6 +99,30 @@ class VectorMemorySearchResult(BaseModel):
     score: float
 
 
+class VectorMemoryEntry(BaseModel):
+    """正本メモリから派生したベクトル index entry。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    memory_id: MemoryId
+    vector: tuple[float, ...]
+    source_digest: str
+    embedding_model: str
+    embedding_dimension: int
+    metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
+
+
+class VectorMemoryEntryMetadata(BaseModel):
+    """entry の鮮度・互換性判定に必要な metadata。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    memory_id: MemoryId
+    source_digest: str
+    embedding_model: str
+    embedding_dimension: int
+
+
 class VectorMemoryIndex(Protocol):
     """ベクトルベースのメモリ検索インデックスのプロトコル。
 
@@ -91,24 +130,34 @@ class VectorMemoryIndex(Protocol):
     検索インデックスとして動作する。
     """
 
-    def upsert(self, memory_id: MemoryId, text: str, metadata: Mapping[str, str]) -> None:
-        """メモリテキストとメタデータをインデックスに登録または更新する。"""
+    def upsert(self, entry: VectorMemoryEntry) -> None:
+        """派生 index entry を登録または更新する。"""
         ...
 
     def delete(self, memory_id: MemoryId) -> None:
         """指定 ID のエントリをインデックスから削除する。"""
         ...
 
-    def search(self, query: str, *, limit: int) -> Sequence[VectorMemorySearchResult]:
-        """クエリテキストに対するベクトル類似度検索を実行する。
+    def search(
+        self, query_vector: Sequence[float], *, limit: int
+    ) -> Sequence[VectorMemorySearchResult]:
+        """クエリベクトルに対する類似度検索を実行する。
 
         Args:
-            query: 検索クエリテキスト。
+            query_vector: 検索クエリベクトル。
             limit: 返す結果の最大件数。
 
         Returns:
             Sequence[VectorMemorySearchResult]: 類似度スコア降順の結果。
         """
+        ...
+
+    def metadata(self, memory_id: MemoryId) -> VectorMemoryEntryMetadata | None:
+        """Entry metadata を返す。存在しない場合は None。"""
+        ...
+
+    def ids(self) -> Sequence[MemoryId]:
+        """Index に存在する全 memory id を返す。"""
         ...
 
 

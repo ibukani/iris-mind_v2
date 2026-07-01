@@ -11,6 +11,7 @@ from iris.contracts.memory import MemoryQuery, MemorySearchResult
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.memory import (
         MemoryId,
         MemoryStore,
@@ -173,8 +174,8 @@ class HybridMemoryRetriever(MemoryRetriever):
         *,
         fts_retriever: MemoryRetriever,
         vector_index: VectorMemoryIndex,
+        embedding: EmbeddingModel,
         store: MemoryStore,
-        reranker: MemoryReranker | None = None,
         fts_limit: int = 10,
         vector_limit: int = 10,
     ) -> None:
@@ -183,15 +184,16 @@ class HybridMemoryRetriever(MemoryRetriever):
         Args:
             fts_retriever: FTS5 全文検索バックエンド。
             vector_index: ベクトル類似度検索インデックス。
+            embedding: query embedding model。
             store: ベクトル検索結果の memory_id → MemoryRecord 解決用ストア。
-            reranker: 再ランク付け器。省略時はデフォルト重みの MemoryReranker。
             fts_limit: FTS5 検索の取得上限。
             vector_limit: ベクトル検索の取得上限。
         """
         self._fts = fts_retriever
         self._vector = vector_index
+        self._embedding = embedding
         self._store = store
-        self._reranker = reranker or MemoryReranker()
+        self._reranker = MemoryReranker()
         self._fts_limit = fts_limit
         self._vector_limit = vector_limit
 
@@ -218,7 +220,10 @@ class HybridMemoryRetriever(MemoryRetriever):
         )
         fts_results = tuple(self._fts.search(fts_query))
 
-        vector_raw = self._vector.search(query.text, limit=self._vector_limit)
+        vector_raw = self._vector.search(
+            self._embedding.embed(query.text),
+            limit=self._vector_limit,
+        )
         vector_results = self._resolve_vector_results(vector_raw, query)
 
         return self._reranker.rerank(

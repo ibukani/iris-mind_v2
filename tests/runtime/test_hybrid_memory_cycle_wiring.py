@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from iris.adapters.embeddings.fake import DeterministicFakeEmbedding
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
@@ -66,9 +67,12 @@ def test_sqlite_hybrid_memory_retriever_wires_vector_and_fts5(
     store = SQLiteMemoryStore(tmp_path / "hybrid.db")
     store.put(MemoryRecord(id=MemoryId("m1"), text="green tea"))
 
-    retriever, vector_index = wire_sqlite_hybrid_memory_retriever(
+    vector_index = InMemoryVectorMemoryIndex()
+    embedding = DeterministicFakeEmbedding(dimension=2)
+    retriever = wire_sqlite_hybrid_memory_retriever(
         store=store,
-        embed_text=embed_text,
+        vector_index=vector_index,
+        embedding=embedding,
     )
 
     assert vector_index is not None
@@ -100,9 +104,12 @@ def test_wire_affect_cycle_uses_injected_memory_retriever() -> None:
 def test_wire_policy_cycle_passes_vector_index_to_write_step() -> None:
     """vector_index 指定時に MemoryWriteStep に渡される。"""
     store = InMemoryMemoryStore()
-    vector_index = InMemoryVectorMemoryIndex(embed_text)
+    vector_index = InMemoryVectorMemoryIndex()
+    embedding = DeterministicFakeEmbedding(dimension=2)
     cycle = wire_core_cognitive_cycle(
-        stores=CognitiveCycleStores(memory_store=store, vector_index=vector_index),
+        stores=CognitiveCycleStores(
+            memory_store=store, vector_index=vector_index, embedding=embedding
+        ),
     )
 
     steps: Any = get_private_attr_as(cycle, "_steps", tuple[object, ...])

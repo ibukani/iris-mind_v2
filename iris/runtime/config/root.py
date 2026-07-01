@@ -50,6 +50,7 @@ from iris.runtime.config.llm import (
     validate_provider,
 )
 from iris.runtime.config.logging import RuntimeLoggingConfig
+from iris.runtime.config.memory import RuntimeMemoryConfig, apply_memory_toml
 from iris.runtime.config.parsing import (
     parse_raw_config_version,
     table_or_empty,
@@ -115,6 +116,7 @@ class IrisRuntimeConfig:
     scheduler: RuntimeSchedulerConfig
     delivery: RuntimeDeliveryConfig
     learning: RuntimeLearningConfig
+    memory: RuntimeMemoryConfig
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         scheduler=RuntimeSchedulerConfig(),
         delivery=RuntimeDeliveryConfig(),
         learning=RuntimeLearningConfig(),
+        memory=RuntimeMemoryConfig(),
     )
 
 
@@ -385,6 +388,7 @@ def _apply_toml_sections(
         scheduler=apply_scheduler_toml(config.scheduler, scheduler_table),
         delivery=apply_delivery_toml(config.delivery, delivery_table),
         learning=apply_learning_toml(config.learning, table_or_empty(table, "learning")),
+        memory=apply_memory_toml(config.memory, table_or_empty(table, "memory")),
         models=models,
         ollama=ollama,
         openai=openai,
@@ -423,6 +427,7 @@ class _RuntimeConfigSections:
     scheduler: RuntimeSchedulerConfig
     delivery: RuntimeDeliveryConfig
     learning: RuntimeLearningConfig
+    memory: RuntimeMemoryConfig
     models: RuntimeModelsConfig
     ollama: RuntimeOllamaConfig
     openai: RuntimeOpenAIConfig
@@ -455,6 +460,7 @@ def _apply_env_sections(
         scheduler=apply_scheduler_env(config.scheduler, env),
         delivery=config.delivery,
         learning=config.learning,
+        memory=config.memory,
         models=models,
         ollama=ollama,
         openai=openai,
@@ -487,6 +493,7 @@ def _compose_runtime_config(
         scheduler=sections.scheduler,
         delivery=sections.delivery,
         learning=sections.learning,
+        memory=sections.memory,
         models=sections.models,
         ollama=sections.ollama,
         openai=sections.openai,

@@ -32,6 +32,24 @@ allow_insecure_remote = false
 backend = "memory"
 sqlite_path = ".iris/runtime/state.sqlite3"
 
+[memory.vector]
+enabled = false
+backend = "in_memory"
+collection = "iris_memory"
+rebuild_on_startup = true
+fail_open_on_index_error = true
+
+[memory.embedding]
+provider = "fake"
+model = "fake-v1"
+dimension = 32
+batch_size = 32
+
+[memory.vector.qdrant]
+url = "http://localhost:6333"
+api_key_env = ""
+prefer_grpc = false
+
 [scheduler]
 enabled = false
 interval_seconds = 30.0

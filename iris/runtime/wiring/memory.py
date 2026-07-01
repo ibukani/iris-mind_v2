@@ -5,15 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.adapters.memory.langchain import LangChainMemoryStore
-from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.cognitive.memory.hybrid import HybridMemoryRetriever
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from iris.adapters.memory.vector_index import EmbeddingFunction
     from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
     from iris.cognitive.memory.retrieval import MemoryRetriever
+    from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.memory import (
         MemoryQuery,
         MemorySearchResult,
@@ -63,6 +62,7 @@ def wire_hybrid_memory_retriever(
     *,
     fts_retriever: MemoryRetriever,
     vector_index: VectorMemoryIndex,
+    embedding: EmbeddingModel,
     store: MemoryStore,
     fts_limit: int = 10,
     vector_limit: int = 10,
@@ -72,6 +72,7 @@ def wire_hybrid_memory_retriever(
     Args:
         fts_retriever: FTS5 全文検索バックエンド。
         vector_index: ベクトル類似度検索インデックス。
+        embedding: query embedding model。
         store: ベクトル検索結果の memory_id → MemoryRecord 解決用ストア。
         fts_limit: FTS5 検索の取得上限。
         vector_limit: ベクトル検索の取得上限。
@@ -82,6 +83,7 @@ def wire_hybrid_memory_retriever(
     return HybridMemoryRetriever(
         fts_retriever=fts_retriever,
         vector_index=vector_index,
+        embedding=embedding,
         store=store,
         fts_limit=fts_limit,
         vector_limit=vector_limit,
@@ -90,31 +92,29 @@ def wire_hybrid_memory_retriever(
 
 def wire_sqlite_hybrid_memory_retriever(
     store: SQLiteMemoryStore,
-    embed_text: EmbeddingFunction,
+    vector_index: VectorMemoryIndex,
+    embedding: EmbeddingModel,
     *,
     fts_limit: int = 10,
     vector_limit: int = 10,
-) -> tuple[HybridMemoryRetriever, InMemoryVectorMemoryIndex]:
+) -> HybridMemoryRetriever:
     """SQLiteMemoryStore とベクトルインデックスからハイブリッドレトリーバーを組み立てる。
 
     Args:
         store: SQLiteMemoryStore（FTS5 全文検索 + レコード解決用）。
-        embed_text: テキストベクトル用の埋め込み関数。
+        vector_index: 派生 vector index。
+        embedding: query embedding model。
         fts_limit: FTS5 検索の取得上限。
         vector_limit: ベクトル検索の取得上限。
 
     Returns:
-        tuple[HybridMemoryRetriever, InMemoryVectorMemoryIndex]:
-            ハイブリッドレトリーバーとベクトルインデックスのタプル。
+        HybridMemoryRetriever: 構成済み retriever。
     """
-    vector = InMemoryVectorMemoryIndex(embed_text)
-    return (
-        wire_hybrid_memory_retriever(
-            fts_retriever=SQLiteFTS5MemoryRetriever(store),
-            vector_index=vector,
-            store=store,
-            fts_limit=fts_limit,
-            vector_limit=vector_limit,
-        ),
-        vector,
+    return wire_hybrid_memory_retriever(
+        fts_retriever=SQLiteFTS5MemoryRetriever(store),
+        vector_index=vector_index,
+        embedding=embedding,
+        store=store,
+        fts_limit=fts_limit,
+        vector_limit=vector_limit,
     )

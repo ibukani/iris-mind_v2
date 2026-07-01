@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import MemoryWriteResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.memory.extraction import RuleBasedMemoryCandidateExtractor
 from iris.cognitive.memory.policy import MemoryWritePolicy
-from iris.contracts.memory import MemoryId, MemoryRecord
+from iris.contracts.memory import (
+    MemoryId,
+    MemoryRecord,
+    VectorMemoryEntry,
+    VectorMemoryIndexError,
+    memory_record_digest,
+)
 from iris.core.metadata import immutable_metadata
 
 if TYPE_CHECKING:
@@ -18,8 +25,11 @@ if TYPE_CHECKING:
 
     from iris.cognitive.memory.candidates import MemoryCandidate, MemoryCandidateExtractor
     from iris.cognitive.workspace.frame import WorkspaceFrame
+    from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.memory import MutableMemoryStore, VectorMemoryIndex
     from iris.contracts.metadata import ImmutableMetadata
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _generate_memory_id(candidate: MemoryCandidate) -> MemoryId:
@@ -73,6 +83,8 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
         extractor: MemoryCandidateExtractor | None = None,
         policy: MemoryWritePolicy | None = None,
         vector_index: VectorMemoryIndex | None = None,
+        embedding: EmbeddingModel | None = None,
+        fail_open_on_index_error: bool = True,
     ) -> None:
         """保存先ストアと抽出器・ポリシーで初期化する。
 
@@ -81,11 +93,21 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
             extractor: 候補抽出器。省略時は RuleBasedMemoryCandidateExtractor。
             policy: 保存ポリシー。省略時は MemoryWritePolicy。
             vector_index: ベクトル検索インデックス。指定時は write 成功後に upsert する。
+            embedding: index entry を生成する埋め込みモデル。
+            fail_open_on_index_error: index failure を正本 write 成功後に許容するか。
+
+        Raises:
+            ValueError: vector index と embedding の片方だけが指定された場合。
         """
         self._store = store
         self._extractor = extractor or RuleBasedMemoryCandidateExtractor()
         self._policy = policy or MemoryWritePolicy()
         self._vector_index = vector_index
+        self._embedding = embedding
+        self._fail_open_on_index_error = fail_open_on_index_error
+        if (vector_index is None) != (embedding is None):
+            msg = "vector_index and embedding must be configured together"
+            raise ValueError(msg)
 
     @override
     async def run(self, frame: WorkspaceFrame) -> MemoryWriteResult:
@@ -123,14 +145,8 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
                 metadata=_candidate_metadata(candidate),
             )
 
-            await asyncio.to_thread(self._store.update, record)
-            if self._vector_index is not None:
-                await asyncio.to_thread(
-                    self._vector_index.upsert,
-                    memory_id,
-                    record.text,
-                    dict(record.metadata),
-                )
+            record = await asyncio.to_thread(self._store.update, record)
+            await self._upsert_vector(record)
             written_ids.append(str(memory_id))
 
         status = StepStatus.OK if written_ids else StepStatus.SKIPPED
@@ -140,3 +156,26 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
             written_ids=tuple(written_ids),
             rejected_count=rejected_count,
         )
+
+    async def _upsert_vector(self, record: MemoryRecord) -> None:
+        """正本保存後に派生 index を更新する。
+
+        Raises:
+            VectorMemoryIndexError: fail-open 無効時に index 更新が失敗した場合。
+        """
+        if self._vector_index is None or self._embedding is None:
+            return
+        entry = VectorMemoryEntry(
+            memory_id=record.id,
+            vector=await asyncio.to_thread(self._embedding.embed, record.text),
+            source_digest=memory_record_digest(record),
+            embedding_model=self._embedding.model_id,
+            embedding_dimension=self._embedding.dimension,
+            metadata=record.metadata,
+        )
+        try:
+            await asyncio.to_thread(self._vector_index.upsert, entry)
+        except VectorMemoryIndexError:
+            if not self._fail_open_on_index_error:
+                raise
+            _LOGGER.exception("memory vector index upsert failed", extra={"memory_id": record.id})

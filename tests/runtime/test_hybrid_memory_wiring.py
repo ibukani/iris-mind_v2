@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import override
 
+from iris.adapters.embeddings.fake import DeterministicFakeEmbedding
 from iris.adapters.memory.fake import FakeMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.cognitive.memory.hybrid import HybridMemoryRetriever
@@ -52,13 +53,13 @@ def test_wire_hybrid_memory_retriever_returns_hybrid() -> None:
         )
     )
     fts = _SimpleFtsRetriever(store)
-    vector = InMemoryVectorMemoryIndex(embed_text)
-    vector.upsert(MemoryId("m1"), "User likes green tea.", {})
-    vector.upsert(MemoryId("m2"), "User prefers coffee.", {})
+    vector = InMemoryVectorMemoryIndex()
+    embedding = DeterministicFakeEmbedding(dimension=2)
 
     hybrid = wire_hybrid_memory_retriever(
         fts_retriever=fts,
         vector_index=vector,
+        embedding=embedding,
         store=store,
     )
 
