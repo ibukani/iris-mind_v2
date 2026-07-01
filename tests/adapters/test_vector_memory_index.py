@@ -8,9 +8,11 @@ from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,
+    MemoryRecord,
     VectorMemoryEntry,
     VectorMemoryIndexError,
     VectorMemorySearchFilter,
+    vector_memory_entry_from_record,
 )
 from iris.core.ids import ActorId, SpaceId
 
@@ -35,6 +37,7 @@ def _entry(memory_id: str, text: str) -> VectorMemoryEntry:
         memory_id=MemoryId(memory_id),
         vector=embed_text(text),
         source_digest=text,
+        embedding_provider="test",
         embedding_model="test",
         embedding_dimension=2,
     )
@@ -151,7 +154,32 @@ def test_vector_memory_index_dimension_mismatch_uses_index_error() -> None:
                 memory_id=MemoryId("bad"),
                 vector=(1.0, 0.0),
                 source_digest="bad",
+                embedding_provider="test",
                 embedding_model="test",
                 embedding_dimension=3,
             )
         )
+
+
+def test_vector_entry_factory_and_metadata_preserve_embedding_identity() -> None:
+    """Factory と in-memory metadata は provider/model/dimension を保持する。"""
+    record = MemoryRecord(id=MemoryId("m1"), text="green tea")
+    entry = vector_memory_entry_from_record(
+        record,
+        vector=(1.0, 0.0),
+        embedding_provider="fake",
+        embedding_model="fake-v2",
+        embedding_dimension=2,
+    )
+    index = InMemoryVectorMemoryIndex()
+    index.upsert(entry)
+
+    metadata = index.metadata(record.id)
+
+    assert entry.embedding_provider == "fake"
+    assert entry.embedding_model == "fake-v2"
+    assert entry.embedding_dimension == 2
+    assert metadata is not None
+    assert metadata.embedding_provider == "fake"
+    assert metadata.embedding_model == "fake-v2"
+    assert metadata.embedding_dimension == 2

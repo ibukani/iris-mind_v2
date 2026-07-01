@@ -9,6 +9,11 @@ class EmbeddingModel(Protocol):
     """テキストを固定次元ベクトルへ変換する契約。"""
 
     @property
+    def provider(self) -> str:
+        """Index compatibility 判定に使う provider 識別子。"""
+        ...
+
+    @property
     def model_id(self) -> str:
         """Index compatibility 判定に使う安定したモデル識別子。"""
         ...

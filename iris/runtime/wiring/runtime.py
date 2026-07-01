@@ -303,6 +303,9 @@ def _rebuild_memory_vector(
     _LOGGER.info(
         "memory vector index rebuild complete",
         extra={
+            "embedding_provider": embedding.provider,
+            "embedding_model": embedding.model_id,
+            "embedding_dimension": embedding.dimension,
             "scanned": stats.scanned,
             "upserted": stats.upserted,
             "unchanged": stats.unchanged,

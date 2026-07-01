@@ -21,6 +21,11 @@ class DeterministicFakeEmbedding:
         self._dimension = dimension
 
     @property
+    def provider(self) -> str:
+        """Fake provider 識別子を返す。"""
+        return "fake"
+
+    @property
     def model_id(self) -> str:
         """設定されたモデル識別子を返す。"""
         return self._model_id

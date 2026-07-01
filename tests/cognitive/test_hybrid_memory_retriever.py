@@ -7,12 +7,13 @@ from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.cognitive.memory.hybrid import HybridMemoryRetriever, MemoryReranker
 from iris.contracts.memory import (
     MemoryId,
+    MemoryKind,
     MemoryQuery,
     MemoryRecord,
     MemorySearchResult,
     VectorMemoryEntry,
 )
-from iris.core.ids import ActorId
+from iris.core.ids import ActorId, SpaceId
 
 
 def embed_text(text: str) -> tuple[float, float]:
@@ -31,6 +32,7 @@ def embed_text(text: str) -> tuple[float, float]:
 
 
 class _Embedding:
+    provider = "test"
     model_id = "test"
     dimension = 2
 
@@ -43,12 +45,13 @@ class _Embedding:
 
 def _index_for_store(store: FakeMemoryStore) -> InMemoryVectorMemoryIndex:
     index = InMemoryVectorMemoryIndex()
-    for result in store.search(MemoryQuery(text="", limit=100)):
+    for result in store.search(MemoryQuery(text="", limit=100, include_archived=True)):
         index.upsert(
             VectorMemoryEntry(
                 memory_id=result.record.id,
                 vector=embed_text(result.record.text),
                 source_digest=result.record.text,
+                embedding_provider="test",
                 embedding_model="test",
                 embedding_dimension=2,
             )
@@ -153,6 +156,67 @@ def test_hybrid_retriever_filters_scope() -> None:
         MemoryQuery(text="tea", limit=5, actor_id=ActorId("m1")),
     )
     assert len(results) == 0
+
+
+def test_hybrid_vector_results_respect_scope_kind_and_archived_filters() -> None:
+    """Vector候補にもactor/space/kind/archived filterを適用する。"""
+    actor = ActorId("actor-a")
+    space = SpaceId("space-a")
+    store = FakeMemoryStore(
+        records=(
+            MemoryRecord(
+                id=MemoryId("active"),
+                text="active tea",
+                actor_id=actor,
+                space_id=space,
+                kind=MemoryKind.PREFERENCE,
+            ),
+            MemoryRecord(
+                id=MemoryId("archived"),
+                text="archived tea",
+                actor_id=actor,
+                space_id=space,
+                kind=MemoryKind.PREFERENCE,
+                archived=True,
+            ),
+            MemoryRecord(
+                id=MemoryId("other-space"),
+                text="other tea",
+                actor_id=actor,
+                space_id=SpaceId("space-b"),
+                kind=MemoryKind.PREFERENCE,
+            ),
+            MemoryRecord(
+                id=MemoryId("other-kind"),
+                text="note tea",
+                actor_id=actor,
+                space_id=space,
+                kind=MemoryKind.NOTE,
+            ),
+        )
+    )
+    hybrid = HybridMemoryRetriever(
+        fts_retriever=_FtsRetriever(store),
+        vector_index=_index_for_store(store),
+        embedding=_Embedding(),
+        store=store,
+    )
+    query = MemoryQuery(
+        text="tea",
+        actor_id=actor,
+        space_id=space,
+        kind=MemoryKind.PREFERENCE,
+        limit=5,
+    )
+
+    active_results = hybrid.search(query)
+    archived_results = hybrid.search(query.model_copy(update={"include_archived": True}))
+
+    assert [result.record.id for result in active_results] == [MemoryId("active")]
+    assert {result.record.id for result in archived_results} == {
+        MemoryId("active"),
+        MemoryId("archived"),
+    }
 
 
 def test_memory_reranker_composite_score() -> None:

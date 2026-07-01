@@ -90,6 +90,7 @@ class MemoryVectorIndexRebuilder:
                     vector_memory_entry_from_record(
                         record,
                         vector=vector,
+                        embedding_provider=self._embedding.provider,
                         embedding_model=self._embedding.model_id,
                         embedding_dimension=self._embedding.dimension,
                     )
@@ -124,6 +125,7 @@ class MemoryVectorIndexRebuilder:
 
     def _is_incompatible(self, metadata: VectorMemoryEntryMetadata) -> bool:
         return (
-            metadata.embedding_model != self._embedding.model_id
+            metadata.embedding_provider != self._embedding.provider
+            or metadata.embedding_model != self._embedding.model_id
             or metadata.embedding_dimension != self._embedding.dimension
         )

@@ -33,6 +33,7 @@ class _PointPayload(BaseModel):
 
     memory_id: str
     source_digest: str
+    embedding_provider: str
     embedding_model: str
     embedding_dimension: int
     actor_id: str | None = None
@@ -88,6 +89,37 @@ class _ScrollResponse(BaseModel):
     result: _ScrollResult
 
 
+class _CollectionVectorParams(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    size: int
+    distance: str | None = None
+
+
+class _CollectionParams(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    vectors: _CollectionVectorParams | dict[str, _CollectionVectorParams] | None = None
+
+
+class _CollectionConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    params: _CollectionParams | None = None
+
+
+class _CollectionResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    config: _CollectionConfig | None = None
+
+
+class _CollectionResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    result: _CollectionResult
+
+
 def _timestamp_payload(value: datetime | None) -> str | None:
     """Qdrant payload 用に datetime を JSON scalar へ変換する。
 
@@ -106,6 +138,7 @@ def _point_payload(entry: VectorMemoryEntry) -> dict[str, object]:
     return {
         "memory_id": str(entry.memory_id),
         "source_digest": entry.source_digest,
+        "embedding_provider": entry.embedding_provider,
         "embedding_model": entry.embedding_model,
         "embedding_dimension": entry.embedding_dimension,
         "actor_id": str(entry.actor_id) if entry.actor_id is not None else None,
@@ -184,7 +217,30 @@ class QdrantVectorMemoryIndex(VectorMemoryIndex):
                 ),
                 "create collection",
             )
+            self._raise_for_status(response, "create collection")
+            return
         self._raise_for_status(response, "ensure collection")
+        self._validate_existing_collection(response)
+
+    def _validate_existing_collection(self, response: httpx.Response) -> None:
+        parsed = self._parse_response(response, _CollectionResponse, "get collection")
+        config = parsed.result.config
+        params = config.params if config is not None else None
+        vectors = params.vectors if params is not None else None
+        if vectors is None:
+            return
+        if isinstance(vectors, dict):
+            msg = "Qdrant collection uses named vectors; unnamed memory index is incompatible"
+            raise VectorMemoryIndexError(msg)
+        if vectors.size != self._dimension:
+            msg = (
+                "Qdrant collection vector dimension mismatch: "
+                f"expected {self._dimension}, found {vectors.size}"
+            )
+            raise VectorMemoryIndexError(msg)
+        if vectors.distance is not None and vectors.distance.casefold() != "cosine":
+            msg = "Qdrant collection distance must be Cosine"
+            raise VectorMemoryIndexError(msg)
 
     @staticmethod
     def _point_id(memory_id: MemoryId) -> str:
@@ -325,6 +381,7 @@ class QdrantVectorMemoryIndex(VectorMemoryIndex):
         return VectorMemoryEntryMetadata(
             memory_id=MemoryId(payload.memory_id),
             source_digest=payload.source_digest,
+            embedding_provider=payload.embedding_provider,
             embedding_model=payload.embedding_model,
             embedding_dimension=payload.embedding_dimension,
             actor_id=ActorId(payload.actor_id) if payload.actor_id is not None else None,

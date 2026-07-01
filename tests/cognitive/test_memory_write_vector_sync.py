@@ -122,6 +122,11 @@ async def test_memory_write_step_keeps_canonical_record_when_vector_fails(
 
 class _MismatchedDimensionEmbedding:
     @property
+    def provider(self) -> str:
+        """Provider identifier for compatibility metadata."""
+        return "test"
+
+    @property
     def model_id(self) -> str:
         """Model identifier for compatibility metadata."""
         return "mismatch"

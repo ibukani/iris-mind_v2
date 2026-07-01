@@ -118,6 +118,7 @@ class VectorMemoryEntry(BaseModel):
     memory_id: MemoryId
     vector: tuple[float, ...]
     source_digest: str
+    embedding_provider: str
     embedding_model: str
     embedding_dimension: int
     actor_id: ActorId | None = None
@@ -134,6 +135,7 @@ def vector_memory_entry_from_record(
     record: MemoryRecord,
     *,
     vector: Sequence[float],
+    embedding_provider: str,
     embedding_model: str,
     embedding_dimension: int,
 ) -> VectorMemoryEntry:
@@ -146,6 +148,7 @@ def vector_memory_entry_from_record(
         memory_id=record.id,
         vector=tuple(vector),
         source_digest=memory_record_digest(record),
+        embedding_provider=embedding_provider,
         embedding_model=embedding_model,
         embedding_dimension=embedding_dimension,
         actor_id=record.actor_id,
@@ -166,6 +169,7 @@ class VectorMemoryEntryMetadata(BaseModel):
 
     memory_id: MemoryId
     source_digest: str
+    embedding_provider: str
     embedding_model: str
     embedding_dimension: int
     actor_id: ActorId | None = None

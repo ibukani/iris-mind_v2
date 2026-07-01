@@ -115,6 +115,7 @@ class InMemoryVectorMemoryIndex(VectorMemoryIndex):
         return VectorMemoryEntryMetadata(
             memory_id=entry.memory_id,
             source_digest=entry.source_digest,
+            embedding_provider=entry.embedding_provider,
             embedding_model=entry.embedding_model,
             embedding_dimension=entry.embedding_dimension,
             actor_id=entry.actor_id,

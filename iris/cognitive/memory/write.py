@@ -168,6 +168,7 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
         entry = vector_memory_entry_from_record(
             record,
             vector=vector,
+            embedding_provider=self._embedding.provider,
             embedding_model=self._embedding.model_id,
             embedding_dimension=self._embedding.dimension,
         )
