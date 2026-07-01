@@ -11,10 +11,10 @@ from iris.contracts.memory import (
     MemoryQuery,
     MemoryRecord,
     MutableMemoryStore,
-    VectorMemoryEntry,
     VectorMemoryEntryMetadata,
     VectorMemoryIndex,
     memory_record_digest,
+    vector_memory_entry_from_record,
 )
 
 if TYPE_CHECKING:
@@ -87,13 +87,11 @@ class MemoryVectorIndexRebuilder:
             vectors = self._embedding.embed_batch(tuple(record.text for record in batch))
             for record, vector in zip(batch, vectors, strict=True):
                 self._index.upsert(
-                    VectorMemoryEntry(
-                        memory_id=record.id,
+                    vector_memory_entry_from_record(
+                        record,
                         vector=vector,
-                        source_digest=memory_record_digest(record),
                         embedding_model=self._embedding.model_id,
                         embedding_dimension=self._embedding.dimension,
-                        metadata=record.metadata,
                     )
                 )
                 upserted += 1

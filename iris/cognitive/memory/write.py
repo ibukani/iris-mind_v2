@@ -14,9 +14,8 @@ from iris.cognitive.memory.policy import MemoryWritePolicy
 from iris.contracts.memory import (
     MemoryId,
     MemoryRecord,
-    VectorMemoryEntry,
     VectorMemoryIndexError,
-    memory_record_digest,
+    vector_memory_entry_from_record,
 )
 from iris.core.metadata import immutable_metadata
 
@@ -165,13 +164,12 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
         """
         if self._vector_index is None or self._embedding is None:
             return
-        entry = VectorMemoryEntry(
-            memory_id=record.id,
-            vector=await asyncio.to_thread(self._embedding.embed, record.text),
-            source_digest=memory_record_digest(record),
+        vector = await asyncio.to_thread(self._embedding.embed, record.text)
+        entry = vector_memory_entry_from_record(
+            record,
+            vector=vector,
             embedding_model=self._embedding.model_id,
             embedding_dimension=self._embedding.dimension,
-            metadata=record.metadata,
         )
         try:
             await asyncio.to_thread(self._vector_index.upsert, entry)

@@ -10,11 +10,29 @@ from iris.contracts.memory import (
     VectorMemoryEntry,
     VectorMemoryEntryMetadata,
     VectorMemoryIndex,
+    VectorMemoryIndexError,
+    VectorMemorySearchFilter,
     VectorMemorySearchResult,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+
+def _matches_filter(entry: VectorMemoryEntry, filters: VectorMemorySearchFilter | None) -> bool:
+    """Entry が検索前フィルタを満たすか判定する。
+
+    Returns:
+        フィルタ条件を満たす場合 True。
+    """
+    if filters is None:
+        return True
+    return (
+        (filters.include_archived or not entry.archived)
+        and (filters.actor_id is None or entry.actor_id == filters.actor_id)
+        and (filters.space_id is None or entry.space_id == filters.space_id)
+        and (filters.kind is None or entry.kind == filters.kind)
+    )
 
 
 class InMemoryVectorMemoryIndex(VectorMemoryIndex):
@@ -29,12 +47,16 @@ class InMemoryVectorMemoryIndex(VectorMemoryIndex):
         """Entry を検証して登録または更新する。
 
         Raises:
-            ValueError: vector 次元と metadata が一致しない場合。
+            VectorMemoryIndexError: vector 次元と metadata が一致しない場合。
         """
-        vector = vector_from_embedding(entry.vector)
+        try:
+            vector = vector_from_embedding(entry.vector)
+        except ValueError as exc:
+            msg = "Vector entry contains an invalid embedding"
+            raise VectorMemoryIndexError(msg) from exc
         if len(vector) != entry.embedding_dimension:
             msg = "Vector dimension does not match entry metadata"
-            raise ValueError(msg)
+            raise VectorMemoryIndexError(msg)
         self._entries[entry.memory_id] = entry.model_copy(update={"vector": vector})
 
     @override
@@ -48,18 +70,32 @@ class InMemoryVectorMemoryIndex(VectorMemoryIndex):
         query_vector: Sequence[float],
         *,
         limit: int,
+        filters: VectorMemorySearchFilter | None = None,
     ) -> Sequence[VectorMemorySearchResult]:
         """Cosine similarity 降順の結果を返す。
 
         Returns:
             類似度降順の結果。
+
+        Raises:
+            VectorMemoryIndexError: query vector が不正または登録 entry と次元不一致の場合。
         """
         if limit <= 0 or not self._entries:
             return ()
-        query = vector_from_embedding(query_vector)
+        try:
+            query = vector_from_embedding(query_vector)
+        except ValueError as exc:
+            msg = "Vector query contains an invalid embedding"
+            raise VectorMemoryIndexError(msg) from exc
         ranked: list[tuple[float, int, VectorMemorySearchResult]] = []
         for index, (memory_id, entry) in enumerate(self._entries.items()):
-            score = cosine_similarity(query, entry.vector)
+            if not _matches_filter(entry, filters):
+                continue
+            try:
+                score = cosine_similarity(query, entry.vector)
+            except ValueError as exc:
+                msg = "Vector query dimension does not match entry"
+                raise VectorMemoryIndexError(msg) from exc
             ranked.append(
                 (score, index, VectorMemorySearchResult(memory_id=memory_id, score=score))
             )
@@ -81,6 +117,13 @@ class InMemoryVectorMemoryIndex(VectorMemoryIndex):
             source_digest=entry.source_digest,
             embedding_model=entry.embedding_model,
             embedding_dimension=entry.embedding_dimension,
+            actor_id=entry.actor_id,
+            space_id=entry.space_id,
+            kind=entry.kind,
+            archived=entry.archived,
+            source_observation_id=entry.source_observation_id,
+            created_at=entry.created_at,
+            updated_at=entry.updated_at,
         )
 
     @override

@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from iris.cognitive.memory.retrieval import MemoryRetriever
-from iris.contracts.memory import MemoryQuery, MemorySearchResult
+from iris.contracts.memory import (
+    MemoryQuery,
+    MemorySearchResult,
+    VectorMemorySearchFilter,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -223,6 +227,12 @@ class HybridMemoryRetriever(MemoryRetriever):
         vector_raw = self._vector.search(
             self._embedding.embed(query.text),
             limit=self._vector_limit,
+            filters=VectorMemorySearchFilter(
+                actor_id=query.actor_id,
+                space_id=query.space_id,
+                kind=query.kind,
+                include_archived=query.include_archived,
+            ),
         )
         vector_results = self._resolve_vector_results(vector_raw, query)
 

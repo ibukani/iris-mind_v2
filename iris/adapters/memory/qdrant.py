@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, TypeVar, override
 import uuid
 
@@ -10,12 +11,15 @@ from pydantic import BaseModel, ConfigDict
 
 from iris.contracts.memory import (
     MemoryId,
+    MemoryKind,
     VectorMemoryEntry,
     VectorMemoryEntryMetadata,
     VectorMemoryIndex,
     VectorMemoryIndexError,
+    VectorMemorySearchFilter,
     VectorMemorySearchResult,
 )
+from iris.core.ids import ActorId, ObservationId, SpaceId
 
 _HTTP_NOT_FOUND = 404
 _ResponseModel = TypeVar("_ResponseModel", bound=BaseModel)
@@ -31,6 +35,13 @@ class _PointPayload(BaseModel):
     source_digest: str
     embedding_model: str
     embedding_dimension: int
+    actor_id: str | None = None
+    space_id: str | None = None
+    kind: MemoryKind = MemoryKind.NOTE
+    archived: bool = False
+    source_observation_id: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class _ScoredPoint(BaseModel):
@@ -75,6 +86,61 @@ class _ScrollResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     result: _ScrollResult
+
+
+def _timestamp_payload(value: datetime | None) -> str | None:
+    """Qdrant payload 用に datetime を JSON scalar へ変換する。
+
+    Returns:
+        ISO 8601 timestamp または None。
+    """
+    return value.isoformat() if value is not None else None
+
+
+def _point_payload(entry: VectorMemoryEntry) -> dict[str, object]:
+    """VectorMemoryEntry から Qdrant payload を作る。
+
+    Returns:
+        Qdrant point payload。
+    """
+    return {
+        "memory_id": str(entry.memory_id),
+        "source_digest": entry.source_digest,
+        "embedding_model": entry.embedding_model,
+        "embedding_dimension": entry.embedding_dimension,
+        "actor_id": str(entry.actor_id) if entry.actor_id is not None else None,
+        "space_id": str(entry.space_id) if entry.space_id is not None else None,
+        "kind": entry.kind.value,
+        "archived": entry.archived,
+        "source_observation_id": (
+            str(entry.source_observation_id) if entry.source_observation_id is not None else None
+        ),
+        "created_at": _timestamp_payload(entry.created_at),
+        "updated_at": _timestamp_payload(entry.updated_at),
+        "metadata": dict(entry.metadata),
+    }
+
+
+def _qdrant_filter(filters: VectorMemorySearchFilter | None) -> dict[str, object] | None:
+    """VectorMemorySearchFilter を Qdrant filter DSL に変換する。
+
+    Returns:
+        Qdrant filter。条件がない場合は None。
+    """
+    if filters is None:
+        return None
+    must: list[dict[str, object]] = []
+    if filters.actor_id is not None:
+        must.append({"key": "actor_id", "match": {"value": str(filters.actor_id)}})
+    if filters.space_id is not None:
+        must.append({"key": "space_id", "match": {"value": str(filters.space_id)}})
+    if filters.kind is not None:
+        must.append({"key": "kind", "match": {"value": filters.kind.value}})
+    if not filters.include_archived:
+        must.append({"key": "archived", "match": {"value": False}})
+    if not must:
+        return None
+    return {"must": must}
 
 
 class QdrantVectorMemoryIndex(VectorMemoryIndex):
@@ -162,13 +228,6 @@ class QdrantVectorMemoryIndex(VectorMemoryIndex):
         if len(entry.vector) != self._dimension or entry.embedding_dimension != self._dimension:
             msg = "Qdrant vector dimension does not match collection"
             raise VectorMemoryIndexError(msg)
-        payload = {
-            "memory_id": str(entry.memory_id),
-            "source_digest": entry.source_digest,
-            "embedding_model": entry.embedding_model,
-            "embedding_dimension": entry.embedding_dimension,
-            "metadata": dict(entry.metadata),
-        }
         response = self._send(
             lambda: self._client.put(
                 f"/collections/{self._collection}/points",
@@ -178,7 +237,7 @@ class QdrantVectorMemoryIndex(VectorMemoryIndex):
                         {
                             "id": self._point_id(entry.memory_id),
                             "vector": list(entry.vector),
-                            "payload": payload,
+                            "payload": _point_payload(entry),
                         }
                     ]
                 },
@@ -202,7 +261,11 @@ class QdrantVectorMemoryIndex(VectorMemoryIndex):
 
     @override
     def search(
-        self, query_vector: Sequence[float], *, limit: int
+        self,
+        query_vector: Sequence[float],
+        *,
+        limit: int,
+        filters: VectorMemorySearchFilter | None = None,
     ) -> Sequence[VectorMemorySearchResult]:
         """Qdrant query API で類似 point を返す。
 
@@ -217,10 +280,18 @@ class QdrantVectorMemoryIndex(VectorMemoryIndex):
         if len(query_vector) != self._dimension:
             msg = "Qdrant query vector dimension does not match collection"
             raise VectorMemoryIndexError(msg)
+        body: dict[str, object] = {
+            "query": list(query_vector),
+            "limit": limit,
+            "with_payload": True,
+        }
+        qdrant_filter = _qdrant_filter(filters)
+        if qdrant_filter is not None:
+            body["filter"] = qdrant_filter
         response = self._send(
             lambda: self._client.post(
                 f"/collections/{self._collection}/points/query",
-                json={"query": list(query_vector), "limit": limit, "with_payload": True},
+                json=body,
             ),
             "query",
         )
@@ -256,6 +327,17 @@ class QdrantVectorMemoryIndex(VectorMemoryIndex):
             source_digest=payload.source_digest,
             embedding_model=payload.embedding_model,
             embedding_dimension=payload.embedding_dimension,
+            actor_id=ActorId(payload.actor_id) if payload.actor_id is not None else None,
+            space_id=SpaceId(payload.space_id) if payload.space_id is not None else None,
+            kind=payload.kind,
+            archived=payload.archived,
+            source_observation_id=(
+                ObservationId(payload.source_observation_id)
+                if payload.source_observation_id is not None
+                else None
+            ),
+            created_at=payload.created_at,
+            updated_at=payload.updated_at,
         )
 
     @override

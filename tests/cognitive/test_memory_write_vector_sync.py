@@ -118,3 +118,51 @@ async def test_memory_write_step_keeps_canonical_record_when_vector_fails(
     assert store.get(MemoryId(result.written_ids[0])) is not None
     assert "memory vector index upsert failed" in caplog.text
     assert "jasmine tea is my favorite" not in caplog.text
+
+
+class _MismatchedDimensionEmbedding:
+    @property
+    def model_id(self) -> str:
+        """Model identifier for compatibility metadata."""
+        return "mismatch"
+
+    @property
+    def dimension(self) -> int:
+        """Declared dimension intentionally differs from embed output."""
+        return 3
+
+    def embed(self, text: str) -> tuple[float, ...]:
+        """Declared dimension と異なる vector を返す。
+
+        Returns:
+            Declared dimension と異なる 2 次元 vector。
+        """
+        del text
+        return (1.0, 0.0)
+
+    def embed_batch(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+        """Declared dimension と異なる batch vector を返す。
+
+        Returns:
+            入力数と同じ件数の mismatch vector。
+        """
+        return tuple(self.embed(text) for text in texts)
+
+
+@pytest.mark.anyio
+async def test_memory_write_step_keeps_canonical_record_on_vector_dimension_mismatch(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """InMemory index の dimension mismatch でも fail-open で正本 write を保持する。"""
+    store = InMemoryMemoryStore()
+    step = MemoryWriteStep(
+        store=store,
+        vector_index=InMemoryVectorMemoryIndex(),
+        embedding=_MismatchedDimensionEmbedding(),
+    )
+
+    result = await step.run(_build_frame("覚えて: jasmine tea is my favorite"))
+
+    assert result.status == StepStatus.OK
+    assert store.get(MemoryId(result.written_ids[0])) is not None
+    assert "memory vector index upsert failed" in caplog.text

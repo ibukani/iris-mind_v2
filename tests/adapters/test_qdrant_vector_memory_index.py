@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
 from iris.adapters.memory.qdrant import QdrantVectorMemoryIndex
-from iris.contracts.memory import MemoryId, VectorMemoryEntry, VectorMemoryIndexError
+from iris.contracts.memory import (
+    MemoryId,
+    MemoryKind,
+    VectorMemoryEntry,
+    VectorMemoryIndexError,
+    VectorMemorySearchFilter,
+)
+from iris.core.ids import ActorId, ObservationId, SpaceId
 
 
 def test_qdrant_index_upsert_and_query_use_typed_payload() -> None:
@@ -49,13 +58,45 @@ def test_qdrant_index_upsert_and_query_use_typed_payload() -> None:
             source_digest="digest",
             embedding_model="fake-v1",
             embedding_dimension=2,
+            actor_id=ActorId("actor-1"),
+            space_id=SpaceId("space-1"),
+            kind=MemoryKind.PREFERENCE,
+            archived=False,
+            source_observation_id=ObservationId("obs-1"),
         )
     )
 
-    results = index.search((1.0, 0.0), limit=1)
+    results = index.search(
+        (1.0, 0.0),
+        limit=1,
+        filters=VectorMemorySearchFilter(
+            actor_id=ActorId("actor-1"),
+            space_id=SpaceId("space-1"),
+            kind=MemoryKind.PREFERENCE,
+        ),
+    )
 
     assert results[0].memory_id == MemoryId("m1")
     assert [request.method for request in requests] == ["GET", "PUT", "POST"]
+
+    upsert_body = json.loads(requests[1].content)
+    payload = upsert_body["points"][0]["payload"]
+    assert payload["memory_id"] == "m1"
+    assert payload["actor_id"] == "actor-1"
+    assert payload["space_id"] == "space-1"
+    assert payload["kind"] == "preference"
+    assert payload["archived"] is False
+    assert payload["source_observation_id"] == "obs-1"
+
+    query_body = json.loads(requests[2].content)
+    assert query_body["filter"] == {
+        "must": [
+            {"key": "actor_id", "match": {"value": "actor-1"}},
+            {"key": "space_id", "match": {"value": "space-1"}},
+            {"key": "kind", "match": {"value": "preference"}},
+            {"key": "archived", "match": {"value": False}},
+        ]
+    }
 
 
 def test_qdrant_index_rejects_incompatible_dimensions() -> None:

@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+import pytest
+
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
-from iris.contracts.memory import MemoryId, VectorMemoryEntry
+from iris.contracts.memory import (
+    MemoryId,
+    MemoryKind,
+    VectorMemoryEntry,
+    VectorMemoryIndexError,
+    VectorMemorySearchFilter,
+)
+from iris.core.ids import ActorId, SpaceId
 
 
 def embed_text(text: str) -> tuple[float, float]:
@@ -81,3 +90,68 @@ def test_vector_memory_index_search_returns_empty_on_no_entries() -> None:
     index = InMemoryVectorMemoryIndex()
 
     assert tuple(index.search(embed_text("tea"), limit=5)) == ()
+
+
+def test_vector_memory_index_filters_before_limit() -> None:
+    """Out-of-scope entry が上位を埋めても in-scope entry を返す。"""
+    index = InMemoryVectorMemoryIndex()
+    index.upsert(
+        _entry("out-of-scope", "tea").model_copy(
+            update={
+                "actor_id": ActorId("actor-b"),
+                "space_id": SpaceId("space-1"),
+                "kind": MemoryKind.PREFERENCE,
+            }
+        )
+    )
+    index.upsert(
+        _entry("in-scope", "tea").model_copy(
+            update={
+                "actor_id": ActorId("actor-a"),
+                "space_id": SpaceId("space-1"),
+                "kind": MemoryKind.PREFERENCE,
+            }
+        )
+    )
+
+    results = index.search(
+        embed_text("tea"),
+        limit=1,
+        filters=VectorMemorySearchFilter(
+            actor_id=ActorId("actor-a"),
+            space_id=SpaceId("space-1"),
+            kind=MemoryKind.PREFERENCE,
+        ),
+    )
+
+    assert [result.memory_id for result in results] == [MemoryId("in-scope")]
+
+
+def test_vector_memory_index_excludes_archived_by_filter() -> None:
+    """include_archived=False の検索前フィルタで archived entry を除外する。"""
+    index = InMemoryVectorMemoryIndex()
+    index.upsert(_entry("archived", "tea").model_copy(update={"archived": True}))
+    index.upsert(_entry("active", "tea"))
+
+    results = index.search(
+        embed_text("tea"),
+        limit=5,
+        filters=VectorMemorySearchFilter(include_archived=False),
+    )
+
+    assert [result.memory_id for result in results] == [MemoryId("active")]
+
+
+def test_vector_memory_index_dimension_mismatch_uses_index_error() -> None:
+    """Dimension mismatch は ValueError ではなく index error に正規化する。"""
+    index = InMemoryVectorMemoryIndex()
+    with pytest.raises(VectorMemoryIndexError, match="dimension"):
+        index.upsert(
+            VectorMemoryEntry(
+                memory_id=MemoryId("bad"),
+                vector=(1.0, 0.0),
+                source_digest="bad",
+                embedding_model="test",
+                embedding_dimension=3,
+            )
+        )

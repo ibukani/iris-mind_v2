@@ -99,6 +99,17 @@ class VectorMemorySearchResult(BaseModel):
     score: float
 
 
+class VectorMemorySearchFilter(BaseModel):
+    """VectorMemoryIndex へ渡す検索前フィルタ。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    actor_id: ActorId | None = None
+    space_id: SpaceId | None = None
+    kind: MemoryKind | None = None
+    include_archived: bool = False
+
+
 class VectorMemoryEntry(BaseModel):
     """正本メモリから派生したベクトル index entry。"""
 
@@ -109,7 +120,43 @@ class VectorMemoryEntry(BaseModel):
     source_digest: str
     embedding_model: str
     embedding_dimension: int
+    actor_id: ActorId | None = None
+    space_id: SpaceId | None = None
+    kind: MemoryKind = MemoryKind.NOTE
+    archived: bool = False
+    source_observation_id: ObservationId | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
+
+
+def vector_memory_entry_from_record(
+    record: MemoryRecord,
+    *,
+    vector: Sequence[float],
+    embedding_model: str,
+    embedding_dimension: int,
+) -> VectorMemoryEntry:
+    """正本 MemoryRecord から canonical metadata 付き index entry を作る。
+
+    Returns:
+        VectorMemoryEntry: 派生 vector index 用 entry。
+    """
+    return VectorMemoryEntry(
+        memory_id=record.id,
+        vector=tuple(vector),
+        source_digest=memory_record_digest(record),
+        embedding_model=embedding_model,
+        embedding_dimension=embedding_dimension,
+        actor_id=record.actor_id,
+        space_id=record.space_id,
+        kind=record.kind,
+        archived=record.archived,
+        source_observation_id=record.source_observation_id,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        metadata=record.metadata,
+    )
 
 
 class VectorMemoryEntryMetadata(BaseModel):
@@ -121,6 +168,13 @@ class VectorMemoryEntryMetadata(BaseModel):
     source_digest: str
     embedding_model: str
     embedding_dimension: int
+    actor_id: ActorId | None = None
+    space_id: SpaceId | None = None
+    kind: MemoryKind = MemoryKind.NOTE
+    archived: bool = False
+    source_observation_id: ObservationId | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class VectorMemoryIndex(Protocol):
@@ -139,13 +193,18 @@ class VectorMemoryIndex(Protocol):
         ...
 
     def search(
-        self, query_vector: Sequence[float], *, limit: int
+        self,
+        query_vector: Sequence[float],
+        *,
+        limit: int,
+        filters: VectorMemorySearchFilter | None = None,
     ) -> Sequence[VectorMemorySearchResult]:
         """クエリベクトルに対する類似度検索を実行する。
 
         Args:
             query_vector: 検索クエリベクトル。
             limit: 返す結果の最大件数。
+            filters: actor / space / kind / archived の検索前フィルタ。
 
         Returns:
             Sequence[VectorMemorySearchResult]: 類似度スコア降順の結果。
