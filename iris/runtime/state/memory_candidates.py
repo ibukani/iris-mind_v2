@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from iris.cognitive.memory.candidates import MemoryCandidate
     from iris.contracts.metadata import ImmutableMetadata
-    from iris.core.ids import ActorId, ObservationId, SpaceId
+    from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 
 MemoryCandidateReviewId = NewType("MemoryCandidateReviewId", str)
 
@@ -39,6 +39,7 @@ class MemoryCandidateReviewRecord:
     idempotency_key: str
     status: MemoryCandidateReviewStatus = MemoryCandidateReviewStatus.PENDING_REVIEW
     actor_id: ActorId | None = None
+    account_id: AccountId | None = None
     space_id: SpaceId | None = None
     source_observation_id: ObservationId | None = None
     metadata: ImmutableMetadata = field(default_factory=immutable_metadata)
@@ -66,6 +67,8 @@ class MemoryCandidateReviewStore(Protocol):
         self,
         *,
         actor_id: ActorId | None = None,
+        account_id: AccountId | None = None,
+        space_id: SpaceId | None = None,
         limit: int = 50,
     ) -> tuple[MemoryCandidateReviewRecord, ...]:
         """List pending review candidates in deterministic order.
@@ -133,6 +136,8 @@ class InMemoryMemoryCandidateReviewStore:
         self,
         *,
         actor_id: ActorId | None = None,
+        account_id: AccountId | None = None,
+        space_id: SpaceId | None = None,
         limit: int = 50,
     ) -> tuple[MemoryCandidateReviewRecord, ...]:
         """List pending review candidates in deterministic order.
@@ -146,6 +151,8 @@ class InMemoryMemoryCandidateReviewStore:
                 for record in self._records.values()
                 if record.status is MemoryCandidateReviewStatus.PENDING_REVIEW
                 and (actor_id is None or record.actor_id == actor_id)
+                and (account_id is None or record.account_id == account_id)
+                and (space_id is None or record.space_id == space_id)
             ]
             records.sort(key=lambda record: (record.created_at, str(record.candidate_id)))
             return tuple(records[:limit])
