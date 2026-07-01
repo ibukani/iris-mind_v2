@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from iris.contracts.learning import RuntimeLearningEvent
     from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
+    from iris.runtime.state.memory_candidates import MemoryCandidateReviewStore
 
 _RESPONSE_STYLE_PATTERNS = (
     r"(?:今後|これから|以後|次から).*(?:短め|短く|簡潔|端的).*(?:答えて|回答して|返して)",
@@ -168,6 +169,34 @@ class ImplicitCandidateAdmissionPolicy:
         if contains_sensitive_profile_content(text) and not self.allow_sensitive_review_candidates:
             return False
         return candidate.sensitivity in _REVIEWABLE_SENSITIVITY
+
+
+class ImplicitMemoryCandidateWorker:
+    """Backward-compatible wrapper for the production review-store worker."""
+
+    kind = BackgroundJobKind.MEMORY_EXTRACTION
+
+    def __init__(
+        self,
+        store: MemoryCandidateReviewStore,
+        *,
+        extractor: ConservativeImplicitMemoryCandidateExtractor | None = None,
+        policy: ImplicitCandidateAdmissionPolicy | None = None,
+    ) -> None:
+        """Delegate to the account-aware production worker."""
+        from iris.runtime.learning.implicit_review_pipeline import (  # noqa: PLC0415
+            AccountAwareImplicitMemoryCandidateWorker,
+        )
+
+        self._delegate = AccountAwareImplicitMemoryCandidateWorker(
+            store,
+            extractor=extractor,
+            policy=policy,
+        )
+
+    def run(self, job: BackgroundJobRecord) -> None:
+        """Run candidate extraction through the production worker."""
+        self._delegate.run(job)
 
 
 def runtime_learning_event_to_payload(
