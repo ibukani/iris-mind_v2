@@ -28,10 +28,6 @@ from iris.runtime.learning.jobs import (
     RuntimeLearningCandidateJobPayload,
 )
 from iris.runtime.observation_router import actor_message_observation, user_feedback_observation
-from iris.runtime.state.memory_candidates import (
-    MemoryCandidateReviewId,
-    MemoryCandidateReviewRecord,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -39,7 +35,6 @@ if TYPE_CHECKING:
 
     from iris.contracts.learning import RuntimeLearningEvent
     from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
-    from iris.runtime.state.memory_candidates import MemoryCandidateReviewStore
 
 _RESPONSE_STYLE_PATTERNS = (
     r"(?:今後|これから|以後|次から).*(?:短め|短く|簡潔|端的).*(?:答えて|回答して|返して)",
@@ -93,7 +88,7 @@ class EnqueueImplicitMemoryCandidateHook:
     async def after_runtime_event(self, event: RuntimeLearningEvent) -> None:
         """学習シグナルがあるruntime eventだけを冪等にenqueueする。"""
         payload = runtime_learning_event_to_payload(event)
-        if payload is None:
+        if payload is None or not has_implicit_candidate_signal(payload):
             return
         key = _job_key(payload)
         await self._queue.enqueue(_new_job(key, payload, event.occurred_at, self._max_attempts))
@@ -175,40 +170,6 @@ class ImplicitCandidateAdmissionPolicy:
         return candidate.sensitivity in _REVIEWABLE_SENSITIVITY
 
 
-class ImplicitMemoryCandidateWorker:
-    """Runtime learning jobからreview-required memory candidatesを保存するworker。"""
-
-    kind = BackgroundJobKind.MEMORY_EXTRACTION
-
-    def __init__(
-        self,
-        store: MemoryCandidateReviewStore,
-        *,
-        extractor: ConservativeImplicitMemoryCandidateExtractor | None = None,
-        policy: ImplicitCandidateAdmissionPolicy | None = None,
-    ) -> None:
-        """Review store、抽出器、admission policyを注入する。"""
-        self._store = store
-        self._extractor = extractor or ConservativeImplicitMemoryCandidateExtractor()
-        self._policy = policy or ImplicitCandidateAdmissionPolicy()
-
-    def run(self, job: BackgroundJobRecord) -> None:
-        """候補抽出を行い、許可されたものだけreview storeへ保存する。
-
-        Raises:
-            TypeError: job payloadがworker契約に合わない場合。
-        """
-        payload = job.payload
-        if not isinstance(payload, RuntimeLearningCandidateJobPayload):
-            message = "implicit candidate extraction requires RuntimeLearningCandidateJobPayload"
-            raise TypeError(message)
-        for candidate in self._extractor.extract(payload):
-            if not self._policy.accept(candidate):
-                continue
-            record = _review_record(job, payload, candidate)
-            self._store.add_nowait(record)
-
-
 def runtime_learning_event_to_payload(
     event: RuntimeLearningEvent,
 ) -> RuntimeLearningCandidateJobPayload | None:
@@ -248,6 +209,25 @@ def runtime_learning_event_to_payload(
         source_observation_id=event.source_observation_id,
         occurred_at=event.occurred_at,
     )
+
+
+def has_implicit_candidate_signal(payload: RuntimeLearningCandidateJobPayload) -> bool:
+    """Cheaply decide whether extraction could produce any candidate.
+
+    This avoids queue churn for ordinary conversation turns that cannot match
+    the conservative extractor.
+
+    Returns:
+        True when a background extraction job is worthwhile.
+    """
+    text = (payload.input_text or "").strip()
+    if not text:
+        return False
+    if payload.event_kind is RuntimeLearningEventKind.USER_FEEDBACK:
+        return True
+    if payload.observation_kind is not ObservationKind.ACTOR_MESSAGE:
+        return False
+    return _matches_any(text, (*_RESPONSE_STYLE_PATTERNS, *_LANGUAGE_PREFERENCE_PATTERNS))
 
 
 def _feedback_candidates(
@@ -413,38 +393,3 @@ def _new_job(
         created_at=now,
         updated_at=now,
     )
-
-
-def _review_record(
-    job: BackgroundJobRecord,
-    payload: RuntimeLearningCandidateJobPayload,
-    candidate: MemoryCandidate,
-) -> MemoryCandidateReviewRecord:
-    key = _candidate_key(job, candidate)
-    return MemoryCandidateReviewRecord(
-        candidate_id=MemoryCandidateReviewId(f"candidate-{key[:24]}"),
-        candidate=candidate,
-        created_at=job.created_at,
-        updated_at=job.updated_at,
-        idempotency_key=f"candidate:{key}",
-        actor_id=payload.actor_id,
-        space_id=payload.space_id,
-        source_observation_id=payload.source_observation_id,
-        metadata=immutable_metadata(
-            {
-                "background_job_id": str(job.job_id),
-                "runtime_event_kind": payload.event_kind.value,
-                "source": MemoryCandidateSource.IMPLICIT_CONVERSATION.value,
-                "retention_policy": MemoryRetentionPolicy.REVIEW_REQUIRED.value,
-                "review_required": "true",
-                "reason": candidate.reason or "",
-            }
-        ),
-    )
-
-
-def _candidate_key(job: BackgroundJobRecord, candidate: MemoryCandidate) -> str:
-    material = (
-        f"{job.idempotency_key}|{candidate.text}|{candidate.kind.value}|{candidate.source.value}"
-    )
-    return sha256(material.encode()).hexdigest()
