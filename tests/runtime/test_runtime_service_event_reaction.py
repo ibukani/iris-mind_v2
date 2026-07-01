@@ -30,7 +30,7 @@ from iris.runtime.ingress.observation_ingress import (
     ObservationIngressContext,
 )
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
-from iris.runtime.server import build_runtime_service
+from iris.runtime.server import RuntimeServiceBuildOptions, build_runtime_service
 from iris.runtime.service import (
     IntegratingObservationPipeline,
     IrisRuntimeService,
@@ -199,8 +199,10 @@ def service_setup() -> tuple[IrisRuntimeService, _CaptureFrameStep]:
         stores,
         feature_catalog=feature_catalog,
         output_pipeline=output_pipeline,
-        now=lambda: _RECEIVED_AT,
-        target_stale_after_seconds=604800.0,
+        options=RuntimeServiceBuildOptions(
+            target_stale_after_seconds=604800.0,
+            now=lambda: _RECEIVED_AT,
+        ),
     )
     return service, capture
 

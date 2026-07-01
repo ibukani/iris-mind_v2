@@ -27,11 +27,18 @@ from iris.runtime.observability.logging import configure_runtime_logging
 from iris.runtime.wiring.grpc import create_grpc_server
 from iris.runtime.wiring.runtime import (
     RuntimeComponents,
+    RuntimeServiceBuildOptions,
     build_runtime_components,
     build_runtime_service,
 )
 
-__all__ = ["build_runtime_components", "build_runtime_service", "main", "serve"]
+__all__ = [
+    "RuntimeServiceBuildOptions",
+    "build_runtime_components",
+    "build_runtime_service",
+    "main",
+    "serve",
+]
 
 
 def _log_development_warnings(config: IrisRuntimeConfig) -> None:

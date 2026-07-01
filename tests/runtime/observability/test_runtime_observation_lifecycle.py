@@ -27,7 +27,7 @@ from iris.runtime.ingress.observation_ingress import (
     ObservationIngressContext,
     unauthenticated_external_ingress,
 )
-from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
+from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeServiceExtensions
 from iris.runtime.wiring.app import wire_default_app
 
 if TYPE_CHECKING:
@@ -137,7 +137,10 @@ async def test_actor_message_path_emits_lifecycle_events() -> None:
     """Actor message emits integration, context, route, cognitive, success events."""
     observer = _RecordingObserver()
     app = wire_default_app(FakeLLMClient(responses=("ok",)))
-    service = IrisRuntimeService(app, observation_observer=observer)
+    service = IrisRuntimeService(
+        app,
+        extensions=RuntimeServiceExtensions(observation_observer=observer),
+    )
 
     await service.handle_observation(
         ObservationEnvelope.external_client(
@@ -166,7 +169,7 @@ async def test_presence_signal_path_emits_no_send_without_cognitive() -> None:
     observer = _RecordingObserver()
     service = IrisRuntimeService(
         wire_default_app(FakeLLMClient()),
-        observation_observer=observer,
+        extensions=RuntimeServiceExtensions(observation_observer=observer),
     )
 
     await service.handle_observation(
@@ -187,7 +190,7 @@ async def test_activity_event_path_emits_activity_reaction_events() -> None:
     service = IrisRuntimeService(
         wire_default_app(FakeLLMClient()),
         activity_event_reaction_handler=_ReactionHandler(),
-        observation_observer=observer,
+        extensions=RuntimeServiceExtensions(observation_observer=observer),
     )
 
     await service.handle_observation(
@@ -208,7 +211,10 @@ async def test_activity_event_path_emits_activity_reaction_events() -> None:
 async def test_exception_path_emits_error_and_reraises() -> None:
     """Runtime observation errors are observed and re-raised."""
     observer = _RecordingObserver()
-    service = IrisRuntimeService(_FailingApp(steps=()), observation_observer=observer)
+    service = IrisRuntimeService(
+        _FailingApp(steps=()),
+        extensions=RuntimeServiceExtensions(observation_observer=observer),
+    )
 
     with pytest.raises(_RuntimeTestError, match="prompt text"):
         await service.handle_observation(
@@ -228,7 +234,10 @@ async def test_lifecycle_fields_do_not_include_user_or_prompt_text() -> None:
     """Lifecycle event fields do not include user text or prompt text."""
     observer = _RecordingObserver()
     app = wire_default_app(FakeLLMClient(responses=("ok",)))
-    service = IrisRuntimeService(app, observation_observer=observer)
+    service = IrisRuntimeService(
+        app,
+        extensions=RuntimeServiceExtensions(observation_observer=observer),
+    )
 
     await service.handle_observation(
         ObservationEnvelope.external_client(

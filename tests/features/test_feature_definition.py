@@ -12,13 +12,14 @@ from iris.runtime.wiring.features import (
     collect_background_loop_tasks,
     collect_cognitive_steps,
     collect_learning_hooks,
+    collect_runtime_learning_hooks,
     wire_runtime_features,
 )
 
 if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot
     from iris.contracts.event_reaction import EventReactionDecision
-    from iris.contracts.learning import LearningEvent
+    from iris.contracts.learning import LearningEvent, RuntimeLearningEvent
     from iris.contracts.observations import ActivityEventObservation
 
 
@@ -30,6 +31,7 @@ def test_feature_definition_defaults_are_empty_tuples() -> None:
     assert feature.activity_reaction_planners == ()
     assert feature.observation_sources == ()
     assert feature.learning_hooks == ()
+    assert feature.runtime_learning_hooks == ()
     assert feature.background_loop_tasks == ()
 
 
@@ -108,6 +110,10 @@ def test_learning_collectors_preserve_feature_registration_order() -> None:
         async def after_action_result(self, event: LearningEvent) -> None:
             _ = event
 
+    class _RuntimeHook:
+        async def after_runtime_event(self, event: RuntimeLearningEvent) -> None:
+            _ = event
+
     class _Job:
         name = "test"
 
@@ -116,19 +122,24 @@ def test_learning_collectors_preserve_feature_registration_order() -> None:
 
     first_hook = _Hook()
     second_hook = _Hook()
+    first_runtime_hook = _RuntimeHook()
+    second_runtime_hook = _RuntimeHook()
     first_job = _Job()
     second_job = _Job()
     features = (
         FeatureDefinition(
             name="first",
             learning_hooks=(first_hook,),
+            runtime_learning_hooks=(first_runtime_hook,),
             background_loop_tasks=(first_job,),
         ),
         FeatureDefinition(
             name="second",
             learning_hooks=(second_hook,),
+            runtime_learning_hooks=(second_runtime_hook,),
             background_loop_tasks=(second_job,),
         ),
     )
     assert collect_learning_hooks(features) == (first_hook, second_hook)
+    assert collect_runtime_learning_hooks(features) == (first_runtime_hook, second_runtime_hook)
     assert collect_background_loop_tasks(features) == (first_job, second_job)

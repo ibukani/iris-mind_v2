@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING
 
 from iris.adapters.grpc.mappers.common import (
     datetime_from_proto_timestamp,
@@ -25,10 +25,13 @@ from iris.contracts.observations import (
     ObservationContext,
     ObservationKind,
     PresenceSignalObservation,
+    UserFeedbackKind,
+    UserFeedbackObservation,
 )
 from iris.contracts.presence import PresenceStatus
 from iris.core.ids import (
     AccountId,
+    ActionId,
     CorrelationId,
     DeviceId,
     ExternalRef,
@@ -53,7 +56,7 @@ _GRPC_ADAPTER_ID = "grpc"
 _GRPC_ADAPTER_PROVIDER = "grpc"
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
     from datetime import datetime
 
     from iris.adapters.app_gateway.ports import IdentityResolver, SpaceResolver
@@ -61,6 +64,11 @@ if TYPE_CHECKING:
     from iris.contracts.spaces import InteractionSpace
     from iris.generated.iris.runtime.v1 import runtime_pb2
     from iris.runtime.ingress.observation_ingress import ObservationCapability
+
+    ObservationMapper = Callable[
+        [observations_pb2.Observation, ObservationKind, datetime, ObservationContext],
+        Observation,
+    ]
 
 
 class RuntimeIngressProfile(StrEnum):
@@ -163,15 +171,23 @@ class GrpcRuntimeMapper:
         _validate_observation_kind_and_payload(observation)
         occurred_at = _datetime_from_timestamp(observation)
         context = await self.observation_context_from_proto(observation.context)
-        if kind is ObservationKind.ACTOR_MESSAGE:
-            return self._map_actor_message(observation, kind, occurred_at, context)
-        if kind is ObservationKind.IDLE_TICK:
-            return self._map_idle_tick(observation, kind, occurred_at, context)
-        if kind is ObservationKind.ACTIVITY_EVENT:
-            return self._map_activity_event(observation, kind, occurred_at, context)
-        if kind is ObservationKind.PRESENCE_SIGNAL:
-            return self._map_presence_signal(observation, kind, occurred_at, context)
-        assert_never(kind)
+        mapper = self._observation_mapper_for(kind)
+        return mapper(observation, kind, occurred_at, context)
+
+    def _observation_mapper_for(self, kind: ObservationKind) -> ObservationMapper:
+        """Observation kindに対応するpayload mapperを返す。
+
+        Returns:
+            対応するpayload mapper。
+        """
+        mappers: dict[ObservationKind, ObservationMapper] = {
+            ObservationKind.ACTOR_MESSAGE: self._map_actor_message,
+            ObservationKind.IDLE_TICK: self._map_idle_tick,
+            ObservationKind.ACTIVITY_EVENT: self._map_activity_event,
+            ObservationKind.PRESENCE_SIGNAL: self._map_presence_signal,
+            ObservationKind.USER_FEEDBACK: self._map_user_feedback,
+        }
+        return mappers[kind]
 
     @staticmethod
     def _map_actor_message(
@@ -266,6 +282,41 @@ class GrpcRuntimeMapper:
             status=_presence_status_from_proto(presence_payload.status),
             expires_at=expires_at,
             metadata=metadata_dict(presence_payload.metadata),
+        )
+
+    @staticmethod
+    def _map_user_feedback(
+        observation: observations_pb2.Observation,
+        kind: ObservationKind,
+        occurred_at: datetime,
+        context: ObservationContext,
+    ) -> UserFeedbackObservation:
+        feedback_payload = observation.user_feedback
+        if not feedback_payload.text.strip():
+            raise_mapping_error("user_feedback.text must not be blank")
+        return UserFeedbackObservation(
+            observation_id=ObservationId(observation.observation_id),
+            session_id=SessionId(observation.session_id),
+            context=context,
+            occurred_at=occurred_at,
+            kind=kind,
+            feedback_kind=_user_feedback_kind_from_proto(feedback_payload.feedback_kind),
+            text=feedback_payload.text,
+            target_observation_id=(
+                ObservationId(feedback_payload.target_observation_id)
+                if feedback_payload.target_observation_id
+                else None
+            ),
+            target_action_id=(
+                ActionId(feedback_payload.target_action_id)
+                if feedback_payload.target_action_id
+                else None
+            ),
+            target_external_message_id=(
+                ExternalRef(feedback_payload.target_external_message_id)
+                if feedback_payload.target_external_message_id
+                else None
+            ),
         )
 
     async def observation_context_from_proto(
@@ -386,6 +437,7 @@ def _validate_observation_kind_and_payload(
         observations_pb2.OBSERVATION_KIND_IDLE_TICK: "idle_tick",
         observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT: "activity_event",
         observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL: "presence_signal",
+        observations_pb2.OBSERVATION_KIND_USER_FEEDBACK: "user_feedback",
     }
     try:
         expected_payload = expected_payload_by_kind[observation.kind]
@@ -424,6 +476,7 @@ def _observation_kind_from_proto(
         observations_pb2.OBSERVATION_KIND_IDLE_TICK: ObservationKind.IDLE_TICK,
         observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT: ObservationKind.ACTIVITY_EVENT,
         observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL: ObservationKind.PRESENCE_SIGNAL,
+        observations_pb2.OBSERVATION_KIND_USER_FEEDBACK: ObservationKind.USER_FEEDBACK,
     }
     try:
         return mapping[kind]
@@ -465,3 +518,19 @@ def _presence_status_from_proto(
         return mapping[status]
     except KeyError:
         raise_mapping_error(f"unsupported or unspecified presence status: {status}")
+
+
+def _user_feedback_kind_from_proto(
+    kind: observations_pb2.UserFeedbackKind.ValueType,
+) -> UserFeedbackKind:
+    mapping = {
+        observations_pb2.USER_FEEDBACK_KIND_POSITIVE: UserFeedbackKind.POSITIVE,
+        observations_pb2.USER_FEEDBACK_KIND_NEGATIVE: UserFeedbackKind.NEGATIVE,
+        observations_pb2.USER_FEEDBACK_KIND_STYLE_PREFERENCE: UserFeedbackKind.STYLE_PREFERENCE,
+        observations_pb2.USER_FEEDBACK_KIND_CORRECTION: UserFeedbackKind.CORRECTION,
+        observations_pb2.USER_FEEDBACK_KIND_OTHER: UserFeedbackKind.OTHER,
+    }
+    try:
+        return mapping[kind]
+    except KeyError:
+        raise_mapping_error(f"unsupported or unspecified user feedback kind: {kind}")

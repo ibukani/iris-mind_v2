@@ -11,12 +11,16 @@ from iris.core.datetime_utils import now_utc
 from iris.runtime.conversation import DeliveryConversationHistoryHook, ShortTermConversationRuntime
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
-from iris.runtime.learning.hooks import LearningHookRunner
+from iris.runtime.learning.hooks import LearningHookRunner, RuntimeLearningHookRunner
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
 from iris.runtime.learning.runner import BackgroundJobRunner
 from iris.runtime.observability.events import LoggingRuntimeObservationObserver
 from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
-from iris.runtime.service import IntegratingObservationPipeline, IrisRuntimeService
+from iris.runtime.service import (
+    IntegratingObservationPipeline,
+    IrisRuntimeService,
+    RuntimeServiceExtensions,
+)
 from iris.runtime.state.activity_integrator import ActivityIntegrator
 from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.state.scheduler_target_integrator import SchedulerTargetIntegrator
@@ -30,6 +34,7 @@ from iris.runtime.wiring.features import (
     RuntimeFeatureCatalog,
     collect_action_plan_presenters,
     collect_learning_hooks,
+    collect_runtime_learning_hooks,
     wire_runtime_features,
 )
 from iris.runtime.wiring.presentation import wire_output_pipeline
@@ -62,6 +67,15 @@ class RuntimeComponents:
 
 
 @dataclass(frozen=True)
+class RuntimeServiceBuildOptions:
+    """RuntimeService組み立てに使う境界横断オプション。"""
+
+    target_stale_after_seconds: float
+    runtime_learning_hook_runner: RuntimeLearningHookRunner | None = None
+    now: Callable[[], datetime] | None = None
+
+
+@dataclass(frozen=True)
 class _RuntimeGatewayComponents:
     """Iris runtime の gateway 系コンポーネント群。"""
 
@@ -77,8 +91,7 @@ def build_runtime_service(
     *,
     feature_catalog: RuntimeFeatureCatalog,
     output_pipeline: RuntimeOutputPipeline,
-    target_stale_after_seconds: float,
-    now: Callable[[], datetime] | None = None,
+    options: RuntimeServiceBuildOptions,
 ) -> IrisRuntimeService:
     """IrisApp とランタイムstateストアからサービス境界を組み立てる。
 
@@ -90,19 +103,18 @@ def build_runtime_service(
         stores: ランタイムstateストア。
         feature_catalog: 有効なフィーチャー定義の集合。
         output_pipeline: presentation と safety を適用する共有出力境界。
-        target_stale_after_seconds: target が stale になるまでの idle 秒数。
-        now: 現在時刻を返す関数。省略時は `datetime.now(UTC)`。
+        options: target stale policy、現在時刻、runtime hook runner。
 
     Returns:
         構成済みの IrisRuntimeService。
     """
     trust_policy = ObservationTrustPolicy()
-    current_now = now or now_utc
+    current_now = options.now or now_utc
     observation_pipeline = _wire_observation_pipeline(
         stores,
         trust_policy=trust_policy,
         now=current_now,
-        target_stale_after_seconds=target_stale_after_seconds,
+        target_stale_after_seconds=options.target_stale_after_seconds,
     )
     availability_resolver = wire_availability_resolver()
     workspace_context_assembler = wire_workspace_context_assembler(
@@ -122,8 +134,12 @@ def build_runtime_service(
         observation_pipeline=observation_pipeline,
         workspace_context_assembler=workspace_context_assembler,
         activity_event_reaction_handler=activity_event_reaction_handler,
-        observation_observer=LoggingRuntimeObservationObserver(),
-        conversation_runtime=ShortTermConversationRuntime(stores.conversation_history_store),
+        extensions=RuntimeServiceExtensions(
+            observation_observer=LoggingRuntimeObservationObserver(),
+            conversation_runtime=ShortTermConversationRuntime(stores.conversation_history_store),
+            runtime_learning_hook_runner=options.runtime_learning_hook_runner,
+        ),
+        now=current_now,
     )
 
 
@@ -160,7 +176,13 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         stores,
         feature_catalog=feature_catalog,
         output_pipeline=output_pipeline,
-        target_stale_after_seconds=config.scheduler.target_stale_after_seconds,
+        options=RuntimeServiceBuildOptions(
+            target_stale_after_seconds=config.scheduler.target_stale_after_seconds,
+            runtime_learning_hook_runner=_wire_runtime_learning_hook_runner(
+                config,
+                feature_catalog,
+            ),
+        ),
     )
     gateway_components = _wire_runtime_gateway_components(config, stores, feature_catalog)
     background_job_runner = BackgroundJobRunner(
@@ -305,3 +327,20 @@ def _wire_action_result_hooks(
         DeliveryConversationHistoryHook(stores.conversation_history_store),
         *feature_hooks,
     )
+
+
+def _wire_runtime_learning_hook_runner(
+    config: IrisRuntimeConfig,
+    feature_catalog: RuntimeFeatureCatalog,
+) -> RuntimeLearningHookRunner | None:
+    """Runtime outcome後に実行する feature-owned hook runner を組み立てる。
+
+    Returns:
+        learning無効またはhook未登録ならNone。
+    """
+    if not config.learning.enabled:
+        return None
+    hooks = collect_runtime_learning_hooks(feature_catalog.features)
+    if not hooks:
+        return None
+    return RuntimeLearningHookRunner(hooks)
