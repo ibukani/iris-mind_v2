@@ -12,13 +12,13 @@ from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
 from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
     SQLiteMemoryCandidateReviewStore,
 )
-from iris.cognitive.memory.candidates import (
+from iris.contracts.memory import MemoryId, MemoryKind, MemoryRecord
+from iris.contracts.memory_candidates import (
     MemoryCandidate,
     MemoryCandidateSensitivity,
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
-from iris.contracts.memory import MemoryId, MemoryKind, MemoryRecord
 from iris.core.ids import ActorId, ObservationId, SpaceId
 from iris.runtime.learning.jobs import (
     BackgroundJobId,

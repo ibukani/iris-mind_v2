@@ -237,15 +237,6 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
     (
         "iris/adapters",
         "iris/adapters/persistence/sqlite/stores/memory_candidate_reviews.py",
-        "iris.cognitive.memory.candidates",
-        (
-            "SQLite review adapter persists cognitive-owned MemoryCandidate payloads "
-            "without coupling cognitive code to adapters"
-        ),
-    ),
-    (
-        "iris/adapters",
-        "iris/adapters/persistence/sqlite/stores/memory_candidate_reviews.py",
         "iris.runtime.state.memory_candidates",
         "SQLite review adapter implements the runtime-owned MemoryCandidateReviewStore port",
     ),

@@ -7,14 +7,14 @@ from datetime import UTC, datetime
 import pytest
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.cognitive.memory.candidates import (
-    MemoryCandidateSource,
-    MemoryRetentionPolicy,
-)
 from iris.contracts.actions import PresentedOutput
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.learning import RuntimeLearningEvent, RuntimeLearningEventKind
 from iris.contracts.memory import MemoryKind, MemoryQuery
+from iris.contracts.memory_candidates import (
+    MemoryCandidateSource,
+    MemoryRetentionPolicy,
+)
 from iris.contracts.observations import (
     ActorMessageObservation,
     ObservationContext,

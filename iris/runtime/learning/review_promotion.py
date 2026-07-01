@@ -7,17 +7,17 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import TYPE_CHECKING
 
-from iris.cognitive.memory.candidates import (
-    MemoryCandidateSensitivity,
-    MemoryCandidateSource,
-    MemoryRetentionPolicy,
-)
 from iris.cognitive.memory.safety import (
     contains_credential_like_content,
     contains_sensitive_profile_content,
     is_unsafe_preferred_name_memory_text,
 )
 from iris.contracts.memory import MemoryId, MemoryRecord
+from iris.contracts.memory_candidates import (
+    MemoryCandidateSensitivity,
+    MemoryCandidateSource,
+    MemoryRetentionPolicy,
+)
 from iris.core.datetime_utils import now_utc
 from iris.core.metadata import immutable_metadata
 from iris.runtime.state.memory_candidates import (
@@ -29,8 +29,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
-    from iris.cognitive.memory.candidates import MemoryCandidate
     from iris.contracts.memory import MutableMemoryStore
+    from iris.contracts.memory_candidates import MemoryCandidate
     from iris.runtime.state.memory_candidates import (
         MemoryCandidateReviewId,
         MemoryCandidateReviewRecord,

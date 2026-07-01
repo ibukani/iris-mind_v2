@@ -8,13 +8,13 @@ from datetime import UTC, datetime
 import pytest
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
-from iris.cognitive.memory.candidates import (
+from iris.contracts.memory import MemoryKind, MemoryQuery
+from iris.contracts.memory_candidates import (
     MemoryCandidate,
     MemoryCandidateSensitivity,
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
-from iris.contracts.memory import MemoryKind, MemoryQuery
 from iris.core.ids import ActorId, ObservationId, SpaceId
 from iris.runtime.learning.review_promotion import (
     ApprovedMemoryCandidatePromoter,

@@ -5,9 +5,9 @@ from __future__ import annotations
 from hashlib import sha256
 from typing import TYPE_CHECKING
 
-from iris.cognitive.memory.candidates import MemoryCandidate
 from iris.cognitive.memory.policy import MemoryWritePolicy
 from iris.contracts.memory import MemoryId, MemoryRecord
+from iris.contracts.memory_candidates import MemoryCandidate
 from iris.core.metadata import immutable_metadata
 from iris.runtime.learning.jobs import (
     BackgroundJobKind,

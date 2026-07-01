@@ -8,13 +8,13 @@ from typing import NewType
 
 from pydantic import BaseModel, ConfigDict
 
-from iris.cognitive.memory.candidates import (
+from iris.contracts.learning import RuntimeLearningEventKind
+from iris.contracts.memory import MemoryKind
+from iris.contracts.memory_candidates import (
     MemoryCandidateSensitivity,
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
-from iris.contracts.learning import RuntimeLearningEventKind
-from iris.contracts.memory import MemoryKind
 from iris.contracts.observations import ObservationKind, UserFeedbackKind
 from iris.core.ids import AccountId, ActorId, ObservationId, SessionId, SpaceId
 

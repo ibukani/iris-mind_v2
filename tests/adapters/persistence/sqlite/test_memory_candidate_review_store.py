@@ -11,13 +11,13 @@ import pytest
 from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
     SQLiteMemoryCandidateReviewStore,
 )
-from iris.cognitive.memory.candidates import (
+from iris.contracts.memory import MemoryKind
+from iris.contracts.memory_candidates import (
     MemoryCandidate,
     MemoryCandidateSensitivity,
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
-from iris.contracts.memory import MemoryKind
 from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 from iris.core.metadata import immutable_metadata
 from iris.runtime.state.memory_candidates import (

@@ -185,7 +185,7 @@ ActionPlan
 - `LearningHookRunner` / `RuntimeLearningHookRunner` は hook failure を user-facing path へ伝搬しない。
 - `BackgroundJobQueue` は runtime learning work を hot path 外で実行する queue 境界として実装済み。`state.backend = "sqlite"` では durable queue、`state.backend = "memory"` では process-local queue を使う。
 - 明示メモリ保存は `MemoryBackgroundJobPayload` から `MemoryStore` へ保存できる。
-- implicit conversation learning は保守的抽出器で `MemoryCandidateReviewStore` に review-required candidate として保存する。`state.backend = "sqlite"` では review lifecycle と promotion metadata は再起動後も保持される。
+- implicit conversation learning は保守的抽出器で `MemoryCandidateReviewStore` に review-required candidate として保存する。`MemoryCandidate` の durable contract は `iris/contracts/memory_candidates.py` が所有し、SQLite adapter は cognitive 内部 model を import しない。`state.backend = "sqlite"` では review lifecycle と promotion metadata は再起動後も保持される。
 - approved implicit candidate だけが `ApprovedMemoryCandidatePromoter` 経由で durable `MemoryStore` に昇格できる。
 - promotion 済み metadata と canonical `MemoryStore` の欠損は `promoted_memory_missing` として通常の冪等 promotion と区別する。
 

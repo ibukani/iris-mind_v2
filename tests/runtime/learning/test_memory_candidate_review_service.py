@@ -6,12 +6,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from iris.cognitive.memory.candidates import (
+from iris.contracts.memory import MemoryKind
+from iris.contracts.memory_candidates import (
     MemoryCandidate,
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
-from iris.contracts.memory import MemoryKind
 from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 from iris.runtime.learning.review_service import (
     InvalidMemoryCandidateReviewTransitionError,

@@ -18,13 +18,13 @@ from iris.adapters.persistence.sqlite.serialization import (
     required_datetime_to_text,
     text_to_datetime,
 )
-from iris.cognitive.memory.candidates import (
+from iris.contracts.memory import MemoryKind
+from iris.contracts.memory_candidates import (
     MemoryCandidate,
     MemoryCandidateSensitivity,
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
-from iris.contracts.memory import MemoryKind
 from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 from iris.core.metadata import immutable_metadata
 from iris.runtime.state.memory_candidates import (

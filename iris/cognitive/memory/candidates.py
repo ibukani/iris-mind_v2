@@ -1,78 +1,20 @@
-"""Memory candidate models and extractor protocol."""
+"""Memory candidate extractor protocol と cognitive re-export。"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
 
-from iris.core.metadata import EMPTY_METADATA
+from iris.contracts.memory_candidates import (
+    MemoryCandidate,
+    MemoryCandidateSensitivity,
+    MemoryCandidateSource,
+    MemoryRetentionPolicy,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
     from iris.cognitive.workspace.frame import WorkspaceFrame
-    from iris.contracts.memory import MemoryKind
-    from iris.core.ids import ActorId, ObservationId, SpaceId
-
-
-class MemoryCandidateSource(StrEnum):
-    """メモリ候補が生成された経路。"""
-
-    EXPLICIT_USER_REQUEST = "explicit_user_request"
-    EXPLICIT_PROFILE_STATEMENT = "explicit_profile_statement"
-    EXPLICIT_PREFERENCE_STATEMENT = "explicit_preference_statement"
-    EXPLICIT_USER_INSTRUCTION = "explicit_user_instruction"
-    EXPLICIT_PREFERENCE = "explicit_preference"
-    IMPLICIT_CONVERSATION = "implicit_conversation"
-    SYSTEM_EVENT = "system_event"
-    ACTION_RESULT = "action_result"
-    REFLECTION = "reflection"
-    CONSOLIDATION = "consolidation"
-    LANGMEM_EXTRACTION = "langmem_extraction"
-    PERSONA_PATCH = "persona_patch"
-
-
-class MemoryRetentionPolicy(StrEnum):
-    """候補の保存期間と審査要件。"""
-
-    DURABLE = "durable"
-    LONG_TERM = "long_term"
-    UNTIL_CHANGED = "until_changed"
-    SESSION = "session"
-    SESSION_ONLY = "session_only"
-    EXPIRES_AT = "expires_at"
-    REVIEW_REQUIRED = "review_required"
-    DISCARD_AFTER_RESTART = "discard_after_restart"
-    DISCARD = "discard"
-
-
-class MemoryCandidateSensitivity(StrEnum):
-    """保存候補の安全性・機微度分類。"""
-
-    NORMAL = "normal"
-    PERSONAL = "personal"
-    SENSITIVE = "sensitive"
-    SECRET_LIKE = "secret" + "_like"
-
-
-@dataclass(frozen=True)
-class MemoryCandidate:
-    """保存候補となるメモリ情報。"""
-
-    text: str
-    kind: MemoryKind
-    salience: float
-    confidence: float
-    source: MemoryCandidateSource = MemoryCandidateSource.EXPLICIT_USER_REQUEST
-    reason: str | None = None
-    retention_policy: MemoryRetentionPolicy = MemoryRetentionPolicy.DURABLE
-    sensitivity: MemoryCandidateSensitivity = MemoryCandidateSensitivity.NORMAL
-    review_required: bool = False
-    actor_id: ActorId | None = None
-    space_id: SpaceId | None = None
-    source_observation_id: ObservationId | None = None
-    metadata: Mapping[str, str] = EMPTY_METADATA
 
 
 class MemoryCandidateExtractor(Protocol):
@@ -81,3 +23,12 @@ class MemoryCandidateExtractor(Protocol):
     def extract(self, frame: WorkspaceFrame) -> Sequence[MemoryCandidate]:
         """フレームから保存候補を抽出する。"""
         ...
+
+
+__all__ = [
+    "MemoryCandidate",
+    "MemoryCandidateExtractor",
+    "MemoryCandidateSensitivity",
+    "MemoryCandidateSource",
+    "MemoryRetentionPolicy",
+]
