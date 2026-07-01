@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from iris.runtime.config import load_runtime_config
 from tests.helpers.approx import approx
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_toml_sets_implicit_learning_candidate_options(tmp_path: Path) -> None:
