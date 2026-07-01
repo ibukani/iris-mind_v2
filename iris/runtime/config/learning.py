@@ -17,6 +17,9 @@ class RuntimeLearningConfig:
     background_job_interval_seconds: float = 10.0
     max_jobs_per_run: int = 5
     max_attempts: int = 3
+    implicit_candidates_enabled: bool = True
+    implicit_candidate_min_confidence: float = 0.35
+    implicit_candidate_max_text_length: int = 1000
 
 
 def apply_learning_toml(
@@ -57,7 +60,44 @@ def apply_learning_toml(
             value,
             max_attempts=parse_int(table["max_attempts"], "learning.max_attempts"),
         )
-    return validate_learning_config(value)
+    return validate_learning_config(_apply_implicit_candidate_toml(value, table))
+
+
+def _apply_implicit_candidate_toml(
+    config: RuntimeLearningConfig,
+    table: TomlTable,
+) -> RuntimeLearningConfig:
+    """Apply implicit candidate learning TOML values.
+
+    Returns:
+        Updated learning config.
+    """
+    value = config
+    if "implicit_candidates_enabled" in table:
+        value = replace(
+            value,
+            implicit_candidates_enabled=parse_bool(
+                table["implicit_candidates_enabled"],
+                "learning.implicit_candidates_enabled",
+            ),
+        )
+    if "implicit_candidate_min_confidence" in table:
+        value = replace(
+            value,
+            implicit_candidate_min_confidence=parse_float(
+                table["implicit_candidate_min_confidence"],
+                "learning.implicit_candidate_min_confidence",
+            ),
+        )
+    if "implicit_candidate_max_text_length" in table:
+        value = replace(
+            value,
+            implicit_candidate_max_text_length=parse_int(
+                table["implicit_candidate_max_text_length"],
+                "learning.implicit_candidate_max_text_length",
+            ),
+        )
+    return value
 
 
 def validate_learning_config(config: RuntimeLearningConfig) -> RuntimeLearningConfig:
@@ -77,4 +117,12 @@ def validate_learning_config(config: RuntimeLearningConfig) -> RuntimeLearningCo
             "learning.max_jobs_per_run",
         ),
         max_attempts=require_greater_than_zero(config.max_attempts, "learning.max_attempts"),
+        implicit_candidate_min_confidence=require_greater_than_zero(
+            config.implicit_candidate_min_confidence,
+            "learning.implicit_candidate_min_confidence",
+        ),
+        implicit_candidate_max_text_length=require_greater_than_zero(
+            config.implicit_candidate_max_text_length,
+            "learning.implicit_candidate_max_text_length",
+        ),
     )

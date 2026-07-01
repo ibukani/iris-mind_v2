@@ -12,6 +12,11 @@ from iris.runtime.conversation import DeliveryConversationHistoryHook, ShortTerm
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.learning.hooks import LearningHookRunner, RuntimeLearningHookRunner
+from iris.runtime.learning.implicit_candidates import ImplicitCandidateAdmissionPolicy
+from iris.runtime.learning.implicit_review_pipeline import (
+    AccountAwareImplicitMemoryCandidateWorker,
+    FilteringImplicitMemoryCandidateHook,
+)
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
 from iris.runtime.learning.runner import BackgroundJobRunner
 from iris.runtime.observability.events import LoggingRuntimeObservationObserver
@@ -38,11 +43,7 @@ from iris.runtime.wiring.features import (
     wire_runtime_features,
 )
 from iris.runtime.wiring.presentation import wire_output_pipeline
-from iris.runtime.wiring.scheduler import (
-    SchedulerSafetyDependencies,
-    wire_runtime_scheduler,
-    wire_scheduler_runner,
-)
+from iris.runtime.wiring.scheduler import wire_runtime_scheduler, wire_scheduler_runner
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
 
 if TYPE_CHECKING:
@@ -184,6 +185,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
             target_stale_after_seconds=config.scheduler.target_stale_after_seconds,
             runtime_learning_hook_runner=_wire_runtime_learning_hook_runner(
                 config,
+                stores,
                 feature_catalog,
             ),
         ),
@@ -191,19 +193,24 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     gateway_components = _wire_runtime_gateway_components(config, stores, feature_catalog)
     background_job_runner = BackgroundJobRunner(
         stores.background_job_queue,
-        (DeterministicMemoryConsolidationWorker(stores.memory_store),),
+        (
+            DeterministicMemoryConsolidationWorker(stores.memory_store),
+            AccountAwareImplicitMemoryCandidateWorker(
+                stores.memory_candidate_review_store,
+                policy=ImplicitCandidateAdmissionPolicy(
+                    min_confidence=config.learning.implicit_candidate_min_confidence,
+                    max_text_length=config.learning.implicit_candidate_max_text_length,
+                ),
+            ),
+        ),
         max_jobs_per_run=config.learning.max_jobs_per_run,
     )
     scheduler_runner = wire_scheduler_runner(
         runtime_service=runtime_service,
         scheduler=wire_runtime_scheduler(stores.scheduler_target_store, config),
-        delivery_gate=wire_delivery_safety_gate(config.delivery, config.safety),
+        delivery_gate=wire_delivery_safety_gate(config.delivery),
         outbox=stores.delivery_outbox,
         config=config,
-        safety=SchedulerSafetyDependencies(
-            availability_provider=gateway_components.availability_provider,
-            audit_journal=stores.safety_audit_journal,
-        ),
     )
     return RuntimeComponents(
         stores=stores,
@@ -338,16 +345,69 @@ def _wire_action_result_hooks(
 
 def _wire_runtime_learning_hook_runner(
     config: IrisRuntimeConfig,
-    feature_catalog: RuntimeFeatureCatalog,
+    stores_or_feature_catalog: RuntimeStateStores | RuntimeFeatureCatalog,
+    feature_catalog: RuntimeFeatureCatalog | None = None,
 ) -> RuntimeLearningHookRunner | None:
-    """Runtime outcome後に実行する feature-owned hook runner を組み立てる。
+    """Runtime outcome後に実行する hook runner を組み立てる。
 
     Returns:
         learning無効またはhook未登録ならNone。
     """
     if not config.learning.enabled:
         return None
-    hooks = collect_runtime_learning_hooks(feature_catalog.features)
-    if not hooks:
+    stores: RuntimeStateStores | None
+    resolved_feature_catalog: RuntimeFeatureCatalog
+    if feature_catalog is None:
+        stores = None
+        resolved_feature_catalog = _require_feature_catalog(stores_or_feature_catalog)
+    else:
+        stores = _require_runtime_state_stores(stores_or_feature_catalog)
+        resolved_feature_catalog = feature_catalog
+    hooks = collect_runtime_learning_hooks(resolved_feature_catalog.features)
+    built_in_hooks = _wire_builtin_runtime_learning_hooks(config, stores)
+    all_hooks = (*built_in_hooks, *hooks)
+    if not all_hooks:
         return None
-    return RuntimeLearningHookRunner(hooks)
+    return RuntimeLearningHookRunner(all_hooks)
+
+
+def _wire_builtin_runtime_learning_hooks(
+    config: IrisRuntimeConfig,
+    stores: RuntimeStateStores | None,
+) -> tuple[FilteringImplicitMemoryCandidateHook, ...]:
+    """Built-in runtime learning hooksを組み立てる。
+
+    Returns:
+        Built-in hooks。store未指定または無効なら空。
+    """
+    if stores is None:
+        return ()
+    if (
+        not config.learning.background_jobs_enabled
+        or not config.learning.implicit_candidates_enabled
+    ):
+        return ()
+    return (
+        FilteringImplicitMemoryCandidateHook(
+            stores.background_job_queue,
+            max_attempts=config.learning.max_attempts,
+        ),
+    )
+
+
+def _require_feature_catalog(
+    value: RuntimeStateStores | RuntimeFeatureCatalog,
+) -> RuntimeFeatureCatalog:
+    if isinstance(value, RuntimeFeatureCatalog):
+        return value
+    message = "feature_catalog is required when wiring built-in runtime learning hooks"
+    raise TypeError(message)
+
+
+def _require_runtime_state_stores(
+    value: RuntimeStateStores | RuntimeFeatureCatalog,
+) -> RuntimeStateStores:
+    if isinstance(value, RuntimeStateStores):
+        return value
+    message = "RuntimeStateStores required for runtime learning hook wiring"
+    raise TypeError(message)
