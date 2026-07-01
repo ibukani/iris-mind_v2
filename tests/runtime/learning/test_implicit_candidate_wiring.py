@@ -25,6 +25,7 @@ _NOW = datetime(2026, 7, 1, tzinfo=UTC)
 
 
 async def test_filtering_hook_skips_ordinary_actor_message() -> None:
+    """Filtering hook does not enqueue extraction jobs for ordinary actor messages."""
     queue = InMemoryBackgroundJobQueue()
 
     await FilteringImplicitMemoryCandidateHook(queue).after_runtime_event(_event("hello there"))
@@ -33,6 +34,7 @@ async def test_filtering_hook_skips_ordinary_actor_message() -> None:
 
 
 async def test_filtering_hook_enqueues_preference_actor_message() -> None:
+    """Filtering hook enqueues candidate extraction for preference signals."""
     queue = InMemoryBackgroundJobQueue()
 
     await FilteringImplicitMemoryCandidateHook(queue).after_runtime_event(
@@ -43,6 +45,7 @@ async def test_filtering_hook_enqueues_preference_actor_message() -> None:
 
 
 async def test_account_aware_worker_preserves_boundary_ids() -> None:
+    """Account-aware worker stores actor, account, and space boundaries."""
     queue = InMemoryBackgroundJobQueue()
     store = InMemoryMemoryCandidateReviewStore()
     await FilteringImplicitMemoryCandidateHook(queue).after_runtime_event(
@@ -62,6 +65,7 @@ async def test_account_aware_worker_preserves_boundary_ids() -> None:
 
 
 async def test_review_store_filters_by_account_and_space() -> None:
+    """Review store can isolate pending candidates by account and space."""
     queue = InMemoryBackgroundJobQueue()
     store = InMemoryMemoryCandidateReviewStore()
     await FilteringImplicitMemoryCandidateHook(queue).after_runtime_event(
