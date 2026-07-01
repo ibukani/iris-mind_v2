@@ -9,6 +9,7 @@ from iris.contracts.observations import (
     ActorMessageObservation,
     Observation,
     PresenceSignalObservation,
+    UserFeedbackObservation,
 )
 
 
@@ -27,13 +28,22 @@ class PresenceSignalRoute:
 
 
 @dataclass(frozen=True)
+class UserFeedbackRoute:
+    """UserFeedbackObservation を認知cycleへ流さず学習境界へ渡す route。"""
+
+    observation: UserFeedbackObservation
+
+
+@dataclass(frozen=True)
 class CognitiveRoute:
     """通常の cognitive cycle へ渡す route。"""
 
     observation: Observation
 
 
-type ObservationRoute = ActivityEventRoute | PresenceSignalRoute | CognitiveRoute
+type ObservationRoute = (
+    ActivityEventRoute | PresenceSignalRoute | UserFeedbackRoute | CognitiveRoute
+)
 
 
 def route_observation(observation: Observation) -> ObservationRoute:
@@ -46,6 +56,8 @@ def route_observation(observation: Observation) -> ObservationRoute:
         return ActivityEventRoute(observation)
     if isinstance(observation, PresenceSignalObservation):
         return PresenceSignalRoute(observation)
+    if isinstance(observation, UserFeedbackObservation):
+        return UserFeedbackRoute(observation)
     return CognitiveRoute(observation)
 
 
@@ -71,6 +83,19 @@ def presence_signal_observation(
         PresenceSignalObservation または None。
     """
     if isinstance(observation, PresenceSignalObservation):
+        return observation
+    return None
+
+
+def user_feedback_observation(
+    observation: Observation,
+) -> UserFeedbackObservation | None:
+    """UserFeedbackObservation なら typed observation を返す。
+
+    Returns:
+        UserFeedbackObservation または None。
+    """
+    if isinstance(observation, UserFeedbackObservation):
         return observation
     return None
 

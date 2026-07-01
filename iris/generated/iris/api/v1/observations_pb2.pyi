@@ -33,6 +33,7 @@ class _ObservationKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Obser
     OBSERVATION_KIND_IDLE_TICK: _ObservationKind.ValueType  # 3
     OBSERVATION_KIND_ACTIVITY_EVENT: _ObservationKind.ValueType  # 6
     OBSERVATION_KIND_PRESENCE_SIGNAL: _ObservationKind.ValueType  # 7
+    OBSERVATION_KIND_USER_FEEDBACK: _ObservationKind.ValueType  # 8
 
 class ObservationKind(_ObservationKind, metaclass=_ObservationKindEnumTypeWrapper): ...
 
@@ -41,6 +42,7 @@ OBSERVATION_KIND_ACTOR_MESSAGE: ObservationKind.ValueType  # 1
 OBSERVATION_KIND_IDLE_TICK: ObservationKind.ValueType  # 3
 OBSERVATION_KIND_ACTIVITY_EVENT: ObservationKind.ValueType  # 6
 OBSERVATION_KIND_PRESENCE_SIGNAL: ObservationKind.ValueType  # 7
+OBSERVATION_KIND_USER_FEEDBACK: ObservationKind.ValueType  # 8
 Global___ObservationKind: _TypeAlias = ObservationKind  # noqa: Y015
 
 class _ActivityKind:
@@ -96,6 +98,29 @@ PRESENCE_STATUS_IDLE: PresenceStatus.ValueType  # 5
 PRESENCE_STATUS_DO_NOT_DISTURB: PresenceStatus.ValueType  # 6
 PRESENCE_STATUS_INVISIBLE: PresenceStatus.ValueType  # 7
 Global___PresenceStatus: _TypeAlias = PresenceStatus  # noqa: Y015
+
+class _UserFeedbackKind:
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
+
+class _UserFeedbackKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_UserFeedbackKind.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
+    USER_FEEDBACK_KIND_UNSPECIFIED: _UserFeedbackKind.ValueType  # 0
+    USER_FEEDBACK_KIND_POSITIVE: _UserFeedbackKind.ValueType  # 1
+    USER_FEEDBACK_KIND_NEGATIVE: _UserFeedbackKind.ValueType  # 2
+    USER_FEEDBACK_KIND_STYLE_PREFERENCE: _UserFeedbackKind.ValueType  # 3
+    USER_FEEDBACK_KIND_CORRECTION: _UserFeedbackKind.ValueType  # 4
+    USER_FEEDBACK_KIND_OTHER: _UserFeedbackKind.ValueType  # 5
+
+class UserFeedbackKind(_UserFeedbackKind, metaclass=_UserFeedbackKindEnumTypeWrapper): ...
+
+USER_FEEDBACK_KIND_UNSPECIFIED: UserFeedbackKind.ValueType  # 0
+USER_FEEDBACK_KIND_POSITIVE: UserFeedbackKind.ValueType  # 1
+USER_FEEDBACK_KIND_NEGATIVE: UserFeedbackKind.ValueType  # 2
+USER_FEEDBACK_KIND_STYLE_PREFERENCE: UserFeedbackKind.ValueType  # 3
+USER_FEEDBACK_KIND_CORRECTION: UserFeedbackKind.ValueType  # 4
+USER_FEEDBACK_KIND_OTHER: UserFeedbackKind.ValueType  # 5
+Global___UserFeedbackKind: _TypeAlias = UserFeedbackKind  # noqa: Y015
 
 @_typing.final
 class ActorMessagePayload(_message.Message):
@@ -242,6 +267,37 @@ class PresenceSignalPayload(_message.Message):
 Global___PresenceSignalPayload: _TypeAlias = PresenceSignalPayload  # noqa: Y015
 
 @_typing.final
+class UserFeedbackPayload(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    FEEDBACK_KIND_FIELD_NUMBER: _builtins.int
+    TEXT_FIELD_NUMBER: _builtins.int
+    TARGET_OBSERVATION_ID_FIELD_NUMBER: _builtins.int
+    TARGET_ACTION_ID_FIELD_NUMBER: _builtins.int
+    TARGET_EXTERNAL_MESSAGE_ID_FIELD_NUMBER: _builtins.int
+    feedback_kind: Global___UserFeedbackKind.ValueType
+    text: _builtins.str
+    target_observation_id: _builtins.str
+    target_action_id: _builtins.str
+    target_external_message_id: _builtins.str
+    def __init__(
+        self,
+        *,
+        feedback_kind: Global___UserFeedbackKind.ValueType = ...,
+        text: _builtins.str = ...,
+        target_observation_id: _builtins.str = ...,
+        target_action_id: _builtins.str = ...,
+        target_external_message_id: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["feedback_kind", b"feedback_kind", "target_action_id", b"target_action_id", "target_external_message_id", b"target_external_message_id", "target_observation_id", b"target_observation_id", "text", b"text"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___UserFeedbackPayload: _TypeAlias = UserFeedbackPayload  # noqa: Y015
+
+@_typing.final
 class ObservationContext(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
@@ -328,6 +384,7 @@ class Observation(_message.Message):
     IDLE_TICK_FIELD_NUMBER: _builtins.int
     ACTIVITY_EVENT_FIELD_NUMBER: _builtins.int
     PRESENCE_SIGNAL_FIELD_NUMBER: _builtins.int
+    USER_FEEDBACK_FIELD_NUMBER: _builtins.int
     observation_id: _builtins.str
     """Client-generated observation ID."""
     session_id: _builtins.str
@@ -350,6 +407,8 @@ class Observation(_message.Message):
     def activity_event(self) -> Global___ActivityEventPayload: ...
     @_builtins.property
     def presence_signal(self) -> Global___PresenceSignalPayload: ...
+    @_builtins.property
+    def user_feedback(self) -> Global___UserFeedbackPayload: ...
     def __init__(
         self,
         *,
@@ -362,12 +421,13 @@ class Observation(_message.Message):
         idle_tick: Global___IdleTickPayload | None = ...,
         activity_event: Global___ActivityEventPayload | None = ...,
         presence_signal: Global___PresenceSignalPayload | None = ...,
+        user_feedback: Global___UserFeedbackPayload | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _typing.Literal["activity_event", b"activity_event", "actor_message", b"actor_message", "context", b"context", "idle_tick", b"idle_tick", "occurred_at", b"occurred_at", "payload", b"payload", "presence_signal", b"presence_signal"]  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["activity_event", b"activity_event", "actor_message", b"actor_message", "context", b"context", "idle_tick", b"idle_tick", "occurred_at", b"occurred_at", "payload", b"payload", "presence_signal", b"presence_signal", "user_feedback", b"user_feedback"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["activity_event", b"activity_event", "actor_message", b"actor_message", "context", b"context", "idle_tick", b"idle_tick", "kind", b"kind", "observation_id", b"observation_id", "occurred_at", b"occurred_at", "payload", b"payload", "presence_signal", b"presence_signal", "session_id", b"session_id"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["activity_event", b"activity_event", "actor_message", b"actor_message", "context", b"context", "idle_tick", b"idle_tick", "kind", b"kind", "observation_id", b"observation_id", "occurred_at", b"occurred_at", "payload", b"payload", "presence_signal", b"presence_signal", "session_id", b"session_id", "user_feedback", b"user_feedback"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
-    _WhichOneofReturnType_payload: _TypeAlias = _typing.Literal["actor_message", "idle_tick", "activity_event", "presence_signal"]  # noqa: Y015
+    _WhichOneofReturnType_payload: _TypeAlias = _typing.Literal["actor_message", "idle_tick", "activity_event", "presence_signal", "user_feedback"]  # noqa: Y015
     _WhichOneofArgType_payload: _TypeAlias = _typing.Literal["payload", b"payload"]  # noqa: Y015
     def WhichOneof(self, oneof_group: _WhichOneofArgType_payload) -> _WhichOneofReturnType_payload | None: ...
 

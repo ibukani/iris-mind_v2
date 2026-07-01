@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from iris.contracts.activity import ActivityKind
 from iris.contracts.observations import (
     ActivityEventObservation,
     ObservationContext,
     ObservationKind,
     PresenceSignalObservation,
+    UserFeedbackKind,
+    UserFeedbackObservation,
 )
 from iris.contracts.presence import PresenceStatus
 from iris.core.ids import AccountId, ObservationId, SessionId
@@ -37,6 +41,7 @@ def test_observation_kind_exposes_only_typed_ingress_kinds() -> None:
         "idle_tick",
         "activity_event",
         "presence_signal",
+        "user_feedback",
     }
 
 
@@ -85,3 +90,35 @@ def test_presence_signal_observation_carries_expiry_and_frozen_metadata() -> Non
     assert observation.expires_at == expires_at
     assert observation.metadata == {"client_name": "desktop"}
     assert_mapping_rejects_item_assignment(observation.metadata)
+
+
+def test_user_feedback_observation_carries_feedback_and_target_fields() -> None:
+    """UserFeedbackObservationがfeedback種別と対象参照を保持する。"""
+    observation = UserFeedbackObservation(
+        observation_id=ObservationId("obs-feedback"),
+        session_id=SessionId("session-1"),
+        context=ObservationContext(),
+        occurred_at=datetime(2026, 7, 1, tzinfo=UTC),
+        kind=ObservationKind.USER_FEEDBACK,
+        feedback_kind=UserFeedbackKind.STYLE_PREFERENCE,
+        text="もっと短く答えて",
+        target_observation_id=ObservationId("obs-target"),
+    )
+
+    assert observation.feedback_kind is UserFeedbackKind.STYLE_PREFERENCE
+    assert observation.text == "もっと短く答えて"
+    assert observation.target_observation_id == ObservationId("obs-target")
+
+
+def test_user_feedback_observation_rejects_blank_text() -> None:
+    """空白だけのfeedback textは拒否される。"""
+    with pytest.raises(ValueError, match="user feedback text must not be blank"):
+        UserFeedbackObservation(
+            observation_id=ObservationId("obs-feedback"),
+            session_id=SessionId("session-1"),
+            context=ObservationContext(),
+            occurred_at=datetime(2026, 7, 1, tzinfo=UTC),
+            kind=ObservationKind.USER_FEEDBACK,
+            feedback_kind=UserFeedbackKind.OTHER,
+            text="   ",
+        )

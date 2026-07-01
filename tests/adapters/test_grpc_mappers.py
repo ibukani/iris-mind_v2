@@ -29,11 +29,14 @@ from iris.contracts.observations import (
     ActorMessageObservation,
     IdleTickObservation,
     PresenceSignalObservation,
+    UserFeedbackKind,
+    UserFeedbackObservation,
 )
 from iris.contracts.presence import PresenceStatus
 from iris.contracts.spaces import InteractionSpace, SpaceKind
 from iris.core.ids import (
     AccountId,
+    ActionId,
     ActorId,
     CorrelationId,
     DeviceId,
@@ -133,6 +136,33 @@ async def test_activity_event_zero_sequence_maps_to_none() -> None:
     assert isinstance(observation, ActivityEventObservation)
     assert observation.provider_event_id is None
     assert observation.provider_sequence is None
+
+
+@pytest.mark.anyio
+async def test_user_feedback_proto_maps_to_observation() -> None:
+    """UserFeedback protoがtyped UserFeedbackObservationへmapされることを確認する。"""
+    observation = await _mapper().observation_from_proto(
+        observations_pb2.Observation(
+            observation_id="obs-feedback",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_USER_FEEDBACK,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            user_feedback=observations_pb2.UserFeedbackPayload(
+                feedback_kind=observations_pb2.USER_FEEDBACK_KIND_STYLE_PREFERENCE,
+                text="もっと短く答えて",
+                target_observation_id="obs-target",
+                target_action_id="action-target",
+                target_external_message_id="external-message-1",
+            ),
+        )
+    )
+
+    assert isinstance(observation, UserFeedbackObservation)
+    assert observation.feedback_kind is UserFeedbackKind.STYLE_PREFERENCE
+    assert observation.text == "もっと短く答えて"
+    assert observation.target_observation_id == ObservationId("obs-target")
+    assert observation.target_action_id == ActionId("action-target")
+    assert observation.target_external_message_id == ExternalRef("external-message-1")
 
 
 @pytest.mark.anyio
@@ -390,6 +420,7 @@ def test_proto_enum_numbers_preserve_wire_meanings() -> None:
     assert observations_pb2.OBSERVATION_KIND_IDLE_TICK == 3
     assert observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT == 6
     assert observations_pb2.OBSERVATION_KIND_PRESENCE_SIGNAL == 7
+    assert observations_pb2.OBSERVATION_KIND_USER_FEEDBACK == 8
     assert spaces_pb2.SPACE_KIND_TEXT_CHANNEL == 2
     assert spaces_pb2.SPACE_KIND_ROOM == 4
     assert spaces_pb2.SPACE_KIND_BROADCAST == 5
@@ -511,6 +542,56 @@ async def test_presence_signal_kind_with_activity_payload_raises_mapping_error()
     )
 
     with pytest.raises(GrpcMappingError, match="requires presence_signal payload"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_user_feedback_kind_without_payload_raises_mapping_error() -> None:
+    """USER_FEEDBACK kindでpayloadがない場合にmapping errorになることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_USER_FEEDBACK,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+    )
+
+    with pytest.raises(GrpcMappingError, match="requires user_feedback payload"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_user_feedback_blank_text_raises_mapping_error() -> None:
+    """空白だけのuser_feedback.textはmapping errorになる。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_USER_FEEDBACK,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        user_feedback=observations_pb2.UserFeedbackPayload(
+            feedback_kind=observations_pb2.USER_FEEDBACK_KIND_OTHER,
+            text="   ",
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match=r"user_feedback\.text must not be blank"):
+        await _mapper().observation_from_proto(request)
+
+
+@pytest.mark.anyio
+async def test_unspecified_user_feedback_kind_raises_mapping_error() -> None:
+    """USER_FEEDBACK_KIND_UNSPECIFIEDが拒否されることを確認する。"""
+    request = observations_pb2.Observation(
+        observation_id="obs-1",
+        session_id="session-1",
+        kind=observations_pb2.OBSERVATION_KIND_USER_FEEDBACK,
+        occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+        user_feedback=observations_pb2.UserFeedbackPayload(
+            feedback_kind=observations_pb2.USER_FEEDBACK_KIND_UNSPECIFIED,
+            text="ok",
+        ),
+    )
+
+    with pytest.raises(GrpcMappingError, match="unsupported or unspecified user feedback kind"):
         await _mapper().observation_from_proto(request)
 
 

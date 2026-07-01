@@ -15,6 +15,7 @@ from iris.features.definition import FeatureDefinition, LearningHook
 from iris.runtime.config import IrisRuntimeConfig, default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.conversation import DeliveryConversationHistoryHook
+from iris.runtime.learning.hooks import RuntimeLearningHookRunner
 from iris.runtime.server import build_runtime_components
 from iris.runtime.wiring.app import AppStateDependencies, build_app_from_config
 from iris.runtime.wiring.features import RuntimeFeatureCatalog
@@ -22,7 +23,7 @@ from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
 from iris.runtime.wiring.state import wire_runtime_state
 
 if TYPE_CHECKING:
-    from iris.contracts.learning import LearningEvent
+    from iris.contracts.learning import LearningEvent, RuntimeLearningEvent
     from iris.runtime.wiring.state import RuntimeStateStores
 
 from tests.helpers.private_access import (
@@ -47,11 +48,31 @@ class _WireActionResultHooks(Protocol):
         ...
 
 
+class _WireRuntimeLearningHookRunner(Protocol):
+    """Typed access to runtime learning hook runner wiring."""
+
+    def __call__(
+        self,
+        config: IrisRuntimeConfig,
+        feature_catalog: RuntimeFeatureCatalog,
+    ) -> RuntimeLearningHookRunner | None:
+        """Return optional runtime learning hook runner."""
+        ...
+
+
 class _NoOpLearningHook:
     """Feature-owned hook used to verify learning.enabled filtering."""
 
     async def after_action_result(self, event: LearningEvent) -> None:
         """Accept a learning event without side effects."""
+        _ = event
+
+
+class _NoOpRuntimeLearningHook:
+    """Feature-owned runtime hook used to verify learning.enabled filtering."""
+
+    async def after_runtime_event(self, event: RuntimeLearningEvent) -> None:
+        """Accept a runtime learning event without side effects."""
         _ = event
 
 
@@ -61,6 +82,13 @@ def _is_wire_action_result_hooks(value: object) -> TypeGuard[_WireActionResultHo
     The runtime check can only validate callability; the protocol signature is
     enforced statically at the call site after TypeGuard narrowing.
     """
+    return callable(value)
+
+
+def _is_wire_runtime_learning_hook_runner(
+    value: object,
+) -> TypeGuard[_WireRuntimeLearningHookRunner]:
+    """Return whether a private import has the expected callable shape."""
     return callable(value)
 
 
@@ -186,3 +214,31 @@ def test_action_result_hook_wiring_keeps_delivery_history_when_learning_disabled
     assert isinstance(hooks[0], DeliveryConversationHistoryHook)
     assert hooks[0].store is stores.conversation_history_store
     assert feature_hook not in hooks
+
+
+def test_runtime_learning_hook_runner_wiring_respects_learning_enabled() -> None:
+    """Runtime learning hooks は learning.enabled=False で配線されない。"""
+    feature_hook = _NoOpRuntimeLearningHook()
+    feature_catalog = RuntimeFeatureCatalog(
+        features=(
+            FeatureDefinition(
+                name="test-runtime-learning",
+                runtime_learning_hooks=(feature_hook,),
+            ),
+        )
+    )
+    wire_runner = import_private_as(
+        "iris.runtime.wiring.runtime",
+        "_wire_runtime_learning_hook_runner",
+        object,
+    )
+    assert _is_wire_runtime_learning_hook_runner(wire_runner)
+
+    enabled_config = default_runtime_config()
+    disabled_config = replace(
+        enabled_config,
+        learning=replace(enabled_config.learning, enabled=False),
+    )
+
+    assert isinstance(wire_runner(enabled_config, feature_catalog), RuntimeLearningHookRunner)
+    assert wire_runner(disabled_config, feature_catalog) is None

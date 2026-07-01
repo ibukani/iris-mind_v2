@@ -7,6 +7,8 @@ import time
 from typing import TYPE_CHECKING, Protocol
 
 from iris.contracts.actions import PresentedOutput
+from iris.contracts.learning import RuntimeLearningEvent, RuntimeLearningEventKind
+from iris.core.datetime_utils import now_utc
 from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     trusted_adapter_ingress,
@@ -16,11 +18,13 @@ from iris.runtime.observability.context import RuntimeTraceContext, bind_trace_c
 from iris.runtime.observation_router import (
     ActivityEventRoute,
     PresenceSignalRoute,
+    UserFeedbackRoute,
     route_observation,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
+    from datetime import datetime
 
     from iris.contracts.delivery import DeliveryRouteHint
     from iris.contracts.observations import ActivityEventObservation, Observation
@@ -103,6 +107,15 @@ class RuntimeResponse:
     correlation_id: CorrelationId | None = None
 
 
+@dataclass(frozen=True)
+class RuntimeServiceExtensions:
+    """RuntimeServiceへ注入する任意の副作用境界。"""
+
+    observation_observer: RuntimeObservationObserver | None = None
+    conversation_runtime: ConversationTurnRuntime | None = None
+    runtime_learning_hook_runner: RuntimeLearningEventRunner | None = None
+
+
 class ObservationRuntimeService(Protocol):
     """観測を処理して RuntimeResponse を返す runtime 境界 port。
 
@@ -172,6 +185,14 @@ class ActivityEventReactionPipeline(Protocol):
         ...
 
 
+class RuntimeLearningEventRunner(Protocol):
+    """Runtime outcome学習イベントを副作用境界へ渡すrunner。"""
+
+    async def run(self, event: RuntimeLearningEvent) -> None:
+        """Runtime learning eventを処理する。"""
+        ...
+
+
 @dataclass(frozen=True)
 class IntegratingObservationPipeline:
     """複数の observation integrator を一つの runtime 境界として実行する。"""
@@ -198,16 +219,19 @@ class IrisRuntimeService:
         observation_pipeline: ObservationProcessingPipeline | None = None,
         workspace_context_assembler: WorkspaceContextProvider | None = None,
         activity_event_reaction_handler: ActivityEventReactionPipeline | None = None,
-        observation_observer: RuntimeObservationObserver | None = None,
-        conversation_runtime: ConversationTurnRuntime | None = None,
+        extensions: RuntimeServiceExtensions | None = None,
+        now: Callable[[], datetime] | None = None,
     ) -> None:
         """明示的に注入されたappとoptional observation pipelineでserviceを生成する。"""
+        runtime_extensions = extensions or RuntimeServiceExtensions()
         self._app = app
         self._observation_pipeline = observation_pipeline
         self._workspace_context_assembler = workspace_context_assembler
         self._activity_event_reaction_handler = activity_event_reaction_handler
-        self._observation_observer = observation_observer
-        self._conversation_runtime = conversation_runtime
+        self._observation_observer = runtime_extensions.observation_observer
+        self._conversation_runtime = runtime_extensions.conversation_runtime
+        self._runtime_learning_hook_runner = runtime_extensions.runtime_learning_hook_runner
+        self._now = now or now_utc
 
     async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
         """State integration後、必要な観測だけをIrisApp経由で処理する。
@@ -279,6 +303,13 @@ class IrisRuntimeService:
             )
             return response
 
+        if isinstance(route, UserFeedbackRoute):
+            return await self._handle_user_feedback(
+                route.observation,
+                envelope.correlation_id,
+                started_at,
+            )
+
         self._record("runtime.cognitive.start", route=route_name)
         situation_context = await self._load_conversation_context(
             route.observation,
@@ -294,6 +325,12 @@ class IrisRuntimeService:
             output_present=output.is_sendable,
         )
         await self._record_conversation_response(route.observation, output)
+        await self._run_runtime_learning_event(
+            kind=_runtime_learning_event_kind(output),
+            observation=route.observation,
+            output=output,
+            route=route_name,
+        )
         self._record(
             "runtime.observation.success",
             route=route_name,
@@ -380,6 +417,12 @@ class IrisRuntimeService:
                 route="activity_event",
                 output_present=False,
             )
+        await self._run_runtime_learning_event(
+            kind=_runtime_learning_event_kind(output),
+            observation=observation,
+            output=output,
+            route="activity_event",
+        )
         self._record(
             "runtime.observation.success",
             route="activity_event",
@@ -387,6 +430,59 @@ class IrisRuntimeService:
             output_present=output.is_sendable,
         )
         return RuntimeResponse(output=output, correlation_id=correlation_id)
+
+    async def _handle_user_feedback(
+        self,
+        observation: Observation,
+        correlation_id: CorrelationId | None,
+        started_at: float,
+    ) -> RuntimeResponse:
+        """UserFeedbackObservationを認知cycleに流さずruntime学習境界へ渡す。
+
+        Returns:
+            RuntimeResponse: no-sendの結果。
+        """
+        await self._run_runtime_learning_event(
+            kind=RuntimeLearningEventKind.USER_FEEDBACK,
+            observation=observation,
+            output=None,
+            route="user_feedback",
+        )
+        self._record(
+            "runtime.observation.no_send",
+            route="user_feedback",
+            output_present=False,
+        )
+        response = RuntimeResponse(output=PresentedOutput(text=None), correlation_id=correlation_id)
+        self._record(
+            "runtime.observation.success",
+            route="user_feedback",
+            latency_ms=_latency_ms(started_at),
+            output_present=False,
+        )
+        return response
+
+    async def _run_runtime_learning_event(
+        self,
+        *,
+        kind: RuntimeLearningEventKind,
+        observation: Observation,
+        output: PresentedOutput | None,
+        route: str,
+    ) -> None:
+        """任意配線されたruntime学習フックへpost-result eventを渡す。"""
+        if self._runtime_learning_hook_runner is None:
+            return
+        await self._runtime_learning_hook_runner.run(
+            RuntimeLearningEvent(
+                kind=kind,
+                observation=observation,
+                output=output,
+                occurred_at=self._now(),
+                route=route,
+                source_observation_id=observation.observation_id,
+            )
+        )
 
     def _record(self, event: str, **fields: RuntimeLogValue) -> None:
         """Optional observer へ runtime event を渡す。"""
@@ -429,7 +525,9 @@ def _ingress_kind(ingress: ObservationIngressContext) -> str:
     return "external_client"
 
 
-def _route_name(route: ActivityEventRoute | PresenceSignalRoute | object) -> str:
+def _route_name(
+    route: ActivityEventRoute | PresenceSignalRoute | UserFeedbackRoute | object,
+) -> str:
     """Runtime route から安全な route 名を返す。
 
     Returns:
@@ -439,7 +537,20 @@ def _route_name(route: ActivityEventRoute | PresenceSignalRoute | object) -> str
         return "activity_event"
     if isinstance(route, PresenceSignalRoute):
         return "presence_signal"
+    if isinstance(route, UserFeedbackRoute):
+        return "user_feedback"
     return "cognitive"
+
+
+def _runtime_learning_event_kind(output: PresentedOutput) -> RuntimeLearningEventKind:
+    """出力可能性からruntime学習イベント種別を返す。
+
+    Returns:
+        sendable outputならinline response、それ以外はno-action。
+    """
+    if output.is_sendable:
+        return RuntimeLearningEventKind.INLINE_RESPONSE_GENERATED
+    return RuntimeLearningEventKind.NO_ACTION
 
 
 def _latency_ms(started_at: float) -> float:

@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.contracts.availability import AvailabilitySnapshot
     from iris.contracts.event_reaction import EventReactionDecision
-    from iris.contracts.learning import LearningEvent
+    from iris.contracts.learning import LearningEvent, RuntimeLearningEvent
     from iris.contracts.observations import ActivityEventObservation, Observation
     from iris.contracts.presentation import ActionPlanPresenter
 
@@ -27,6 +27,13 @@ class LearningHook(Protocol):
 
     async def after_action_result(self, event: LearningEvent) -> None:
         """実行されたアクションの結果を処理する。"""
+
+
+class RuntimeLearningHook(Protocol):
+    """runtime outcome後学習フックのプロトコル。"""
+
+    async def after_runtime_event(self, event: RuntimeLearningEvent) -> None:
+        """配送結果を伴わないruntime learning eventを処理する。"""
 
 
 class BackgroundLoopTask(Protocol):
@@ -60,5 +67,6 @@ class FeatureDefinition:
     activity_reaction_planners: tuple[ActivityReactionPlanner, ...] = ()
     observation_sources: tuple[ObservationSource, ...] = ()
     learning_hooks: tuple[LearningHook, ...] = ()
+    runtime_learning_hooks: tuple[RuntimeLearningHook, ...] = ()
     background_loop_tasks: tuple[BackgroundLoopTask, ...] = ()
     action_plan_presenters: tuple[ActionPlanPresenter, ...] = ()

@@ -22,7 +22,12 @@ if TYPE_CHECKING:
     from iris.contracts.memory import MemoryStore
     from iris.contracts.presentation import ActionPlanPresenter
     from iris.contracts.relationship import RelationshipStore
-    from iris.features.definition import BackgroundLoopTask, FeatureDefinition, LearningHook
+    from iris.features.definition import (
+        BackgroundLoopTask,
+        FeatureDefinition,
+        LearningHook,
+        RuntimeLearningHook,
+    )
 
 
 @dataclass(frozen=True)
@@ -89,6 +94,17 @@ def collect_learning_hooks(
         登録順の学習フック。
     """
     return collect_feature_items(tuple(feature.learning_hooks for feature in features))
+
+
+def collect_runtime_learning_hooks(
+    features: Sequence[FeatureDefinition],
+) -> tuple[RuntimeLearningHook, ...]:
+    """runtime学習フックをフィーチャー登録順に収集する。
+
+    Returns:
+        登録順のruntime学習フック。
+    """
+    return collect_feature_items(tuple(feature.runtime_learning_hooks for feature in features))
 
 
 def collect_background_loop_tasks(

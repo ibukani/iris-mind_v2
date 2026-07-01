@@ -38,7 +38,7 @@ from iris.runtime.conversation import (
     DeliveryConversationHistoryHook,
     ShortTermConversationRuntime,
 )
-from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
+from iris.runtime.service import IrisRuntimeService, ObservationEnvelope, RuntimeServiceExtensions
 from iris.runtime.state.conversation import (
     ConversationKey,
     ConversationSubjectKind,
@@ -146,7 +146,9 @@ async def test_runtime_history_uses_actor_and_space_across_session_changes() -> 
     history_store = InMemoryConversationHistoryStore()
     service = IrisRuntimeService(
         app,
-        conversation_runtime=ShortTermConversationRuntime(history_store),
+        extensions=RuntimeServiceExtensions(
+            conversation_runtime=ShortTermConversationRuntime(history_store)
+        ),
     )
     first = _message(
         "最初の質問",
@@ -189,9 +191,11 @@ async def test_runtime_history_messages_respect_character_budget() -> None:
     )
     service = IrisRuntimeService(
         app,
-        conversation_runtime=ShortTermConversationRuntime(
-            store,
-            policy=ConversationHistoryPolicy(max_window_records=10, max_history_chars=6),
+        extensions=RuntimeServiceExtensions(
+            conversation_runtime=ShortTermConversationRuntime(
+                store,
+                policy=ConversationHistoryPolicy(max_window_records=10, max_history_chars=6),
+            ),
         ),
     )
     await service.handle_observation(ObservationEnvelope.external_client(observation=current))

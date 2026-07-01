@@ -15,6 +15,7 @@ enum ObservationKind {
   OBSERVATION_KIND_IDLE_TICK = 3;
   OBSERVATION_KIND_ACTIVITY_EVENT = 6;
   OBSERVATION_KIND_PRESENCE_SIGNAL = 7;
+  OBSERVATION_KIND_USER_FEEDBACK = 8;
 }
 
 enum ActivityKind {
@@ -41,6 +42,15 @@ enum PresenceStatus {
   PRESENCE_STATUS_INVISIBLE = 7;
 }
 
+enum UserFeedbackKind {
+  USER_FEEDBACK_KIND_UNSPECIFIED = 0;
+  USER_FEEDBACK_KIND_POSITIVE = 1;
+  USER_FEEDBACK_KIND_NEGATIVE = 2;
+  USER_FEEDBACK_KIND_STYLE_PREFERENCE = 3;
+  USER_FEEDBACK_KIND_CORRECTION = 4;
+  USER_FEEDBACK_KIND_OTHER = 5;
+}
+
 message ActorMessagePayload {
   string text = 1;
   string external_message_id = 2;
@@ -64,6 +74,14 @@ message PresenceSignalPayload {
   google.protobuf.Timestamp expires_at = 2;
   // Provider-specific auxiliary details only.
   map<string, string> metadata = 10;
+}
+
+message UserFeedbackPayload {
+  UserFeedbackKind feedback_kind = 1;
+  string text = 2;
+  string target_observation_id = 3;
+  string target_action_id = 4;
+  string target_external_message_id = 5;
 }
 
 message ObservationContext {
@@ -99,5 +117,6 @@ message Observation {
     IdleTickPayload idle_tick = 11;
     ActivityEventPayload activity_event = 12;
     PresenceSignalPayload presence_signal = 13;
+    UserFeedbackPayload user_feedback = 14;
   }
 }

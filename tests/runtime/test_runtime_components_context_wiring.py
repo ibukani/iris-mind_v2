@@ -28,7 +28,7 @@ from iris.runtime.ingress.observation_ingress import (
     ObservationIngressContext,
     unauthenticated_external_ingress,
 )
-from iris.runtime.server import build_runtime_service
+from iris.runtime.server import RuntimeServiceBuildOptions, build_runtime_service
 from iris.runtime.service import ObservationEnvelope
 from iris.runtime.wiring.features import wire_runtime_features
 from iris.runtime.wiring.presentation import wire_output_pipeline
@@ -78,8 +78,10 @@ async def test_build_runtime_service_wires_context_availability_for_text_observa
         stores,
         feature_catalog=feature_catalog,
         output_pipeline=output_pipeline,
-        target_stale_after_seconds=604800.0,
-        now=lambda: _RECEIVED_AT,
+        options=RuntimeServiceBuildOptions(
+            target_stale_after_seconds=604800.0,
+            now=lambda: _RECEIVED_AT,
+        ),
     )
 
     activity_response = await service.handle_observation(
