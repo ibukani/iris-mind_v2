@@ -28,6 +28,10 @@ from iris.runtime.learning.jobs import (
     RuntimeLearningCandidateJobPayload,
 )
 from iris.runtime.observation_router import actor_message_observation, user_feedback_observation
+from iris.runtime.state.memory_candidates import (
+    MemoryCandidateReviewId,
+    MemoryCandidateReviewRecord,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -73,8 +77,8 @@ _REVIEWABLE_SENSITIVITY = frozenset(
 )
 
 
-class EnqueueImplicitMemoryCandidateHook:
-    """Runtime learning eventsをimplicit candidate extraction jobへ変換するhook。"""
+class FilteringImplicitMemoryCandidateHook:
+    """Only enqueue extraction jobs for events that can produce review candidates."""
 
     def __init__(
         self,
@@ -87,12 +91,16 @@ class EnqueueImplicitMemoryCandidateHook:
         self._max_attempts = max_attempts
 
     async def after_runtime_event(self, event: RuntimeLearningEvent) -> None:
-        """学習シグナルがあるruntime eventだけを冪等にenqueueする。"""
+        """Candidate signal がある runtime event だけを冪等に enqueue する。"""
         payload = runtime_learning_event_to_payload(event)
         if payload is None or not has_implicit_candidate_signal(payload):
             return
         key = _job_key(payload)
         await self._queue.enqueue(_new_job(key, payload, event.occurred_at, self._max_attempts))
+
+
+class EnqueueImplicitMemoryCandidateHook(FilteringImplicitMemoryCandidateHook):
+    """Backward-compatible name for the filtering implicit candidate hook."""
 
 
 class ConservativeImplicitMemoryCandidateExtractor:
@@ -171,8 +179,8 @@ class ImplicitCandidateAdmissionPolicy:
         return candidate.sensitivity in _REVIEWABLE_SENSITIVITY
 
 
-class ImplicitMemoryCandidateWorker:
-    """Backward-compatible wrapper for the production review-store worker."""
+class AccountAwareImplicitMemoryCandidateWorker:
+    """Runtime learning jobからreview-required memory candidatesを保存するworker。"""
 
     kind = BackgroundJobKind.MEMORY_EXTRACTION
 
@@ -183,20 +191,30 @@ class ImplicitMemoryCandidateWorker:
         extractor: ConservativeImplicitMemoryCandidateExtractor | None = None,
         policy: ImplicitCandidateAdmissionPolicy | None = None,
     ) -> None:
-        """Delegate to the account-aware production worker."""
-        from iris.runtime.learning.implicit_review_pipeline import (  # noqa: PLC0415
-            AccountAwareImplicitMemoryCandidateWorker,
-        )
-
-        self._delegate = AccountAwareImplicitMemoryCandidateWorker(
-            store,
-            extractor=extractor,
-            policy=policy,
-        )
+        """Review store、抽出器、admission policyを注入する。"""
+        self._store = store
+        self._extractor = extractor or ConservativeImplicitMemoryCandidateExtractor()
+        self._policy = policy or ImplicitCandidateAdmissionPolicy()
 
     def run(self, job: BackgroundJobRecord) -> None:
-        """Run candidate extraction through the production worker."""
-        self._delegate.run(job)
+        """候補抽出を行い、許可されたものだけreview storeへ保存する。
+
+        Raises:
+            TypeError: job payloadがworker契約に合わない場合。
+        """
+        payload = job.payload
+        if not isinstance(payload, RuntimeLearningCandidateJobPayload):
+            message = "implicit candidate extraction requires RuntimeLearningCandidateJobPayload"
+            raise TypeError(message)
+        for candidate in self._extractor.extract(payload):
+            if not self._policy.accept(candidate):
+                continue
+            record = _review_record(job, payload, candidate)
+            self._store.add_nowait(record)
+
+
+class ImplicitMemoryCandidateWorker(AccountAwareImplicitMemoryCandidateWorker):
+    """Backward-compatible name for the account-aware review-store worker."""
 
 
 def runtime_learning_event_to_payload(
@@ -253,7 +271,7 @@ def has_implicit_candidate_signal(payload: RuntimeLearningCandidateJobPayload) -
     if not text:
         return False
     if payload.event_kind is RuntimeLearningEventKind.USER_FEEDBACK:
-        return True
+        return _feedback_kind_has_signal(payload.feedback_kind) or _feedback_text_has_marker(text)
     if payload.observation_kind is not ObservationKind.ACTOR_MESSAGE:
         return False
     return _matches_any(text, (*_RESPONSE_STYLE_PATTERNS, *_LANGUAGE_PREFERENCE_PATTERNS))
@@ -348,6 +366,35 @@ def _candidate(
     )
 
 
+def _review_record(
+    job: BackgroundJobRecord,
+    payload: RuntimeLearningCandidateJobPayload,
+    candidate: MemoryCandidate,
+) -> MemoryCandidateReviewRecord:
+    key = _candidate_key(job, candidate)
+    return MemoryCandidateReviewRecord(
+        candidate_id=MemoryCandidateReviewId(f"candidate-{key[:24]}"),
+        candidate=candidate,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+        idempotency_key=f"candidate:{key}",
+        actor_id=payload.actor_id,
+        account_id=payload.account_id,
+        space_id=payload.space_id,
+        source_observation_id=payload.source_observation_id,
+        metadata=immutable_metadata(
+            {
+                "background_job_id": str(job.job_id),
+                "runtime_event_kind": payload.event_kind.value,
+                "source": MemoryCandidateSource.IMPLICIT_CONVERSATION.value,
+                "retention_policy": MemoryRetentionPolicy.REVIEW_REQUIRED.value,
+                "review_required": "true",
+                "reason": candidate.reason or "",
+            }
+        ),
+    )
+
+
 def _feedback_text(feedback_kind: UserFeedbackKind | None, text: str) -> str:
     if feedback_kind is UserFeedbackKind.STYLE_PREFERENCE:
         return f"ユーザーはIrisの応答スタイルについて次のフィードバックをした: {text}"
@@ -359,10 +406,11 @@ def _feedback_text(feedback_kind: UserFeedbackKind | None, text: str) -> str:
 def _feedback_confidence(feedback_kind: UserFeedbackKind | None, text: str) -> float:
     if feedback_kind in {UserFeedbackKind.STYLE_PREFERENCE, UserFeedbackKind.CORRECTION}:
         return 0.6
-    lowered = text.casefold()
-    if any(marker in lowered for marker in (*_POSITIVE_FEEDBACK, *_NEGATIVE_FEEDBACK)):
+    if feedback_kind in {UserFeedbackKind.POSITIVE, UserFeedbackKind.NEGATIVE}:
         return 0.45
-    return 0.4
+    if _feedback_text_has_marker(text):
+        return 0.4
+    return 0.3
 
 
 def _feedback_memory_kind(feedback_kind: UserFeedbackKind | None) -> MemoryKind:
@@ -379,6 +427,20 @@ def _feedback_reason(feedback_kind: UserFeedbackKind | None) -> str:
     if feedback_kind is UserFeedbackKind.CORRECTION:
         return "user feedback may correct assistant behavior or understanding"
     return "user feedback may be useful for future relationship or behavior adjustment"
+
+
+def _feedback_kind_has_signal(feedback_kind: UserFeedbackKind | None) -> bool:
+    return feedback_kind in {
+        UserFeedbackKind.POSITIVE,
+        UserFeedbackKind.NEGATIVE,
+        UserFeedbackKind.STYLE_PREFERENCE,
+        UserFeedbackKind.CORRECTION,
+    }
+
+
+def _feedback_text_has_marker(text: str) -> bool:
+    lowered = text.casefold()
+    return any(marker in lowered for marker in (*_POSITIVE_FEEDBACK, *_NEGATIVE_FEEDBACK))
 
 
 def _sensitivity_for_text(text: str) -> MemoryCandidateSensitivity:
@@ -402,6 +464,13 @@ def _job_key(payload: RuntimeLearningCandidateJobPayload) -> str:
             payload.input_text or "",
             payload.output_text or "",
         )
+    )
+    return sha256(material.encode()).hexdigest()
+
+
+def _candidate_key(job: BackgroundJobRecord, candidate: MemoryCandidate) -> str:
+    material = (
+        f"{job.idempotency_key}|{candidate.text}|{candidate.kind.value}|{candidate.source.value}"
     )
     return sha256(material.encode()).hexdigest()
 
