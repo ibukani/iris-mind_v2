@@ -18,6 +18,8 @@ from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
 )
 from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
+from iris.adapters.persistence.sqlite.stores.transcript import SQLiteTranscriptStore
+from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
 from iris.runtime.learning.dispatch import InMemoryLearningDispatchStore
@@ -32,6 +34,7 @@ from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewSt
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
+from iris.runtime.state.transcript import NullTranscriptStore
 
 if TYPE_CHECKING:
     from iris.contracts.accounts import AccountStore
@@ -46,6 +49,7 @@ if TYPE_CHECKING:
     from iris.runtime.state.presence import PresenceStore
     from iris.runtime.state.scheduler_targets import SchedulerTargetStore
     from iris.runtime.state.space_occupancy import SpaceOccupancyStore
+    from iris.runtime.state.transcript import TranscriptStore
 
 
 class SyncLifecycle(Protocol):
@@ -74,6 +78,7 @@ class RuntimeStateStores:
     memory_candidate_review_store: MemoryCandidateReviewStore
     learning_dispatch_store: InMemoryLearningDispatchStore
     conversation_history_store: InMemoryConversationHistoryStore
+    transcript_store: TranscriptStore
     sqlite_context: SQLitePersistenceContext | None = None
     sync_lifecycles: tuple[SyncLifecycle, ...] = ()
 
@@ -102,6 +107,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
 
     Learning dispatch と短期会話履歴は process-local のままにする。
     Background job queue と review candidate lifecycle は SQLite で永続化する。
+    Transcript は config で明示有効化された場合だけ SQLite に保存する。
 
     Returns:
         SQLite backend に対応した RuntimeStateStores。
@@ -113,6 +119,15 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
     sqlite_candidate_review_store = SQLiteMemoryCandidateReviewStore(
         sqlite_path,
         ensure_schema=False,
+    )
+    sqlite_transcript_store = (
+        SQLiteTranscriptStore(
+            sqlite_path,
+            ensure_schema=False,
+            max_records_per_key=config.conversation.transcript.max_records_per_key,
+        )
+        if config.conversation.transcript.enabled
+        else None
     )
     memory_store: MutableMemoryStore = sqlite_memory_store
     return RuntimeStateStores(
@@ -133,11 +148,17 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         memory_candidate_review_store=sqlite_candidate_review_store,
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),
+        transcript_store=sqlite_transcript_store or NullTranscriptStore(),
         sqlite_context=ctx,
-        sync_lifecycles=(
-            sqlite_memory_store,
-            sqlite_background_job_queue,
-            sqlite_candidate_review_store,
+        sync_lifecycles=tuple(
+            lifecycle
+            for lifecycle in (
+                sqlite_memory_store,
+                sqlite_background_job_queue,
+                sqlite_candidate_review_store,
+                sqlite_transcript_store,
+            )
+            if lifecycle is not None
         ),
     )
 
@@ -147,7 +168,13 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
 
     Returns:
         Process-local backend に対応した RuntimeStateStores。
+
+    Raises:
+        ConfigError: transcript persistence が memory backend で有効な場合。
     """
+    if config.conversation.transcript.enabled:
+        message = "conversation.transcript.enabled=true requires state.backend='sqlite'"
+        raise ConfigError(message)
     return RuntimeStateStores(
         account_store=InMemoryAccountStore(),
         memory_store=InMemoryMemoryStore(),
@@ -165,6 +192,7 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
         memory_candidate_review_store=InMemoryMemoryCandidateReviewStore(),
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),
+        transcript_store=NullTranscriptStore(),
         sqlite_context=None,
         sync_lifecycles=(),
     )

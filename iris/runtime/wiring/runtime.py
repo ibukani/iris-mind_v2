@@ -15,7 +15,12 @@ from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
 from iris.contracts.memory import VectorMemoryIndexError
 from iris.core.datetime_utils import now_utc
 from iris.runtime.config.memory import MemoryVectorBackend, resolve_qdrant_api_key
-from iris.runtime.conversation import DeliveryConversationHistoryHook, ShortTermConversationRuntime
+from iris.runtime.conversation import (
+    ConversationHistoryPolicy,
+    DeliveryConversationHistoryHook,
+    ShortTermConversationRuntime,
+    TranscriptWritePolicy,
+)
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.learning.hooks import LearningHookRunner, RuntimeLearningHookRunner
@@ -92,6 +97,12 @@ class RuntimeServiceBuildOptions:
     """RuntimeService組み立てに使う境界横断オプション。"""
 
     target_stale_after_seconds: float
+    conversation_max_window_records: int = 20
+    conversation_max_history_chars: int = 8000
+    conversation_summary_enabled: bool = True
+    conversation_summary_max_chars: int = 1600
+    conversation_summary_min_records: int = 12
+    transcript_retention_days: int = 30
     runtime_learning_hook_runner: RuntimeLearningHookRunner | None = None
     now: Callable[[], datetime] | None = None
 
@@ -157,10 +168,43 @@ def build_runtime_service(
         activity_event_reaction_handler=activity_event_reaction_handler,
         extensions=RuntimeServiceExtensions(
             observation_observer=LoggingRuntimeObservationObserver(),
-            conversation_runtime=ShortTermConversationRuntime(stores.conversation_history_store),
+            conversation_runtime=ShortTermConversationRuntime(
+                stores.conversation_history_store,
+                transcript_store=stores.transcript_store,
+                policy=_conversation_history_policy_from_config(
+                    options.conversation_max_window_records,
+                    options.conversation_max_history_chars,
+                    summary_enabled=options.conversation_summary_enabled,
+                    summary_max_chars=options.conversation_summary_max_chars,
+                    summary_min_records=options.conversation_summary_min_records,
+                ),
+                transcript_policy=TranscriptWritePolicy(options.transcript_retention_days),
+            ),
             runtime_learning_hook_runner=options.runtime_learning_hook_runner,
         ),
         now=current_now,
+    )
+
+
+def _conversation_history_policy_from_config(
+    max_window_records: int,
+    max_history_chars: int,
+    *,
+    summary_enabled: bool,
+    summary_max_chars: int,
+    summary_min_records: int,
+) -> ConversationHistoryPolicy:
+    """Runtime config から conversation history policy を構築する。
+
+    Returns:
+        ConversationHistoryPolicy インスタンス。
+    """
+    return ConversationHistoryPolicy(
+        max_window_records=max_window_records,
+        max_history_chars=max_history_chars,
+        summary_enabled=summary_enabled,
+        summary_max_chars=summary_max_chars,
+        summary_min_records=summary_min_records,
     )
 
 
@@ -202,6 +246,12 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         output_pipeline=output_pipeline,
         options=RuntimeServiceBuildOptions(
             target_stale_after_seconds=config.scheduler.target_stale_after_seconds,
+            conversation_max_window_records=config.conversation.max_window_records,
+            conversation_max_history_chars=config.conversation.max_history_chars,
+            conversation_summary_enabled=config.conversation.summary_enabled,
+            conversation_summary_max_chars=config.conversation.summary_max_chars,
+            conversation_summary_min_records=config.conversation.summary_min_records,
+            transcript_retention_days=config.conversation.transcript.retention_days,
             runtime_learning_hook_runner=_wire_runtime_learning_hook_runner(
                 config,
                 stores,
@@ -445,7 +495,11 @@ def _wire_action_result_hooks(
         collect_learning_hooks(feature_catalog.features) if config.learning.enabled else ()
     )
     return (
-        DeliveryConversationHistoryHook(stores.conversation_history_store),
+        DeliveryConversationHistoryHook(
+            stores.conversation_history_store,
+            transcript_store=stores.transcript_store,
+            transcript_policy=TranscriptWritePolicy(config.conversation.transcript.retention_days),
+        ),
         *feature_hooks,
     )
 

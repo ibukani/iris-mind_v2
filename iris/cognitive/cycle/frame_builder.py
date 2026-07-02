@@ -72,6 +72,11 @@ class FrameBuilder:
                 if situation_context is not None
                 else ()
             ),
+            conversation_summary=(
+                situation_context.conversation_window.summary
+                if situation_context is not None
+                else None
+            ),
         )
 
     @staticmethod
@@ -268,4 +273,5 @@ def _rebuild_frame(
         space_context=frame.space_context,
         situation_context=frame.situation_context,
         conversation_history=frame.conversation_history,
+        conversation_summary=frame.conversation_summary,
     )

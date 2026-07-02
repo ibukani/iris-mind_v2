@@ -25,6 +25,11 @@ from iris.runtime.config.auth import (
     apply_auth_toml,
     validate_auth_config,
 )
+from iris.runtime.config.conversation import (
+    RuntimeConversationConfig,
+    apply_conversation_toml,
+    validate_conversation_config,
+)
 from iris.runtime.config.delivery import (
     RuntimeDeliveryConfig,
     apply_delivery_toml,
@@ -75,6 +80,7 @@ from iris.runtime.config.sources import apply_toml as apply_llm_logging_toml
 from iris.runtime.config.sources import read_toml_file
 from iris.runtime.config.spec import runtime_config_specs_for_version
 from iris.runtime.config.state import (
+    RuntimeStateBackend,
     RuntimeStateConfig,
     apply_state_env,
     apply_state_toml,
@@ -117,6 +123,7 @@ class IrisRuntimeConfig:
     delivery: RuntimeDeliveryConfig
     learning: RuntimeLearningConfig
     memory: RuntimeMemoryConfig
+    conversation: RuntimeConversationConfig
 
 
 @dataclass(frozen=True)
@@ -151,6 +158,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         delivery=RuntimeDeliveryConfig(),
         learning=RuntimeLearningConfig(),
         memory=RuntimeMemoryConfig(),
+        conversation=RuntimeConversationConfig(),
     )
 
 
@@ -389,6 +397,10 @@ def _apply_toml_sections(
         delivery=apply_delivery_toml(config.delivery, delivery_table),
         learning=apply_learning_toml(config.learning, table_or_empty(table, "learning")),
         memory=apply_memory_toml(config.memory, table_or_empty(table, "memory")),
+        conversation=apply_conversation_toml(
+            config.conversation,
+            table_or_empty(table, "conversation"),
+        ),
         models=models,
         ollama=ollama,
         openai=openai,
@@ -428,6 +440,7 @@ class _RuntimeConfigSections:
     delivery: RuntimeDeliveryConfig
     learning: RuntimeLearningConfig
     memory: RuntimeMemoryConfig
+    conversation: RuntimeConversationConfig
     models: RuntimeModelsConfig
     ollama: RuntimeOllamaConfig
     openai: RuntimeOpenAIConfig
@@ -461,6 +474,7 @@ def _apply_env_sections(
         delivery=config.delivery,
         learning=config.learning,
         memory=config.memory,
+        conversation=config.conversation,
         models=models,
         ollama=ollama,
         openai=openai,
@@ -494,6 +508,7 @@ def _compose_runtime_config(
         delivery=sections.delivery,
         learning=sections.learning,
         memory=sections.memory,
+        conversation=sections.conversation,
         models=sections.models,
         ollama=sections.ollama,
         openai=sections.openai,
@@ -523,6 +538,11 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
     validated_scheduler = validate_scheduler_config(config.scheduler)
     validated_delivery = validate_delivery_config(config.delivery)
     validated_learning = validate_learning_config(config.learning)
+    validated_conversation = validate_conversation_config(config.conversation)
+    _validate_transcript_backend(
+        state=validated_state,
+        conversation=validated_conversation,
+    )
     return replace(
         config,
         server=validated_server,
@@ -531,7 +551,23 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         scheduler=validated_scheduler,
         delivery=validated_delivery,
         learning=validated_learning,
+        conversation=validated_conversation,
     )
+
+
+def _validate_transcript_backend(
+    *,
+    state: RuntimeStateConfig,
+    conversation: RuntimeConversationConfig,
+) -> None:
+    """Transcript persistence が silent no-op にならないことを検証する。
+
+    Raises:
+        ConfigError: transcript persistence が SQLite backend 以外で有効な場合。
+    """
+    if conversation.transcript.enabled and state.backend is not RuntimeStateBackend.SQLITE:
+        message = "conversation.transcript.enabled=true requires state.backend='sqlite'"
+        raise ConfigError(message)
 
 
 @dataclass(frozen=True)

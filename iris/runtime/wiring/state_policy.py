@@ -36,6 +36,7 @@ class RuntimeStatePersistencePolicy:
     scheduler_target_store: PersistenceKind
     background_job_queue: PersistenceKind
     memory_candidate_review_store: PersistenceKind
+    transcript_store: PersistenceKind
 
 
 def runtime_state_persistence_policy(
@@ -63,6 +64,7 @@ def runtime_state_persistence_policy(
             scheduler_target_store=PersistenceKind.DURABLE,
             background_job_queue=PersistenceKind.DURABLE,
             memory_candidate_review_store=PersistenceKind.DURABLE,
+            transcript_store=PersistenceKind.DEFERRED,
         )
 
     return RuntimeStatePersistencePolicy(
@@ -78,4 +80,5 @@ def runtime_state_persistence_policy(
         scheduler_target_store=PersistenceKind.EPHEMERAL,
         background_job_queue=PersistenceKind.EPHEMERAL,
         memory_candidate_review_store=PersistenceKind.EPHEMERAL,
+        transcript_store=PersistenceKind.EPHEMERAL,
     )

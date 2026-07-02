@@ -38,3 +38,4 @@ class ConversationWindow(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     records: tuple[ConversationRecord, ...] = ()
+    summary: str | None = None

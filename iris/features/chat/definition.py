@@ -29,6 +29,7 @@ class ResponsePrompt:
     goals: tuple[str, ...] = ()
     constraints: tuple[str, ...] = ()
     conversation_history: tuple[ConversationRecord, ...] = ()
+    conversation_summary: str | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
             _format_policy_constraint(constraint) for constraint in frame.constraints
         ),
         conversation_history=frame.conversation_history,
+        conversation_summary=frame.conversation_summary,
     )
 
 

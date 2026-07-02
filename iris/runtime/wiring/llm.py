@@ -425,6 +425,8 @@ def _build_system_content(prompt: ResponsePrompt) -> str:
 
 def _build_internal_context(prompt: ResponsePrompt) -> str | None:
     sections: list[str] = []
+    if prompt.conversation_summary is not None:
+        sections.append(_build_context_section("Conversation summary", prompt.conversation_summary))
     if prompt.memory_snippets:
         snippets = "\n".join(f"- {snippet}" for snippet in prompt.memory_snippets)
         sections.append(_build_context_section("Relevant memories", snippets))
