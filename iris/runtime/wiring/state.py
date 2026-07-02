@@ -32,6 +32,7 @@ from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
+from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 from iris.runtime.state.transcript import NullTranscriptStore
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
     from iris.runtime.state.activity_projection import ActivityProjectionStore
     from iris.runtime.state.memory_candidates import MemoryCandidateReviewStore
     from iris.runtime.state.presence import PresenceStore
+    from iris.runtime.state.safety_audit import SafetyAuditJournal
     from iris.runtime.state.scheduler_targets import SchedulerTargetStore
     from iris.runtime.state.space_occupancy import SpaceOccupancyStore
     from iris.runtime.state.transcript import TranscriptStore
@@ -74,6 +76,7 @@ class RuntimeStateStores:
     space_occupancy_store: SpaceOccupancyStore
     delivery_outbox: DeliveryOutbox
     scheduler_target_store: SchedulerTargetStore
+    safety_audit_journal: SafetyAuditJournal
     background_job_queue: BackgroundJobQueue
     memory_candidate_review_store: MemoryCandidateReviewStore
     learning_dispatch_store: InMemoryLearningDispatchStore
@@ -144,6 +147,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
             max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
         ),
         scheduler_target_store=SQLiteSchedulerTargetStore(ctx),
+        safety_audit_journal=InMemorySafetyAuditJournal(),
         background_job_queue=sqlite_background_job_queue,
         memory_candidate_review_store=sqlite_candidate_review_store,
         learning_dispatch_store=InMemoryLearningDispatchStore(),
@@ -188,6 +192,7 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
             max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
         ),
         scheduler_target_store=InMemorySchedulerTargetStore(),
+        safety_audit_journal=InMemorySafetyAuditJournal(),
         background_job_queue=InMemoryBackgroundJobQueue(),
         memory_candidate_review_store=InMemoryMemoryCandidateReviewStore(),
         learning_dispatch_store=InMemoryLearningDispatchStore(),

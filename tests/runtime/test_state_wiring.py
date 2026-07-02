@@ -18,6 +18,7 @@ from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
+from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.wiring.state import wire_runtime_state
 
@@ -31,6 +32,7 @@ def test_state_wiring_memory_uses_process_local_delivery_and_scheduler_stores() 
 
     assert isinstance(stores.delivery_outbox, InMemoryDeliveryOutbox)
     assert isinstance(stores.scheduler_target_store, InMemorySchedulerTargetStore)
+    assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
     assert isinstance(stores.background_job_queue, InMemoryBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, InMemoryMemoryCandidateReviewStore)
 
@@ -52,6 +54,7 @@ async def test_state_wiring_sqlite_uses_durable_delivery_and_scheduler_stores(
 
     assert isinstance(stores.delivery_outbox, SQLiteDeliveryOutbox)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
+    assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
     assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
 
