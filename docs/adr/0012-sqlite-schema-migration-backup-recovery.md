@@ -33,7 +33,7 @@ Schema version は二段構えにする。
 - `PRAGMA user_version`: 高速な compatibility check。
 - `schema_migrations`: migration version、name、checksum、applied_at の history。
 
-Current schema version は `CURRENT_SQLITE_SCHEMA_VERSION = 2`。runtime は supported old DB を current へ migrate するが、unknown future version は silent open しない。
+Current schema version は `CURRENT_SQLITE_SCHEMA_VERSION = 3`。runtime は supported old DB を current へ migrate するが、unknown future version は silent open しない。
 
 Baseline migration `v0001_baseline` は current SQLite schema の正本である。対象は以下。
 
@@ -51,6 +51,7 @@ Baseline migration `v0001_baseline` は current SQLite schema の正本である
 | `scheduler_targets` | source of truth | `SQLiteSchedulerTargetStore` |
 | `background_jobs` | source of truth | `SQLiteBackgroundJobQueue` |
 | `memory_candidate_reviews` | source of truth | `SQLiteMemoryCandidateReviewStore`。payload の durable contract は `iris/contracts/memory_candidates.py` |
+| `conversation_transcripts` | opt-in source of truth | `SQLiteTranscriptStore`。payload の durable contract は `iris/contracts/transcript.py` |
 | future `memory_embeddings` | derived / rebuildable index metadata | vector index backend |
 
 Process-local state は SQLite schema の対象にしない。
@@ -60,6 +61,8 @@ Process-local state は SQLite schema の対象にしない。
 - `space_occupancy_store`
 - `conversation_history_store`
 - `learning_dispatch_store`
+
+`conversation_history_store` は prompt 用の process-local window であり、`conversation_transcripts` は明示的に有効化された confirmed transcript persistence である。この2つは同じ会話由来でも異なる state として扱う。
 
 Migration policy:
 
@@ -97,7 +100,7 @@ Activity journal replay scope:
 
 - activity journal は diagnostics、provider event dedupe、future projection rebuild に使ってよい。
 - activity journal は全 durable state の canonical source ではない。
-- account links、relationships、affect baselines、delivery outbox、scheduler targets、background jobs、memory candidate reviews は、専用 store が source of truth。memory candidate review payload は `contracts` の durable candidate contract を使い、SQLite adapter は `cognitive` 内部 model に依存しない。
+- account links、relationships、affect baselines、delivery outbox、scheduler targets、background jobs、memory candidate reviews、opt-in conversation transcripts は、専用 store が source of truth。memory candidate review payload は `contracts` の durable candidate contract を使い、SQLite adapter は `cognitive` 内部 model に依存しない。
 - event が明示的に journal され test されていない限り、activity journal から完全復元できると仮定しない。
 
 Runtime doctor は read-only を維持する。SQLite backend では DB path、schema version、latest migration、pending migration、future version rejection、corrupt detection、runtime learning state counts を報告する。doctor は migration を適用しない。

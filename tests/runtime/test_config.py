@@ -708,6 +708,8 @@ def test_config_package_exposes_stable_public_api() -> None:
     expected = {
         "RuntimeConfigOverrides",
         "RuntimeConfigMetadata",
+        "RuntimeConversationConfig",
+        "RuntimeTranscriptConfig",
         "ConfigFieldSpec",
         "ConfigError",
         "IrisRuntimeConfig",

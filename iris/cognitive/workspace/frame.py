@@ -89,6 +89,7 @@ class WorkspaceFrame(BaseModel):
         default_factory=SituationContextSnapshot,
     )
     conversation_history: tuple[ConversationRecord, ...] = ()
+    conversation_summary: str | None = None
 
 
 def interpreted_input_text(frame: WorkspaceFrame) -> str | None:

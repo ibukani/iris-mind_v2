@@ -271,7 +271,10 @@
       "path": "memory.vector.backend",
       "type": "enum",
       "default": "in_memory",
-      "allowedValues": ["in_memory", "qdrant"],
+      "allowedValues": [
+        "in_memory",
+        "qdrant"
+      ],
       "env": null,
       "secret": false,
       "editable": true,
@@ -311,7 +314,9 @@
       "path": "memory.embedding.provider",
       "type": "enum",
       "default": "fake",
-      "allowedValues": ["fake"],
+      "allowedValues": [
+        "fake"
+      ],
       "env": null,
       "secret": false,
       "editable": true,
@@ -436,6 +441,86 @@
       "secret": false,
       "editable": true,
       "description": "scheduler run 1回あたりの最大 due observation 数。"
+    },
+    {
+      "path": "conversation.max_window_records",
+      "type": "int",
+      "default": 20,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "LLMへ渡す短期会話windowの最大record数。"
+    },
+    {
+      "path": "conversation.max_history_chars",
+      "type": "int",
+      "default": 8000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "LLMへ渡す短期会話windowの最大文字数。0なら過去会話を渡さない。"
+    },
+    {
+      "path": "conversation.summary_enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "長期会話windowの古いturnをsummary contextへ畳む。"
+    },
+    {
+      "path": "conversation.summary_max_chars",
+      "type": "int",
+      "default": 1600,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "会話summary contextの最大文字数。0ならsummaryを渡さない。"
+    },
+    {
+      "path": "conversation.summary_min_records",
+      "type": "int",
+      "default": 12,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "summary生成を検討する最小record数。"
+    },
+    {
+      "path": "conversation.transcript.enabled",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "confirmed conversation transcript の永続保存を有効化する。true は state.backend=sqlite を要求する。"
+    },
+    {
+      "path": "conversation.transcript.retention_days",
+      "type": "int",
+      "default": 30,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "transcript record の保持日数。0なら期限なし。"
+    },
+    {
+      "path": "conversation.transcript.max_records_per_key",
+      "type": "int",
+      "default": 1000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "conversation keyごとのtranscript保持上限。"
     },
     {
       "path": "delivery.enabled",

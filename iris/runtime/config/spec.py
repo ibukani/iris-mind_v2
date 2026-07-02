@@ -373,6 +373,57 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "scheduler run 1回あたりの最大 due observation 数。",
         ),
         ConfigFieldSpec(
+            "conversation.max_window_records",
+            ConfigValueType.INT,
+            20,
+            "LLMへ渡す短期会話windowの最大record数。",
+        ),
+        ConfigFieldSpec(
+            "conversation.max_history_chars",
+            ConfigValueType.INT,
+            8000,
+            "LLMへ渡す短期会話windowの最大文字数。0なら過去会話を渡さない。",
+        ),
+        ConfigFieldSpec(
+            "conversation.summary_enabled",
+            ConfigValueType.BOOL,
+            default=True,
+            description="長期会話windowの古いturnをsummary contextへ畳む。",
+        ),
+        ConfigFieldSpec(
+            "conversation.summary_max_chars",
+            ConfigValueType.INT,
+            1600,
+            "会話summary contextの最大文字数。0ならsummaryを渡さない。",
+        ),
+        ConfigFieldSpec(
+            "conversation.summary_min_records",
+            ConfigValueType.INT,
+            12,
+            "summary生成を検討する最小record数。",
+        ),
+        ConfigFieldSpec(
+            "conversation.transcript.enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description=(
+                "confirmed conversation transcript の永続保存を有効化する。"
+                "true は state.backend=sqlite を要求する。"
+            ),
+        ),
+        ConfigFieldSpec(
+            "conversation.transcript.retention_days",
+            ConfigValueType.INT,
+            30,
+            "transcript record の保持日数。0なら期限なし。",
+        ),
+        ConfigFieldSpec(
+            "conversation.transcript.max_records_per_key",
+            ConfigValueType.INT,
+            1000,
+            "conversation keyごとのtranscript保持上限。",
+        ),
+        ConfigFieldSpec(
             "delivery.enabled",
             ConfigValueType.BOOL,
             default=True,

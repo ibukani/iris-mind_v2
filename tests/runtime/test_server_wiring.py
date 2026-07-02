@@ -267,6 +267,7 @@ def test_action_result_hook_wiring_keeps_delivery_history_when_learning_disabled
     assert len(hooks) == 1
     assert isinstance(hooks[0], DeliveryConversationHistoryHook)
     assert hooks[0].store is stores.conversation_history_store
+    assert hooks[0].transcript_store is stores.transcript_store
     assert feature_hook not in hooks
 
 

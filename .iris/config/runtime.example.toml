@@ -57,6 +57,20 @@ min_interval_per_target_seconds = 1800.0
 target_stale_after_seconds = 604800.0
 max_due_per_run = 10
 
+[conversation]
+max_window_records = 20
+max_history_chars = 8000
+summary_enabled = true
+summary_max_chars = 1600
+summary_min_records = 12
+
+[conversation.transcript]
+# raw transcript persistence is opt-in and requires state.backend = "sqlite".
+# Keep disabled unless retention is intentional.
+enabled = false
+retention_days = 30
+max_records_per_key = 1000
+
 [delivery]
 enabled = true
 max_outbox_depth_per_provider = 100

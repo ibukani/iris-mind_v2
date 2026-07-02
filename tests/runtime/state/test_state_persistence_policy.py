@@ -18,7 +18,9 @@ from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
 )
 from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
-from iris.runtime.config import default_runtime_config
+from iris.adapters.persistence.sqlite.stores.transcript import SQLiteTranscriptStore
+from iris.runtime.config import ConfigError, default_runtime_config
+from iris.runtime.config.conversation import RuntimeConversationConfig, RuntimeTranscriptConfig
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
@@ -29,6 +31,7 @@ from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
+from iris.runtime.state.transcript import NullTranscriptStore
 from iris.runtime.wiring.state import wire_runtime_state
 from iris.runtime.wiring.state_policy import (
     PERSISTENCE_KIND_VALUES,
@@ -56,6 +59,7 @@ def test_memory_backend_policy_marks_runtime_state_ephemeral() -> None:
     assert policy.scheduler_target_store == PersistenceKind.EPHEMERAL
     assert policy.background_job_queue == PersistenceKind.EPHEMERAL
     assert policy.memory_candidate_review_store == PersistenceKind.EPHEMERAL
+    assert policy.transcript_store == PersistenceKind.EPHEMERAL
 
 
 def test_sqlite_backend_policy_marks_durable_companion_state() -> None:
@@ -71,6 +75,7 @@ def test_sqlite_backend_policy_marks_durable_companion_state() -> None:
     assert policy.scheduler_target_store == PersistenceKind.DURABLE
     assert policy.background_job_queue == PersistenceKind.DURABLE
     assert policy.memory_candidate_review_store == PersistenceKind.DURABLE
+    assert policy.transcript_store == PersistenceKind.DEFERRED
 
 
 def test_sqlite_backend_keeps_runtime_projections_ephemeral() -> None:
@@ -102,6 +107,7 @@ async def test_sqlite_runtime_wiring_uses_sqlite_durable_stores(tmp_path: Path) 
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
     assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
+    assert isinstance(stores.transcript_store, NullTranscriptStore)
 
     await stores.close()
 
@@ -117,6 +123,20 @@ def test_memory_runtime_wiring_uses_in_memory_state_stores() -> None:
     assert isinstance(stores.activity_journal, InMemoryActivityJournal)
     assert isinstance(stores.background_job_queue, InMemoryBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, InMemoryMemoryCandidateReviewStore)
+    assert isinstance(stores.transcript_store, NullTranscriptStore)
+
+
+def test_memory_runtime_wiring_rejects_enabled_transcript_store() -> None:
+    """Memory backend で transcript persistence を有効化すると fail closed する。"""
+    config = replace(
+        default_runtime_config(),
+        conversation=RuntimeConversationConfig(
+            transcript=RuntimeTranscriptConfig(enabled=True),
+        ),
+    )
+
+    with pytest.raises(ConfigError, match=r"state\.backend='sqlite'"):
+        wire_runtime_state(config)
 
 
 @pytest.mark.anyio
@@ -144,6 +164,7 @@ async def test_runtime_wiring_keeps_projection_presence_and_occupancy_in_memory(
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
     assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
+    assert isinstance(stores.transcript_store, NullTranscriptStore)
 
     await stores.close()
 
@@ -151,3 +172,27 @@ async def test_runtime_wiring_keeps_projection_presence_and_occupancy_in_memory(
 def test_persistence_kind_literal_values_include_deferred_for_policy_docs() -> None:
     """PersistenceKind values remain stable for policy documentation."""
     assert PERSISTENCE_KIND_VALUES == ("durable", "ephemeral", "deferred")
+
+
+@pytest.mark.anyio
+async def test_sqlite_runtime_wiring_uses_sqlite_transcript_store_when_enabled(
+    tmp_path: Path,
+) -> None:
+    """SQLite transcript store は明示 enabled の場合だけ durable store になる。"""
+    base = default_runtime_config()
+    config = replace(
+        base,
+        state=RuntimeStateConfig(
+            backend=RuntimeStateBackend.SQLITE,
+            sqlite_path=str(tmp_path / "state.db"),
+        ),
+        conversation=RuntimeConversationConfig(
+            transcript=RuntimeTranscriptConfig(enabled=True),
+        ),
+    )
+
+    stores = wire_runtime_state(config)
+
+    assert isinstance(stores.transcript_store, SQLiteTranscriptStore)
+
+    await stores.close()

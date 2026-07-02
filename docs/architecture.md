@@ -887,12 +887,13 @@ CLI / main.py / iris.runtime.server
 - authenticated ingress capability による typed activity/presence claim の runtime integration 実装済み
 - trusted voice join/leave からの in-memory space occupancy integration 実装済み
 - `AvailabilityResolver` / `WorkspaceContextAssembler` による `SituationContextSnapshot` の組み立て実装済み
-- 永続ストレージ: SQLite backend は account、memory、relationship、affect、activity journal を永続化する。activity projection、presence、space occupancy、delivery outbox、scheduler target store、対話スペース解決はエフェメラル。
+- 永続ストレージ: SQLite backend は account、memory、relationship、affect、activity journal、delivery outbox、scheduler target store、background jobs、memory candidate reviews を永続化する。activity projection、presence、space occupancy、対話スペース解決、short-term conversation history はエフェメラル。
+- Transcript persistence は `conversation.transcript.enabled` で明示的に有効化し、`state.backend = "sqlite"` を使う場合だけ SQLite に保存する。short-term conversation history と long-term memory とは分離する。
 - Scheduler lifecycle は config で有効化できる。`SchedulerRunner` は `IdleTickObservation` を発行し、`DeliverySafetyGate` と `DeliveryOutbox` を通した pull-based delivery だけを使う。
-- Delivery は in-memory outbox 実装。`DeliveryEnvelope`、lease、idempotent `ReportActionResult`、`DeliveryStatus` state machine は durable backend へ置換可能な契約として実装済み。
+- Delivery は SQLite backend で durable outbox にできる。`DeliveryEnvelope`、lease、idempotent `ReportActionResult`、`DeliveryStatus` state machine は durable backend で永続化できる契約として実装済み。
 - Runtime observability は `RuntimeTraceContext`、safe lifecycle logs、LLM request observer、startup diagnostics、read-only runtime doctor を実装済み。
 - `MotivationResult` 型と `FrameBuilder` 対応は既存、step 実装は未着手
-- LearningHook / RuntimeLearningHook / BackgroundJobQueue は skeleton 実装済み。implicit candidate は review store に入り、approved candidate だけが MemoryStore へ promotion される。promotion 済み metadata と canonical MemoryStore の不整合は `promoted_memory_missing` として通常の冪等 hit と区別する。SQLite learning-state persistence、transcript persistence、summarization は未実装
+- LearningHook / RuntimeLearningHook / BackgroundJobQueue は実装済み。implicit candidate は review store に入り、approved candidate だけが MemoryStore へ promotion される。promotion 済み metadata と canonical MemoryStore の不整合は `promoted_memory_missing` として通常の冪等 hit と区別する。SQLite learning-state persistence、opt-in transcript persistence、deterministic long-conversation summary は実装済み
 - 外部アプリ連携 (Discord, Voice, Twitch) は未実装
 - AppGateway は Protocol とサーバーサイドの Identity Resolver / Space Resolver を定義済み (外部アプリのidentity永続化用)
 
