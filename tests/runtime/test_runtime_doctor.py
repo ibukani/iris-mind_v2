@@ -683,6 +683,36 @@ async def test_runtime_doctor_warns_on_scheduler_without_safety_audit_journal(
 
 
 @pytest.mark.anyio
+async def test_runtime_doctor_reports_all_scheduler_partial_wiring_warnings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Scheduler wiring 欠落が複数ある場合はすべて issue に出す。"""
+    config = _scheduler_enabled_config()
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_standard_operational_wiring",
+        _static_wiring(
+            doctor.RuntimeOperationalWiringDiagnostics(
+                scheduler_runner_wired=False,
+                availability_provider_wired=False,
+                safety_audit_journal_wired=False,
+            )
+        ),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "scheduler-runtime")
+    assert check.status == "warn"
+    assert check.issue is not None
+    assert "scheduler.enabled=true but scheduler runner is not wired" in check.issue
+    assert "scheduler.enabled=true but availability_provider is not wired" in check.issue
+    assert "scheduler.enabled=true but safety_audit_journal is not wired" in check.issue
+
+
+@pytest.mark.anyio
 async def test_runtime_doctor_warns_on_proactive_without_delivery_safety_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -755,6 +785,37 @@ async def test_runtime_doctor_warns_on_proactive_without_safety_audit_journal(
     assert check.status == "warn"
     assert check.issue == "proactive_talk enabled but safety_audit_journal is not wired"
     assert "safety_audit_journal=not_wired" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_reports_all_proactive_partial_wiring_warnings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proactive safety 欠落が複数ある場合はすべて issue に出す。"""
+    config = default_runtime_config()
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_standard_operational_wiring",
+        _static_wiring(
+            doctor.RuntimeOperationalWiringDiagnostics(
+                proactive_talk_enabled=True,
+                delivery_safety_gate_wired=False,
+                output_safety_gate_wired=False,
+                safety_audit_journal_wired=False,
+            )
+        ),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "proactive-safety")
+    assert check.status == "warn"
+    assert check.issue is not None
+    assert "proactive_talk enabled but delivery safety gate is not configured" in check.issue
+    assert "proactive_talk enabled but output safety gate is not configured" in check.issue
+    assert "proactive_talk enabled but safety_audit_journal is not wired" in check.issue
 
 
 @pytest.mark.anyio

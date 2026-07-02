@@ -491,24 +491,24 @@ def _scheduler_runtime_check(
         f"availability_provider={_wired_status(wired=wiring.availability_provider_wired)} "
         f"safety_audit_journal={_wired_status(wired=wiring.safety_audit_journal_wired)}"
     )
-    warning = _scheduler_runtime_warning(config, wiring)
-    if warning is None:
+    issues = _scheduler_runtime_warning_issues(config, wiring)
+    if not issues:
         return _build_check("scheduler-runtime", status="ok", summary=summary)
     return _build_check(
         "scheduler-runtime",
         status="warn",
         summary=summary,
-        issue=warning,
+        issue=_issue_summary(issues),
         next_action="complete scheduler runtime wiring before enabling scheduler",
     )
 
 
-def _scheduler_runtime_warning(
+def _scheduler_runtime_warning_issues(
     config: IrisRuntimeConfig,
     wiring: RuntimeOperationalWiringDiagnostics,
-) -> str | None:
+) -> tuple[str, ...]:
     if not config.scheduler.enabled:
-        return None
+        return ()
     warning_checks = (
         (
             not wiring.scheduler_runner_wired,
@@ -523,10 +523,7 @@ def _scheduler_runtime_warning(
             "scheduler.enabled=true but safety_audit_journal is not wired",
         ),
     )
-    for has_warning, issue in warning_checks:
-        if has_warning:
-            return issue
-    return None
+    return tuple(issue for has_warning, issue in warning_checks if has_warning)
 
 
 def _delivery_outbox_check(
@@ -676,24 +673,24 @@ def _proactive_safety_check(
         f"output_safety={output_safety} "
         f"safety_audit_journal={audit_journal}"
     )
-    warning = _proactive_safety_warning(config, wiring)
-    if warning is None:
+    issues = _proactive_safety_warning_issues(config, wiring)
+    if not issues:
         return _build_check("proactive-safety", status="ok", summary=summary)
     return _build_check(
         "proactive-safety",
         status="warn",
         summary=summary,
-        issue=warning,
+        issue=_issue_summary(issues),
         next_action="complete proactive safety wiring before enabling proactive delivery",
     )
 
 
-def _proactive_safety_warning(
+def _proactive_safety_warning_issues(
     config: IrisRuntimeConfig,
     wiring: RuntimeOperationalWiringDiagnostics,
-) -> str | None:
+) -> tuple[str, ...]:
     if not wiring.proactive_talk_enabled:
-        return None
+        return ()
     warning_checks = (
         (
             not wiring.delivery_safety_gate_wired,
@@ -708,10 +705,11 @@ def _proactive_safety_warning(
             "proactive_talk enabled but safety_audit_journal is not wired",
         ),
     )
-    for has_warning, issue in warning_checks:
-        if has_warning:
-            return issue
-    return None
+    return tuple(issue for has_warning, issue in warning_checks if has_warning)
+
+
+def _issue_summary(issues: tuple[str, ...]) -> str:
+    return "; ".join(issues)
 
 
 def _delivery_safety_mode(
