@@ -1,4 +1,4 @@
-"""Runtime state wiring backend selection tests."""
+"""runtime state wiring の backend 選択 test。"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 def test_state_wiring_memory_uses_process_local_delivery_and_scheduler_stores() -> None:
-    """Memory backend wires process-local outbox and scheduler targets."""
+    """Memory backend は process-local outbox と scheduler target を配線する。"""
     stores = wire_runtime_state(default_runtime_config())
 
     assert isinstance(stores.delivery_outbox, InMemoryDeliveryOutbox)
@@ -41,7 +41,7 @@ def test_state_wiring_memory_uses_process_local_delivery_and_scheduler_stores() 
 async def test_state_wiring_sqlite_uses_durable_delivery_and_scheduler_stores(
     tmp_path: Path,
 ) -> None:
-    """SQLite backend wires durable outbox and scheduler targets."""
+    """SQLite backend は durable outbox と scheduler target を配線する。"""
     config = replace(
         default_runtime_config(),
         state=RuntimeStateConfig(

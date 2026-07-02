@@ -1,4 +1,4 @@
-"""Runtime component wiring tests for scheduler safety dependencies."""
+"""標準 runtime component wiring が scheduler safety dependencies を保持することを検証する。"""
 
 from __future__ import annotations
 
@@ -43,16 +43,16 @@ _SESSION_ID = SessionId("session-scheduler-busy")
 
 
 class _SendableStep(PipelineStep[ActionSelectionResult]):
-    """Scheduler composition test 用に sendable plan を返す step。"""
+    """送信可能な plan を返す scheduler composition test 用 step。"""
 
     name = "sendable"
 
     @override
     async def run(self, frame: WorkspaceFrame) -> ActionSelectionResult:
-        """Sendable ActionPlan を返す。
+        """送信可能な ActionPlan を返す。
 
         Returns:
-            ActionSelectionResult: sendable text を持つ action plan。
+            ActionSelectionResult: 送信可能な text を持つ action plan。
         """
         _ = frame.observation
         return ActionSelectionResult(
@@ -77,10 +77,10 @@ def _build_sendable_app(
     output_pipeline: RuntimeOutputPipeline,
     features: Sequence[FeatureDefinition] = (),
 ) -> IrisApp:
-    """標準 composition の app だけを sendable test double に差し替える。
+    """標準 composition の app だけを送信可能な test double に差し替える。
 
     Returns:
-        Sendable step を持つ IrisApp。
+        送信可能な step を持つ IrisApp。
     """
     _ = config, client_factory, state, features
     return IrisApp(steps=(_SendableStep(),), output_pipeline=output_pipeline)
@@ -102,7 +102,7 @@ def test_build_runtime_components_wires_scheduler_safety_dependencies() -> None:
 
 
 def test_build_runtime_components_uses_strict_scheduler_delivery_gate() -> None:
-    """Strict safety mode は標準 scheduler delivery gate にも反映される。"""
+    """標準 scheduler delivery gate に strict safety mode が反映される。"""
     config = replace(
         default_runtime_config(),
         safety=RuntimeSafetyConfig(mode="strict"),
@@ -170,7 +170,7 @@ async def test_standard_runtime_wiring_blocks_safety_reasons_and_records_audit(
 
 
 def _scheduler_target() -> SchedulerTarget:
-    """BUSY availability を解決できる scheduler target を作る。
+    """BUSY の availability を解決できる scheduler target を作る。
 
     Returns:
         actor_id 付き SchedulerTarget。
@@ -193,7 +193,7 @@ def _scheduler_target() -> SchedulerTarget:
 
 
 def _presence(status: PresenceStatus) -> PresenceSnapshot:
-    """Presence snapshot を作る。
+    """Presence の snapshot を作る。
 
     Returns:
         AvailabilityResolver で block reason に変換される PresenceSnapshot。

@@ -1,4 +1,4 @@
-"""Runtime wiring helper tests for scheduler wiring."""
+"""scheduler wiring helper の test。"""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class _AvailabilityProvider:
-    """DeliveryAvailabilityProvider fake for wiring identity assertions."""
+    """wiring の同一性検証用 DeliveryAvailabilityProvider fake。"""
 
     async def availability_for_target(
         self,
@@ -38,17 +38,17 @@ class _AvailabilityProvider:
         *,
         now: datetime,
     ) -> AvailabilitySnapshot | None:
-        """Return no availability snapshot.
+        """Availability snapshot は返さない。
 
         Returns:
-            None。wire identity test では呼び出されない。
+            None。wiring の同一性 test では呼び出されない。
         """
         _ = target, now
         return None
 
 
 def test_wire_scheduler_runner_keeps_explicit_safety_dependencies() -> None:
-    """wire_scheduler_runner は明示された safety dependencies を runner へ渡す。"""
+    """明示された safety dependencies を wire_scheduler_runner が runner へ渡す。"""
     config = default_runtime_config()
     stores = wire_runtime_state(config)
     feature_catalog = wire_runtime_features()
@@ -82,7 +82,7 @@ def test_wire_scheduler_runner_keeps_explicit_safety_dependencies() -> None:
 
 
 def test_wire_runtime_scheduler_maps_runtime_scheduler_config_to_policy() -> None:
-    """wire_runtime_scheduler は scheduler config を policy に写像する。"""
+    """Scheduler config を wire_runtime_scheduler が policy に写像する。"""
     base_config = default_runtime_config()
     config = replace(
         base_config,

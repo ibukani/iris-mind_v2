@@ -1,4 +1,4 @@
-"""Runtime wiring helper tests for state stores."""
+"""state store wiring helper の test。"""
 
 from __future__ import annotations
 
