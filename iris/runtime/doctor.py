@@ -37,7 +37,10 @@ from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.learning.jobs import BackgroundJobStatus
 from iris.runtime.observability.diagnostics import DiagnosticsCheckOutcome, run_startup_diagnostics
 from iris.runtime.state.memory_candidates import MemoryCandidateReviewStatus
-from iris.runtime.wiring.features import wire_runtime_features
+from iris.runtime.wiring.runtime import (
+    RuntimeOperationalWiringDiagnostics,
+    describe_runtime_operational_wiring,
+)
 
 
 @dataclass(frozen=True)
@@ -131,21 +134,6 @@ class _FilePathCheckSpec:
     missing_fail_summary: str
     missing_fail_issue: str
     missing_fail_next_action: str
-
-
-@dataclass(frozen=True)
-class RuntimeOperationalWiringDiagnostics:
-    """Runtime doctor が runtime 起動なしで検査する標準 wiring snapshot。"""
-
-    scheduler_runner_wired: bool = True
-    availability_provider_wired: bool = True
-    safety_audit_journal_wired: bool = True
-    delivery_broker_wired: bool = True
-    delivery_safety_gate_wired: bool = True
-    output_safety_gate_wired: bool = True
-    proactive_talk_enabled: bool = False
-    proactive_generation_mode: str = "not_configured"
-    proactive_threshold: str = "not_configured"
 
 
 @dataclass(frozen=True)
@@ -744,15 +732,10 @@ def _wired_status(*, wired: bool) -> str:
     return "wired" if wired else "not_wired"
 
 
-def _standard_operational_wiring(config: IrisRuntimeConfig) -> RuntimeOperationalWiringDiagnostics:
-    feature_catalog = wire_runtime_features()
-    proactive_talk_enabled = any(
-        feature.name == "proactive_talk" for feature in feature_catalog.features
-    )
-    return RuntimeOperationalWiringDiagnostics(
-        delivery_broker_wired=config.delivery.enabled,
-        proactive_talk_enabled=proactive_talk_enabled,
-    )
+def _runtime_operational_wiring_snapshot(
+    config: IrisRuntimeConfig,
+) -> RuntimeOperationalWiringDiagnostics:
+    return describe_runtime_operational_wiring(config)
 
 
 def _summary_from_gate_check(check: RuntimeDoctorCheck) -> _OperationalStatusSummary:
@@ -813,7 +796,7 @@ def _runtime_doctor_base_checks(config: IrisRuntimeConfig) -> list[RuntimeDoctor
     Returns:
         順序を保った RuntimeDoctorCheck の list。
     """
-    wiring = _standard_operational_wiring(config)
+    wiring = _runtime_operational_wiring_snapshot(config)
     return [
         _state_backend_check(config),
         _sqlite_state_check(config),

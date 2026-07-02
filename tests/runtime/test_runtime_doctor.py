@@ -25,6 +25,7 @@ from iris.runtime.config.llm import LLMProvider, ModelSlotName
 from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.doctor import main, run_runtime_doctor
 from iris.runtime.observability.diagnostics import DiagnosticsCheckOutcome, StartupDiagnosticsReport
+from iris.runtime.wiring.runtime import RuntimeOperationalWiringDiagnostics
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -625,10 +626,8 @@ async def test_runtime_doctor_warns_on_scheduler_without_availability_provider(
     monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
     monkeypatch.setattr(
         doctor,
-        "_standard_operational_wiring",
-        _static_wiring(
-            doctor.RuntimeOperationalWiringDiagnostics(availability_provider_wired=False)
-        ),
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(RuntimeOperationalWiringDiagnostics(availability_provider_wired=False)),
     )
 
     report = await run_runtime_doctor()
@@ -648,8 +647,8 @@ async def test_runtime_doctor_warns_on_scheduler_without_runner(
     monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
     monkeypatch.setattr(
         doctor,
-        "_standard_operational_wiring",
-        _static_wiring(doctor.RuntimeOperationalWiringDiagnostics(scheduler_runner_wired=False)),
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(RuntimeOperationalWiringDiagnostics(scheduler_runner_wired=False)),
     )
 
     report = await run_runtime_doctor()
@@ -669,10 +668,8 @@ async def test_runtime_doctor_warns_on_scheduler_without_safety_audit_journal(
     monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
     monkeypatch.setattr(
         doctor,
-        "_standard_operational_wiring",
-        _static_wiring(
-            doctor.RuntimeOperationalWiringDiagnostics(safety_audit_journal_wired=False)
-        ),
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(RuntimeOperationalWiringDiagnostics(safety_audit_journal_wired=False)),
     )
 
     report = await run_runtime_doctor()
@@ -692,9 +689,9 @@ async def test_runtime_doctor_reports_all_scheduler_partial_wiring_warnings(
     monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
     monkeypatch.setattr(
         doctor,
-        "_standard_operational_wiring",
+        "_runtime_operational_wiring_snapshot",
         _static_wiring(
-            doctor.RuntimeOperationalWiringDiagnostics(
+            RuntimeOperationalWiringDiagnostics(
                 scheduler_runner_wired=False,
                 availability_provider_wired=False,
                 safety_audit_journal_wired=False,
@@ -722,9 +719,9 @@ async def test_runtime_doctor_warns_on_proactive_without_delivery_safety_gate(
     monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
     monkeypatch.setattr(
         doctor,
-        "_standard_operational_wiring",
+        "_runtime_operational_wiring_snapshot",
         _static_wiring(
-            doctor.RuntimeOperationalWiringDiagnostics(
+            RuntimeOperationalWiringDiagnostics(
                 proactive_talk_enabled=True,
                 delivery_safety_gate_wired=False,
             ),
@@ -748,8 +745,8 @@ async def test_runtime_doctor_warns_on_proactive_with_allow_all_output_safety(
     monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
     monkeypatch.setattr(
         doctor,
-        "_standard_operational_wiring",
-        _static_wiring(doctor.RuntimeOperationalWiringDiagnostics(proactive_talk_enabled=True)),
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(RuntimeOperationalWiringDiagnostics(proactive_talk_enabled=True)),
     )
 
     report = await run_runtime_doctor()
@@ -770,9 +767,9 @@ async def test_runtime_doctor_warns_on_proactive_without_safety_audit_journal(
     monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
     monkeypatch.setattr(
         doctor,
-        "_standard_operational_wiring",
+        "_runtime_operational_wiring_snapshot",
         _static_wiring(
-            doctor.RuntimeOperationalWiringDiagnostics(
+            RuntimeOperationalWiringDiagnostics(
                 proactive_talk_enabled=True,
                 safety_audit_journal_wired=False,
             ),
@@ -797,9 +794,9 @@ async def test_runtime_doctor_reports_all_proactive_partial_wiring_warnings(
     monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
     monkeypatch.setattr(
         doctor,
-        "_standard_operational_wiring",
+        "_runtime_operational_wiring_snapshot",
         _static_wiring(
-            doctor.RuntimeOperationalWiringDiagnostics(
+            RuntimeOperationalWiringDiagnostics(
                 proactive_talk_enabled=True,
                 delivery_safety_gate_wired=False,
                 output_safety_gate_wired=False,
@@ -978,9 +975,9 @@ def _scheduler_enabled_config() -> IrisRuntimeConfig:
 
 
 def _static_wiring(
-    wiring: doctor.RuntimeOperationalWiringDiagnostics,
-) -> Callable[[IrisRuntimeConfig], doctor.RuntimeOperationalWiringDiagnostics]:
-    def build_wiring(config: IrisRuntimeConfig) -> doctor.RuntimeOperationalWiringDiagnostics:
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> Callable[[IrisRuntimeConfig], RuntimeOperationalWiringDiagnostics]:
+    def build_wiring(config: IrisRuntimeConfig) -> RuntimeOperationalWiringDiagnostics:
         del config
         return wiring
 
