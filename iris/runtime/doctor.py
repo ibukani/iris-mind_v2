@@ -25,6 +25,7 @@ from iris.adapters.persistence.sqlite.migrator import (
     SQLiteSchemaMigrator,
     SQLiteUnsupportedSchemaVersionError,
 )
+from iris.contracts.delivery import DeliveryStatus
 from iris.core.datetime_utils import now_utc, parse_datetime
 from iris.runtime.config import (
     ConfigError,
@@ -36,6 +37,10 @@ from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.learning.jobs import BackgroundJobStatus
 from iris.runtime.observability.diagnostics import DiagnosticsCheckOutcome, run_startup_diagnostics
 from iris.runtime.state.memory_candidates import MemoryCandidateReviewStatus
+from iris.runtime.wiring.runtime import (
+    RuntimeOperationalWiringDiagnostics,
+    describe_runtime_operational_wiring,
+)
 
 
 @dataclass(frozen=True)
@@ -129,6 +134,27 @@ class _FilePathCheckSpec:
     missing_fail_summary: str
     missing_fail_issue: str
     missing_fail_next_action: str
+
+
+@dataclass(frozen=True)
+class _OperationalStatusSummary:
+    """Operational count query の結果状態と危険件数を保持する。"""
+
+    summary: str
+    status: str = "ok"
+    pending_count: int = 0
+    leased_count: int = 0
+    failed_count: int = 0
+    issue: str | None = None
+    next_action: str | None = None
+
+
+@dataclass(frozen=True)
+class _SQLiteSchemaGate:
+    """read-only SQLite count query の前提状態。"""
+
+    available: bool
+    check: RuntimeDoctorCheck | None = None
 
 
 def _resolve_config_path(config_path: str | None) -> _ResolvedConfigPath:
@@ -350,6 +376,13 @@ def _background_job_status_counts(conn: sqlite3.Connection) -> dict[str, int]:
     return dict(_status_count_pair(row) for row in rows)
 
 
+def _delivery_outbox_status_counts(conn: sqlite3.Connection) -> dict[str, int]:
+    rows: list[sqlite3.Row] = conn.execute(
+        "SELECT status, COUNT(*) AS count FROM delivery_outbox GROUP BY status"
+    ).fetchall()
+    return dict(_status_count_pair(row) for row in rows)
+
+
 def _candidate_review_status_counts(conn: sqlite3.Connection) -> dict[str, int]:
     rows: list[sqlite3.Row] = conn.execute(
         "SELECT status, COUNT(*) AS count FROM memory_candidate_reviews GROUP BY status"
@@ -432,21 +465,351 @@ def _scheduler_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     return _build_check("scheduler", status="ok", summary=status)
 
 
+def _scheduler_runtime_check(
+    config: IrisRuntimeConfig,
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> RuntimeDoctorCheck:
+    enabled = "enabled" if config.scheduler.enabled else "disabled"
+    loop = "enabled" if config.scheduler.enabled else "disabled"
+    target_store = config.state.backend.value
+    summary = (
+        f"enabled={enabled} loop={loop} "
+        f"runner_wired={_wired_status(wired=wiring.scheduler_runner_wired)} "
+        f"target_store={target_store} "
+        f"availability_provider={_wired_status(wired=wiring.availability_provider_wired)} "
+        f"safety_audit_journal={_wired_status(wired=wiring.safety_audit_journal_wired)}"
+    )
+    issues = _scheduler_runtime_warning_issues(config, wiring)
+    if not issues:
+        return _build_check("scheduler-runtime", status="ok", summary=summary)
+    return _build_check(
+        "scheduler-runtime",
+        status="warn",
+        summary=summary,
+        issue=_issue_summary(issues),
+        next_action="complete scheduler runtime wiring before enabling scheduler",
+    )
+
+
+def _scheduler_runtime_warning_issues(
+    config: IrisRuntimeConfig,
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> tuple[str, ...]:
+    if not config.scheduler.enabled:
+        return ()
+    warning_checks = (
+        (
+            not wiring.scheduler_runner_wired,
+            "scheduler.enabled=true but scheduler runner is not wired",
+        ),
+        (
+            not wiring.availability_provider_wired,
+            "scheduler.enabled=true but availability_provider is not wired",
+        ),
+        (
+            not wiring.safety_audit_journal_wired,
+            "scheduler.enabled=true but safety_audit_journal is not wired",
+        ),
+    )
+    return tuple(issue for has_warning, issue in warning_checks if has_warning)
+
+
+def _delivery_outbox_check(
+    config: IrisRuntimeConfig,
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> RuntimeDoctorCheck:
+    counts = _delivery_outbox_status_summary(config)
+    backend = config.state.backend.value
+    delivery = "enabled" if config.delivery.enabled else "disabled"
+    broker = _wired_status(wired=wiring.delivery_broker_wired and config.delivery.enabled)
+    summary = f"enabled={delivery} backend={backend} broker={broker}; {counts.summary}"
+    if counts.status != "ok":
+        return _build_check(
+            "delivery-outbox",
+            status=counts.status,
+            summary=summary,
+            issue=counts.issue,
+            next_action=counts.next_action,
+        )
+    if not config.delivery.enabled and counts.pending_count > 0:
+        return _build_check(
+            "delivery-outbox",
+            status="warn",
+            summary=summary,
+            issue="delivery outbox has pending items but delivery broker is disabled",
+            next_action="enable delivery worker/broker or drain pending outbox items",
+        )
+    return _build_check("delivery-outbox", status="ok", summary=summary)
+
+
+def _delivery_outbox_status_summary(config: IrisRuntimeConfig) -> _OperationalStatusSummary:
+    if config.state.backend is not RuntimeStateBackend.SQLITE:
+        return _OperationalStatusSummary(
+            summary=_ordered_zero_counts(DeliveryStatus),
+        )
+    return _sqlite_delivery_outbox_status_summary(Path(config.state.sqlite_path))
+
+
+def _sqlite_delivery_outbox_status_summary(path: Path) -> _OperationalStatusSummary:
+    if not path.exists() or path.is_dir():
+        return _OperationalStatusSummary(
+            summary="sqlite state DB is not available",
+            status="skipped",
+        )
+    gate = _sqlite_counts_schema_gate(path, "delivery-outbox")
+    if gate.check is not None:
+        return _summary_from_gate_check(gate.check)
+    return _query_delivery_outbox_status_summary(path)
+
+
+def _query_delivery_outbox_status_summary(path: Path) -> _OperationalStatusSummary:
+    try:
+        with contextlib.closing(sqlite3.connect(path)) as conn:
+            conn.row_factory = sqlite3.Row
+            counts = _delivery_outbox_status_counts(conn)
+    except sqlite3.DatabaseError as exc:
+        return _sqlite_operational_query_failure("delivery_outbox", exc)
+    summary = _ordered_counts(counts, DeliveryStatus)
+    return _OperationalStatusSummary(
+        summary=summary,
+        pending_count=counts.get(DeliveryStatus.PENDING.value, 0),
+        leased_count=counts.get(DeliveryStatus.LEASED.value, 0),
+        failed_count=counts.get(DeliveryStatus.FAILED_PERMANENT.value, 0),
+    )
+
+
+def _background_jobs_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
+    counts = _background_job_status_summary(config)
+    backend = config.state.backend.value
+    loop = "enabled" if config.learning.background_jobs_enabled else "disabled"
+    summary = f"loop={loop} backend={backend}; {counts.summary}"
+    if counts.status != "ok":
+        return _build_check(
+            "background-jobs",
+            status=counts.status,
+            summary=summary,
+            issue=counts.issue,
+            next_action=counts.next_action,
+        )
+    if not config.learning.background_jobs_enabled and _has_background_job_work(counts):
+        return _build_check(
+            "background-jobs",
+            status="warn",
+            summary=summary,
+            issue="background jobs are pending or failed but background job loop is disabled",
+            next_action="enable learning.background_jobs_enabled or drain background jobs",
+        )
+    return _build_check("background-jobs", status="ok", summary=summary)
+
+
+def _background_job_status_summary(config: IrisRuntimeConfig) -> _OperationalStatusSummary:
+    if config.state.backend is not RuntimeStateBackend.SQLITE:
+        return _OperationalStatusSummary(summary=_ordered_zero_counts(BackgroundJobStatus))
+    return _sqlite_background_job_status_summary(Path(config.state.sqlite_path))
+
+
+def _sqlite_background_job_status_summary(path: Path) -> _OperationalStatusSummary:
+    if not path.exists() or path.is_dir():
+        return _OperationalStatusSummary(
+            summary="sqlite state DB is not available",
+            status="skipped",
+        )
+    gate = _sqlite_counts_schema_gate(path, "background-jobs")
+    if gate.check is not None:
+        return _summary_from_gate_check(gate.check)
+    return _query_background_job_status_summary(path)
+
+
+def _query_background_job_status_summary(path: Path) -> _OperationalStatusSummary:
+    try:
+        with contextlib.closing(sqlite3.connect(path)) as conn:
+            conn.row_factory = sqlite3.Row
+            counts = _background_job_status_counts(conn)
+    except sqlite3.DatabaseError as exc:
+        return _sqlite_operational_query_failure("background_jobs", exc)
+    summary = _ordered_counts(counts, BackgroundJobStatus)
+    return _OperationalStatusSummary(
+        summary=summary,
+        pending_count=counts.get(BackgroundJobStatus.PENDING.value, 0),
+        leased_count=counts.get(BackgroundJobStatus.LEASED.value, 0),
+        failed_count=(
+            counts.get(BackgroundJobStatus.FAILED_RETRYABLE.value, 0)
+            + counts.get(BackgroundJobStatus.FAILED_PERMANENT.value, 0)
+        ),
+    )
+
+
+def _has_background_job_work(counts: _OperationalStatusSummary) -> bool:
+    return counts.pending_count > 0 or counts.leased_count > 0 or counts.failed_count > 0
+
+
+def _proactive_safety_check(
+    config: IrisRuntimeConfig,
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> RuntimeDoctorCheck:
+    proactive = "enabled" if wiring.proactive_talk_enabled else "disabled"
+    delivery_safety = _delivery_safety_mode(config, wiring)
+    quiet_hours = _quiet_hours_summary(config)
+    output_safety = _output_safety_mode(config, wiring)
+    audit_journal = _wired_status(wired=wiring.safety_audit_journal_wired)
+    summary = (
+        f"proactive_talk={proactive} "
+        f"generation_mode={wiring.proactive_generation_mode} "
+        f"threshold={wiring.proactive_threshold} "
+        f"delivery_safety={delivery_safety} "
+        f"quiet_hours={quiet_hours} "
+        f"output_safety={output_safety} "
+        f"safety_audit_journal={audit_journal}"
+    )
+    issues = _proactive_safety_warning_issues(config, wiring)
+    if not issues:
+        return _build_check("proactive-safety", status="ok", summary=summary)
+    return _build_check(
+        "proactive-safety",
+        status="warn",
+        summary=summary,
+        issue=_issue_summary(issues),
+        next_action="complete proactive safety wiring before enabling proactive delivery",
+    )
+
+
+def _proactive_safety_warning_issues(
+    config: IrisRuntimeConfig,
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> tuple[str, ...]:
+    if not wiring.proactive_talk_enabled:
+        return ()
+    warning_checks = (
+        (
+            not wiring.delivery_safety_gate_wired,
+            "proactive_talk enabled but delivery safety gate is not configured",
+        ),
+        (
+            not wiring.output_safety_gate_wired or config.safety.mode == "development",
+            "proactive_talk enabled but output safety gate is not configured",
+        ),
+        (
+            not wiring.safety_audit_journal_wired,
+            "proactive_talk enabled but safety_audit_journal is not wired",
+        ),
+    )
+    return tuple(issue for has_warning, issue in warning_checks if has_warning)
+
+
+def _issue_summary(issues: tuple[str, ...]) -> str:
+    return "; ".join(issues)
+
+
+def _delivery_safety_mode(
+    config: IrisRuntimeConfig,
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> str:
+    if not wiring.delivery_safety_gate_wired:
+        return "not_configured"
+    if config.safety.mode == "strict":
+        return "strict"
+    return "basic"
+
+
+def _output_safety_mode(
+    config: IrisRuntimeConfig,
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> str:
+    if not wiring.output_safety_gate_wired:
+        return "not_configured"
+    if config.safety.mode in {"basic", "strict"}:
+        return "basic_output_filter"
+    return "allow_all"
+
+
+def _quiet_hours_summary(config: IrisRuntimeConfig) -> str:
+    quiet_hours = config.delivery.quiet_hours
+    status = "enabled" if quiet_hours.enabled else "disabled"
+    return f"{status} {quiet_hours.start}-{quiet_hours.end} {quiet_hours.timezone}"
+
+
+def _wired_status(*, wired: bool) -> str:
+    return "wired" if wired else "not_wired"
+
+
+def _runtime_operational_wiring_snapshot(
+    config: IrisRuntimeConfig,
+) -> RuntimeOperationalWiringDiagnostics:
+    return describe_runtime_operational_wiring(config)
+
+
+def _summary_from_gate_check(check: RuntimeDoctorCheck) -> _OperationalStatusSummary:
+    return _OperationalStatusSummary(
+        summary=check.summary,
+        status=check.status,
+        issue=check.issue,
+        next_action=check.next_action,
+    )
+
+
+def _sqlite_operational_query_failure(
+    table_name: str,
+    exc: sqlite3.DatabaseError,
+) -> _OperationalStatusSummary:
+    return _OperationalStatusSummary(
+        summary=f"{table_name} count query failed",
+        status="fail",
+        issue=str(exc),
+        next_action="inspect SQLite operational tables or restore from backup",
+    )
+
+
+def _sqlite_counts_schema_gate(path: Path, check_name: str) -> _SQLiteSchemaGate:
+    try:
+        schema = SQLiteSchemaMigrator().inspect(path)
+    except SQLiteSchemaError as exc:
+        return _SQLiteSchemaGate(
+            available=False,
+            check=_build_check(
+                check_name,
+                status="fail",
+                summary="sqlite operational state is not readable",
+                issue=str(exc),
+                next_action="fix sqlite-state check before inspecting operational state",
+            ),
+        )
+    if schema.pending_versions:
+        return _SQLiteSchemaGate(
+            available=False,
+            check=_build_check(
+                check_name,
+                status="warn",
+                summary="sqlite schema migration is pending",
+                next_action="start Iris normally to migrate operational tables",
+            ),
+        )
+    return _SQLiteSchemaGate(available=True)
+
+
+def _ordered_zero_counts[EnumT: StrEnum](enum_type: type[EnumT]) -> str:
+    return _ordered_counts({}, enum_type)
+
+
 def _runtime_doctor_base_checks(config: IrisRuntimeConfig) -> list[RuntimeDoctorCheck]:
     """Runtime doctor の固定チェック群を順序付きで組み立てる。
 
     Returns:
         順序を保った RuntimeDoctorCheck の list。
     """
+    wiring = _runtime_operational_wiring_snapshot(config)
     return [
         _state_backend_check(config),
         _sqlite_state_check(config),
         _logging_path_check(config),
         _runtime_learning_state_check(config),
+        _background_jobs_check(config),
         _server_check(config),
         _model_slots_check(config),
         _delivery_check(config),
+        _delivery_outbox_check(config, wiring),
         _scheduler_check(config),
+        _scheduler_runtime_check(config, wiring),
+        _proactive_safety_check(config, wiring),
     ]
 
 

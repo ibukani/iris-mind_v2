@@ -82,6 +82,48 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
+class RuntimeOperationalWiringDiagnostics:
+    """runtime composition root が提供する read-only wiring diagnostics snapshot。"""
+
+    scheduler_runner_wired: bool = True
+    availability_provider_wired: bool = True
+    safety_audit_journal_wired: bool = True
+    delivery_broker_wired: bool = True
+    delivery_safety_gate_wired: bool = True
+    output_safety_gate_wired: bool = True
+    proactive_talk_enabled: bool = False
+    proactive_generation_mode: str = "not_configured"
+    proactive_threshold: str = "not_configured"
+
+
+def describe_runtime_operational_wiring(
+    config: IrisRuntimeConfig,
+) -> RuntimeOperationalWiringDiagnostics:
+    """Runtime 起動なしで composition root の標準配線状態を記述する。
+
+    doctor は副作用を避けるため `build_runtime_components()` を呼ばない。
+    代わりに、標準 runtime composition root と同じ feature catalog / config
+    判定をここへ集約し、将来 config-driven feature enable が追加されたときに
+    実配線と diagnostics の乖離をこの層で防ぐ。
+
+    Args:
+        config: runtime 設定。
+
+    Returns:
+        doctor へ渡す read-only wiring snapshot。
+    """
+    feature_catalog = wire_runtime_features()
+    return RuntimeOperationalWiringDiagnostics(
+        delivery_broker_wired=config.delivery.enabled,
+        proactive_talk_enabled=_feature_enabled(feature_catalog, "proactive_talk"),
+    )
+
+
+def _feature_enabled(catalog: RuntimeFeatureCatalog, feature_name: str) -> bool:
+    return any(feature.name == feature_name for feature in catalog.features)
+
+
+@dataclass(frozen=True)
 class RuntimeComponents:
     """ランタイムサーバー起動前に組み立てるコンポーネント群。"""
 

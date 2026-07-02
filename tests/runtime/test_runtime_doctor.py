@@ -20,11 +20,12 @@ from iris.adapters.llm.diagnostics import (
 from iris.adapters.persistence.sqlite.backup import SQLiteBackupService
 from iris.adapters.persistence.sqlite.migrator import SQLiteSchemaMigrator
 from iris.runtime import doctor
-from iris.runtime.config import IrisRuntimeConfig, default_runtime_config
+from iris.runtime.config import IrisRuntimeConfig, RuntimeSafetyConfig, default_runtime_config
 from iris.runtime.config.llm import LLMProvider, ModelSlotName
 from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.doctor import main, run_runtime_doctor
 from iris.runtime.observability.diagnostics import DiagnosticsCheckOutcome, StartupDiagnosticsReport
+from iris.runtime.wiring.runtime import RuntimeOperationalWiringDiagnostics
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,7 +50,44 @@ async def test_runtime_doctor_default_config_reports_ok(
     assert "state-backend" in names
     assert "provider-readiness" in names
     assert "delivery" in names
+    assert "delivery-outbox" in names
+    assert "background-jobs" in names
     assert "scheduler" in names
+    assert "scheduler-runtime" in names
+    assert "proactive-safety" in names
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_default_memory_backend_reports_operational_status(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Memory backend の doctor は scheduler/delivery/proactive 状態を表示する。"""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("IRIS_MIND_CONFIG", raising=False)
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    delivery_check = next(item for item in report.checks if item.name == "delivery-outbox")
+    assert delivery_check.status == "ok"
+    assert "enabled=enabled backend=memory broker=wired" in delivery_check.summary
+    assert "pending=0 leased=0" in delivery_check.summary
+    background_check = next(item for item in report.checks if item.name == "background-jobs")
+    assert background_check.status == "ok"
+    assert "loop=enabled backend=memory" in background_check.summary
+    scheduler_check = next(item for item in report.checks if item.name == "scheduler-runtime")
+    assert scheduler_check.status == "ok"
+    assert "enabled=disabled loop=disabled runner_wired=wired" in scheduler_check.summary
+    assert "availability_provider=wired" in scheduler_check.summary
+    proactive_check = next(item for item in report.checks if item.name == "proactive-safety")
+    assert proactive_check.status == "ok"
+    assert "proactive_talk=disabled" in proactive_check.summary
+    assert "generation_mode=not_configured" in proactive_check.summary
+    assert "threshold=not_configured" in proactive_check.summary
+    assert "quiet_hours=disabled 22:00-08:00 Asia/Tokyo" in proactive_check.summary
+    assert "output_safety=allow_all" in proactive_check.summary
+    assert "safety_audit_journal=wired" in proactive_check.summary
 
 
 @pytest.mark.anyio
@@ -484,6 +522,344 @@ async def test_runtime_doctor_reports_runtime_learning_state_counts(
 
 
 @pytest.mark.anyio
+async def test_runtime_doctor_reports_sqlite_delivery_outbox_counts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """SQLite delivery_outbox status counts は本文なしで doctor に表示される。"""
+    db_path = tmp_path / "state.sqlite3"
+    SQLiteSchemaMigrator().ensure_current(db_path)
+    _insert_delivery_outbox_rows(db_path)
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "delivery-outbox")
+    assert check.status == "ok"
+    assert "backend=sqlite" in check.summary
+    assert (
+        "pending=1 leased=1 succeeded=0 failed_permanent=1 cancelled=0 blocked=1" in check.summary
+    )
+    assert "SECRET_USER_MESSAGE" not in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_reports_background_jobs_as_dedicated_check(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Background job queue counts は dedicated check として表示される。"""
+    db_path = tmp_path / "state.sqlite3"
+    SQLiteSchemaMigrator().ensure_current(db_path)
+    _insert_runtime_learning_state_rows(db_path)
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "background-jobs")
+    assert check.status == "ok"
+    assert "loop=enabled backend=sqlite" in check.summary
+    assert "pending=1 leased=1 succeeded=0 failed_retryable=1" in check.summary
+    assert "failed_permanent=0 cancelled=0" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_warns_on_delivery_disabled_with_pending_outbox(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Delivery disabled で pending outbox があれば warn になる。"""
+    db_path = tmp_path / "state.sqlite3"
+    SQLiteSchemaMigrator().ensure_current(db_path)
+    _insert_delivery_outbox_rows(db_path)
+    config = _sqlite_config(db_path)
+    config = replace(config, delivery=replace(config.delivery, enabled=False))
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "delivery-outbox")
+    assert check.status == "warn"
+    assert check.issue == "delivery outbox has pending items but delivery broker is disabled"
+    assert "enabled=disabled backend=sqlite broker=not_wired" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_warns_on_background_jobs_disabled_with_work(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Background job loop disabled で未処理 job があれば warn になる。"""
+    db_path = tmp_path / "state.sqlite3"
+    SQLiteSchemaMigrator().ensure_current(db_path)
+    _insert_runtime_learning_state_rows(db_path)
+    config = _sqlite_config(db_path)
+    config = replace(
+        config,
+        learning=replace(config.learning, background_jobs_enabled=False),
+    )
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "background-jobs")
+    assert check.status == "warn"
+    assert (
+        check.issue == "background jobs are pending or failed but background job loop is disabled"
+    )
+    assert "loop=disabled backend=sqlite" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_warns_on_scheduler_without_availability_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Scheduler enabled で availability provider が欠落すると warn になる。"""
+    config = _scheduler_enabled_config()
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(RuntimeOperationalWiringDiagnostics(availability_provider_wired=False)),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "scheduler-runtime")
+    assert check.status == "warn"
+    assert check.issue == "scheduler.enabled=true but availability_provider is not wired"
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_warns_on_scheduler_without_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Scheduler enabled で runner が欠落すると warn になる。"""
+    config = _scheduler_enabled_config()
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(RuntimeOperationalWiringDiagnostics(scheduler_runner_wired=False)),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "scheduler-runtime")
+    assert check.status == "warn"
+    assert check.issue == "scheduler.enabled=true but scheduler runner is not wired"
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_warns_on_scheduler_without_safety_audit_journal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Scheduler enabled で safety audit journal が欠落すると warn になる。"""
+    config = _scheduler_enabled_config()
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(RuntimeOperationalWiringDiagnostics(safety_audit_journal_wired=False)),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "scheduler-runtime")
+    assert check.status == "warn"
+    assert check.issue == "scheduler.enabled=true but safety_audit_journal is not wired"
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_reports_all_scheduler_partial_wiring_warnings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Scheduler wiring 欠落が複数ある場合はすべて issue に出す。"""
+    config = _scheduler_enabled_config()
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(
+            RuntimeOperationalWiringDiagnostics(
+                scheduler_runner_wired=False,
+                availability_provider_wired=False,
+                safety_audit_journal_wired=False,
+            )
+        ),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "scheduler-runtime")
+    assert check.status == "warn"
+    assert check.issue is not None
+    assert "scheduler.enabled=true but scheduler runner is not wired" in check.issue
+    assert "scheduler.enabled=true but availability_provider is not wired" in check.issue
+    assert "scheduler.enabled=true but safety_audit_journal is not wired" in check.issue
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_warns_on_proactive_without_delivery_safety_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proactive enabled で delivery safety gate が欠落すると warn になる。"""
+    config = replace(default_runtime_config(), safety=RuntimeSafetyConfig(mode="strict"))
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(
+            RuntimeOperationalWiringDiagnostics(
+                proactive_talk_enabled=True,
+                delivery_safety_gate_wired=False,
+            ),
+        ),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "proactive-safety")
+    assert check.status == "warn"
+    assert check.issue == "proactive_talk enabled but delivery safety gate is not configured"
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_warns_on_proactive_with_allow_all_output_safety(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proactive enabled で output safety が allow_all なら warn になる。"""
+    config = default_runtime_config()
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(RuntimeOperationalWiringDiagnostics(proactive_talk_enabled=True)),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "proactive-safety")
+    assert check.status == "warn"
+    assert check.issue == "proactive_talk enabled but output safety gate is not configured"
+    assert "output_safety=allow_all" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_warns_on_proactive_without_safety_audit_journal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proactive enabled で safety audit journal が欠落すると warn になる。"""
+    config = replace(default_runtime_config(), safety=RuntimeSafetyConfig(mode="strict"))
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(
+            RuntimeOperationalWiringDiagnostics(
+                proactive_talk_enabled=True,
+                safety_audit_journal_wired=False,
+            ),
+        ),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "proactive-safety")
+    assert check.status == "warn"
+    assert check.issue == "proactive_talk enabled but safety_audit_journal is not wired"
+    assert "safety_audit_journal=not_wired" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_reports_all_proactive_partial_wiring_warnings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proactive safety 欠落が複数ある場合はすべて issue に出す。"""
+    config = default_runtime_config()
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+    monkeypatch.setattr(
+        doctor,
+        "_runtime_operational_wiring_snapshot",
+        _static_wiring(
+            RuntimeOperationalWiringDiagnostics(
+                proactive_talk_enabled=True,
+                delivery_safety_gate_wired=False,
+                output_safety_gate_wired=False,
+                safety_audit_journal_wired=False,
+            )
+        ),
+    )
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "proactive-safety")
+    assert check.status == "warn"
+    assert check.issue is not None
+    assert "proactive_talk enabled but delivery safety gate is not configured" in check.issue
+    assert "proactive_talk enabled but output safety gate is not configured" in check.issue
+    assert "proactive_talk enabled but safety_audit_journal is not wired" in check.issue
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_proactive_disabled_is_not_warning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proactive disabled なら development safety でも warning にしない。"""
+    config = default_runtime_config()
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    check = next(item for item in report.checks if item.name == "proactive-safety")
+    assert check.status == "ok"
+    assert check.issue is None
+    assert "proactive_talk=disabled" in check.summary
+
+
+@pytest.mark.anyio
+async def test_runtime_doctor_does_not_emit_user_content_from_operational_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Doctor output は outbox / job / memory candidate の本文を出さない。"""
+    db_path = tmp_path / "state.sqlite3"
+    SQLiteSchemaMigrator().ensure_current(db_path)
+    _insert_delivery_outbox_rows(db_path)
+    _insert_runtime_learning_state_rows(db_path)
+    config = _sqlite_config(db_path)
+    monkeypatch.setattr(doctor, "load_runtime_config", _loaded_config(config))
+    monkeypatch.setattr(doctor, "run_startup_diagnostics", _disabled_startup_diagnostics)
+
+    report = await run_runtime_doctor()
+
+    rendered = "\n".join(
+        part
+        for check in report.checks
+        for part in (check.summary, check.issue or "", check.next_action or "")
+    )
+    assert "SECRET_USER_MESSAGE" not in rendered
+    assert "SECRET_JOB_TEXT" not in rendered
+    assert "pending text" not in rendered
+    assert "approved text" not in rendered
+
+
+@pytest.mark.anyio
 async def test_runtime_doctor_runtime_learning_state_warns_on_pending_migration(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -501,6 +877,12 @@ async def test_runtime_doctor_runtime_learning_state_warns_on_pending_migration(
     assert check.status == "warn"
     assert check.summary == "sqlite schema migration is pending"
     assert check.next_action == "start Iris normally to migrate runtime learning tables"
+    delivery_check = next(item for item in report.checks if item.name == "delivery-outbox")
+    assert delivery_check.status == "warn"
+    assert "sqlite schema migration is pending" in delivery_check.summary
+    background_check = next(item for item in report.checks if item.name == "background-jobs")
+    assert background_check.status == "warn"
+    assert "sqlite schema migration is pending" in background_check.summary
 
 
 @pytest.mark.anyio
@@ -548,6 +930,60 @@ async def test_runtime_doctor_fails_on_future_sqlite_schema(
     assert check.next_action == "upgrade Iris before opening this database"
 
 
+def _insert_delivery_outbox_rows(db_path: Path) -> None:
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO delivery_outbox (
+                delivery_id, idempotency_key, status, created_at, updated_at, not_before,
+                attempts, max_attempts, lease_id, lease_expires_at, blocked_reason,
+                last_error_reason, source_observation_id, target_provider,
+                target_provider_subject, target_provider_space_ref, target_session_id,
+                target_actor_id, target_account_id, target_space_id, action_type,
+                action_id, action_session_id, action_correlation_id, action_text
+            ) VALUES
+                ('delivery-pending', 'delivery-pending', 'pending',
+                 '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00', NULL,
+                 0, 3, NULL, NULL, NULL, NULL, NULL, 'discord', 'user-1', 'space-1',
+                 'session-1', 'actor-1', 'account-1', 'space-id-1', 'send_message',
+                 'action-pending', 'session-1', 'correlation-pending', 'SECRET_USER_MESSAGE'),
+                ('delivery-leased', 'delivery-leased', 'leased',
+                 '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00', NULL,
+                 1, 3, 'lease-1', '2026-07-01T00:05:00+00:00', NULL, NULL, NULL,
+                 'discord', 'user-1', 'space-1', 'session-1', 'actor-1', 'account-1',
+                 'space-id-1', 'send_message', 'action-leased', 'session-1',
+                 'correlation-leased', 'leased body'),
+                ('delivery-failed', 'delivery-failed', 'failed_permanent',
+                 '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00', NULL,
+                 3, 3, NULL, NULL, NULL, 'failed', NULL, 'discord', 'user-1', 'space-1',
+                 'session-1', 'actor-1', 'account-1', 'space-id-1', 'send_message',
+                 'action-failed', 'session-1', 'correlation-failed', 'failed body'),
+                ('delivery-blocked', 'delivery-blocked', 'blocked',
+                 '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00', NULL,
+                 0, 3, NULL, NULL, 'quiet_hours', NULL, NULL, 'discord', 'user-1',
+                 'space-1', 'session-1', 'actor-1', 'account-1', 'space-id-1',
+                 'send_message', 'action-blocked', 'session-1', 'correlation-blocked',
+                 'blocked body')
+            """
+        )
+        conn.commit()
+
+
+def _scheduler_enabled_config() -> IrisRuntimeConfig:
+    config = default_runtime_config()
+    return replace(config, scheduler=replace(config.scheduler, enabled=True))
+
+
+def _static_wiring(
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> Callable[[IrisRuntimeConfig], RuntimeOperationalWiringDiagnostics]:
+    def build_wiring(config: IrisRuntimeConfig) -> RuntimeOperationalWiringDiagnostics:
+        del config
+        return wiring
+
+    return build_wiring
+
+
 def _insert_runtime_learning_state_rows(db_path: Path) -> None:
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         conn.execute(
@@ -556,7 +992,8 @@ def _insert_runtime_learning_state_rows(db_path: Path) -> None:
                 job_id, kind, payload_type, payload_json, status, attempts, max_attempts,
                 not_before, leased_until, idempotency_key, created_at, updated_at, last_error
             ) VALUES
-                ('job-pending', 'reflection', 'deferred_learning', '{}', 'pending', 0, 3,
+                ('job-pending', 'reflection', 'deferred_learning',
+                 '{"text":"SECRET_JOB_TEXT"}', 'pending', 0, 3,
                  '2026-07-01T00:00:00+00:00', NULL, 'job-pending',
                  '2026-07-01T00:00:00+00:00', '2026-07-01T00:00:00+00:00', NULL),
                 ('job-leased', 'reflection', 'deferred_learning', '{}', 'leased', 0, 3,
