@@ -58,7 +58,11 @@ from iris.runtime.wiring.features import (
     wire_runtime_features,
 )
 from iris.runtime.wiring.presentation import wire_output_pipeline
-from iris.runtime.wiring.scheduler import wire_runtime_scheduler, wire_scheduler_runner
+from iris.runtime.wiring.scheduler import (
+    SchedulerSafetyDependencies,
+    wire_runtime_scheduler,
+    wire_scheduler_runner,
+)
 from iris.runtime.wiring.state import RuntimeStateStores, wire_runtime_state
 
 if TYPE_CHECKING:
@@ -284,9 +288,13 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     scheduler_runner = wire_scheduler_runner(
         runtime_service=runtime_service,
         scheduler=wire_runtime_scheduler(stores.scheduler_target_store, config),
-        delivery_gate=wire_delivery_safety_gate(config.delivery),
+        delivery_gate=wire_delivery_safety_gate(config.delivery, config.safety),
         outbox=stores.delivery_outbox,
         config=config,
+        safety=SchedulerSafetyDependencies(
+            availability_provider=gateway_components.availability_provider,
+            audit_journal=stores.safety_audit_journal,
+        ),
     )
     return RuntimeComponents(
         stores=stores,

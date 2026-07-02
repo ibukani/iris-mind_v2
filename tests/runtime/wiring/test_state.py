@@ -1,4 +1,4 @@
-"""Runtime wiring helper tests for state stores."""
+"""state store wiring helper の test。"""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
+from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 from iris.runtime.wiring.state import wire_runtime_state
 
@@ -48,6 +49,7 @@ def test_wire_runtime_state_uses_in_memory_runtime_context_stores_by_default() -
     assert isinstance(stores.activity_projection_store, InMemoryActivityProjectionStore)
     assert isinstance(stores.presence_store, InMemoryPresenceStore)
     assert isinstance(stores.space_occupancy_store, InMemorySpaceOccupancyStore)
+    assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
     assert isinstance(stores.background_job_queue, InMemoryBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, InMemoryMemoryCandidateReviewStore)
 
@@ -86,6 +88,7 @@ async def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqli
     assert isinstance(stores.affect_store, SQLiteAffectStore)
     assert isinstance(stores.activity_journal, SQLiteActivityJournal)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
+    assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
     assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
 

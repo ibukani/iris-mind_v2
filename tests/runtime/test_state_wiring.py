@@ -1,4 +1,4 @@
-"""Runtime state wiring backend selection tests."""
+"""runtime state wiring の backend 選択 test。"""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
+from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.wiring.state import wire_runtime_state
 
@@ -26,11 +27,12 @@ if TYPE_CHECKING:
 
 
 def test_state_wiring_memory_uses_process_local_delivery_and_scheduler_stores() -> None:
-    """Memory backend wires process-local outbox and scheduler targets."""
+    """Memory backend は process-local outbox と scheduler target を配線する。"""
     stores = wire_runtime_state(default_runtime_config())
 
     assert isinstance(stores.delivery_outbox, InMemoryDeliveryOutbox)
     assert isinstance(stores.scheduler_target_store, InMemorySchedulerTargetStore)
+    assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
     assert isinstance(stores.background_job_queue, InMemoryBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, InMemoryMemoryCandidateReviewStore)
 
@@ -39,7 +41,7 @@ def test_state_wiring_memory_uses_process_local_delivery_and_scheduler_stores() 
 async def test_state_wiring_sqlite_uses_durable_delivery_and_scheduler_stores(
     tmp_path: Path,
 ) -> None:
-    """SQLite backend wires durable outbox and scheduler targets."""
+    """SQLite backend は durable outbox と scheduler target を配線する。"""
     config = replace(
         default_runtime_config(),
         state=RuntimeStateConfig(
@@ -52,6 +54,7 @@ async def test_state_wiring_sqlite_uses_durable_delivery_and_scheduler_stores(
 
     assert isinstance(stores.delivery_outbox, SQLiteDeliveryOutbox)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
+    assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
     assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
 
