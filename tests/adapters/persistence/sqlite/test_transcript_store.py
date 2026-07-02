@@ -78,6 +78,21 @@ async def test_sqlite_transcript_store_appends_and_queries_by_boundary(tmp_path:
         store.close()
 
 
+async def test_sqlite_transcript_store_ignores_duplicate_transcript_id(tmp_path: Path) -> None:
+    """同じ transcript_id の再挿入は先行 record を維持する。"""
+    store = SQLiteTranscriptStore(tmp_path / "state.sqlite3")
+    try:
+        first = _record("tr-1", "first")
+        duplicate = first.model_copy(update={"content": "changed on retry"})
+        await store.append((first, duplicate))
+
+        records = await store.query(TranscriptQuery(actor_id=ActorId("actor-1")))
+
+        assert tuple(record.content for record in records) == ("first",)
+    finally:
+        store.close()
+
+
 async def test_sqlite_transcript_store_prunes_expired_records(tmp_path: Path) -> None:
     """retention_until を過ぎた record だけを削除する。"""
     store = SQLiteTranscriptStore(tmp_path / "state.sqlite3")
