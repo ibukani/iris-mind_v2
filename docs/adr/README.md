@@ -28,6 +28,7 @@ Implementation anchors
 | [0011](0011-memory-vector-index-backend.md) | Accepted | Vector index は memory record の正本ではなく derived retrieval backend として扱う。 |
 | [0012](0012-sqlite-schema-migration-backup-recovery.md) | Accepted | SQLite backend は明示的な schema migration、backup、recovery policy で運用する。 |
 | [0013](0013-local-llm-lifecycle-readiness-warmup.md) | Accepted | Local LLM lifecycle / readiness / warmup を provider-neutral state と request-time probe で扱う。 |
+| [0014](0014-local-model-call-budget-and-cascade-policy.md) | Accepted | Local model call budget と cascade policy で user-facing hot path の large LLM 呼び出しを制限する。 |
 
 ## 現在の横断方針
 

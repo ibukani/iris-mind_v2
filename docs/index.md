@@ -26,6 +26,7 @@ Iris runtime foundation の主要ドキュメント入口。
 - [`adr/0007-runtime-boundary-guard.md`](adr/0007-runtime-boundary-guard.md): runtime boundary guard の方針。
 - [`adr/0008-runtime-observability-and-diagnostics.md`](adr/0008-runtime-observability-and-diagnostics.md): runtime observability と diagnostics。
 - [`adr/0013-local-llm-lifecycle-readiness-warmup.md`](adr/0013-local-llm-lifecycle-readiness-warmup.md): Local LLM lifecycle / readiness / warmup。
+- [`adr/0014-local-model-call-budget-and-cascade-policy.md`](adr/0014-local-model-call-budget-and-cascade-policy.md): Local model call budget と cascade policy。
 
 ## Source Of Truth
 

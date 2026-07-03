@@ -39,6 +39,7 @@ class RuntimeTraceCounterSnapshot:
     classifier_call_count: int = 0
     embedding_call_count: int = 0
     reranker_call_count: int = 0
+    avoided_large_llm_call_count: int = 0
 
 
 @dataclass
@@ -47,6 +48,7 @@ class _RuntimeTraceCounters:
     classifier: int = 0
     embedding: int = 0
     reranker: int = 0
+    avoided_large_llm: int = 0
 
     def increment(self, kind: RuntimeModelCallKind) -> None:
         if kind is RuntimeModelCallKind.LLM_GENERATE:
@@ -58,12 +60,17 @@ class _RuntimeTraceCounters:
         else:
             self.reranker += 1
 
+    def increment_avoided_large_llm(self) -> None:
+        """Budget gate が回避した large LLM 呼び出し数を増やす。"""
+        self.avoided_large_llm += 1
+
     def snapshot(self) -> RuntimeTraceCounterSnapshot:
         return RuntimeTraceCounterSnapshot(
             model_call_count=self.llm_generate,
             classifier_call_count=self.classifier,
             embedding_call_count=self.embedding,
             reranker_call_count=self.reranker,
+            avoided_large_llm_call_count=self.avoided_large_llm,
         )
 
 
@@ -108,6 +115,16 @@ def increment_trace_call(kind: RuntimeModelCallKind) -> None:
         counters.increment(kind)
 
 
+def increment_avoided_large_llm_call() -> None:
+    """Budget gate が回避した large LLM 呼び出しを trace scope に記録する。
+
+    Trace context がない場所では no-op にする。
+    """
+    counters = _CURRENT_TRACE_COUNTERS.get()
+    if counters is not None:
+        counters.increment_avoided_large_llm()
+
+
 def current_trace_counter_snapshot() -> RuntimeTraceCounterSnapshot:
     """現在の trace scope の call counter snapshot を返す。
 
@@ -146,6 +163,7 @@ def trace_counter_extra() -> RuntimeLogFields:
         "classifier_call_count": counters.classifier_call_count,
         "embedding_call_count": counters.embedding_call_count,
         "reranker_call_count": counters.reranker_call_count,
+        "avoided_large_llm_call_count": counters.avoided_large_llm_call_count,
     }
 
 

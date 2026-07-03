@@ -7,12 +7,14 @@ from typing import TYPE_CHECKING, Protocol
 
 from iris.contracts.actions import PresentedOutput
 from iris.contracts.learning import RuntimeLearningEvent, RuntimeLearningEventKind
+from iris.contracts.model_policy import ModelCallSite
 from iris.core.datetime_utils import now_utc
 from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
     trusted_adapter_ingress,
     unauthenticated_external_ingress,
 )
+from iris.runtime.model_call_budget import bind_model_call_budget_scope, bind_model_call_site
 from iris.runtime.observability.context import (
     RuntimeTraceContext,
     bind_trace_context,
@@ -255,7 +257,7 @@ class IrisRuntimeService:
         """
         started_at = perf_counter()
         trace_context = _trace_context_from_envelope(envelope)
-        with bind_trace_context(trace_context):
+        with bind_trace_context(trace_context), bind_model_call_budget_scope():
             try:
                 response = await self._handle_observation_bound(envelope, started_at)
             except Exception as exc:
@@ -529,16 +531,16 @@ class IrisRuntimeService:
         stage_started_at = perf_counter()
         try:
             if self._runtime_learning_hook_runner is not None:
-                await self._runtime_learning_hook_runner.run(
-                    RuntimeLearningEvent(
-                        kind=kind,
-                        observation=observation,
-                        output=output,
-                        occurred_at=self._now(),
-                        route=route,
-                        source_observation_id=observation.observation_id,
-                    )
+                event = RuntimeLearningEvent(
+                    kind=kind,
+                    observation=observation,
+                    output=output,
+                    occurred_at=self._now(),
+                    route=route,
+                    source_observation_id=observation.observation_id,
                 )
+                with bind_model_call_site(ModelCallSite.RUNTIME_LEARNING_HOOK):
+                    await self._runtime_learning_hook_runner.run(event)
         finally:
             self._record_stage_latency(
                 RuntimeLatencyStage.RUNTIME_LEARNING_HOOK,

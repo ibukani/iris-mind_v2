@@ -132,6 +132,758 @@
       "description": "Review store に入れる implicit candidate の最大文字数。"
     },
     {
+      "path": "model_call_budget.enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Feature 別 model call budget と cascade policy を有効化する。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.large_llm_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path で許可する large LLM 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.small_classifier_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path で許可する small classifier 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.embedding_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path で許可する embedding 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.reranker_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path で許可する reranker 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.background_llm_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path で許可する background LLM job 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.confidence_threshold",
+      "type": "float",
+      "default": 0.65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path で low-confidence fallback を開始する信頼度閾値。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.low_confidence_fallback",
+      "type": "enum",
+      "default": "deterministic_baseline",
+      "allowedValues": [
+        "no_op",
+        "deterministic_baseline",
+        "defer",
+        "enqueue_background",
+        "reject"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path の low-confidence / budget exceeded fallback 挙動。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.high_risk_escalation_allowed",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path で high-risk 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.uncertain_escalation_allowed",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path で uncertain 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.user_response_hot_path.enqueue_only",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "user_response_hot_path を同期 model call 禁止の enqueue-only 経路として扱う。"
+    },
+    {
+      "path": "model_call_budget.proactive.large_llm_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive で許可する large LLM 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.proactive.small_classifier_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive で許可する small classifier 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.proactive.embedding_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive で許可する embedding 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.proactive.reranker_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive で許可する reranker 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.proactive.background_llm_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive で許可する background LLM job 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.proactive.confidence_threshold",
+      "type": "float",
+      "default": 0.65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive で low-confidence fallback を開始する信頼度閾値。"
+    },
+    {
+      "path": "model_call_budget.proactive.low_confidence_fallback",
+      "type": "enum",
+      "default": "defer",
+      "allowedValues": [
+        "no_op",
+        "deterministic_baseline",
+        "defer",
+        "enqueue_background",
+        "reject"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive の low-confidence / budget exceeded fallback 挙動。"
+    },
+    {
+      "path": "model_call_budget.proactive.high_risk_escalation_allowed",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive で high-risk 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.proactive.uncertain_escalation_allowed",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive で uncertain 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.proactive.enqueue_only",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive を同期 model call 禁止の enqueue-only 経路として扱う。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.large_llm_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction で許可する large LLM 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.small_classifier_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction で許可する small classifier 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.embedding_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction で許可する embedding 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.reranker_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction で許可する reranker 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.background_llm_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction で許可する background LLM job 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.confidence_threshold",
+      "type": "float",
+      "default": 0.65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction で low-confidence fallback を開始する信頼度閾値。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.low_confidence_fallback",
+      "type": "enum",
+      "default": "enqueue_background",
+      "allowedValues": [
+        "no_op",
+        "deterministic_baseline",
+        "defer",
+        "enqueue_background",
+        "reject"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction の low-confidence / budget exceeded fallback 挙動。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.high_risk_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction で high-risk 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.uncertain_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction で uncertain 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.memory_extraction.enqueue_only",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction を同期 model call 禁止の enqueue-only 経路として扱う。"
+    },
+    {
+      "path": "model_call_budget.reflection.large_llm_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection で許可する large LLM 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.reflection.small_classifier_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection で許可する small classifier 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.reflection.embedding_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection で許可する embedding 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.reflection.reranker_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection で許可する reranker 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.reflection.background_llm_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection で許可する background LLM job 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.reflection.confidence_threshold",
+      "type": "float",
+      "default": 0.65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection で low-confidence fallback を開始する信頼度閾値。"
+    },
+    {
+      "path": "model_call_budget.reflection.low_confidence_fallback",
+      "type": "enum",
+      "default": "defer",
+      "allowedValues": [
+        "no_op",
+        "deterministic_baseline",
+        "defer",
+        "enqueue_background",
+        "reject"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection の low-confidence / budget exceeded fallback 挙動。"
+    },
+    {
+      "path": "model_call_budget.reflection.high_risk_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection で high-risk 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.reflection.uncertain_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection で uncertain 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.reflection.enqueue_only",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection を同期 model call 禁止の enqueue-only 経路として扱う。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.large_llm_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update で許可する large LLM 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.small_classifier_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update で許可する small classifier 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.embedding_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update で許可する embedding 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.reranker_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update で許可する reranker 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.background_llm_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update で許可する background LLM job 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.confidence_threshold",
+      "type": "float",
+      "default": 0.65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update で low-confidence fallback を開始する信頼度閾値。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.low_confidence_fallback",
+      "type": "enum",
+      "default": "no_op",
+      "allowedValues": [
+        "no_op",
+        "deterministic_baseline",
+        "defer",
+        "enqueue_background",
+        "reject"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update の low-confidence / budget exceeded fallback 挙動。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.high_risk_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update で high-risk 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.uncertain_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update で uncertain 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.relationship_update.enqueue_only",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "relationship_update を同期 model call 禁止の enqueue-only 経路として扱う。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.large_llm_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate で許可する large LLM 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.small_classifier_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate で許可する small classifier 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.embedding_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate で許可する embedding 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.reranker_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate で許可する reranker 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.background_llm_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate で許可する background LLM job 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.confidence_threshold",
+      "type": "float",
+      "default": 0.65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate で low-confidence fallback を開始する信頼度閾値。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.low_confidence_fallback",
+      "type": "enum",
+      "default": "reject",
+      "allowedValues": [
+        "no_op",
+        "deterministic_baseline",
+        "defer",
+        "enqueue_background",
+        "reject"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate の low-confidence / budget exceeded fallback 挙動。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.high_risk_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate で high-risk 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.uncertain_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate で uncertain 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.interaction_policy_candidate.enqueue_only",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "interaction_policy_candidate を同期 model call 禁止の enqueue-only 経路として扱う。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.large_llm_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook で許可する large LLM 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.small_classifier_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook で許可する small classifier 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.embedding_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook で許可する embedding 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.reranker_max_calls",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook で許可する reranker 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.background_llm_max_calls",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook で許可する background LLM job 最大呼び出し数。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.confidence_threshold",
+      "type": "float",
+      "default": 0.65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook で low-confidence fallback を開始する信頼度閾値。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.low_confidence_fallback",
+      "type": "enum",
+      "default": "enqueue_background",
+      "allowedValues": [
+        "no_op",
+        "deterministic_baseline",
+        "defer",
+        "enqueue_background",
+        "reject"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook の low-confidence / budget exceeded fallback 挙動。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.high_risk_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook で high-risk 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.uncertain_escalation_allowed",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook で uncertain 低信頼時の上位モデル escalation を許可する。"
+    },
+    {
+      "path": "model_call_budget.runtime_learning_hook.enqueue_only",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "runtime_learning_hook を同期 model call 禁止の enqueue-only 経路として扱う。"
+    },
+    {
       "path": "server.tls.enabled",
       "type": "bool",
       "default": false,

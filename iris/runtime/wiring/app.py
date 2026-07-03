@@ -20,7 +20,11 @@ from iris.runtime.wiring.features import (
     collect_cognitive_steps,
     collect_feature_items,
 )
-from iris.runtime.wiring.llm import LLMClientFactory, wire_response_generator
+from iris.runtime.wiring.llm import (
+    LLMClientFactory,
+    wire_budgeted_response_generator,
+    wire_response_generator,
+)
 from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever, wire_hybrid_memory_retriever
 from iris.runtime.wiring.presentation import wire_output_pipeline
 
@@ -35,6 +39,7 @@ if TYPE_CHECKING:
     from iris.contracts.relationship import RelationshipStore
     from iris.features.definition import FeatureDefinition
     from iris.runtime.config import IrisRuntimeConfig
+    from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
     from iris.runtime.output_pipeline import RuntimeOutputPipeline
 
 
@@ -116,6 +121,8 @@ def build_app_from_config(
         model=model,
         temperature=model_config.temperature,
         max_tokens=model_config.max_output_tokens,
+        model_call_budget=config.model_call_budget,
+        model_slot="default_chat",
     )
     all_features = collect_feature_items((features, (chat_feature,)))
     cycle = wire_core_cognitive_cycle(
@@ -139,17 +146,27 @@ def _wire_chat_feature(
     model: str,
     temperature: float,
     max_tokens: int | None,
+    model_call_budget: RuntimeModelCallBudgetConfig | None = None,
+    model_slot: str = "default_chat",
 ) -> FeatureDefinition:
     """Chat feature を再利用可能な形で組み立てる。
 
     Returns:
         構成済みの chat feature。
     """
-    return define_chat_feature(
-        wire_response_generator(
-            llm_client,
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+    generator = wire_response_generator(
+        llm_client,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
+    if model_call_budget is not None:
+        return define_chat_feature(
+            wire_budgeted_response_generator(
+                generator,
+                model_call_budget,
+                model=model,
+                model_slot=model_slot,
+            )
+        )
+    return define_chat_feature(generator)

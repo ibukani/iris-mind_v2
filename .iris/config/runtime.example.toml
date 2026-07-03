@@ -89,6 +89,93 @@ implicit_candidates_enabled = true
 implicit_candidate_min_confidence = 0.35
 implicit_candidate_max_text_length = 1000
 
+[model_call_budget]
+enabled = true
+
+[model_call_budget.user_response_hot_path]
+large_llm_max_calls = 1
+small_classifier_max_calls = 1
+embedding_max_calls = 1
+reranker_max_calls = 1
+background_llm_max_calls = 0
+confidence_threshold = 0.65
+low_confidence_fallback = "deterministic_baseline"
+high_risk_escalation_allowed = true
+uncertain_escalation_allowed = true
+enqueue_only = false
+
+[model_call_budget.proactive]
+large_llm_max_calls = 1
+small_classifier_max_calls = 1
+embedding_max_calls = 1
+reranker_max_calls = 0
+background_llm_max_calls = 1
+confidence_threshold = 0.65
+low_confidence_fallback = "defer"
+high_risk_escalation_allowed = true
+uncertain_escalation_allowed = true
+enqueue_only = false
+
+[model_call_budget.memory_extraction]
+large_llm_max_calls = 0
+small_classifier_max_calls = 1
+embedding_max_calls = 1
+reranker_max_calls = 0
+background_llm_max_calls = 1
+confidence_threshold = 0.65
+low_confidence_fallback = "enqueue_background"
+high_risk_escalation_allowed = false
+uncertain_escalation_allowed = false
+enqueue_only = false
+
+[model_call_budget.reflection]
+large_llm_max_calls = 0
+small_classifier_max_calls = 0
+embedding_max_calls = 1
+reranker_max_calls = 0
+background_llm_max_calls = 1
+confidence_threshold = 0.65
+low_confidence_fallback = "defer"
+high_risk_escalation_allowed = false
+uncertain_escalation_allowed = false
+enqueue_only = false
+
+[model_call_budget.relationship_update]
+large_llm_max_calls = 0
+small_classifier_max_calls = 1
+embedding_max_calls = 1
+reranker_max_calls = 0
+background_llm_max_calls = 1
+confidence_threshold = 0.65
+low_confidence_fallback = "no_op"
+high_risk_escalation_allowed = false
+uncertain_escalation_allowed = false
+enqueue_only = false
+
+[model_call_budget.interaction_policy_candidate]
+large_llm_max_calls = 0
+small_classifier_max_calls = 1
+embedding_max_calls = 1
+reranker_max_calls = 1
+background_llm_max_calls = 1
+confidence_threshold = 0.65
+low_confidence_fallback = "reject"
+high_risk_escalation_allowed = false
+uncertain_escalation_allowed = false
+enqueue_only = false
+
+[model_call_budget.runtime_learning_hook]
+large_llm_max_calls = 0
+small_classifier_max_calls = 0
+embedding_max_calls = 0
+reranker_max_calls = 0
+background_llm_max_calls = 1
+confidence_threshold = 0.65
+low_confidence_fallback = "enqueue_background"
+high_risk_escalation_allowed = false
+uncertain_escalation_allowed = false
+enqueue_only = true
+
 [delivery.quiet_hours]
 enabled = false
 start = "22:00"
