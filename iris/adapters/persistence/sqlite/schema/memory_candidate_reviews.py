@@ -8,6 +8,7 @@ MEMORY_CANDIDATE_REVIEW_REQUIRED_COLUMNS = frozenset(
         "candidate_id",
         "idempotency_key",
         "status",
+        "candidate_type",
         "candidate_json",
         "candidate_text",
         "candidate_kind",

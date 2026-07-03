@@ -19,6 +19,7 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.review_candidates import ReviewCandidateStatus, ReviewDecisionRequest
 from iris.core.ids import ActorId, ObservationId, SpaceId
 from iris.runtime.learning.jobs import (
     BackgroundJobId,
@@ -97,10 +98,9 @@ async def test_reopened_sqlite_review_service_and_promoter_preserve_lifecycle(
     service = MemoryCandidateReviewService(review_store, now=lambda: _REVIEWED_AT)
     approved = await service.approve(
         record.candidate_id,
-        reviewed_by="operator",
-        reason="stable preference",
+        ReviewDecisionRequest(reviewed_by="operator", reason="stable preference"),
     )
-    assert approved.record.status is MemoryCandidateReviewStatus.APPROVED
+    assert approved.candidate.status is ReviewCandidateStatus.APPROVED
     review_store.close()
     memory_store.close()
 

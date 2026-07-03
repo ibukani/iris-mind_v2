@@ -7,6 +7,11 @@ from enum import StrEnum
 from threading import RLock
 from typing import TYPE_CHECKING, NewType, Protocol
 
+from iris.contracts.review_candidates import (
+    ReviewCandidateFilter,
+    ReviewCandidateStatus,
+    ReviewCandidateType,
+)
 from iris.core.metadata import immutable_metadata
 
 if TYPE_CHECKING:
@@ -38,6 +43,7 @@ class MemoryCandidateReviewRecord:
     updated_at: datetime
     idempotency_key: str
     status: MemoryCandidateReviewStatus = MemoryCandidateReviewStatus.PENDING_REVIEW
+    candidate_type: ReviewCandidateType = ReviewCandidateType.MEMORY
     actor_id: ActorId | None = None
     account_id: AccountId | None = None
     space_id: SpaceId | None = None
@@ -104,6 +110,17 @@ class MemoryCandidateReviewStore(Protocol):
         limit: int = 50,
     ) -> tuple[MemoryCandidateReviewRecord, ...]:
         """指定 status の review candidate を決定的順序で返す。
+
+        Returns:
+            作成時刻と candidate id で整列済みの matching record。
+        """
+        ...
+
+    async def list_by_filter(
+        self,
+        query: ReviewCandidateFilter,
+    ) -> tuple[MemoryCandidateReviewRecord, ...]:
+        """Review service boundary 用 filter で candidate を返す。
 
         Returns:
             作成時刻と candidate id で整列済みの matching record。
@@ -214,18 +231,33 @@ class InMemoryMemoryCandidateReviewStore:
         Returns:
             作成時刻と candidate id で整列済みの matching record。
         """
-        _validate_positive_limit(limit)
+        return await self.list_by_filter(
+            ReviewCandidateFilter.model_construct(
+                status=ReviewCandidateStatus(status.value),
+                candidate_type=None,
+                actor_id=actor_id,
+                account_id=account_id,
+                space_id=space_id,
+                limit=limit,
+            )
+        )
+
+    async def list_by_filter(
+        self,
+        query: ReviewCandidateFilter,
+    ) -> tuple[MemoryCandidateReviewRecord, ...]:
+        """Review service boundary 用 filter で candidate を返す。
+
+        Returns:
+            作成時刻と candidate id で整列済みの matching record。
+        """
+        _validate_positive_limit(query.limit)
         with self._lock:
             records = [
-                record
-                for record in self._records.values()
-                if record.status is status
-                and (actor_id is None or record.actor_id == actor_id)
-                and (account_id is None or record.account_id == account_id)
-                and (space_id is None or record.space_id == space_id)
+                record for record in self._records.values() if _matches_filter(record, query)
             ]
             records.sort(key=lambda record: (record.created_at, str(record.candidate_id)))
-            return tuple(records[:limit])
+            return tuple(records[: query.limit])
 
     async def update_status(
         self,
@@ -289,6 +321,24 @@ class MemoryCandidateReviewDecision:
 
     accepted: bool
     reason: str | None = None
+
+
+def _matches_filter(
+    record: MemoryCandidateReviewRecord,
+    query: ReviewCandidateFilter,
+) -> bool:
+    """ReviewCandidateFilter が record に一致するか判定する。
+
+    Returns:
+        Filter 条件をすべて満たす場合は True。
+    """
+    return (
+        (query.status is None or record.status.value == query.status.value)
+        and (query.candidate_type is None or record.candidate_type is query.candidate_type)
+        and (query.actor_id is None or record.actor_id == query.actor_id)
+        and (query.account_id is None or record.account_id == query.account_id)
+        and (query.space_id is None or record.space_id == query.space_id)
+    )
 
 
 def _validate_positive_limit(limit: int) -> None:
