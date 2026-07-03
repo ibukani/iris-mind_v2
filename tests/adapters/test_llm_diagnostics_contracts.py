@@ -18,6 +18,7 @@ from iris.adapters.llm.diagnostics import (
     LLMProviderTimeoutError,
     ProviderCapability,
     ProviderDiagnosticIssue,
+    ProviderReadinessDetails,
     ProviderReadinessResult,
     ReadinessStatus,
     aggregate_issue_severity,
@@ -154,8 +155,7 @@ def test_build_provider_readiness_result_sets_status_and_metadata() -> None:
                 severity=ReadinessStatus.WARN,
             ),
         ),
-        latency_ms=12.5,
-        metadata=metadata,
+        details=ProviderReadinessDetails(latency_ms=12.5, metadata=metadata),
     )
     metadata["k"] = "changed"
 

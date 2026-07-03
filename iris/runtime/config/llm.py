@@ -134,6 +134,7 @@ class RuntimeOllamaConfig:
     base_url: str = "http://localhost:11434"
     timeout_seconds: float = 120.0
     keep_alive: str | None = None
+    warmup_prompt: str | None = None
     think: RuntimeOllamaThink = False
 
 
@@ -460,6 +461,8 @@ class _RuntimeOllamaConfigPatch:
     timeout_seconds: float | None = None
     keep_alive: str | None = None
     keep_alive_set: bool = False
+    warmup_prompt: str | None = None
+    warmup_prompt_set: bool = False
     think: RuntimeOllamaThink = False
     think_set: bool = False
 
@@ -485,6 +488,12 @@ class _RuntimeOllamaConfigPatch:
                 else None
             ),
             keep_alive_set="keep_alive" in table,
+            warmup_prompt=(
+                parse_optional_string(table["warmup_prompt"], "ollama.warmup_prompt")
+                if "warmup_prompt" in table
+                else None
+            ),
+            warmup_prompt_set="warmup_prompt" in table,
             think=(
                 parse_ollama_think(table["think"], "ollama.think") if "think" in table else False
             ),
@@ -507,6 +516,8 @@ class _RuntimeOllamaConfigPatch:
             ),
             keep_alive=env.get("IRIS_OLLAMA_KEEP_ALIVE", None),
             keep_alive_set="IRIS_OLLAMA_KEEP_ALIVE" in env,
+            warmup_prompt=env.get("IRIS_OLLAMA_WARMUP_PROMPT", None),
+            warmup_prompt_set="IRIS_OLLAMA_WARMUP_PROMPT" in env,
             think=(
                 env_ollama_think(env, "IRIS_OLLAMA_THINK", None)
                 if "IRIS_OLLAMA_THINK" in env
@@ -527,6 +538,9 @@ class _RuntimeOllamaConfigPatch:
                 config.timeout_seconds if self.timeout_seconds is None else self.timeout_seconds
             ),
             keep_alive=config.keep_alive if not self.keep_alive_set else self.keep_alive,
+            warmup_prompt=(
+                config.warmup_prompt if not self.warmup_prompt_set else self.warmup_prompt
+            ),
             think=config.think if not self.think_set else self.think,
         )
 

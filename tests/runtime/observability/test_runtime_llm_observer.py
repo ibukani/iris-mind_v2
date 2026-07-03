@@ -7,12 +7,14 @@ from typing import override
 from loguru import logger as loguru_logger
 import pytest
 
+from iris.adapters.llm.lifecycle import ModelLoadState
 from iris.adapters.llm.observability import ObservableLLMClient
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMResponse, LLMRole
 from iris.runtime.observability.context import RuntimeTraceContext, bind_trace_context
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 from iris.runtime.observability.logger import LoguruRuntimeLogger
 from iris.runtime.observability.ports import RuntimeLatencyBudget
+from tests.helpers.approx import approx
 
 
 class _RecordingRuntimeLogger:
@@ -175,3 +177,22 @@ async def test_llm_slow_generation_emits_budget_warning() -> None:
     slow_event = next(event for event in logger.events if event[1] == "runtime.latency.slow")
     assert slow_event[2]["stage"] == "llm_generate"
     assert slow_event[2]["budget_exceeded"] is True
+
+
+def test_runtime_llm_observer_records_explicit_model_load_state() -> None:
+    """Runtime observer records model load state supplied by observable client."""
+    logger = _RecordingRuntimeLogger()
+    observer = RuntimeLLMRequestObserver(logger)
+
+    observer.on_request_success(
+        model="model-a",
+        latency_ms=40.0,
+        finish_reason="stop",
+        model_load_state=ModelLoadState.WARM,
+        generation_latency_ms=30.0,
+    )
+
+    latency_event = next(event for event in logger.events if event[1] == "runtime.latency.stage")
+    assert latency_event[2]["model_load_state"] == "warm"
+    assert latency_event[2]["generation_latency_ms"] == approx(30.0)
+    assert "cold_start_latency_ms" not in latency_event[2]

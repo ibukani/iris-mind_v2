@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from iris.adapters.llm.lifecycle import ModelLoadState
 from iris.core.metadata import immutable_metadata
 
 if TYPE_CHECKING:
@@ -77,6 +78,7 @@ class ProviderReadinessResult:
         latency_ms: Optional measured latency in milliseconds.
         issues: Ordered tuple of issues found during the probe.
         metadata: Optional safe metadata (e.g. base URL, model counts).
+        model_load_state: Provider-neutral model load state derived by the probe.
     """
 
     provider: str
@@ -85,7 +87,23 @@ class ProviderReadinessResult:
     capabilities: ProviderCapability
     latency_ms: float | None = None
     issues: tuple[ProviderDiagnosticIssue, ...] = ()
+    model_load_state: ModelLoadState = ModelLoadState.UNKNOWN
     metadata: Mapping[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class ProviderReadinessDetails:
+    """Optional details attached to a provider readiness result.
+
+    Attributes:
+        latency_ms: Optional measured latency in milliseconds.
+        metadata: Optional safe metadata from the probe.
+        model_load_state: Provider-neutral model load state.
+    """
+
+    latency_ms: float | None = None
+    metadata: Mapping[str, str] | None = None
+    model_load_state: ModelLoadState = ModelLoadState.UNKNOWN
 
 
 def aggregate_issue_severity(
@@ -116,8 +134,7 @@ def build_provider_readiness_result(
     model: str,
     capabilities: ProviderCapability,
     issues: tuple[ProviderDiagnosticIssue, ...],
-    latency_ms: float | None = None,
-    metadata: dict[str, str] | None = None,
+    details: ProviderReadinessDetails | None = None,
 ) -> ProviderReadinessResult:
     """Build a typed readiness result from provider diagnostics input.
 
@@ -126,19 +143,21 @@ def build_provider_readiness_result(
         model: Model name that was probed.
         capabilities: Provider capability declaration.
         issues: Ordered diagnostic issues found during the probe.
-        latency_ms: Optional measured latency in milliseconds.
-        metadata: Optional safe metadata from the probe.
+        details: Optional latency, metadata, and load-state details.
 
     Returns:
         A frozen provider readiness result with aggregate status.
     """
+    resolved_details = ProviderReadinessDetails() if details is None else details
+    metadata = dict(resolved_details.metadata) if resolved_details.metadata is not None else None
     return ProviderReadinessResult(
         provider=provider,
         model=model,
         status=aggregate_issue_severity(issues),
         capabilities=capabilities,
-        latency_ms=latency_ms,
+        latency_ms=resolved_details.latency_ms,
         issues=issues,
+        model_load_state=resolved_details.model_load_state,
         metadata=immutable_metadata(metadata) if metadata is not None else None,
     )
 

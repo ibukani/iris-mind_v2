@@ -13,6 +13,7 @@ from iris.adapters.llm.diagnostics import (
     ProviderReadinessResult,
     ReadinessStatus,
 )
+from iris.adapters.llm.lifecycle import ModelLoadState
 from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
 from iris.runtime.config import (
@@ -40,6 +41,8 @@ class _OutcomeSpec:
 
     readiness: ReadinessStatus
     warmup: ReadinessStatus | None = None
+    readiness_load_state: ModelLoadState = ModelLoadState.UNKNOWN
+    warmup_load_state: ModelLoadState = ModelLoadState.UNKNOWN
 
 
 class _StubDiagnostics:
@@ -84,6 +87,7 @@ class _StubDiagnostics:
             model=model,
             status=self.outcome.readiness,
             capabilities=self.capabilities,
+            model_load_state=self.outcome.readiness_load_state,
             issues=(),
         )
 
@@ -103,6 +107,7 @@ class _StubDiagnostics:
             model=model,
             status=self.outcome.warmup,
             capabilities=self.capabilities,
+            model_load_state=self.outcome.warmup_load_state,
             issues=(),
         )
 
@@ -349,6 +354,51 @@ async def test_run_startup_diagnostics_calls_warmup_when_enabled_and_supported(
 
 
 @pytest.mark.anyio
+async def test_run_startup_diagnostics_fake_local_backend_covers_lifecycle_states(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fake local diagnostics fixes readiness/warmup/unavailable behavior."""
+    config = _with_providers(
+        default_runtime_config(),
+        default_chat=(LLMProvider.OLLAMA, "missing-model"),
+        fast_judge=(LLMProvider.FAKE, "fake-llm"),
+        reasoning=(LLMProvider.FAKE, "fake-llm"),
+    )
+    config = _with_diagnostics(config, warmup_models=True)
+    local_capability = ProviderCapability(
+        health_check=True,
+        model_availability_check=True,
+        model_loaded_check=True,
+        warmup=True,
+    )
+    local_backend = _StubDiagnostics(
+        provider_name=LLMProvider.OLLAMA,
+        capability=local_capability,
+        outcome=_OutcomeSpec(
+            readiness=ReadinessStatus.FAIL,
+            warmup=ReadinessStatus.SKIPPED,
+            readiness_load_state=ModelLoadState.UNAVAILABLE,
+            warmup_load_state=ModelLoadState.UNAVAILABLE,
+        ),
+    )
+    _install_factory(
+        monkeypatch,
+        _slot_stub_factory({ModelSlotName.DEFAULT_CHAT: local_backend}),
+    )
+
+    report = await run_startup_diagnostics(config)
+
+    assert local_backend.check_readiness_calls == 1
+    assert local_backend.warmup_calls == 1
+    outcome = report.outcomes[0]
+    assert outcome.readiness.status is ReadinessStatus.FAIL
+    assert outcome.readiness.model_load_state is ModelLoadState.UNAVAILABLE
+    assert outcome.warmup is not None
+    assert outcome.warmup.status is ReadinessStatus.SKIPPED
+    assert outcome.warmup.model_load_state is ModelLoadState.UNAVAILABLE
+
+
+@pytest.mark.anyio
 async def test_run_startup_diagnostics_skips_warmup_when_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -446,6 +496,7 @@ async def test_run_startup_diagnostics_captures_construction_failure(
     fast_outcome = next(o for o in report.outcomes if o.slot == "fast_judge")
     assert default_outcome.readiness.status is ReadinessStatus.FAIL
     assert default_outcome.readiness.issues[0].code == "diagnostics_build_failed"
+    assert default_outcome.readiness.model_load_state is ModelLoadState.UNAVAILABLE
     assert fast_outcome.readiness.status is ReadinessStatus.OK
 
 

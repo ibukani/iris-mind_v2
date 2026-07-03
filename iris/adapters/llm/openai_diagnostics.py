@@ -17,6 +17,7 @@ from iris.adapters.llm.diagnostics import (
     LLMProviderDiagnostics,
     ProviderCapability,
     ProviderDiagnosticIssue,
+    ProviderReadinessDetails,
     ProviderReadinessResult,
     ReadinessStatus,
     build_provider_readiness_result,
@@ -258,7 +259,7 @@ def _build_result(
         model=model,
         capabilities=_OPENAI_DIAGNOSTICS_CAPABILITIES,
         issues=issues,
-        metadata=metadata,
+        details=ProviderReadinessDetails(metadata=metadata),
     )
 
 

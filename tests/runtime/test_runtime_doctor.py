@@ -17,6 +17,7 @@ from iris.adapters.llm.diagnostics import (
     ProviderReadinessResult,
     ReadinessStatus,
 )
+from iris.adapters.llm.lifecycle import ModelLoadState
 from iris.adapters.persistence.sqlite.backup import SQLiteBackupService
 from iris.adapters.persistence.sqlite.migrator import SQLiteSchemaMigrator
 from iris.runtime import doctor
@@ -156,6 +157,22 @@ async def test_runtime_doctor_forces_startup_diagnostics_warmup_off(
 
 
 @pytest.mark.anyio
+async def test_runtime_doctor_provider_readiness_reports_model_load_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Provider readiness check summary includes the model load state."""
+    check = await _provider_check(
+        monkeypatch,
+        _outcome(
+            readiness=_result(ReadinessStatus.OK, model_load_state=ModelLoadState.WARM),
+            warmup=None,
+        ),
+    )
+
+    assert "model_load_state=warm" in check.summary
+
+
+@pytest.mark.anyio
 async def test_runtime_doctor_warmup_fail_overrides_readiness_ok(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -280,6 +297,7 @@ def _result(
     *,
     issue_code: str | None = None,
     remediation: str | None = None,
+    model_load_state: ModelLoadState = ModelLoadState.UNKNOWN,
 ) -> ProviderReadinessResult:
     issues: tuple[ProviderDiagnosticIssue, ...] = ()
     if issue_code is not None:
@@ -297,6 +315,7 @@ def _result(
         status=status,
         capabilities=ProviderCapability(warmup=True),
         issues=issues,
+        model_load_state=model_load_state,
     )
 
 
@@ -453,7 +472,7 @@ async def test_runtime_doctor_reports_sqlite_schema_version(
 
     check = next(item for item in report.checks if item.name == "sqlite-state")
     assert check.status == "ok"
-    assert "schema_version=4" in check.summary
+    assert "schema_version=5" in check.summary
     assert "latest_migration=review_candidate_type" in check.summary
 
 
