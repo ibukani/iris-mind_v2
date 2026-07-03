@@ -60,16 +60,25 @@ body:
     validations:
       required: true
   - type: textarea
+    id: supersedes
+    attributes:
+      label: Supersedes / Superseded by
+      description: 置き換えるIssue、または本Epicを置き換えるIssue。なければ「なし」。
+      placeholder: "- Supersedes #60"
+    validations:
+      required: true
+  - type: textarea
     id: background
     attributes:
-      label: Background
+      label: 背景 / Context
+      description: 必要性、既存Issue・PR、設計判断、問題の発生源を記載してください。
     validations:
       required: true
   - type: textarea
     id: goal
     attributes:
-      label: Goal
-      description: Epic 完了時の状態を記載してください。
+      label: 目的 / Goal
+      description: 個別タスクではなく、Epic 完了時の到達状態を記載してください。
     validations:
       required: true
   - type: textarea
@@ -89,9 +98,9 @@ body:
     validations:
       required: true
   - type: textarea
-    id: in_scope
+    id: scope
     attributes:
-      label: In scope
+      label: スコープ / Scope
       description: このEpicが所有する境界を明示してください。
       placeholder: "- ..."
     validations:
@@ -99,16 +108,32 @@ body:
   - type: textarea
     id: out_of_scope
     attributes:
-      label: Out of scope
+      label: スコープ外 / Non-goals
       description: 関連していても、このEpicが所有しない事項を明示してください。
       placeholder: "- ..."
     validations:
       required: true
   - type: textarea
-    id: completion_criteria
+    id: implementation_targets
     attributes:
-      label: Completion criteria
+      label: 実装対象候補 / Implementation targets
+      description: 変更されそうな module / package / docs / tests を記載してください。
+      placeholder: "- iris/runtime/...\n- tests/...\n- docs/..."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 受け入れ条件 / Acceptance criteria
       placeholder: "- [ ] 必須子Issueが完了\n- [ ] 運用・安全性基準を満たす"
+    validations:
+      required: true
+  - type: textarea
+    id: recommended_tests
+    attributes:
+      label: 推奨テスト / Test plan
+      description: Epic 全体で最低限必要な統合・安全性・回帰テストを記載してください。
+      placeholder: "- 統合テスト: ...\n- 安全性テスト: ..."
     validations:
       required: true
   - type: textarea
