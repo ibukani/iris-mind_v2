@@ -10,6 +10,7 @@ Iris runtime foundation の主要ドキュメント入口。
 
 - [`architecture.md`](architecture.md): 現在の層構造、runtime flow、scheduler、delivery、state、observability の実装状態。
 - [`runtime-api.md`](runtime-api.md): 外部 gRPC 契約、`SubmitObservation`、`PollAppActions`、`ReportActionResult`。
+- [`learning-candidate-review.md`](learning-candidate-review.md): 学習候補の list / read / approve / reject / discard service boundary。
 - [`observability.md`](observability.md): runtime trace context、lifecycle logs、LLM request observability、startup diagnostics、runtime doctor。
 - [`archive/legacy-v0.md`](archive/legacy-v0.md): 現在のコードベースへ適用しない旧アーキテクチャ情報。
 
