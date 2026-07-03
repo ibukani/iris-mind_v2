@@ -72,7 +72,7 @@ async def test_warmup_payload_includes_keep_alive_and_num_predict() -> None:
     assert handler.payload["keep_alive"] == "5m"
     options = handler.payload["options"]
     assert _is_dict(options)
-    assert options["temperature"] == 0.25
+    assert options["temperature"] == pytest.approx(0.25)
     assert options["num_predict"] == 8
 
 
@@ -94,7 +94,13 @@ class _WarmupErrorHandler:
         return httpx.Response(200, request=request)
 
     def _raise_chat_error(self, request: httpx.Request) -> httpx.Response:
-        """Raise the configured warmup chat error."""
+        """Raise the configured warmup chat error.
+
+        Raises:
+            httpx.ConnectError: When configured with ``connect`` mode.
+            httpx.TimeoutException: When configured with ``timeout`` mode.
+            httpx.ReadError: When configured with ``read`` mode.
+        """
         if self._mode == "connect":
             message = "connection refused"
             raise httpx.ConnectError(message, request=request)
@@ -123,7 +129,11 @@ class _CapturingWarmupHandler:
         return httpx.Response(200, request=request)
 
     def _chat_response(self, request: httpx.Request) -> httpx.Response:
-        """Capture and acknowledge the warmup chat request."""
+        """Capture and acknowledge the warmup chat request.
+
+        Returns:
+            Successful mock ``/api/chat`` response.
+        """
         body = json.loads(request.content.decode())
         assert _is_dict(body)
         self.payload = dict(body)
@@ -135,5 +145,9 @@ class _CapturingWarmupHandler:
 
 
 def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
-    """Narrow a JSON-like value to a dictionary."""
+    """Narrow a JSON-like value to a dictionary.
+
+    Returns:
+        True when ``value`` is a dictionary.
+    """
     return isinstance(value, dict)
