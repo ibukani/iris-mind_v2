@@ -240,6 +240,12 @@ LAYER_EXCEPTIONS: list[tuple[str, str, str, str]] = [
         "iris.runtime.state.memory_candidates",
         "SQLite review adapter implements the runtime-owned MemoryCandidateReviewStore port",
     ),
+    (
+        "iris/adapters",
+        "iris/adapters/persistence/sqlite/stores/safety_audit.py",
+        "iris.runtime.state.safety_audit",
+        "SQLite safety audit adapter implements the runtime-owned SafetyAuditJournal port",
+    ),
 ]
 
 ENTRYPOINT_FILES: set[str] = {

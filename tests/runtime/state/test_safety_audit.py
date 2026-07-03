@@ -90,3 +90,22 @@ def _record(
         policy="strict_delivery",
         policy_version="1",
     )
+
+
+async def test_in_memory_audit_is_process_local_across_restart_equivalent() -> None:
+    """In-memory backend は restart 相当の再生成で block history を失う。"""
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    journal = InMemorySafetyAuditJournal()
+    await journal.append(
+        _record(
+            now=now,
+            target_key="target",
+            stage=SafetyAuditStage.DELIVERY,
+            allowed=False,
+        )
+    )
+    assert await journal.recent_block_count("target", since=now - timedelta(minutes=1)) == 1
+
+    restarted = InMemorySafetyAuditJournal()
+
+    assert await restarted.recent_block_count("target", since=now - timedelta(minutes=1)) == 0

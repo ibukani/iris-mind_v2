@@ -16,6 +16,7 @@ from iris.adapters.persistence.sqlite.schema.background_jobs import (
 from iris.adapters.persistence.sqlite.schema.memory_candidate_reviews import (
     MEMORY_CANDIDATE_REVIEW_REQUIRED_COLUMNS,
 )
+from iris.adapters.persistence.sqlite.schema.safety_audit import SAFETY_AUDIT_REQUIRED_COLUMNS
 from iris.adapters.persistence.sqlite.schema.transcript import (
     CONVERSATION_TRANSCRIPT_REQUIRED_COLUMNS,
 )
@@ -218,6 +219,7 @@ _REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "background_jobs": BACKGROUND_JOB_REQUIRED_COLUMNS,
     "memory_candidate_reviews": MEMORY_CANDIDATE_REVIEW_REQUIRED_COLUMNS,
     "conversation_transcripts": CONVERSATION_TRANSCRIPT_REQUIRED_COLUMNS,
+    "safety_audit_records": SAFETY_AUDIT_REQUIRED_COLUMNS,
 }
 
 

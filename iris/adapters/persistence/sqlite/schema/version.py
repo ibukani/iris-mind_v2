@@ -2,5 +2,5 @@
 
 from __future__ import annotations
 
-CURRENT_SQLITE_SCHEMA_VERSION = 3
+CURRENT_SQLITE_SCHEMA_VERSION = 4
 SCHEMA_MIGRATIONS_TABLE = "schema_migrations"
