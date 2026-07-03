@@ -606,6 +606,13 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             env="IRIS_OLLAMA_KEEP_ALIVE",
         ),
         ConfigFieldSpec(
+            "ollama.warmup_prompt",
+            ConfigValueType.OPTIONAL_STR,
+            None,
+            "Ollama warmup 時に送る任意 prompt。未設定なら load-only request。",
+            env="IRIS_OLLAMA_WARMUP_PROMPT",
+        ),
+        ConfigFieldSpec(
             "ollama.think",
             ConfigValueType.OPTIONAL_STR,
             default=False,

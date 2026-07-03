@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
+from iris.adapters.llm.lifecycle import (
+    ModelLoadState,
+)
 from iris.adapters.llm.observability import (
     LoggingRequestObserver,
     ObservableLLMClient,
@@ -25,12 +28,21 @@ class _RecordingObserver:
     """Test observer that records every lifecycle event it receives."""
 
     def __init__(self) -> None:
-        self.started: list[str] = []
-        self.successes: list[tuple[str, float, str]] = []
-        self.errors: list[tuple[str, float, BaseException]] = []
+        self.started: list[tuple[str, ModelLoadState]] = []
+        self.successes: list[
+            tuple[str, float, str, ModelLoadState, float | None, float | None]
+        ] = []
+        self.errors: list[
+            tuple[str, float, BaseException, ModelLoadState, float | None, float | None]
+        ] = []
 
-    def on_request_start(self, *, model: str) -> None:
-        self.started.append(model)
+    def on_request_start(
+        self,
+        *,
+        model: str,
+        model_load_state: ModelLoadState = ModelLoadState.UNKNOWN,
+    ) -> None:
+        self.started.append((model, model_load_state))
 
     def on_request_success(
         self,
@@ -38,8 +50,20 @@ class _RecordingObserver:
         model: str,
         latency_ms: float,
         finish_reason: str,
+        model_load_state: ModelLoadState = ModelLoadState.UNKNOWN,
+        generation_latency_ms: float | None = None,
+        cold_start_latency_ms: float | None = None,
     ) -> None:
-        self.successes.append((model, latency_ms, finish_reason))
+        self.successes.append(
+            (
+                model,
+                latency_ms,
+                finish_reason,
+                model_load_state,
+                generation_latency_ms,
+                cold_start_latency_ms,
+            )
+        )
 
     def on_request_error(
         self,
@@ -47,8 +71,20 @@ class _RecordingObserver:
         model: str,
         latency_ms: float,
         error: BaseException,
+        model_load_state: ModelLoadState = ModelLoadState.UNKNOWN,
+        generation_latency_ms: float | None = None,
+        cold_start_latency_ms: float | None = None,
     ) -> None:
-        self.errors.append((model, latency_ms, error))
+        self.errors.append(
+            (
+                model,
+                latency_ms,
+                error,
+                model_load_state,
+                generation_latency_ms,
+                cold_start_latency_ms,
+            )
+        )
 
 
 def _build_request(model: str = "test-model") -> LLMRequest:
@@ -100,7 +136,7 @@ async def test_observable_llm_client_reports_start_and_success() -> None:
     response = await client.generate(_build_request("model-a"))
 
     assert response.text == "ok"
-    assert observer.started == ["model-a"]
+    assert observer.started == [("model-a", ModelLoadState.UNKNOWN)]
     assert len(observer.successes) == 1
     success = observer.successes[0]
     assert success[0] == "model-a"
@@ -127,7 +163,7 @@ async def test_observable_llm_client_reports_error_and_reraises() -> None:
     with pytest.raises(_BoomError, match="kaboom for model-b"):
         await client.generate(_build_request("model-b"))
 
-    assert observer.started == ["model-b"]
+    assert observer.started == [("model-b", ModelLoadState.UNKNOWN)]
     assert observer.successes == []
     assert len(observer.errors) == 1
     error = observer.errors[0]
@@ -160,6 +196,7 @@ def test_logging_observer_emits_debug_on_start(caplog: pytest.LogCaptureFixture)
     start_records = [record for record in caplog.records if record.message == "llm.request.start"]
     assert len(start_records) == 1
     assert_exact_eq(_assert_extra(start_records[0], "model"), "m")
+    assert_exact_eq(_assert_extra(start_records[0], "model_load_state"), "unknown")
 
 
 def test_logging_observer_emits_info_on_success(caplog: pytest.LogCaptureFixture) -> None:
@@ -176,6 +213,7 @@ def test_logging_observer_emits_info_on_success(caplog: pytest.LogCaptureFixture
     assert_exact_eq(_assert_extra(record, "model"), "m")
     assert _assert_extra(record, "latency_ms") == approx(12.5)
     assert_exact_eq(_assert_extra(record, "finish_reason"), "stop")
+    assert_exact_eq(_assert_extra(record, "model_load_state"), "unknown")
 
 
 def test_logging_observer_emits_warning_on_error(caplog: pytest.LogCaptureFixture) -> None:
@@ -195,6 +233,7 @@ def test_logging_observer_emits_warning_on_error(caplog: pytest.LogCaptureFixtur
     assert _assert_extra(record, "latency_ms") == approx(42.0)
     assert_exact_eq(_assert_extra(record, "error_type"), "RuntimeError")
     assert_exact_eq(_assert_extra(record, "error_message"), "boom")
+    assert_exact_eq(_assert_extra(record, "model_load_state"), "unknown")
 
 
 def test_logging_observer_uses_provided_logger() -> None:

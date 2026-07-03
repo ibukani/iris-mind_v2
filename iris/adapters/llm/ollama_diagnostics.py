@@ -21,10 +21,12 @@ from iris.adapters.llm.diagnostics import (
     LLMProviderInvalidResponseError,
     ProviderCapability,
     ProviderDiagnosticIssue,
+    ProviderReadinessDetails,
     ProviderReadinessResult,
     ReadinessStatus,
     build_provider_readiness_result,
 )
+from iris.adapters.llm.lifecycle import ModelLoadState
 from iris.adapters.llm.ollama import OllamaConfig
 
 type _JsonScalar = str | int | float | bool | None
@@ -200,12 +202,15 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
 
         installed_models = await self._list_models()
         if installed_models is not None and model not in installed_models:
+            metadata["model_installed"] = "false"
             return _build_result(
                 model=model,
                 issues=(_warmup_model_missing_issue(model),),
                 started=started,
                 metadata=metadata,
             )
+        if installed_models is not None:
+            metadata["model_installed"] = "true"
 
         chat_outcome = await self._issue_warmup_chat(
             model=model, started=started, metadata=metadata
@@ -362,13 +367,30 @@ def _build_warmup_payload(*, model: str, config: OllamaConfig) -> _JsonObject:
         options["num_predict"] = config.max_output_tokens
     payload: _JsonObject = {
         "model": model,
-        "messages": [],
+        "messages": _warmup_messages(config),
         "stream": False,
         "options": options,
     }
     if config.keep_alive is not None:
         payload["keep_alive"] = config.keep_alive
     return payload
+
+
+def _warmup_messages(config: OllamaConfig) -> list[_JsonValue]:
+    """Build optional warmup messages for an Ollama load request.
+
+    Returns:
+        ``messages`` payload for warmup; empty list means load-only warmup.
+    """
+    prompt = config.warmup_prompt
+    if prompt is None or not prompt.strip():
+        return []
+    return [
+        {
+            "role": "user",
+            "content": prompt,
+        },
+    ]
 
 
 def _translate_warmup_error(exc: httpx.HTTPError) -> ProviderDiagnosticIssue:
@@ -483,10 +505,49 @@ def _build_result(
         provider=_OLLAMA_DIAGNOSTICS_PROVIDER,
         model=model,
         capabilities=_OLLAMA_DIAGNOSTICS_CAPABILITIES,
-        latency_ms=latency_ms,
         issues=issues,
-        metadata=metadata,
+        details=ProviderReadinessDetails(
+            latency_ms=latency_ms,
+            metadata=metadata,
+            model_load_state=_model_load_state(metadata, issues),
+        ),
     )
+
+
+def _model_load_state(
+    metadata: dict[str, str],
+    issues: tuple[ProviderDiagnosticIssue, ...],
+) -> ModelLoadState:
+    issue_codes = frozenset(issue.code for issue in issues)
+    state = ModelLoadState.UNKNOWN
+    if issue_codes & _UNAVAILABLE_ISSUE_CODES:
+        state = ModelLoadState.UNAVAILABLE
+    elif metadata.get("model_loaded") == "true":
+        state = ModelLoadState.WARM
+    elif issue_codes & _UNKNOWN_LOAD_STATE_ISSUE_CODES:
+        state = ModelLoadState.UNKNOWN
+    elif metadata.get("model_installed") == "true" and metadata.get("model_loaded") == "false":
+        state = ModelLoadState.UNLOADED
+    return state
+
+
+_UNKNOWN_LOAD_STATE_ISSUE_CODES: frozenset[str] = frozenset(
+    {
+        "ps_endpoint_unavailable",
+        "ps_probe_failed_after_warmup",
+        "tags_endpoint_unavailable",
+    },
+)
+
+
+_UNAVAILABLE_ISSUE_CODES: frozenset[str] = frozenset(
+    {
+        "daemon_unreachable",
+        "model_not_installed",
+        "warmup_failed",
+        "warmup_skipped_model_missing",
+    },
+)
 
 
 def _safe_json(response: httpx.Response) -> _JsonObject:

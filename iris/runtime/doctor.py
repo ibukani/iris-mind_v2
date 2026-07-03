@@ -1012,6 +1012,7 @@ def _diagnostics_summary(
     warmup = "none" if outcome.warmup is None else outcome.warmup.status.value
     return (
         f"{outcome.slot} {outcome.provider.value} {outcome.model} "
+        f"model_load_state={outcome.readiness.model_load_state.value} "
         f"readiness={readiness} warmup={warmup} selected={stage.stage}:{stage.status.value}"
     )
 

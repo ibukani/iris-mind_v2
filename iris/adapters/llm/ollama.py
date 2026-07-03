@@ -35,6 +35,7 @@ class OllamaConfig:
     temperature: float = 0.0
     max_output_tokens: int | None = None
     keep_alive: str | None = None
+    warmup_prompt: str | None = None
     think: bool | str | None = False
 
 
@@ -222,7 +223,13 @@ def _to_llm_response(body: _JsonObject, *, fallback_model: str) -> LLMResponse:
     provider_model = body.get("model")
     model = provider_model if isinstance(provider_model, str) else fallback_model
     finish_reason = _finish_reason(body)
-    return LLMResponse(text=content, model=model, finish_reason=finish_reason)
+    return LLMResponse(
+        text=content,
+        model=model,
+        finish_reason=finish_reason,
+        load_latency_ms=_duration_ms(body, "load_duration"),
+        generation_latency_ms=_duration_ms(body, "eval_duration"),
+    )
 
 
 def _finish_reason(body: _JsonObject) -> str:
@@ -230,6 +237,22 @@ def _finish_reason(body: _JsonObject) -> str:
     if isinstance(done_reason, str):
         return done_reason
     return "stop"
+
+
+def _duration_ms(body: _JsonObject, key: str) -> float | None:
+    """Convert an Ollama nanosecond duration field into milliseconds.
+
+    Returns:
+        Duration in milliseconds, or ``None`` when the field is absent or invalid.
+    """
+    value = body.get(key)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        if value < 0:
+            return None
+        return float(value) / 1_000_000.0
+    return None
 
 
 _HTTP_NOT_FOUND = 404

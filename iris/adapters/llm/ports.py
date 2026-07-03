@@ -40,6 +40,8 @@ class LLMResponse:
     text: str
     model: str
     finish_reason: str = "stop"
+    load_latency_ms: float | None = None
+    generation_latency_ms: float | None = None
 
 
 class LLMClient(Protocol):

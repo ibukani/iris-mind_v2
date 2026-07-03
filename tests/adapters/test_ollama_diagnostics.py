@@ -19,6 +19,8 @@ from iris.adapters.llm.diagnostics import (
     LLMProviderTimeoutError,
     ReadinessStatus,
 )
+from iris.adapters.llm.lifecycle import ModelLoadState
+from iris.adapters.llm.ollama import OllamaConfig
 from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 
 
@@ -356,6 +358,7 @@ async def test_check_readiness_ps_endpoint_failure_does_not_hide_tags_result() -
 
     codes = [issue.code for issue in result.issues]
     assert "ps_endpoint_unavailable" in codes
+    assert result.model_load_state is ModelLoadState.UNKNOWN
     assert result.metadata is not None
     assert result.metadata["model_installed"] == "true"
 
@@ -375,6 +378,7 @@ async def test_check_readiness_ps_malformed_response_emits_warn() -> None:
 
     codes = [issue.code for issue in result.issues]
     assert "ps_endpoint_unavailable" in codes
+    assert result.model_load_state is ModelLoadState.UNKNOWN
     assert result.metadata is not None
     assert result.metadata["model_installed"] == "true"
 
@@ -420,6 +424,44 @@ async def test_warmup_sends_empty_messages_for_load() -> None:
     body = captured[0]
     assert body.get("messages") == []
     assert body.get("model") == "qwen3:8b"
+
+
+@pytest.mark.anyio
+async def test_warmup_sends_configured_prompt_when_present() -> None:
+    """Warmup prompt config is sent as a user message when configured."""
+    captured: list[dict[str, object]] = []
+
+    def _warmup_handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        if not _is_dict(body):
+            msg = "warmup body must be a JSON object"
+            raise AssertionError(msg)
+        captured.append(dict(body))
+        return httpx.Response(
+            200,
+            json={"message": {"content": ""}, "model": body.get("model", "")},
+            request=request,
+        )
+
+    class _CapturingHandler(_OllamaHandler):
+        @override
+        def _chat_response(self, request: httpx.Request) -> httpx.Response:
+            return _warmup_handler(request)
+
+    transport = httpx.MockTransport(
+        _CapturingHandler(
+            tags_body=_TAGS_BODY,
+            show_body=_SHOW_BODY,
+            ps_body=_PS_BODY_LOADED,
+        )
+    )
+
+    config = OllamaConfig(warmup_prompt="load ping")
+    await OllamaDiagnostics(config, transport=transport).warmup("qwen3:8b")
+
+    assert captured, "warmup /api/chat was not called"
+    body = captured[0]
+    assert body.get("messages") == [{"role": "user", "content": "load ping"}]
 
 
 @pytest.mark.anyio
@@ -484,6 +526,7 @@ async def test_warmup_warns_when_ps_call_fails_after_successful_chat() -> None:
     assert result.status is ReadinessStatus.WARN
     codes = [issue.code for issue in result.issues]
     assert "ps_probe_failed_after_warmup" in codes
+    assert result.model_load_state is ModelLoadState.UNKNOWN
 
 
 @pytest.mark.anyio

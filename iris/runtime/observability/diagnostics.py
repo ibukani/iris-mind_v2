@@ -32,6 +32,7 @@ from iris.adapters.llm.diagnostics import (
     ProviderReadinessResult,
     ReadinessStatus,
 )
+from iris.adapters.llm.lifecycle import ModelLoadState
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.llm import (
     ModelSlotName,
@@ -329,6 +330,7 @@ async def _run_with_timeout(
             model=model_config.model,
             status=ReadinessStatus.FAIL,
             capabilities=ProviderCapability(),
+            model_load_state=ModelLoadState.UNAVAILABLE,
             issues=(
                 ProviderDiagnosticIssue(
                     code=issue_code,
@@ -527,6 +529,7 @@ def _build_construction_failure(
         model=model_config.model,
         status=ReadinessStatus.FAIL,
         capabilities=ProviderCapability(),
+        model_load_state=ModelLoadState.UNAVAILABLE,
         issues=(issue,),
     )
     return DiagnosticsCheckOutcome(

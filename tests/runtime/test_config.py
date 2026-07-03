@@ -218,6 +218,7 @@ def test_toml_sets_ollama_and_openai_sections(tmp_path: Path) -> None:
         base_url = "http://localhost:11434"
         timeout_seconds = 120.0
         keep_alive = "5m"
+        warmup_prompt = "load ping"
 
         [openai]
         model = "gpt-5-mini"
@@ -231,6 +232,7 @@ def test_toml_sets_ollama_and_openai_sections(tmp_path: Path) -> None:
     assert config.ollama.base_url == "http://localhost:11434"
     assert abs(config.ollama.timeout_seconds - 120.0) < 0.001
     assert config.ollama.keep_alive == "5m"
+    assert config.ollama.warmup_prompt == "load ping"
     assert config.openai.model == "gpt-5-mini"
     assert config.openai.timeout_seconds is not None
     assert abs(config.openai.timeout_seconds - 60.0) < 0.001
@@ -258,6 +260,7 @@ def test_env_vars_override_toml_values(tmp_path: Path) -> None:
         "IRIS_DEFAULT_CHAT_TEMPERATURE": "0.2",
         "IRIS_DEFAULT_CHAT_MAX_OUTPUT_TOKENS": "128",
         "IRIS_OLLAMA_HOST": "http://env-host:11434",
+        "IRIS_OLLAMA_WARMUP_PROMPT": "env load ping",
     }
 
     config = load_runtime_config(config_path, env=env)
@@ -269,6 +272,7 @@ def test_env_vars_override_toml_values(tmp_path: Path) -> None:
         max_output_tokens=128,
     )
     assert config.ollama.base_url == "http://env-host:11434"
+    assert config.ollama.warmup_prompt == "env load ping"
 
 
 def test_cli_args_override_env_values(tmp_path: Path) -> None:

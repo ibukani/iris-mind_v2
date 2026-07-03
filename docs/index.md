@@ -24,6 +24,7 @@ Iris runtime foundation の主要ドキュメント入口。
 - [`adr/0006-proactive-scheduler-delivery-safety.md`](adr/0006-proactive-scheduler-delivery-safety.md): proactive scheduler と delivery outbox の安全境界。
 - [`adr/0007-runtime-boundary-guard.md`](adr/0007-runtime-boundary-guard.md): runtime boundary guard の方針。
 - [`adr/0008-runtime-observability-and-diagnostics.md`](adr/0008-runtime-observability-and-diagnostics.md): runtime observability と diagnostics。
+- [`adr/0013-local-llm-lifecycle-readiness-warmup.md`](adr/0013-local-llm-lifecycle-readiness-warmup.md): Local LLM lifecycle / readiness / warmup。
 
 ## Source Of Truth
 

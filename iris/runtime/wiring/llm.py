@@ -8,6 +8,7 @@ from iris.adapters.llm.fake import FakeLLMClient
 from iris.adapters.llm.observability import ObservableLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
+from iris.adapters.llm.ollama_lifecycle import OllamaModelLifecycleProbe
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
@@ -20,6 +21,7 @@ from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 
 if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
+    from iris.adapters.llm.lifecycle import ModelLifecycleProbe
     from iris.contracts.conversation import ConversationRecord
     from iris.runtime.observability.ports import RuntimeLatencyBudget
 
@@ -168,6 +170,11 @@ class LLMClientFactory:
         client = _build_llm_client(provider, model_config, runtime_config)
         return _wrap_with_observer(
             client,
+            lifecycle_probe=_build_model_lifecycle_probe(
+                provider,
+                model_config,
+                runtime_config,
+            ),
             latency_budget=runtime_config.observability.latency_budget,
         )
 
@@ -322,6 +329,29 @@ def ollama_adapter_config(
         temperature=model_config.temperature,
         max_output_tokens=model_config.max_output_tokens,
         keep_alive=runtime_config.ollama.keep_alive,
+        warmup_prompt=runtime_config.ollama.warmup_prompt,
+        think=runtime_config.ollama.think,
+    )
+
+
+def ollama_lifecycle_probe_config(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> OllamaConfig:
+    """Runtime config を request-time Ollama lifecycle probe 用に変換する。
+
+    Returns:
+        短い readiness timeout を持つ ``OllamaModelLifecycleProbe`` 用 config。
+    """
+    model = _resolve_ollama_model(model_config.model)
+    return OllamaConfig(
+        model=model,
+        base_url=runtime_config.ollama.base_url,
+        timeout_seconds=runtime_config.diagnostics.readiness_timeout_seconds,
+        temperature=model_config.temperature,
+        max_output_tokens=model_config.max_output_tokens,
+        keep_alive=runtime_config.ollama.keep_alive,
+        warmup_prompt=runtime_config.ollama.warmup_prompt,
         think=runtime_config.ollama.think,
     )
 
@@ -354,6 +384,7 @@ def openai_adapter_config(
 def _wrap_with_observer(
     client: LLMClient,
     *,
+    lifecycle_probe: ModelLifecycleProbe | None,
     latency_budget: RuntimeLatencyBudget,
 ) -> LLMClient:
     """LLM client を既定の request lifecycle observer で包む。
@@ -365,6 +396,7 @@ def _wrap_with_observer(
 
     Args:
         client: provider constructor が返した素の LLM client。
+        lifecycle_probe: 任意の request-time local model lifecycle probe。
         latency_budget: Runtime LLM generation latency budget。
 
     Returns:
@@ -374,7 +406,26 @@ def _wrap_with_observer(
     return ObservableLLMClient(
         client,
         RuntimeLLMRequestObserver(latency_budget=latency_budget),
+        lifecycle_probe=lifecycle_probe,
     )
+
+
+def _build_model_lifecycle_probe(
+    provider: LLMProvider,
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+) -> ModelLifecycleProbe | None:
+    """Provider ごとの request-time lifecycle probe を組み立てる。
+
+    Returns:
+        ローカル lifecycle state を観測できる provider では probe、非対応 provider
+        では ``None``。
+    """
+    if provider is LLMProvider.OLLAMA:
+        return OllamaModelLifecycleProbe(
+            ollama_lifecycle_probe_config(model_config, runtime_config),
+        )
+    return None
 
 
 def _is_fake_llm_model(model: str) -> bool:
