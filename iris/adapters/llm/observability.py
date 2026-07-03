@@ -225,10 +225,10 @@ class ObservableLLMClient:
         """
         model = request.model
         snapshot = await self._snapshot(model)
-        if snapshot.load_state is ModelLoadState.UNAVAILABLE:
-            self._raise_unavailable(model=model, snapshot=snapshot)
         self._observer.on_request_start(model=model, model_load_state=snapshot.load_state)
         started = time.perf_counter()
+        if snapshot.load_state is ModelLoadState.UNAVAILABLE:
+            self._raise_unavailable(model=model, snapshot=snapshot, started=started)
         try:
             response = await self._client.generate(request)
         except BaseException as exc:
@@ -270,15 +270,22 @@ class ObservableLLMClient:
             return ModelLifecycleSnapshot(provider="unknown", model=model)
         return await self._lifecycle_probe.snapshot(model)
 
-    def _raise_unavailable(self, *, model: str, snapshot: ModelLifecycleSnapshot) -> None:
+    def _raise_unavailable(
+        self,
+        *,
+        model: str,
+        snapshot: ModelLifecycleSnapshot,
+        started: float,
+    ) -> None:
         reason = snapshot.reason or "model_unavailable"
         message = f"Local model {model!r} is unavailable before generation: {reason}"
         error = LLMProviderModelUnavailableError(message)
+        latency_ms = (time.perf_counter() - started) * 1000.0
         self._observer.on_request_error(
             model=model,
-            latency_ms=snapshot.latency_ms or 0.0,
+            latency_ms=latency_ms,
             error=error,
             model_load_state=ModelLoadState.UNAVAILABLE,
-            generation_latency_ms=0.0,
+            generation_latency_ms=latency_ms,
         )
         raise error
