@@ -54,7 +54,22 @@ discard(MemoryCandidateReviewId, ReviewDecisionRequest | None) -> ReviewDecision
 
 現時点で promotion 実装があるのは `memory` candidate だけである。将来の `shared_episodic_memory`、`persona_patch`、`relationship`、`internal_state`、`consolidation` は `ReviewCandidateType` と DTO で表現できるようにする。
 
-Memory candidate の detail payload は `ReviewMemoryCandidatePayload` に閉じ込める。将来の candidate type では、同じ `ReviewCandidateDetail` に型付き payload を追加し、既存の `candidate_type` / `status` / `scope` / `metadata` を壊さない。
+Memory candidate の detail payload は `ReviewMemoryCandidatePayload` に閉じ込める。Shared episodic memory candidate の detail payload は `ReviewSharedEpisodicMemoryCandidatePayload` に閉じ込める。`memory_candidate` と `shared_episodic_memory_candidate` は別 field とし、profile / preference memory と共有エピソード記憶を混ぜない。将来の candidate type でも、同じ `ReviewCandidateDetail` に型付き payload を追加し、既存の `candidate_type` / `status` / `scope` / `metadata` を壊さない。
+
+## Shared episodic memory candidate
+
+`shared_episodic_memory` は AIコンパニオン向けの共有体験・内輪ネタ・節目・衝突と修復などを扱う review candidate type である。Contract は `iris/contracts/shared_episodic_memory.py` と `ReviewSharedEpisodicMemoryCandidatePayload` で定義する。詳細は `docs/shared-episodic-memory-candidates.md` を参照する。
+
+必須境界は次の通り。
+
+- `actor_id`: 共有体験の相手 actor。
+- `account_id`: durable user boundary。
+- `space_id`: 体験が発生した conversation space。
+- `source_events`: 1件以上の source event / observation / timestamp。
+- `confidence`: 0.0 以上 1.0 以下。
+- `reason`: review 可能な根拠説明。
+
+初期 policy は `review_required=true` / `admission_policy=review_required` である。`private`、`sensitive`、`embarrassing` な候補も無条件保存しない。`secret_like` な候補は `reject` policy 以外を contract validation で拒否する。
 
 ## Local AI / classifier metadata
 

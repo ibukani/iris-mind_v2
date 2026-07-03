@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from iris.contracts.memory import MemoryKind
 from iris.contracts.memory_candidates import (
@@ -14,6 +14,13 @@ from iris.contracts.memory_candidates import (
     MemoryRetentionPolicy,
 )
 from iris.contracts.metadata import ImmutableMetadata
+from iris.contracts.shared_episodic_memory import (
+    SharedEpisodicAdmissionPolicy,
+    SharedEpisodicAdmissionRisk,
+    SharedEpisodicMemoryKind,
+    SharedEpisodicRetrievalMetadata,
+    SharedEpisodicSourceEventRef,
+)
 from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 
 
@@ -97,6 +104,71 @@ class ReviewMemoryCandidatePayload(BaseModel):
     metadata: ImmutableMetadata = Field(default_factory=dict)
 
 
+class ReviewSharedEpisodicMemoryCandidatePayload(BaseModel):
+    """Shared episodic memory candidate review detail の typed payload。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    summary: str = Field(min_length=1)
+    kind: SharedEpisodicMemoryKind
+    actor_id: ActorId
+    account_id: AccountId
+    space_id: SpaceId
+    source_events: tuple[SharedEpisodicSourceEventRef, ...] = Field(min_length=1)
+    occurred_at: datetime
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason: str = Field(min_length=1)
+    review_required: bool
+    admission_policy: SharedEpisodicAdmissionPolicy
+    admission_risk: SharedEpisodicAdmissionRisk
+    retrieval: SharedEpisodicRetrievalMetadata
+    metadata: ImmutableMetadata = Field(default_factory=dict)
+
+    @field_validator("summary", "reason")
+    @classmethod
+    def _text_fields_must_not_be_blank(cls, value: str) -> str:
+        """空白だけの説明文を拒否する。
+
+        Returns:
+            検証済み文字列。
+
+        Raises:
+            ValueError: 空白だけの文字列の場合。
+        """
+        if not value.strip():
+            message = "shared episodic memory review payload text fields must not be blank"
+            raise ValueError(message)
+        return value
+
+    @model_validator(mode="after")
+    def _validate_admission_policy(
+        self,
+    ) -> ReviewSharedEpisodicMemoryCandidatePayload:
+        """Review payload でも shared episodic admission policy を強制する。
+
+        Returns:
+            検証済み payload。
+
+        Raises:
+            ValueError: admission policy が安全でない場合。
+        """
+        if (
+            self.admission_risk is SharedEpisodicAdmissionRisk.SECRET_LIKE
+            and self.admission_policy is not SharedEpisodicAdmissionPolicy.REJECT
+        ):
+            message = "secret-like shared episodic memories must be rejected"
+            raise ValueError(message)
+        if self.admission_policy is SharedEpisodicAdmissionPolicy.REVIEW_REQUIRED:
+            if not self.review_required:
+                message = "review_required must be true when admission policy is review_required"
+                raise ValueError(message)
+            return self
+        if self.review_required:
+            message = "review_required must be false when admission policy is reject"
+            raise ValueError(message)
+        return self
+
+
 class ReviewCandidateSummary(BaseModel):
     """List API 用の review candidate summary。"""
 
@@ -127,6 +199,7 @@ class ReviewCandidateDetail(BaseModel):
     scope: ReviewCandidateScope
     source_observation_id: ObservationId | None = None
     memory_candidate: ReviewMemoryCandidatePayload | None = None
+    shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None = None
     created_at: datetime
     updated_at: datetime
     reviewed_at: datetime | None = None
@@ -135,6 +208,135 @@ class ReviewCandidateDetail(BaseModel):
     promoted_memory_id: str | None = None
     metadata: ImmutableMetadata = Field(default_factory=dict)
     candidate_metadata: ImmutableMetadata = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_payload_matches_type(self) -> ReviewCandidateDetail:
+        """candidate_type と typed payload の混在を拒否する。
+
+        Returns:
+            検証済み detail DTO。
+        """
+        if self.candidate_type is ReviewCandidateType.MEMORY:
+            _validate_memory_detail_payloads(
+                memory_candidate=self.memory_candidate,
+                shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+            )
+            return self
+        if self.candidate_type is ReviewCandidateType.SHARED_EPISODIC_MEMORY:
+            shared_payload = _require_shared_episodic_detail_payload(
+                memory_candidate=self.memory_candidate,
+                shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+            )
+            _validate_shared_episodic_scope(scope=self.scope, payload=shared_payload)
+            _validate_shared_episodic_source_observation(
+                source_observation_id=self.source_observation_id,
+                payload=shared_payload,
+            )
+            return self
+        _validate_future_detail_has_no_known_payloads(
+            candidate_type=self.candidate_type,
+            memory_candidate=self.memory_candidate,
+            shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+        )
+        return self
+
+
+def _validate_memory_detail_payloads(
+    *,
+    memory_candidate: ReviewMemoryCandidatePayload | None,
+    shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
+) -> None:
+    """Memory detail に memory payload だけが載ることを検証する。
+
+    Raises:
+        ValueError: payload が不足または混在している場合。
+    """
+    if memory_candidate is None:
+        message = "memory candidate detail requires memory payload"
+        raise ValueError(message)
+    if shared_episodic_memory_candidate is not None:
+        message = "memory candidate detail must not include shared episodic payload"
+        raise ValueError(message)
+
+
+def _require_shared_episodic_detail_payload(
+    *,
+    memory_candidate: ReviewMemoryCandidatePayload | None,
+    shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
+) -> ReviewSharedEpisodicMemoryCandidatePayload:
+    """Shared episodic detail の typed payload を返す。
+
+    Returns:
+        検証済み shared episodic payload。
+
+    Raises:
+        ValueError: payload が不足または混在している場合。
+    """
+    if shared_episodic_memory_candidate is None:
+        message = "shared episodic memory detail requires shared episodic payload"
+        raise ValueError(message)
+    if memory_candidate is not None:
+        message = "shared episodic memory detail must not include memory payload"
+        raise ValueError(message)
+    return shared_episodic_memory_candidate
+
+
+def _validate_future_detail_has_no_known_payloads(
+    *,
+    candidate_type: ReviewCandidateType,
+    memory_candidate: ReviewMemoryCandidatePayload | None,
+    shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
+) -> None:
+    """未実装 candidate type に既知 payload が混ざらないことを検証する。
+
+    Raises:
+        ValueError: candidate_type と payload が一致しない場合。
+    """
+    if memory_candidate is not None:
+        message = f"{candidate_type.value} detail must not include memory payload"
+        raise ValueError(message)
+    if shared_episodic_memory_candidate is not None:
+        message = f"{candidate_type.value} detail must not include shared episodic payload"
+        raise ValueError(message)
+
+
+def _validate_shared_episodic_scope(
+    *,
+    scope: ReviewCandidateScope,
+    payload: ReviewSharedEpisodicMemoryCandidatePayload,
+) -> None:
+    """Shared episodic payload と review scope の境界不一致を拒否する。
+
+    Raises:
+        ValueError: scope と payload の actor/account/space が一致しない場合。
+    """
+    if scope.actor_id != payload.actor_id:
+        message = "shared episodic scope actor_id must match payload actor_id"
+        raise ValueError(message)
+    if scope.account_id != payload.account_id:
+        message = "shared episodic scope account_id must match payload account_id"
+        raise ValueError(message)
+    if scope.space_id != payload.space_id:
+        message = "shared episodic scope space_id must match payload space_id"
+        raise ValueError(message)
+
+
+def _validate_shared_episodic_source_observation(
+    *,
+    source_observation_id: ObservationId | None,
+    payload: ReviewSharedEpisodicMemoryCandidatePayload,
+) -> None:
+    """Detail の source observation が source event provenance と矛盾しないことを検証する。
+
+    Raises:
+        ValueError: detail の source observation が source event に含まれない場合。
+    """
+    if source_observation_id is None:
+        return
+    source_observation_ids = {event.observation_id for event in payload.source_events}
+    if source_observation_id not in source_observation_ids:
+        message = "shared episodic source_observation_id must reference a source event"
+        raise ValueError(message)
 
 
 class ReviewDecisionResult(BaseModel):
