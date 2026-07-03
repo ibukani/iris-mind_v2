@@ -105,7 +105,13 @@ def current_model_call_site(default: ModelCallSite) -> ModelCallSite:
 
 
 class ModelCallBudgetGate:
-    """Feature 別 budget と cascade policy に基づいてモデル呼び出しを判定する。"""
+    """Feature 別 budget と cascade policy に基づいてモデル呼び出しを判定する。
+
+    この gate は large LLM / small classifier / embedding / reranker / background LLM
+    の共通 contract を扱う。現時点で runtime wiring に接続済みなのは
+    user-facing large LLM hot path と runtime learning hook の direct large LLM 禁止であり、
+    classifier / embedding / reranker の実呼び出し箇所は後続 feature 実装で同じ gate に接続する。
+    """
 
     def __init__(self, config: RuntimeModelCallBudgetConfig | None = None) -> None:
         """モデル呼び出し予算設定で gate を初期化する。"""

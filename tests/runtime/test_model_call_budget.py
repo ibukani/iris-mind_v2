@@ -10,6 +10,7 @@ import pytest
 from iris.contracts.model_policy import (
     CascadeDecision,
     CascadeFallbackBehavior,
+    CascadeResult,
     ModelCallDescriptor,
     ModelCallKind,
     ModelCallSite,
@@ -31,7 +32,7 @@ from iris.runtime.observability.context import (
     current_trace_counter_snapshot,
 )
 from iris.runtime.service import IrisRuntimeService, ObservationEnvelope
-from iris.runtime.wiring.cognitive import wire_core_cognitive_cycle
+from iris.runtime.wiring.cognitive import wire_basic_cognitive_cycle, wire_core_cognitive_cycle
 from iris.runtime.wiring.llm import BudgetedResponseGenerator
 from tests.helpers.output_pipeline import make_output_pipeline
 
@@ -81,8 +82,8 @@ def test_low_confidence_high_risk_can_escalate_when_policy_allows_it() -> None:
 
 
 @pytest.mark.anyio
-async def test_budgeted_response_generator_does_not_call_wrapped_generator_after_budget() -> None:
-    """BudgetedResponseGenerator は budget 超過時に実体 generator を呼ばない。"""
+async def test_budgeted_response_generator_executes_deterministic_fallback_after_budget() -> None:
+    """BudgetedResponseGenerator は budget 超過時に deterministic fallback を実行する。"""
     wrapped = _CountingResponseGenerator()
     generator = BudgetedResponseGenerator(
         wrapped,
@@ -99,10 +100,47 @@ async def test_budgeted_response_generator_does_not_call_wrapped_generator_after
     assert first.text == "reply-1"
     assert first.cascade_result is not None
     assert first.cascade_result.decision is CascadeDecision.ACCEPT
-    assert not second.text
+    assert second.text == "受け取りました。必要なら、もう少し詳しく教えてください。"
+    assert second.model == "fake-llm:deterministic_baseline"
     assert second.cascade_result is not None
     assert second.cascade_result.decision is CascadeDecision.FALLBACK
+    assert second.cascade_result.fallback_behavior is CascadeFallbackBehavior.DETERMINISTIC_BASELINE
     assert wrapped.calls == 1
+
+
+@pytest.mark.anyio
+async def test_budgeted_response_generator_normalizes_unwired_escalation_to_defer() -> None:
+    """上位モデル配線がない escalation は暗黙再呼び出しせず defer に正規化する。"""
+    wrapped = _CountingResponseGenerator()
+    generator = BudgetedResponseGenerator(
+        wrapped,
+        _EscalatingGate(),
+        model_name="fake-llm",
+        model_slot="default_chat",
+    )
+
+    response = await generator.generate_response(
+        ResponsePrompt(system_instruction="system", actor_text="hello")
+    )
+
+    assert not response.text
+    assert response.cascade_result is not None
+    assert response.cascade_result.decision is CascadeDecision.DEFER
+    assert response.cascade_result.fallback_behavior is CascadeFallbackBehavior.DEFER
+    assert wrapped.calls == 0
+
+
+@pytest.mark.anyio
+async def test_response_generation_step_uses_deterministic_fallback_text() -> None:
+    """Deterministic fallback は no-action ではなく候補応答として扱う。"""
+    cycle = wire_basic_cognitive_cycle(
+        extension_steps=(ResponseGenerationStep(_FallbackResponseGenerator()),)
+    )
+
+    result = await cycle.run(_actor_message("hello"))
+
+    assert result.selected_plan.should_respond is True
+    assert result.selected_plan.candidate_text == "fallback reply"
 
 
 @pytest.mark.anyio
@@ -131,7 +169,7 @@ async def test_runtime_service_user_response_hot_path_shares_one_request_budget(
                         model_name="fake-llm",
                         model_slot="default_chat",
                     ),
-                    priority=20,
+                    priority=1,
                 ),
             )
         ),
@@ -145,6 +183,49 @@ async def test_runtime_service_user_response_hot_path_shares_one_request_budget(
     assert response.output.text == "first-1"
     assert first_generator.calls == 1
     assert second_generator.calls == 0
+
+
+class _FallbackResponseGenerator(ResponseGenerator):
+    """deterministic fallback 済みの応答を返す ResponseGenerator stub。"""
+
+    @override
+    async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
+        """Fallback 応答を返す。
+
+        Returns:
+            GeneratedResponse: fallback cascade result 付きの応答。
+        """
+        _ = prompt
+        return GeneratedResponse(
+            text="fallback reply",
+            model="fake-llm:deterministic_baseline",
+            cascade_result=CascadeResult(
+                decision=CascadeDecision.FALLBACK,
+                reason="model call budget exceeded",
+                confidence=1.0,
+                fallback_behavior=CascadeFallbackBehavior.DETERMINISTIC_BASELINE,
+                model_metadata={"model_slot": "default_chat", "model": "fake-llm"},
+            ),
+        )
+
+
+class _EscalatingGate(ModelCallBudgetGate):
+    """常に escalation を返す gate stub。"""
+
+    @override
+    def check_and_record(self, descriptor: ModelCallDescriptor) -> CascadeResult:
+        """上位モデル escalation 判定を返す。
+
+        Returns:
+            CascadeResult: escalation 判定。
+        """
+        return CascadeResult(
+            decision=CascadeDecision.ESCALATE,
+            reason="low confidence allows escalation",
+            confidence=0.2,
+            fallback_behavior=None,
+            model_metadata=descriptor.metadata,
+        )
 
 
 class _CountingResponseGenerator(ResponseGenerator):

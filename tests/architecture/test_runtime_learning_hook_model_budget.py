@@ -60,6 +60,17 @@ def test_model_call_budget_adr_documents_downstream_issue_anchors() -> None:
         assert issue_number in text
 
 
+def test_model_call_budget_adr_documents_current_enforcement_boundary() -> None:
+    """現段階の enforcement 範囲を docs で明示する。"""
+    text = ADR_PATH.read_text(encoding="utf-8")
+
+    assert "user-facing large LLM hot path" in text
+    assert "config / policy contract" in text
+    assert "実呼び出し箇所への enforcement はこの ADR の実装範囲外" in text
+    assert "classifier / embedding / reranker" in text
+    assert "後続 #69 / #70 / #71 / #72 / #78" in text
+
+
 def test_model_call_budget_adr_documents_runtime_learning_enqueue_only() -> None:
     """Issue #88 の enqueue-only 方針は docs で固定する。"""
     text = ADR_PATH.read_text(encoding="utf-8")

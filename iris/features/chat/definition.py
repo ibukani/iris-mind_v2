@@ -118,17 +118,16 @@ class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):
             )
 
         generated = await self._generator.generate_response(prompt)
-        if (
-            generated.cascade_result is not None
-            and generated.cascade_result.decision is not CascadeDecision.ACCEPT
-        ):
+        if _cascade_blocks_response(generated):
+            cascade_result = generated.cascade_result
+            if cascade_result is None:
+                reason = "model call blocked"
+            else:
+                reason = f"model call {cascade_result.decision.value}: {cascade_result.reason}"
             return ActionSelectionResult(
                 step_name=self.name,
                 status=StepStatus.SKIPPED,
-                reason=(
-                    f"model call {generated.cascade_result.decision.value}: "
-                    f"{generated.cascade_result.reason}"
-                ),
+                reason=reason,
             )
         if not generated.text.strip():
             return ActionSelectionResult(
@@ -148,6 +147,15 @@ class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):
             status=StepStatus.OK,
             action_plans=(plan,),
         )
+
+
+def _cascade_blocks_response(generated: GeneratedResponse) -> bool:
+    cascade_result = generated.cascade_result
+    if cascade_result is None or cascade_result.decision is CascadeDecision.ACCEPT:
+        return False
+    if cascade_result.decision is CascadeDecision.FALLBACK:
+        return not generated.text.strip()
+    return True
 
 
 def define_chat_feature(generator: ResponseGenerator, *, priority: int = 10) -> FeatureDefinition:

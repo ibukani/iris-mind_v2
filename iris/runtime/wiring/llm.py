@@ -16,6 +16,7 @@ from iris.contracts.conversation import ConversationRole
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.contracts.model_policy import (
     CascadeDecision,
+    CascadeFallbackBehavior,
     CascadeResult,
     ModelCallDescriptor,
     ModelCallKind,
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
 
 
 _KNOWN_LLM_PROVIDERS: frozenset[LLMProvider] = frozenset(LLMProvider)
+_DETERMINISTIC_BASELINE_TEXT = "受け取りました。必要なら、もう少し詳しく教えてください。"
 
 
 class LLMResponseGenerator(ResponseGenerator):
@@ -90,7 +92,12 @@ class LLMResponseGenerator(ResponseGenerator):
 
 
 class BudgetedResponseGenerator(ResponseGenerator):
-    """ResponseGenerator の前段で user-facing large LLM budget を固定する wrapper。"""
+    """ResponseGenerator の前段で user-facing large LLM budget を固定する wrapper。
+
+    classifier / embedding / reranker の budget は `ModelCallBudgetGate` contract に含まれるが、
+    この wrapper は LLM response generation だけを担当する。後続 feature は各 adapter / worker
+    の呼び出し境界で同じ gate を使う。
+    """
 
     def __init__(
         self,
@@ -121,11 +128,7 @@ class BudgetedResponseGenerator(ResponseGenerator):
         cascade_result = self._gate.check_and_record(descriptor)
         self._record_cascade_result(cascade_result, descriptor)
         if cascade_result.decision is not CascadeDecision.ACCEPT:
-            return GeneratedResponse(
-                text="",
-                model=self._model_name,
-                cascade_result=cascade_result,
-            )
+            return self._fallback_response(cascade_result)
 
         generated = await self._generator.generate_response(prompt)
         return GeneratedResponse(
@@ -150,6 +153,49 @@ class BudgetedResponseGenerator(ResponseGenerator):
                 }
             ),
         )
+
+    def _fallback_response(self, cascade_result: CascadeResult) -> GeneratedResponse:
+        """Cascade fallback behavior を実際の user-facing 挙動へ写像する。
+
+        `escalate` はこの wrapper では上位モデル配線を持たないため、暗黙に
+        LLM を再呼び出しせず `defer` へ正規化する。
+
+        Returns:
+            GeneratedResponse: fallback 実行結果。
+        """
+        text = ""
+        model = self._model_name
+        result = cascade_result
+
+        if cascade_result.decision is CascadeDecision.ESCALATE:
+            result = _normalized_cascade_result(
+                cascade_result,
+                decision=CascadeDecision.DEFER,
+                reason=f"{cascade_result.reason}; escalation target is not wired",
+                fallback_behavior=CascadeFallbackBehavior.DEFER,
+            )
+        elif cascade_result.fallback_behavior is CascadeFallbackBehavior.DETERMINISTIC_BASELINE:
+            text = _DETERMINISTIC_BASELINE_TEXT
+            model = f"{self._model_name}:deterministic_baseline"
+        elif cascade_result.fallback_behavior in {
+            CascadeFallbackBehavior.DEFER,
+            CascadeFallbackBehavior.ENQUEUE_BACKGROUND,
+        }:
+            result = _normalized_cascade_result(
+                cascade_result,
+                decision=CascadeDecision.DEFER,
+                reason=f"{cascade_result.reason}; fallback deferred",
+                fallback_behavior=cascade_result.fallback_behavior,
+            )
+        elif cascade_result.fallback_behavior is CascadeFallbackBehavior.REJECT:
+            result = _normalized_cascade_result(
+                cascade_result,
+                decision=CascadeDecision.DENY,
+                reason=f"{cascade_result.reason}; fallback rejected",
+                fallback_behavior=CascadeFallbackBehavior.REJECT,
+            )
+
+        return GeneratedResponse(text=text, model=model, cascade_result=result)
 
     def _record_cascade_result(
         self,
@@ -229,6 +275,22 @@ def wire_budgeted_response_generator(
         ModelCallBudgetGate(config),
         model_name=model,
         model_slot=model_slot,
+    )
+
+
+def _normalized_cascade_result(
+    cascade_result: CascadeResult,
+    *,
+    decision: CascadeDecision,
+    reason: str,
+    fallback_behavior: CascadeFallbackBehavior | None,
+) -> CascadeResult:
+    return CascadeResult(
+        decision=decision,
+        reason=reason,
+        confidence=cascade_result.confidence,
+        fallback_behavior=fallback_behavior,
+        model_metadata=cascade_result.model_metadata,
     )
 
 
