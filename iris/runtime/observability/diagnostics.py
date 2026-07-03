@@ -18,7 +18,7 @@ true かつ provider の :class:`ProviderCapability` が ``warmup=True`` の
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -39,7 +39,7 @@ from iris.runtime.config.llm import (
     model_slot_names,
     runtime_model_config_for_slot,
 )
-from iris.runtime.wiring.llm import build_provider_diagnostics
+from iris.runtime.wiring.llm import build_provider_diagnostics, resolve_provider_model
 
 if TYPE_CHECKING:
     from iris.runtime.config.llm import (
@@ -254,10 +254,14 @@ async def _probe_slot(
         return failure
     if provider_diag is None:
         return None
+    resolved_model_config = replace(
+        model_config,
+        model=resolve_provider_model(model_config, runtime_config),
+    )
     readiness = await _probe_stage(
-        provider_diag.check_readiness(model_config.model),
+        provider_diag.check_readiness(resolved_model_config.model),
         slot=slot,
-        model_config=model_config,
+        model_config=resolved_model_config,
         timeout_seconds=readiness_timeout_seconds,
         config_key="diagnostics.readiness_timeout_seconds",
         stage="readiness",
@@ -265,9 +269,9 @@ async def _probe_slot(
     warmup: ProviderReadinessResult | None = None
     if warmup_models and provider_diag.capabilities.warmup:
         warmup = await _probe_stage(
-            provider_diag.warmup(model_config.model),
+            provider_diag.warmup(resolved_model_config.model),
             slot=slot,
-            model_config=model_config,
+            model_config=resolved_model_config,
             timeout_seconds=warmup_timeout_seconds,
             config_key="diagnostics.warmup_timeout_seconds",
             stage="warmup",
@@ -275,7 +279,7 @@ async def _probe_slot(
     return DiagnosticsCheckOutcome(
         slot=slot,
         provider=model_config.provider,
-        model=model_config.model,
+        model=resolved_model_config.model,
         readiness=readiness,
         warmup=warmup,
     )
