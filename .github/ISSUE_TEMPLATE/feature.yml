@@ -141,21 +141,21 @@ body:
     id: background_jobs
     attributes:
       label: Background jobs
-      options: [none, background-only worker, adds or changes background work]
+      options: [no background job impact, background-only worker, adds or changes background work]
     validations:
       required: true
   - type: dropdown
     id: persistence
     attributes:
       label: Persistence
-      options: [none, new durable state, migration required, changes existing durable state]
+      options: [no persistence impact, new durable state, migration required, changes existing durable state]
     validations:
       required: true
   - type: dropdown
     id: safety
     attributes:
       label: Safety
-      options: [none, output safety gate, delivery safety gate, both safety gates, other safety impact]
+      options: [no safety impact, output safety gate, delivery safety gate, both safety gates, other safety impact]
     validations:
       required: true
   - type: textarea
