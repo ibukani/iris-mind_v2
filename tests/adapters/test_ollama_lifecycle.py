@@ -96,13 +96,13 @@ async def test_ollama_lifecycle_reports_unavailable_on_timeout() -> None:
 
 @pytest.mark.anyio
 async def test_ollama_lifecycle_reports_unknown_on_generic_http_error() -> None:
-    """Generic HTTP errors are inconclusive and allow provider generation."""
+    """Repeated generic HTTP errors preserve the last inconclusive endpoint reason."""
     probe = OllamaModelLifecycleProbe(transport=httpx.MockTransport(_read_error))
 
     snapshot = await probe.snapshot("qwen3:8b")
 
     assert snapshot.load_state is ModelLoadState.UNKNOWN
-    assert snapshot.reason == "/api/ps_request_failed"
+    assert snapshot.reason == "/api/tags_request_failed"
 
 
 @pytest.mark.anyio
@@ -127,11 +127,7 @@ async def test_ollama_lifecycle_reports_unknown_on_ps_http_error() -> None:
         transport=httpx.MockTransport(
             _ResponseHandler(
                 ps_response=httpx.Response(500, request=_request("/api/ps")),
-                tags_response=httpx.Response(
-                    200,
-                    json=_TAGS_WITH_MODEL,
-                    request=_request("/api/tags"),
-                ),
+                tags_response=httpx.Response(200, json=_TAGS_WITH_MODEL, request=_request("/api/tags")),
             ),
         ),
     )
@@ -166,16 +162,8 @@ async def test_ollama_lifecycle_reports_unknown_on_invalid_json() -> None:
     probe = OllamaModelLifecycleProbe(
         transport=httpx.MockTransport(
             _ResponseHandler(
-                ps_response=httpx.Response(
-                    200,
-                    content=b"not-json",
-                    request=_request("/api/ps"),
-                ),
-                tags_response=httpx.Response(
-                    200,
-                    json=_TAGS_WITH_MODEL,
-                    request=_request("/api/tags"),
-                ),
+                ps_response=httpx.Response(200, content=b"not-json", request=_request("/api/ps")),
+                tags_response=httpx.Response(200, json=_TAGS_WITH_MODEL, request=_request("/api/tags")),
             ),
         ),
     )
@@ -186,17 +174,14 @@ async def test_ollama_lifecycle_reports_unknown_on_invalid_json() -> None:
     assert snapshot.reason == "/api/ps_invalid_response"
 
 
-_PS_LOADED: dict[str, object] = {
-    "models": [{"name": "qwen3:8b", "size": 4_000_000_000}],
-}
+_PS_LOADED: dict[str, object] = {"models": [{"name": "qwen3:8b", "size": 4_000_000_000}]}
 _PS_EMPTY: dict[str, object] = {"models": []}
-_TAGS_WITH_MODEL: dict[str, object] = {
-    "models": [{"name": "qwen3:8b"}, {"name": "llama3:8b"}],
-}
+_TAGS_WITH_MODEL: dict[str, object] = {"models": [{"name": "qwen3:8b"}, {"name": "llama3:8b"}]}
 _TAGS_WITHOUT_MODEL: dict[str, object] = {"models": [{"name": "llama3:8b"}]}
 
 
 def _request(path: str) -> httpx.Request:
+    """Build a request object for a fixed mock endpoint."""
     return httpx.Request("GET", f"http://testserver{path}")
 
 
@@ -235,12 +220,7 @@ class _LifecycleHandler:
 class _ResponseHandler:
     """HTTPX mock handler using prebuilt responses."""
 
-    def __init__(
-        self,
-        *,
-        ps_response: httpx.Response,
-        tags_response: httpx.Response,
-    ) -> None:
+    def __init__(self, *, ps_response: httpx.Response, tags_response: httpx.Response) -> None:
         """Create handler with fixed responses."""
         self._ps_response = ps_response
         self._tags_response = tags_response
