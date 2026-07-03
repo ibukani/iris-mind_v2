@@ -1,11 +1,11 @@
-"""SQLite review candidate type migration v4。"""
+"""SQLite review candidate type migration v5。"""
 
 from __future__ import annotations
 
 from iris.adapters.persistence.sqlite.migrator_types import SQLiteMigration
 
-REVIEW_CANDIDATE_TYPE_V4 = SQLiteMigration(
-    version=4,
+REVIEW_CANDIDATE_TYPE_V5 = SQLiteMigration(
+    version=5,
     name="review_candidate_type",
     statements=(
         """

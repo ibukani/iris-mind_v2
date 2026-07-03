@@ -11,8 +11,9 @@ from iris.adapters.persistence.sqlite.migrations.v0002_runtime_learning_state im
 from iris.adapters.persistence.sqlite.migrations.v0003_conversation_transcripts import (
     CONVERSATION_TRANSCRIPTS_V3,
 )
-from iris.adapters.persistence.sqlite.migrations.v0004_review_candidate_type import (
-    REVIEW_CANDIDATE_TYPE_V4,
+from iris.adapters.persistence.sqlite.migrations.v0004_safety_audit import SAFETY_AUDIT_V4
+from iris.adapters.persistence.sqlite.migrations.v0005_review_candidate_type import (
+    REVIEW_CANDIDATE_TYPE_V5,
 )
 
 if TYPE_CHECKING:
@@ -29,5 +30,6 @@ def available_migrations() -> tuple[SQLiteMigration, ...]:
         BASELINE_V1,
         RUNTIME_LEARNING_STATE_V2,
         CONVERSATION_TRANSCRIPTS_V3,
-        REVIEW_CANDIDATE_TYPE_V4,
+        SAFETY_AUDIT_V4,
+        REVIEW_CANDIDATE_TYPE_V5,
     )

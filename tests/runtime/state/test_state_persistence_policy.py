@@ -17,6 +17,7 @@ from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
     SQLiteMemoryCandidateReviewStore,
 )
 from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
+from iris.adapters.persistence.sqlite.stores.safety_audit import SQLiteSafetyAuditJournal
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.adapters.persistence.sqlite.stores.transcript import SQLiteTranscriptStore
 from iris.runtime.config import ConfigError, default_runtime_config
@@ -30,6 +31,7 @@ from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
+from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 from iris.runtime.state.transcript import NullTranscriptStore
 from iris.runtime.wiring.state import wire_runtime_state
@@ -57,6 +59,7 @@ def test_memory_backend_policy_marks_runtime_state_ephemeral() -> None:
     assert policy.affect_store == PersistenceKind.EPHEMERAL
     assert policy.delivery_outbox == PersistenceKind.EPHEMERAL
     assert policy.scheduler_target_store == PersistenceKind.EPHEMERAL
+    assert policy.safety_audit_journal == PersistenceKind.EPHEMERAL
     assert policy.background_job_queue == PersistenceKind.EPHEMERAL
     assert policy.memory_candidate_review_store == PersistenceKind.EPHEMERAL
     assert policy.transcript_store == PersistenceKind.EPHEMERAL
@@ -73,6 +76,7 @@ def test_sqlite_backend_policy_marks_durable_companion_state() -> None:
     assert policy.activity_journal == PersistenceKind.DURABLE
     assert policy.delivery_outbox == PersistenceKind.DURABLE
     assert policy.scheduler_target_store == PersistenceKind.DURABLE
+    assert policy.safety_audit_journal == PersistenceKind.DURABLE
     assert policy.background_job_queue == PersistenceKind.DURABLE
     assert policy.memory_candidate_review_store == PersistenceKind.DURABLE
     assert policy.transcript_store == PersistenceKind.DEFERRED
@@ -105,6 +109,7 @@ async def test_sqlite_runtime_wiring_uses_sqlite_durable_stores(tmp_path: Path) 
     assert isinstance(stores.affect_store, SQLiteAffectStore)
     assert isinstance(stores.activity_journal, SQLiteActivityJournal)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
+    assert isinstance(stores.safety_audit_journal, SQLiteSafetyAuditJournal)
     assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
     assert isinstance(stores.transcript_store, NullTranscriptStore)
@@ -121,6 +126,7 @@ def test_memory_runtime_wiring_uses_in_memory_state_stores() -> None:
     assert isinstance(stores.relationship_store, InMemoryRelationshipStore)
     assert isinstance(stores.affect_store, InMemoryAffectStore)
     assert isinstance(stores.activity_journal, InMemoryActivityJournal)
+    assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
     assert isinstance(stores.background_job_queue, InMemoryBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, InMemoryMemoryCandidateReviewStore)
     assert isinstance(stores.transcript_store, NullTranscriptStore)
@@ -162,6 +168,7 @@ async def test_runtime_wiring_keeps_projection_presence_and_occupancy_in_memory(
     assert isinstance(stores.affect_store, SQLiteAffectStore)
     assert isinstance(stores.activity_journal, SQLiteActivityJournal)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
+    assert isinstance(stores.safety_audit_journal, SQLiteSafetyAuditJournal)
     assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
     assert isinstance(stores.transcript_store, NullTranscriptStore)

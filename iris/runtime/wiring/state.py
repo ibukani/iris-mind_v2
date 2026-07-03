@@ -17,6 +17,7 @@ from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
     SQLiteMemoryCandidateReviewStore,
 )
 from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
+from iris.adapters.persistence.sqlite.stores.safety_audit import SQLiteSafetyAuditJournal
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.adapters.persistence.sqlite.stores.transcript import SQLiteTranscriptStore
 from iris.runtime.config.errors import ConfigError
@@ -147,7 +148,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
             max_depth_per_provider=config.delivery.max_outbox_depth_per_provider,
         ),
         scheduler_target_store=SQLiteSchedulerTargetStore(ctx),
-        safety_audit_journal=InMemorySafetyAuditJournal(),
+        safety_audit_journal=SQLiteSafetyAuditJournal(ctx),
         background_job_queue=sqlite_background_job_queue,
         memory_candidate_review_store=sqlite_candidate_review_store,
         learning_dispatch_store=InMemoryLearningDispatchStore(),

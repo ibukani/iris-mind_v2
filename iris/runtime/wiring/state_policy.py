@@ -34,6 +34,7 @@ class RuntimeStatePersistencePolicy:
     affect_store: PersistenceKind
     delivery_outbox: PersistenceKind
     scheduler_target_store: PersistenceKind
+    safety_audit_journal: PersistenceKind
     background_job_queue: PersistenceKind
     memory_candidate_review_store: PersistenceKind
     transcript_store: PersistenceKind
@@ -62,6 +63,7 @@ def runtime_state_persistence_policy(
             affect_store=PersistenceKind.DURABLE,
             delivery_outbox=PersistenceKind.DURABLE,
             scheduler_target_store=PersistenceKind.DURABLE,
+            safety_audit_journal=PersistenceKind.DURABLE,
             background_job_queue=PersistenceKind.DURABLE,
             memory_candidate_review_store=PersistenceKind.DURABLE,
             transcript_store=PersistenceKind.DEFERRED,
@@ -78,6 +80,7 @@ def runtime_state_persistence_policy(
         affect_store=PersistenceKind.EPHEMERAL,
         delivery_outbox=PersistenceKind.EPHEMERAL,
         scheduler_target_store=PersistenceKind.EPHEMERAL,
+        safety_audit_journal=PersistenceKind.EPHEMERAL,
         background_job_queue=PersistenceKind.EPHEMERAL,
         memory_candidate_review_store=PersistenceKind.EPHEMERAL,
         transcript_store=PersistenceKind.EPHEMERAL,
