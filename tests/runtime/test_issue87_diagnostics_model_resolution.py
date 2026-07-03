@@ -35,7 +35,11 @@ class _ResolvedModelStubDiagnostics:
         self.warmup_models: list[str] = []
 
     async def check_readiness(self, model: str) -> ProviderReadinessResult:
-        """Record and return a successful readiness result."""
+        """Record and return a successful readiness result.
+
+        Returns:
+            Successful readiness result for the recorded model.
+        """
         self.check_readiness_models.append(model)
         return ProviderReadinessResult(
             provider=self.provider,
@@ -46,7 +50,11 @@ class _ResolvedModelStubDiagnostics:
         )
 
     async def warmup(self, model: str) -> ProviderReadinessResult:
-        """Record and return a successful warmup result."""
+        """Record and return a successful warmup result.
+
+        Returns:
+            Successful warmup result for the recorded model.
+        """
         self.warmup_models.append(model)
         return ProviderReadinessResult(
             provider=self.provider,
@@ -58,7 +66,11 @@ class _ResolvedModelStubDiagnostics:
 
 
 def _ollama_sentinel_config() -> IrisRuntimeConfig:
-    """Build config where an Ollama slot still carries the fake sentinel model."""
+    """Build config where an Ollama slot still carries the fake sentinel model.
+
+    Returns:
+        Runtime config with an Ollama slot using the fake sentinel model.
+    """
     config = default_runtime_config()
     return replace(
         config,
