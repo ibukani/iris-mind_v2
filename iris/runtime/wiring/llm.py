@@ -192,16 +192,42 @@ class LLMClientFactory:
         Returns:
             応答生成に渡すモデル名。
         """
-        provider = _require_known_provider(
-            model_config.provider,
-            "Unknown LLM provider",
-            self._known_providers,
+        return resolve_provider_model(
+            model_config,
+            runtime_config,
+            known_providers=self._known_providers,
         )
-        if provider == LLMProvider.OLLAMA:
-            return _resolve_ollama_model(model_config.model)
-        if provider == LLMProvider.OPENAI:
-            return _resolve_openai_model(model_config.model, runtime_config)
-        return model_config.model
+
+
+def resolve_provider_model(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+    *,
+    known_providers: frozenset[LLMProvider] = _KNOWN_LLM_PROVIDERS,
+) -> str:
+    """Provider に実際に渡すモデル名を解決する。
+
+    生成、startup diagnostics、runtime doctor、warmup が同じ provider-visible
+    model 名を見るための単一解決点。
+
+    Args:
+        model_config: モデルスロット設定。
+        runtime_config: ランタイム設定全体。
+        known_providers: 許可する provider の集合。
+
+    Returns:
+        Provider adapter に渡す実モデル名。
+    """
+    provider = _require_known_provider(
+        model_config.provider,
+        "Unknown LLM provider",
+        known_providers,
+    )
+    if provider == LLMProvider.OLLAMA:
+        return _resolve_ollama_model(model_config.model)
+    if provider == LLMProvider.OPENAI:
+        return _resolve_openai_model(model_config.model, runtime_config)
+    return model_config.model
 
 
 def build_provider_diagnostics(
