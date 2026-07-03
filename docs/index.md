@@ -31,6 +31,7 @@ Iris runtime foundation の主要ドキュメント入口。
 - [`adr/0012-sqlite-schema-migration-backup-recovery.md`](adr/0012-sqlite-schema-migration-backup-recovery.md): SQLite schema migration / backup / recovery。
 - [`adr/0013-local-llm-lifecycle-readiness-warmup.md`](adr/0013-local-llm-lifecycle-readiness-warmup.md): Local LLM lifecycle / readiness / warmup。
 - [`adr/0014-public-remote-auth-boundary.md`](adr/0014-public-remote-auth-boundary.md): Public remote auth boundary。
+- [`adr/0015-local-model-call-budget-and-cascade-policy.md`](adr/0015-local-model-call-budget-and-cascade-policy.md): Local model call budget と cascade policy。
 
 ## Source Of Truth
 

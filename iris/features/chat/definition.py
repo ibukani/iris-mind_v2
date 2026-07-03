@@ -9,11 +9,13 @@ from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.workspace.frame import WorkspaceFrame, interpreted_input_text
 from iris.contracts.actions import ActionPlan
+from iris.contracts.model_policy import CascadeDecision
 from iris.contracts.observations import ActorMessageObservation
 from iris.features.definition import FeatureDefinition
 
 if TYPE_CHECKING:
     from iris.contracts.conversation import ConversationRecord
+    from iris.contracts.model_policy import CascadeResult
     from iris.contracts.policy import PolicyConstraint
 
 
@@ -38,6 +40,7 @@ class GeneratedResponse:
 
     text: str
     model: str
+    cascade_result: CascadeResult | None = None
 
 
 class ResponseGenerator(Protocol):
@@ -115,10 +118,28 @@ class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):
             )
 
         generated = await self._generator.generate_response(prompt)
+        if _cascade_blocks_response(generated):
+            cascade_result = generated.cascade_result
+            if cascade_result is None:
+                reason = "model call blocked"
+            else:
+                reason = f"model call {cascade_result.decision.value}: {cascade_result.reason}"
+            return ActionSelectionResult(
+                step_name=self.name,
+                status=StepStatus.SKIPPED,
+                reason=reason,
+            )
+        if not generated.text.strip():
+            return ActionSelectionResult(
+                step_name=self.name,
+                status=StepStatus.SKIPPED,
+                reason="empty generated response",
+            )
+
         plan = ActionPlan(
             turn_intent="respond",
             candidate_text=generated.text,
-            should_respond=bool(generated.text),
+            should_respond=True,
             priority=self._priority,
         )
         return ActionSelectionResult(
@@ -126,6 +147,15 @@ class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):
             status=StepStatus.OK,
             action_plans=(plan,),
         )
+
+
+def _cascade_blocks_response(generated: GeneratedResponse) -> bool:
+    cascade_result = generated.cascade_result
+    if cascade_result is None or cascade_result.decision is CascadeDecision.ACCEPT:
+        return False
+    if cascade_result.decision is CascadeDecision.FALLBACK:
+        return not generated.text.strip()
+    return True
 
 
 def define_chat_feature(generator: ResponseGenerator, *, priority: int = 10) -> FeatureDefinition:

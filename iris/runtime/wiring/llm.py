@@ -14,19 +14,33 @@ from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
 from iris.contracts.conversation import ConversationRole
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
+from iris.contracts.model_policy import (
+    CascadeDecision,
+    CascadeFallbackBehavior,
+    CascadeResult,
+    ModelCallDescriptor,
+    ModelCallKind,
+    ModelCallSite,
+)
+from iris.core.metadata import immutable_metadata
 from iris.features.chat.definition import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
 from iris.runtime.config.llm import LLMProvider
+from iris.runtime.model_call_budget import ModelCallBudgetGate, current_model_call_site
+from iris.runtime.observability.context import trace_counter_extra
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
+from iris.runtime.observability.logger import LoguruRuntimeLogger
 
 if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
     from iris.adapters.llm.lifecycle import ModelLifecycleProbe
     from iris.contracts.conversation import ConversationRecord
-    from iris.runtime.observability.ports import RuntimeLatencyBudget
+    from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
+    from iris.runtime.observability.ports import RuntimeLatencyBudget, RuntimeLogger
 
 
 _KNOWN_LLM_PROVIDERS: frozenset[LLMProvider] = frozenset(LLMProvider)
+_DETERMINISTIC_BASELINE_TEXT = "受け取りました。必要なら、もう少し詳しく教えてください。"
 
 
 class LLMResponseGenerator(ResponseGenerator):
@@ -77,6 +91,133 @@ class LLMResponseGenerator(ResponseGenerator):
         return GeneratedResponse(text=response.text, model=response.model)
 
 
+class BudgetedResponseGenerator(ResponseGenerator):
+    """ResponseGenerator の前段で user-facing large LLM budget を固定する wrapper。
+
+    classifier / embedding / reranker の budget は `ModelCallBudgetGate` contract に含まれるが、
+    この wrapper は LLM response generation だけを担当する。後続 feature は各 adapter / worker
+    の呼び出し境界で同じ gate を使う。
+    """
+
+    def __init__(
+        self,
+        generator: ResponseGenerator,
+        gate: ModelCallBudgetGate,
+        *,
+        model_name: str,
+        model_slot: str,
+        default_call_site: ModelCallSite = ModelCallSite.USER_RESPONSE_HOT_PATH,
+        runtime_logger: RuntimeLogger | None = None,
+    ) -> None:
+        """予算 gate と実体 generator を明示注入して初期化する。"""
+        self._generator = generator
+        self._gate = gate
+        self._model_name = model_name
+        self._model_slot = model_slot
+        self._default_call_site = default_call_site
+        self._logger = runtime_logger or LoguruRuntimeLogger()
+
+    @override
+    async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
+        """Budget gate が許可した場合だけ実体 generator を呼ぶ。
+
+        Returns:
+            GeneratedResponse: cascade result 付きの生成結果。
+        """
+        descriptor = self._descriptor()
+        cascade_result = self._gate.check_and_record(descriptor)
+        self._record_cascade_result(cascade_result, descriptor)
+        if cascade_result.decision is not CascadeDecision.ACCEPT:
+            return self._fallback_response(cascade_result)
+
+        generated = await self._generator.generate_response(prompt)
+        return GeneratedResponse(
+            text=generated.text,
+            model=generated.model,
+            cascade_result=cascade_result,
+        )
+
+    def _descriptor(self) -> ModelCallDescriptor:
+        call_site = current_model_call_site(self._default_call_site)
+        return ModelCallDescriptor(
+            call_kind=ModelCallKind.LARGE_LLM,
+            call_site=call_site,
+            model_slot=self._model_slot,
+            model_name=self._model_name,
+            metadata=immutable_metadata(
+                {
+                    "model_slot": self._model_slot,
+                    "model": self._model_name,
+                    "call_kind": ModelCallKind.LARGE_LLM.value,
+                    "call_site": call_site.value,
+                }
+            ),
+        )
+
+    def _fallback_response(self, cascade_result: CascadeResult) -> GeneratedResponse:
+        """Cascade fallback behavior を実際の user-facing 挙動へ写像する。
+
+        `escalate` はこの wrapper では上位モデル配線を持たないため、暗黙に
+        LLM を再呼び出しせず `defer` へ正規化する。
+
+        Returns:
+            GeneratedResponse: fallback 実行結果。
+        """
+        text = ""
+        model = self._model_name
+        result = cascade_result
+
+        if cascade_result.decision is CascadeDecision.ESCALATE:
+            result = _normalized_cascade_result(
+                cascade_result,
+                decision=CascadeDecision.DEFER,
+                reason=f"{cascade_result.reason}; escalation target is not wired",
+                fallback_behavior=CascadeFallbackBehavior.DEFER,
+            )
+        elif cascade_result.fallback_behavior is CascadeFallbackBehavior.DETERMINISTIC_BASELINE:
+            text = _DETERMINISTIC_BASELINE_TEXT
+            model = f"{self._model_name}:deterministic_baseline"
+        elif cascade_result.fallback_behavior in {
+            CascadeFallbackBehavior.DEFER,
+            CascadeFallbackBehavior.ENQUEUE_BACKGROUND,
+        }:
+            result = _normalized_cascade_result(
+                cascade_result,
+                decision=CascadeDecision.DEFER,
+                reason=f"{cascade_result.reason}; fallback deferred",
+                fallback_behavior=cascade_result.fallback_behavior,
+            )
+        elif cascade_result.fallback_behavior is CascadeFallbackBehavior.REJECT:
+            result = _normalized_cascade_result(
+                cascade_result,
+                decision=CascadeDecision.DENY,
+                reason=f"{cascade_result.reason}; fallback rejected",
+                fallback_behavior=CascadeFallbackBehavior.REJECT,
+            )
+
+        return GeneratedResponse(text=text, model=model, cascade_result=result)
+
+    def _record_cascade_result(
+        self,
+        cascade_result: CascadeResult,
+        descriptor: ModelCallDescriptor,
+    ) -> None:
+        fields = trace_counter_extra()
+        fields.update(
+            {
+                "call_site": descriptor.call_site.value,
+                "call_kind": descriptor.call_kind.value,
+                "decision": cascade_result.decision.value,
+                "reason": cascade_result.reason,
+                "confidence": cascade_result.confidence,
+                "fallback_behavior": _fallback_behavior_value(cascade_result),
+                "model_slot": self._model_slot,
+                "model": self._model_name,
+            }
+        )
+        self._logger.info("runtime.model_call.cascade_result", **fields)
+
+
 def wire_fake_llm_client(responses: tuple[str, ...] | None = None) -> FakeLLMClient:
     """決定論的なフェイク LLM クライアントを組み立てる。
 
@@ -115,6 +256,48 @@ def wire_response_generator(
         temperature=temperature,
         max_tokens=max_tokens,
     )
+
+
+def wire_budgeted_response_generator(
+    generator: ResponseGenerator,
+    config: RuntimeModelCallBudgetConfig,
+    *,
+    model: str,
+    model_slot: str,
+) -> BudgetedResponseGenerator:
+    """ResponseGenerator に model call budget gate を被せる。
+
+    Returns:
+        BudgetedResponseGenerator インスタンス。
+    """
+    return BudgetedResponseGenerator(
+        generator,
+        ModelCallBudgetGate(config),
+        model_name=model,
+        model_slot=model_slot,
+    )
+
+
+def _normalized_cascade_result(
+    cascade_result: CascadeResult,
+    *,
+    decision: CascadeDecision,
+    reason: str,
+    fallback_behavior: CascadeFallbackBehavior | None,
+) -> CascadeResult:
+    return CascadeResult(
+        decision=decision,
+        reason=reason,
+        confidence=cascade_result.confidence,
+        fallback_behavior=fallback_behavior,
+        model_metadata=cascade_result.model_metadata,
+    )
+
+
+def _fallback_behavior_value(cascade_result: CascadeResult) -> str | None:
+    if cascade_result.fallback_behavior is None:
+        return None
+    return cascade_result.fallback_behavior.value
 
 
 def wire_openai_llm_client(config: OpenAIConfig) -> LLMClient:

@@ -56,6 +56,12 @@ from iris.runtime.config.llm import (
 )
 from iris.runtime.config.logging import RuntimeLoggingConfig
 from iris.runtime.config.memory import RuntimeMemoryConfig, apply_memory_toml
+from iris.runtime.config.model_call_budget import (
+    RuntimeModelCallBudgetConfig,
+    apply_model_call_budget_toml,
+    default_model_call_budget_config,
+    validate_model_call_budget_config,
+)
 from iris.runtime.config.observability import (
     RuntimeObservabilityConfig,
     apply_observability_toml,
@@ -127,6 +133,7 @@ class IrisRuntimeConfig:
     scheduler: RuntimeSchedulerConfig
     delivery: RuntimeDeliveryConfig
     learning: RuntimeLearningConfig
+    model_call_budget: RuntimeModelCallBudgetConfig
     memory: RuntimeMemoryConfig
     conversation: RuntimeConversationConfig
     observability: RuntimeObservabilityConfig
@@ -163,6 +170,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         scheduler=RuntimeSchedulerConfig(),
         delivery=RuntimeDeliveryConfig(),
         learning=RuntimeLearningConfig(),
+        model_call_budget=default_model_call_budget_config(),
         memory=RuntimeMemoryConfig(),
         conversation=RuntimeConversationConfig(),
         observability=RuntimeObservabilityConfig(),
@@ -403,6 +411,10 @@ def _apply_toml_sections(
         scheduler=apply_scheduler_toml(config.scheduler, scheduler_table),
         delivery=apply_delivery_toml(config.delivery, delivery_table),
         learning=apply_learning_toml(config.learning, table_or_empty(table, "learning")),
+        model_call_budget=apply_model_call_budget_toml(
+            config.model_call_budget,
+            table_or_empty(table, "model_call_budget"),
+        ),
         memory=apply_memory_toml(config.memory, table_or_empty(table, "memory")),
         conversation=apply_conversation_toml(
             config.conversation,
@@ -450,6 +462,7 @@ class _RuntimeConfigSections:
     scheduler: RuntimeSchedulerConfig
     delivery: RuntimeDeliveryConfig
     learning: RuntimeLearningConfig
+    model_call_budget: RuntimeModelCallBudgetConfig
     memory: RuntimeMemoryConfig
     conversation: RuntimeConversationConfig
     models: RuntimeModelsConfig
@@ -485,6 +498,7 @@ def _apply_env_sections(
         scheduler=apply_scheduler_env(config.scheduler, env),
         delivery=config.delivery,
         learning=config.learning,
+        model_call_budget=config.model_call_budget,
         memory=config.memory,
         conversation=config.conversation,
         observability=config.observability,
@@ -520,6 +534,7 @@ def _compose_runtime_config(
         scheduler=sections.scheduler,
         delivery=sections.delivery,
         learning=sections.learning,
+        model_call_budget=sections.model_call_budget,
         memory=sections.memory,
         conversation=sections.conversation,
         observability=sections.observability,
@@ -552,6 +567,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
     validated_scheduler = validate_scheduler_config(config.scheduler)
     validated_delivery = validate_delivery_config(config.delivery)
     validated_learning = validate_learning_config(config.learning)
+    validated_model_call_budget = validate_model_call_budget_config(config.model_call_budget)
     validated_conversation = validate_conversation_config(config.conversation)
     validated_observability = validate_observability_config(config.observability)
     _validate_transcript_backend(
@@ -566,6 +582,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         scheduler=validated_scheduler,
         delivery=validated_delivery,
         learning=validated_learning,
+        model_call_budget=validated_model_call_budget,
         conversation=validated_conversation,
         observability=validated_observability,
     )

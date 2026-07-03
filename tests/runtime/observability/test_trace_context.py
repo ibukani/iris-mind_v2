@@ -7,6 +7,7 @@ from iris.runtime.observability.context import (
     bind_trace_context,
     current_trace_context,
     current_trace_counter_snapshot,
+    increment_avoided_large_llm_call,
     increment_trace_call,
     trace_counter_extra,
     trace_extra,
@@ -92,6 +93,16 @@ def test_trace_call_counters_increment_inside_bound_context() -> None:
     assert snapshot.classifier_call_count == 1
     assert snapshot.embedding_call_count == 1
     assert snapshot.reranker_call_count == 1
+    assert snapshot.avoided_large_llm_call_count == 0
+
+
+def test_avoided_large_llm_counter_increments_inside_bound_context() -> None:
+    """Bound trace scope tracks avoided large LLM calls."""
+    with bind_trace_context(_context()):
+        increment_avoided_large_llm_call()
+        snapshot = current_trace_counter_snapshot()
+
+    assert snapshot.avoided_large_llm_call_count == 1
 
 
 def test_trace_call_counters_reset_after_scope_exit() -> None:
@@ -105,4 +116,5 @@ def test_trace_call_counters_reset_after_scope_exit() -> None:
         "classifier_call_count": 0,
         "embedding_call_count": 0,
         "reranker_call_count": 0,
+        "avoided_large_llm_call_count": 0,
     }

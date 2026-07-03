@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
+from iris.contracts.model_policy import CascadeFallbackBehavior, ModelCallSite
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.model_slots import model_slot_specs
 
@@ -150,6 +151,214 @@ def _latency_budget_specs() -> tuple[ConfigFieldSpec, ...]:
     )
 
 
+@dataclass(frozen=True)
+class _ModelCallBudgetSpecDefaults:
+    """ConfigSpec 生成用の model call budget default 群。"""
+
+    site: ModelCallSite
+    large_llm_max_calls: int
+    small_classifier_max_calls: int
+    embedding_max_calls: int
+    reranker_max_calls: int
+    background_llm_max_calls: int
+    confidence_threshold: float
+    low_confidence_fallback: str
+    high_risk_escalation_allowed: bool
+    uncertain_escalation_allowed: bool
+    enqueue_only: bool
+
+
+_MODEL_CALL_BUDGET_DEFAULTS: tuple[_ModelCallBudgetSpecDefaults, ...] = (
+    _ModelCallBudgetSpecDefaults(
+        site=ModelCallSite.USER_RESPONSE_HOT_PATH,
+        large_llm_max_calls=1,
+        small_classifier_max_calls=1,
+        embedding_max_calls=1,
+        reranker_max_calls=1,
+        background_llm_max_calls=0,
+        confidence_threshold=0.65,
+        low_confidence_fallback=CascadeFallbackBehavior.DETERMINISTIC_BASELINE.value,
+        high_risk_escalation_allowed=True,
+        uncertain_escalation_allowed=True,
+        enqueue_only=False,
+    ),
+    _ModelCallBudgetSpecDefaults(
+        site=ModelCallSite.PROACTIVE,
+        large_llm_max_calls=1,
+        small_classifier_max_calls=1,
+        embedding_max_calls=1,
+        reranker_max_calls=0,
+        background_llm_max_calls=1,
+        confidence_threshold=0.65,
+        low_confidence_fallback=CascadeFallbackBehavior.DEFER.value,
+        high_risk_escalation_allowed=True,
+        uncertain_escalation_allowed=True,
+        enqueue_only=False,
+    ),
+    _ModelCallBudgetSpecDefaults(
+        site=ModelCallSite.MEMORY_EXTRACTION,
+        large_llm_max_calls=0,
+        small_classifier_max_calls=1,
+        embedding_max_calls=1,
+        reranker_max_calls=0,
+        background_llm_max_calls=1,
+        confidence_threshold=0.65,
+        low_confidence_fallback=CascadeFallbackBehavior.ENQUEUE_BACKGROUND.value,
+        high_risk_escalation_allowed=False,
+        uncertain_escalation_allowed=False,
+        enqueue_only=False,
+    ),
+    _ModelCallBudgetSpecDefaults(
+        site=ModelCallSite.REFLECTION,
+        large_llm_max_calls=0,
+        small_classifier_max_calls=0,
+        embedding_max_calls=1,
+        reranker_max_calls=0,
+        background_llm_max_calls=1,
+        confidence_threshold=0.65,
+        low_confidence_fallback=CascadeFallbackBehavior.DEFER.value,
+        high_risk_escalation_allowed=False,
+        uncertain_escalation_allowed=False,
+        enqueue_only=False,
+    ),
+    _ModelCallBudgetSpecDefaults(
+        site=ModelCallSite.RELATIONSHIP_UPDATE,
+        large_llm_max_calls=0,
+        small_classifier_max_calls=1,
+        embedding_max_calls=1,
+        reranker_max_calls=0,
+        background_llm_max_calls=1,
+        confidence_threshold=0.65,
+        low_confidence_fallback=CascadeFallbackBehavior.NO_OP.value,
+        high_risk_escalation_allowed=False,
+        uncertain_escalation_allowed=False,
+        enqueue_only=False,
+    ),
+    _ModelCallBudgetSpecDefaults(
+        site=ModelCallSite.INTERACTION_POLICY_CANDIDATE,
+        large_llm_max_calls=0,
+        small_classifier_max_calls=1,
+        embedding_max_calls=1,
+        reranker_max_calls=1,
+        background_llm_max_calls=1,
+        confidence_threshold=0.65,
+        low_confidence_fallback=CascadeFallbackBehavior.REJECT.value,
+        high_risk_escalation_allowed=False,
+        uncertain_escalation_allowed=False,
+        enqueue_only=False,
+    ),
+    _ModelCallBudgetSpecDefaults(
+        site=ModelCallSite.RUNTIME_LEARNING_HOOK,
+        large_llm_max_calls=0,
+        small_classifier_max_calls=0,
+        embedding_max_calls=0,
+        reranker_max_calls=0,
+        background_llm_max_calls=1,
+        confidence_threshold=0.65,
+        low_confidence_fallback=CascadeFallbackBehavior.ENQUEUE_BACKGROUND.value,
+        high_risk_escalation_allowed=False,
+        uncertain_escalation_allowed=False,
+        enqueue_only=True,
+    ),
+)
+
+
+def _model_call_budget_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Feature 別 model call budget の ConfigSpec 群を返す。
+
+    Returns:
+        tuple[ConfigFieldSpec, ...]: model_call_budget 配下の設定仕様。
+    """
+    return (
+        ConfigFieldSpec(
+            "model_call_budget.enabled",
+            ConfigValueType.BOOL,
+            default=True,
+            description="Feature 別 model call budget と cascade policy を有効化する。",
+        ),
+        *tuple(
+            spec
+            for defaults in _MODEL_CALL_BUDGET_DEFAULTS
+            for spec in _feature_model_call_budget_specs(defaults)
+        ),
+    )
+
+
+def _feature_model_call_budget_specs(
+    defaults: _ModelCallBudgetSpecDefaults,
+) -> tuple[ConfigFieldSpec, ...]:
+    """単一 call site の model call budget 設定仕様を返す。
+
+    Returns:
+        tuple[ConfigFieldSpec, ...]: call site ごとの budget 設定仕様。
+    """
+    prefix = f"model_call_budget.{defaults.site.value}"
+    label = defaults.site.value
+    return (
+        ConfigFieldSpec(
+            f"{prefix}.large_llm_max_calls",
+            ConfigValueType.INT,
+            defaults.large_llm_max_calls,
+            f"{label} で許可する large LLM 最大呼び出し数。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.small_classifier_max_calls",
+            ConfigValueType.INT,
+            defaults.small_classifier_max_calls,
+            f"{label} で許可する small classifier 最大呼び出し数。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.embedding_max_calls",
+            ConfigValueType.INT,
+            defaults.embedding_max_calls,
+            f"{label} で許可する embedding 最大呼び出し数。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.reranker_max_calls",
+            ConfigValueType.INT,
+            defaults.reranker_max_calls,
+            f"{label} で許可する reranker 最大呼び出し数。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.background_llm_max_calls",
+            ConfigValueType.INT,
+            defaults.background_llm_max_calls,
+            f"{label} で許可する background LLM job 最大呼び出し数。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.confidence_threshold",
+            ConfigValueType.FLOAT,
+            defaults.confidence_threshold,
+            f"{label} で low-confidence fallback を開始する信頼度閾値。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.low_confidence_fallback",
+            ConfigValueType.ENUM,
+            defaults.low_confidence_fallback,
+            f"{label} の low-confidence / budget exceeded fallback 挙動。",
+            allowed_values=tuple(item.value for item in CascadeFallbackBehavior),
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.high_risk_escalation_allowed",
+            ConfigValueType.BOOL,
+            defaults.high_risk_escalation_allowed,
+            f"{label} で high-risk 低信頼時の上位モデル escalation を許可する。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.uncertain_escalation_allowed",
+            ConfigValueType.BOOL,
+            defaults.uncertain_escalation_allowed,
+            f"{label} で uncertain 低信頼時の上位モデル escalation を許可する。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.enqueue_only",
+            ConfigValueType.BOOL,
+            defaults.enqueue_only,
+            f"{label} を同期 model call 禁止の enqueue-only 経路として扱う。",
+        ),
+    )
+
+
 def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
     """全ユーザー向けランタイム設定フィールドの正規仕様を返す。
 
@@ -275,6 +484,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             1000,
             "Review store に入れる implicit candidate の最大文字数。",
         ),
+        *_model_call_budget_specs(),
         ConfigFieldSpec(
             "server.tls.enabled",
             ConfigValueType.BOOL,
