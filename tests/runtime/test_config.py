@@ -719,6 +719,7 @@ def test_config_package_exposes_stable_public_api() -> None:
         "ModelSlotName",
         "RuntimeModelConfig",
         "RuntimeModelsConfig",
+        "RuntimeObservabilityConfig",
         "RuntimeOllamaConfig",
         "RuntimeOpenAIConfig",
         "RuntimeDeliveryConfig",
