@@ -1,4 +1,4 @@
-# ADR 0007: Public Remote Auth Boundary
+# ADR 0014: Public Remote Auth Boundary
 
 ## Status
 

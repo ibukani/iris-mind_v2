@@ -179,6 +179,12 @@ from iris.runtime.config import (
 - relationship state
 - affect baseline state
 - activity journal (append-only audit log)
+- delivery outbox records
+- scheduler targets
+- safety audit records
+- runtime learning background jobs
+- memory candidate review records
+- confirmed transcript records (`conversation.transcript.enabled = true` の場合だけ)
 
 `state.backend = "sqlite"` でも process-local のまま (ephemeral):
 
@@ -186,11 +192,13 @@ from iris.runtime.config import (
 - presence
 - space occupancy
 - ephemeral space bindings
+- learning dispatch
+- short-term conversation history
 
 Activity journalは investigation、debugging、provider event dedupe、future replay、
 future projection rebuildのための append-only audit log である。Normal runtime
 contextのhot query pathではない。relationship と affect は専用 store を持ち、
-activity journal には混ぜない。
+activity journal には混ぜない。Delivery outbox と scheduler targets は SQLite backend では durable だが、external app への送信は runtime が直接行わず、pull-based delivery API を通す。Transcript は privacy-sensitive state として明示opt-in時だけ保存する。
 
 詳細は `docs/adr/0002-runtime-state-persistence-policy.md` を参照。
 

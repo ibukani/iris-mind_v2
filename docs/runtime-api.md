@@ -155,7 +155,7 @@ Actor identity is the primary owner for memory and relationship semantics.
 
 Retry 可能な `FAILED` は `PENDING` へ戻して `not_before` に次回 retry 時刻、`last_error_reason` に失敗理由を保持する。最大試行後のみ `FAILED_PERMANENT` へ遷移する。
 
-`PollAppActions` と `ReportActionResult` は proactive delivery outbox 用の pull 型 API である。この phase では信頼済み local/internal client 前提であり、public network に unauthenticated で公開してはならない。provider-level authorization は out of scope。
+`PollAppActions` と `ReportActionResult` は proactive delivery outbox 用の pull 型 API である。local development では local dev principal を使えるが、public network に unauthenticated で公開してはならない。remote / public bind では runtime auth boundary が `DELIVERY_POLL` / `DELIVERY_REPORT` scope と provider ownership を検査する。
 
 外部 client は `PollAppActions(provider, max_items)` で provider ごとの due action を lease する。`PollAppActions` は `LEASED` 状態の item のみ返す。terminal item（`SUCCEEDED` / `FAILED_PERMANENT` / `CANCELLED` / `BLOCKED`）は返さない。Mind runtime は Discord / CLI / voice などの platform send を直接実行しない。現 phase の delivery polling API は `SendMessageAction` のみを返し、`NoAction` は配送されない。
 
