@@ -10,10 +10,11 @@ from typing import TYPE_CHECKING, TypedDict, TypeGuard
 
 from iris.runtime.config import default_runtime_config, load_runtime_config, runtime_config_specs
 from iris.runtime.config.model_slots import model_slot_specs
-from iris.runtime.config.spec import ConfigFieldSpec
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from iris.runtime.config.spec import ConfigFieldSpec
 
 _RUNTIME_ONLY_SPEC_PATHS = frozenset({"ollama.warmup_prompt"})
 
