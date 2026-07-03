@@ -84,6 +84,28 @@ async def test_ollama_lifecycle_reports_unavailable_on_connection_error() -> Non
 
 
 @pytest.mark.anyio
+async def test_ollama_lifecycle_reports_unavailable_on_timeout() -> None:
+    """Timeouts are unavailable so generation can fail fast."""
+    probe = OllamaModelLifecycleProbe(transport=httpx.MockTransport(_timeout_error))
+
+    snapshot = await probe.snapshot("qwen3:8b")
+
+    assert snapshot.load_state is ModelLoadState.UNAVAILABLE
+    assert snapshot.reason == "lifecycle_probe_timeout"
+
+
+@pytest.mark.anyio
+async def test_ollama_lifecycle_reports_unknown_on_generic_http_error() -> None:
+    """Generic HTTP errors are inconclusive and allow provider generation."""
+    probe = OllamaModelLifecycleProbe(transport=httpx.MockTransport(_read_error))
+
+    snapshot = await probe.snapshot("qwen3:8b")
+
+    assert snapshot.load_state is ModelLoadState.UNKNOWN
+    assert snapshot.reason == "/api/ps_request_failed"
+
+
+@pytest.mark.anyio
 async def test_ollama_lifecycle_reports_unknown_on_invalid_tags() -> None:
     """Invalid tags response is inconclusive, not model-unavailable."""
     probe = OllamaModelLifecycleProbe(
@@ -98,6 +120,72 @@ async def test_ollama_lifecycle_reports_unknown_on_invalid_tags() -> None:
     assert snapshot.reason == "/api/tags_invalid_response"
 
 
+@pytest.mark.anyio
+async def test_ollama_lifecycle_reports_unknown_on_ps_http_error() -> None:
+    """HTTP errors from /api/ps are inconclusive when tags prove install."""
+    probe = OllamaModelLifecycleProbe(
+        transport=httpx.MockTransport(
+            _ResponseHandler(
+                ps_response=httpx.Response(500, request=_request("/api/ps")),
+                tags_response=httpx.Response(
+                    200,
+                    json=_TAGS_WITH_MODEL,
+                    request=_request("/api/tags"),
+                ),
+            ),
+        ),
+    )
+
+    snapshot = await probe.snapshot("qwen3:8b")
+
+    assert snapshot.load_state is ModelLoadState.UNKNOWN
+    assert snapshot.reason == "/api/ps_http_500"
+
+
+@pytest.mark.anyio
+async def test_ollama_lifecycle_reports_unknown_on_tags_http_error() -> None:
+    """HTTP errors from /api/tags are inconclusive when model is not loaded."""
+    probe = OllamaModelLifecycleProbe(
+        transport=httpx.MockTransport(
+            _ResponseHandler(
+                ps_response=httpx.Response(200, json=_PS_EMPTY, request=_request("/api/ps")),
+                tags_response=httpx.Response(503, request=_request("/api/tags")),
+            ),
+        ),
+    )
+
+    snapshot = await probe.snapshot("qwen3:8b")
+
+    assert snapshot.load_state is ModelLoadState.UNKNOWN
+    assert snapshot.reason == "/api/tags_http_503"
+
+
+@pytest.mark.anyio
+async def test_ollama_lifecycle_reports_unknown_on_invalid_json() -> None:
+    """Malformed JSON from /api/ps is inconclusive."""
+    probe = OllamaModelLifecycleProbe(
+        transport=httpx.MockTransport(
+            _ResponseHandler(
+                ps_response=httpx.Response(
+                    200,
+                    content=b"not-json",
+                    request=_request("/api/ps"),
+                ),
+                tags_response=httpx.Response(
+                    200,
+                    json=_TAGS_WITH_MODEL,
+                    request=_request("/api/tags"),
+                ),
+            ),
+        ),
+    )
+
+    snapshot = await probe.snapshot("qwen3:8b")
+
+    assert snapshot.load_state is ModelLoadState.UNKNOWN
+    assert snapshot.reason == "/api/ps_invalid_response"
+
+
 _PS_LOADED: dict[str, object] = {
     "models": [{"name": "qwen3:8b", "size": 4_000_000_000}],
 }
@@ -108,9 +196,23 @@ _TAGS_WITH_MODEL: dict[str, object] = {
 _TAGS_WITHOUT_MODEL: dict[str, object] = {"models": [{"name": "llama3:8b"}]}
 
 
+def _request(path: str) -> httpx.Request:
+    return httpx.Request("GET", f"http://testserver{path}")
+
+
 def _connect_error(request: httpx.Request) -> httpx.Response:
     message = "connection refused"
     raise httpx.ConnectError(message, request=request)
+
+
+def _timeout_error(request: httpx.Request) -> httpx.Response:
+    message = "probe timeout"
+    raise httpx.TimeoutException(message, request=request)
+
+
+def _read_error(request: httpx.Request) -> httpx.Response:
+    message = "read failed"
+    raise httpx.ReadError(message, request=request)
 
 
 class _LifecycleHandler:
@@ -127,4 +229,26 @@ class _LifecycleHandler:
             return httpx.Response(200, json=self._ps_body, request=request)
         if request.url.path == "/api/tags":
             return httpx.Response(200, json=self._tags_body, request=request)
+        return httpx.Response(404, request=request)
+
+
+class _ResponseHandler:
+    """HTTPX mock handler using prebuilt responses."""
+
+    def __init__(
+        self,
+        *,
+        ps_response: httpx.Response,
+        tags_response: httpx.Response,
+    ) -> None:
+        """Create handler with fixed responses."""
+        self._ps_response = ps_response
+        self._tags_response = tags_response
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        """Return the configured response for the requested endpoint."""
+        if request.url.path == "/api/ps":
+            return self._ps_response
+        if request.url.path == "/api/tags":
+            return self._tags_response
         return httpx.Response(404, request=request)
