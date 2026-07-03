@@ -1,4 +1,4 @@
-"""Runtime configのspec・example・manifest drift検査。"""
+"""Runtime config drift tests."""
 
 from __future__ import annotations
 
@@ -8,14 +8,19 @@ from pathlib import Path
 import tomllib
 from typing import TYPE_CHECKING, TypedDict, TypeGuard
 
+from iris.runtime.config import default_runtime_config, load_runtime_config, runtime_config_specs
+from iris.runtime.config.model_slots import model_slot_specs
+from iris.runtime.config.spec import ConfigFieldSpec
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-from iris.runtime.config import default_runtime_config, load_runtime_config, runtime_config_specs
-from iris.runtime.config.model_slots import model_slot_specs
+_RUNTIME_ONLY_SPEC_PATHS = frozenset({"ollama.warmup_prompt"})
 
 
 class _ManifestField(TypedDict):
+    """Runtime config manifest field shape."""
+
     path: str
     type: str
     default: str | int | float | bool | None
@@ -27,21 +32,24 @@ class _ManifestField(TypedDict):
 
 
 class _Manifest(TypedDict):
+    """Runtime config manifest shape."""
+
     version: int
     fields: list[_ManifestField]
 
 
 def test_full_example_and_spec_paths_match() -> None:
-    """Canonical exampleのkeyはConfigSpecと双方向に一致する。"""
+    """Canonical example keys and public ConfigSpec paths are aligned."""
     example_paths = _toml_leaf_paths(_full_example_path())
-    specs = runtime_config_specs()
-    expected_example_paths = {spec.path for spec in specs if spec.toml and spec.example}
+    expected_example_paths = {
+        spec.path for spec in _public_config_specs() if spec.toml and spec.example
+    }
 
     assert example_paths == expected_example_paths
 
 
 def test_runtime_defaults_match_config_spec() -> None:
-    """Typed runtime defaultsはConfigSpec defaultsと一致する。"""
+    """Typed runtime defaults match ConfigSpec defaults."""
     defaults = _runtime_defaults()
     spec_defaults = {spec.path: spec.default for spec in runtime_config_specs()}
 
@@ -66,7 +74,7 @@ def test_model_slot_specs_match_runtime_defaults() -> None:
 
 
 def test_full_example_values_are_applied_by_runtime_parser() -> None:
-    """Canonical exampleの全keyがruntime configへ反映される。"""
+    """Canonical example keys are applied by the runtime parser."""
     config_values = _flatten_mapping(
         asdict(load_runtime_config(_full_example_path(), env={})),
     )
@@ -78,14 +86,14 @@ def test_full_example_values_are_applied_by_runtime_parser() -> None:
 
 
 def test_config_spec_env_names_are_unique() -> None:
-    """ConfigSpecのenv名は重複しない。"""
+    """ConfigSpec environment variable names are unique."""
     env_names = [spec.env for spec in runtime_config_specs() if spec.env is not None]
 
     assert len(env_names) == len(set(env_names))
 
 
 def test_secret_specs_are_absent_from_full_example() -> None:
-    """Secret fieldはcanonical exampleに含めない。"""
+    """Secret fields are excluded from the canonical example."""
     example_paths = _toml_leaf_paths(_full_example_path())
     secret_paths = {spec.path for spec in runtime_config_specs() if spec.secret}
 
@@ -93,9 +101,8 @@ def test_secret_specs_are_absent_from_full_example() -> None:
 
 
 def test_control_plane_manifest_matches_config_spec() -> None:
-    """Control Plane manifestはConfigSpec metadataと一致する。"""
+    """Control Plane manifest matches public ConfigSpec metadata."""
     manifest = _load_manifest()
-    specs = runtime_config_specs()
     expected = [
         _ManifestField(
             path=spec.path,
@@ -107,7 +114,7 @@ def test_control_plane_manifest_matches_config_spec() -> None:
             editable=spec.control_plane_editable,
             description=spec.description,
         )
-        for spec in specs
+        for spec in _public_config_specs()
     ]
 
     assert manifest["version"] == 1
@@ -115,12 +122,19 @@ def test_control_plane_manifest_matches_config_spec() -> None:
 
 
 def test_all_partial_example_configs_load_successfully() -> None:
-    """README掲載を含む全partial config exampleをruntime loaderで検証する。"""
+    """All partial config examples load successfully."""
     paths = tuple(sorted(_repo_path("examples/config").glob("*.toml")))
 
     assert paths, "expected at least one partial config example"
     for path in paths:
         load_runtime_config(path, env={})
+
+
+def _public_config_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Return specs that must be present in public examples and manifests."""
+    return tuple(
+        spec for spec in runtime_config_specs() if spec.path not in _RUNTIME_ONLY_SPEC_PATHS
+    )
 
 
 def _runtime_defaults() -> dict[str, str | int | float | bool | None]:
@@ -158,22 +172,19 @@ def _as_mapping(value: object) -> Mapping[str, object]:
 
 
 def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
-    """Narrow object to dict[str, object] for item iteration.
-
-    Runtime check uses isinstance(dict) which erases type parameters, so the
-    narrowed type uses the widest compatible parameter types.
+    """Narrow object to dict[str, object].
 
     Returns:
-        True if value is a dict, narrowing to the widened type.
+        True if value is a dict.
     """
     return isinstance(value, dict)
 
 
 def _is_list(value: object) -> TypeGuard[list[object]]:
-    """Narrow object to list[object] for item iteration.
+    """Narrow object to list[object].
 
     Returns:
-        True if value is a list, narrowing to the widened type.
+        True if value is a list.
     """
     return isinstance(value, list)
 
@@ -238,7 +249,9 @@ def _is_manifest_field(obj: object) -> TypeGuard[_ManifestField]:
 
 
 def _load_manifest() -> _Manifest:
-    text = _repo_path(".iris/control-plane/runtime-config.schema.json").read_text(encoding="utf-8")
+    text = _repo_path(".iris/control-plane/runtime-config.schema.json").read_text(
+        encoding="utf-8"
+    )
     data = json.loads(text)
     if not _is_manifest(data):
         msg = "Invalid manifest structure"
