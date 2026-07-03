@@ -1,84 +1,209 @@
-name: Feature
-description: 新機能・改善の提案
+name: Feature / SubIssue
+description: SubIssue、機能追加、改善、リファクタリング、ポリシー実装
 title: "feat: "
 labels: ["enhancement"]
-milestones: []
 body:
-  - type: textarea
-    id: overview
+  - type: markdown
     attributes:
-      label: 概要
-      description: 1文で何を実装するか
+      value: |
+        Parent は階層、Depends on は実装上の必須前提、Related は非ブロッカーです。`Refs #...` だけで済ませず、各関係を明示してください。
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: 変更内容を1〜3文で要約してください。
+      placeholder: ローカルモデル呼び出しに予算判定を追加する。
     validations:
       required: true
-
-  - type: textarea
-    id: problem
-    attributes:
-      label: 現状の問題
-      description: なぜ必要か。現在のコードの問題点を具体的に
-      render: python
-    validations:
-      required: true
-
-  - type: textarea
-    id: implementation
-    attributes:
-      label: 実装内容
-      description: |
-        ファイル名と具体的な実装コード。
-        複数ステップある場合は番号付きで。
-      render: python
-    validations:
-      required: true
-
-  - type: textarea
-    id: impact
-    attributes:
-      label: 影響範囲
-      description: 変更するファイル一覧と既存データへの影響
-    validations:
-      required: true
-
-  - type: textarea
-    id: rationale
-    attributes:
-      label: 根拠
-      description: |
-        参考文献・論文・先行研究。
-        格式: **論文名 (会議/年)**: 一言で何を示したか
-    validations:
-      required: true
-
   - type: dropdown
-    id: cost
+    id: issue_type
     attributes:
-      label: 実装コスト
-      options:
-        - 低（フィールド追加程度）
-        - 中（新ファイル + 既存変更）
-        - 高（アーキテクチャ変更含む）
+      label: Type
+      options: [subissue, feature, refactor, policy]
     validations:
       required: true
-
   - type: dropdown
     id: priority
     attributes:
-      label: 優先度
-      options:
-        - P0（最重要: 他全ての基盤）
-        - P1（高: 直近に実装）
-        - P2（中: P1後に実装）
-        - P3（低: 余力があれば）
+      label: Priority
+      options: [P0, P1, P2, P3]
     validations:
       required: true
-
-  - type: textarea
-    id: dependencies
+  - type: dropdown
+    id: area
     attributes:
-      label: 依存
-      description: |
-        依存するIssue番号や前提条件。
-        例: Issue #XX（〜〜）推奨
+      label: Area
+      options: [runtime, safety, memory, local-ai, companion-semantics, grpc, cli, control-plane, docs, tests, refactor]
     validations:
-      required: false
+      required: true
+  - type: dropdown
+    id: user_facing
+    attributes:
+      label: User-facing
+      options: ["yes", "no"]
+    validations:
+      required: true
+  - type: dropdown
+    id: hot_path
+    attributes:
+      label: Hot path impact
+      options: ["yes", "no"]
+    validations:
+      required: true
+  - type: dropdown
+    id: default_behavior
+    attributes:
+      label: Default enabled
+      options: ["yes", "no", config-gated]
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: "## Relationship / Dependencies"
+  - type: textarea
+    id: parent
+    attributes:
+      label: Parent
+      description: Epic / SubIssue 階層上の親。実装依存とは限りません。なければ「なし」。
+      placeholder: "- #80 Production safety readiness"
+    validations:
+      required: true
+  - type: textarea
+    id: depends_on
+    attributes:
+      label: Depends on
+      description: 完了前に本Issueを安全・安定して実装できない必須前提。なければ「なし」。
+      placeholder: "- #88 local model call budget and cascade policy"
+    validations:
+      required: true
+  - type: textarea
+    id: blocks_enables
+    attributes:
+      label: Blocks / Enables
+      description: 本Issue完了後に容易または安全になる将来作業。なければ「なし」。
+      placeholder: "- #92 BackgroundJobQueue metrics / backpressure"
+    validations:
+      required: true
+  - type: textarea
+    id: related
+    attributes:
+      label: Related
+      description: 関連するが厳密なブロッカーではないIssue。なければ「なし」。
+      placeholder: "- #75 local AI latency investigation"
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: 現状、問題、必要性を記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: 完了時に成立する状態を記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      placeholder: "- 変更対象\n- 対応するユースケース"
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      placeholder: "- このIssueでは扱わない事項"
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: "## Runtime impact"
+  - type: textarea
+    id: runtime_hot_path
+    attributes:
+      label: User-facing hot path impact
+      description: レイテンシ、同期処理、no-action semantics への影響。なければ「なし」。
+    validations:
+      required: true
+  - type: dropdown
+    id: model_calls
+    attributes:
+      label: Model calls
+      options: [no new model call, small classifier, embedding, reranker, large LLM, multiple or other]
+    validations:
+      required: true
+  - type: dropdown
+    id: background_jobs
+    attributes:
+      label: Background jobs
+      options: [no background job impact, background-only worker, adds or changes background work]
+    validations:
+      required: true
+  - type: dropdown
+    id: persistence
+    attributes:
+      label: Persistence
+      options: [no persistence impact, new durable state, migration required, changes existing durable state]
+    validations:
+      required: true
+  - type: dropdown
+    id: safety
+    attributes:
+      label: Safety
+      options: [no safety impact, output safety gate, delivery safety gate, both safety gates, other safety impact]
+    validations:
+      required: true
+  - type: textarea
+    id: prompt_budget
+    attributes:
+      label: Prompt budget
+      description: トークン量、コンテキスト構築、プロンプトキャッシュへの影響。なければ「なし」。
+    validations:
+      required: true
+  - type: textarea
+    id: observability
+    attributes:
+      label: Observability
+      description: 必要なログ、メトリクス、トレース、アラート。なければ「なし」。
+    validations:
+      required: true
+  - type: dropdown
+    id: feature_flag
+    attributes:
+      label: Feature flag / default behavior
+      options: [no flag and default-on, default-off feature flag, config-gated, existing flag, not applicable]
+    validations:
+      required: true
+  - type: textarea
+    id: design_constraints
+    attributes:
+      label: Design constraints
+      description: 境界、型、安全性、互換性、性能上の制約を記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      placeholder: "- [ ] 条件1\n- [ ] 条件2"
+    validations:
+      required: true
+  - type: textarea
+    id: recommended_tests
+    attributes:
+      label: Recommended tests
+      placeholder: "- 単体テスト: ...\n- 統合テスト: ...\n- 回帰テスト: ..."
+    validations:
+      required: true
+  - type: textarea
+    id: implementation_guidance
+    attributes:
+      label: Implementation guidance
+      description: 推奨する変更箇所、設計案、避けるべき実装を記載してください。未定なら「未定」。
+    validations:
+      required: true
