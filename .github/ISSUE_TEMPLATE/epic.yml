@@ -1,0 +1,118 @@
+name: Epic
+description: 複数Issueを束ねる親トラッキングIssue
+title: "epic: "
+labels: ["epic"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Epic が所有する成果を簡潔に要約してください。
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options: [P0, P1, P2, P3]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [runtime, safety, memory, local-ai, companion-semantics, grpc, cli, control-plane, docs, tests, refactor]
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: "## Relationship / Dependencies"
+  - type: textarea
+    id: parent
+    attributes:
+      label: Parent
+      description: 上位Epic。なければ「なし」。
+      placeholder: "- #40 platform readiness"
+    validations:
+      required: true
+  - type: textarea
+    id: depends_on
+    attributes:
+      label: Depends on
+      description: Epic を安全・安定して進めるための必須前提。なければ「なし」。
+      placeholder: "- #88 prerequisite"
+    validations:
+      required: true
+  - type: textarea
+    id: blocks_enables
+    attributes:
+      label: Blocks / Enables
+      description: Epic 完了で容易または安全になる将来作業。なければ「なし」。
+      placeholder: "- #92 follow-up architecture"
+    validations:
+      required: true
+  - type: textarea
+    id: related
+    attributes:
+      label: Related
+      description: 非ブロッカーの関連Issue。なければ「なし」。
+      placeholder: "- #75 context"
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: Epic 完了時の状態を記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: child_issues
+    attributes:
+      label: Child issues
+      description: Epic が所有する子Issue。状態が追跡できるチェックリストを推奨します。
+      placeholder: "- [ ] #88 local model call budget\n- [ ] #92 BackgroundJobQueue metrics"
+    validations:
+      required: true
+  - type: textarea
+    id: recommended_order
+    attributes:
+      label: Recommended order
+      description: 子Issueの推奨実行順と並列化可能な作業を記載してください。
+      placeholder: "1. #88\n2. #92（#90 と並列可）"
+    validations:
+      required: true
+  - type: textarea
+    id: in_scope
+    attributes:
+      label: In scope
+      description: このEpicが所有する境界を明示してください。
+      placeholder: "- ..."
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: 関連していても、このEpicが所有しない事項を明示してください。
+      placeholder: "- ..."
+    validations:
+      required: true
+  - type: textarea
+    id: completion_criteria
+    attributes:
+      label: Completion criteria
+      placeholder: "- [ ] 必須子Issueが完了\n- [ ] 運用・安全性基準を満たす"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: 補足、判断記録、参照資料。
