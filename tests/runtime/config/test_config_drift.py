@@ -8,7 +8,11 @@ from pathlib import Path
 import tomllib
 from typing import TYPE_CHECKING, TypedDict, TypeGuard
 
-from iris.runtime.config import default_runtime_config, load_runtime_config, runtime_config_specs
+from iris.runtime.config import (
+    default_runtime_config,
+    load_runtime_config,
+    runtime_config_specs,
+)
 from iris.runtime.config.model_slots import model_slot_specs
 
 if TYPE_CHECKING:
@@ -134,7 +138,9 @@ def test_all_partial_example_configs_load_successfully() -> None:
 def _public_config_specs() -> tuple[ConfigFieldSpec, ...]:
     """Return specs that must be present in public examples and manifests."""
     return tuple(
-        spec for spec in runtime_config_specs() if spec.path not in _RUNTIME_ONLY_SPEC_PATHS
+        spec
+        for spec in runtime_config_specs()
+        if spec.path not in _RUNTIME_ONLY_SPEC_PATHS
     )
 
 
@@ -251,7 +257,7 @@ def _is_manifest_field(obj: object) -> TypeGuard[_ManifestField]:
 
 def _load_manifest() -> _Manifest:
     text = _repo_path(".iris/control-plane/runtime-config.schema.json").read_text(
-        encoding="utf-8"
+        encoding="utf-8",
     )
     data = json.loads(text)
     if not _is_manifest(data):
