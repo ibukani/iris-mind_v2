@@ -453,8 +453,8 @@ async def test_runtime_doctor_reports_sqlite_schema_version(
 
     check = next(item for item in report.checks if item.name == "sqlite-state")
     assert check.status == "ok"
-    assert "schema_version=3" in check.summary
-    assert "latest_migration=conversation_transcripts" in check.summary
+    assert "schema_version=4" in check.summary
+    assert "latest_migration=review_candidate_type" in check.summary
 
 
 @pytest.mark.anyio
@@ -473,7 +473,7 @@ async def test_runtime_doctor_warns_on_pending_sqlite_migration(
 
     check = next(item for item in report.checks if item.name == "sqlite-state")
     assert check.status == "warn"
-    assert "pending=1,2" in check.summary
+    assert "pending=1,2,3,4" in check.summary
 
 
 @pytest.mark.anyio

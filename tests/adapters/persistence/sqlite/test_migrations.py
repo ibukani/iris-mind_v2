@@ -37,7 +37,7 @@ def test_empty_db_initializes_to_current_schema(tmp_path: Path) -> None:
     assert result.status is SQLiteMigrationStatus.INITIALIZED
     assert result.previous_version == 0
     assert result.current_version == CURRENT_SQLITE_SCHEMA_VERSION
-    assert result.applied_versions == (1, 2, 3)
+    assert result.applied_versions == (1, 2, 3, 4)
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         assert _user_version(conn) == CURRENT_SQLITE_SCHEMA_VERSION
         assert _table_exists(conn, "accounts")
@@ -47,7 +47,7 @@ def test_empty_db_initializes_to_current_schema(tmp_path: Path) -> None:
         assert _table_exists(conn, "background_jobs")
         assert _table_exists(conn, "memory_candidate_reviews")
         assert _table_exists(conn, "conversation_transcripts")
-        assert _latest_migration(conn) == "conversation_transcripts"
+        assert _latest_migration(conn) == "review_candidate_type"
 
 
 def test_existing_unversioned_memory_db_upgrades_and_rebuilds_fts5(tmp_path: Path) -> None:
@@ -133,7 +133,7 @@ def test_existing_v1_db_upgrades_to_current_schema(tmp_path: Path) -> None:
 
     assert result.status is SQLiteMigrationStatus.UPGRADED
     assert result.previous_version == 1
-    assert result.applied_versions == (2, 3)
+    assert result.applied_versions == (2, 3, 4)
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         assert _user_version(conn) == CURRENT_SQLITE_SCHEMA_VERSION
         assert _table_exists(conn, "background_jobs")
@@ -143,7 +143,9 @@ def test_existing_v1_db_upgrades_to_current_schema(tmp_path: Path) -> None:
             "baseline_runtime_state",
             "runtime_learning_state",
             "conversation_transcripts",
+            "review_candidate_type",
         )
+        assert _column_exists(conn, "memory_candidate_reviews", "candidate_type")
 
 
 def test_already_current_db_does_not_reapply_migrations(tmp_path: Path) -> None:
@@ -159,7 +161,7 @@ def test_already_current_db_does_not_reapply_migrations(tmp_path: Path) -> None:
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         count = conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()
         assert count is not None
-        assert count[0] == 3
+        assert count[0] == 4
 
 
 def test_migration_order_is_stable() -> None:
@@ -323,6 +325,11 @@ def _latest_migration(conn: sqlite3.Connection) -> str | None:
     if row is None:
         return None
     return str(row[0])
+
+
+def _column_exists(conn: sqlite3.Connection, table_name: str, column_name: str) -> bool:
+    rows = conn.execute("SELECT name FROM pragma_table_info(?)", (table_name,)).fetchall()
+    return any(str(row[0]) == column_name for row in rows)
 
 
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
