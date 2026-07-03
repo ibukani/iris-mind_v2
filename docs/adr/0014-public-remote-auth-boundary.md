@@ -1,4 +1,4 @@
-# ADR 0007: Public Remote Auth Boundary
+# ADR 0014: Public Remote Auth Boundary
 
 ## Status
 
@@ -39,6 +39,23 @@ ingress の分離は維持する。
 - DB-backed token admin
 - Control Plane auth UI / admin workflow
 - mTLS 必須化
+
+## Implementation anchors
+
+- `iris/runtime/auth/context.py`
+- `iris/runtime/auth/policy.py`
+- `iris/runtime/auth/principals.py`
+- `iris/runtime/auth/scopes.py`
+- `iris/runtime/auth/static_tokens.py`
+- `iris/runtime/config/auth.py`
+- `iris/adapters/grpc/auth_interceptor.py`
+- `iris/runtime/wiring/grpc.py`
+- `tests/runtime/auth/test_authorization_policy.py`
+- `tests/runtime/auth/test_static_token_verifier.py`
+- `tests/runtime/auth/test_token_generation.py`
+- `tests/runtime/config/test_auth_config.py`
+- `tests/adapters/grpc/test_grpc_auth_interceptor.py`
+- `tests/architecture/test_auth_boundary_guards.py`
 
 ## Consequences
 

@@ -85,6 +85,7 @@ iris/
 │   ├── state/
 │   ├── scheduler/
 │   ├── delivery/
+│   ├── learning/
 │   ├── lifecycle/
 │   └── observability/
 │
@@ -166,13 +167,14 @@ iris/
 - `runtime/delivery/` — pull-based delivery outbox、lease、idempotent `ReportActionResult`。詳細は ADR 0006。
 - `runtime/observability/` — runtime trace context、safe lifecycle logs、LLM request observer、startup diagnostics、runtime doctor。詳細は ADR 0008。
 - `runtime/state/` — runtime-owned state ports、activity projection、presence、space occupancy、workspace context assembly。SQLite backend の永続化範囲は ADR 0002、schema migration / backup / recovery は ADR 0012。
-- `runtime/lifecycle/` — scheduler lifecycle task の起動・停止境界。
+- `runtime/learning/` — action-result 後の learning hook、background job queue、implicit memory candidate review / promotion 境界。詳細は ADR 0010。
+- `runtime/lifecycle/` — scheduler lifecycle task と background job loop の起動・停止境界。
 - `safety/policy_engine.py` — LLM/APIを使わない決定論的strict safety policy。
 
 Deferred / future phase:
 
 - `cognitive/motivation/` — MotivationStep の実装（`MotivationResult` 型と `FrameBuilder` 対応は既存）
-- `cognitive/learning/` — LearningHook / BackgroundJob
+- LLM-based implicit extraction / transcript summarization
 - `features/memory_consolidation/`, `features/relationship_update/`, `features/persona_patch/`
 - `adapters/tools/`, `adapters/embeddings/`
 
@@ -603,7 +605,7 @@ runtime stateのsource-of-truth:
 
 `ActivityEventRecord` は受理済みruntime eventであり、長期記憶ではない。`state.backend = "memory"` の `InMemoryActivityJournal` は bounded で、provider-event dedupe も同じ window 内の保証に限る。`state.backend = "sqlite"` では `SQLiteActivityJournal` が append-only audit log を永続化する。memory extraction は raw `ActivityEventRecord` ではなく、明示的な `MemoryCandidate` event から行う。
 
-現在の runtime state は、activity journal / memory / relationship / affect / account store が SQLite backend に対応する。activity projection、presence、space occupancy、ephemeral space binding、delivery outbox、scheduler target store は process-local のまま。`AvailabilityResolver` と `WorkspaceContextAssembler` は `SituationContextSnapshot` を組み立て、`EventReactionPolicy` / `EventReactionPlanner` / `EventReactionRunner` は trusted `ActivityEventObservation` に対して決定論的な event reaction を返す。
+現在の runtime state は、current-state projection と durable state を分ける。`state.backend = "sqlite"` では account、memory、relationship、affect、activity journal、delivery outbox、scheduler target store、safety audit journal、runtime learning background jobs、memory candidate review store を SQLite backend に永続化する。Transcript は `conversation.transcript.enabled = true` の場合だけ SQLite backend に永続化する。activity projection、presence、space occupancy、ephemeral space binding、learning dispatch、short-term conversation history は process-local のまま。`AvailabilityResolver` と `WorkspaceContextAssembler` は `SituationContextSnapshot` を組み立て、`EventReactionPolicy` / `EventReactionPlanner` / `EventReactionRunner` は trusted `ActivityEventObservation` に対して決定論的な event reaction を返す。
 
 基底 `Observation` は以下を運ぶ。
 
@@ -887,7 +889,7 @@ CLI / main.py / iris.runtime.server
 - authenticated ingress capability による typed activity/presence claim の runtime integration 実装済み
 - trusted voice join/leave からの in-memory space occupancy integration 実装済み
 - `AvailabilityResolver` / `WorkspaceContextAssembler` による `SituationContextSnapshot` の組み立て実装済み
-- 永続ストレージ: SQLite backend は account、memory、relationship、affect、activity journal、delivery outbox、scheduler target store、background jobs、memory candidate reviews を永続化する。activity projection、presence、space occupancy、対話スペース解決、short-term conversation history はエフェメラル。
+- 永続ストレージ: SQLite backend は account、memory、relationship、affect、activity journal、delivery outbox、scheduler target store、safety audit journal、background jobs、memory candidate reviews を永続化する。activity projection、presence、space occupancy、対話スペース解決、learning dispatch、short-term conversation history はエフェメラル。
 - Transcript persistence は `conversation.transcript.enabled` で明示的に有効化し、`state.backend = "sqlite"` を使う場合だけ SQLite に保存する。short-term conversation history と long-term memory とは分離する。
 - Scheduler lifecycle は config で有効化できる。`SchedulerRunner` は `IdleTickObservation` を発行し、`DeliverySafetyGate` と `DeliveryOutbox` を通した pull-based delivery だけを使う。
 - Delivery は SQLite backend で durable outbox にできる。`DeliveryEnvelope`、lease、idempotent `ReportActionResult`、`DeliveryStatus` state machine は durable backend で永続化できる契約として実装済み。
@@ -927,9 +929,9 @@ RuntimeScheduler
 → learning/audit hooks
 ```
 
-`DeliveryOutbox` は sender ではない。外部 client が `PollAppActions` で lease し、platform send 後に `ReportActionResult` を返す。`PollAppActions` は `LEASED` 状態の item のみ返す。`ReportActionResult` は `SUCCEEDED` / `CANCELLED` / `BLOCKED` を terminal completion、`FAILED` のみ retry として扱う。同一報告の再送は全 status で idempotent とし、`delivery_id`、`lease_id`、`action_id`、`correlation_id`、`status`、`external_message_id`、`error_reason` の同一性で判定する。競合報告は `DeliveryOutboxError` を送出する。現実装は in-memory だが、`DeliveryEnvelope`、lease、idempotency key、`DeliveryStatus` state machine は durable 実装へ置換できる契約にする。
+`DeliveryOutbox` は sender ではない。外部 client が `PollAppActions` で lease し、platform send 後に `ReportActionResult` を返す。`PollAppActions` は `LEASED` 状態の item のみ返す。`ReportActionResult` は `SUCCEEDED` / `CANCELLED` / `BLOCKED` を terminal completion、`FAILED` のみ retry として扱う。同一報告の再送は全 status で idempotent とし、`delivery_id`、`lease_id`、`action_id`、`correlation_id`、`status`、`external_message_id`、`error_reason` の同一性で判定する。競合報告は `DeliveryOutboxError` を送出する。`state.backend = "memory"` では process-local outbox、`state.backend = "sqlite"` では `SQLiteDeliveryOutbox` が `DeliveryEnvelope`、lease、idempotency key、`DeliveryStatus` state machine を永続化する。
 
-`SchedulerRunner` は `DeliveryAvailabilityProvider` protocol を通じて `AvailabilitySnapshot` を取得し、`DeliverySafetyGate` へ渡す。BUSY / UNAVAILABLE は delivery enqueue を block する。`DeliverySafetyGate` の runtime-level rate limit は現 phase では未実装。プロアクティブ送信頻度は `IdleTickSource` が `min_interval_per_target_seconds` で制御する。
+`SchedulerRunner` は `DeliveryAvailabilityProvider` protocol を通じて `AvailabilitySnapshot` を取得し、`DeliverySafetyGate` へ渡す。BUSY / UNAVAILABLE は delivery enqueue を block する。`DeliverySafetyGate` は送信rate limitそのものは持たない。プロアクティブ送信頻度は `IdleTickSource` が `min_interval_per_target_seconds` で制御し、strict policy の同一target直近block判定は `SafetyAuditJournal.recent_block_count()` を使う。`state.backend = "sqlite"` では safety audit と scheduler targets も restart 越しに保持される。
 
 `NoAction`、sendable ではない `PresentedOutput`、`DeliverySafetyGate` が block した output は delivery outbox に入れない。
 - external.md: 外部アプリとの責務分離

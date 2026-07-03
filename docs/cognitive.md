@@ -161,9 +161,13 @@ ActivityEventObservation(VOICE_JOINED / VOICE_LEFT)
 
 `SpaceOccupant` は actor-level の現在在室メンバーシップのみを表す。account_id / device_id は `IdentityResolver` / `AccountStore` / `Identity` 層が所有する。`ActivityEventRecord` や `PresenceSnapshot` は provenance として account_id / device_id を保持してよいが、`SpaceOccupant` では identity-link を重複して持たない。
 
-state-onlyのactivity/presence observationはintegration後に `PresentedOutput(text=None)` を返し、通常のtext response生成へ流さない。ただし、trusted `ActivityEventObservation` のうち `EventReactionPolicy` で許可された kind / availability の組み合わせに対しては、`EventReactionRunner` が決定論的な `PresentedOutput` を返す。これはtext response pipelineではなく、runtime層のcontext-local reactionである。proactive発話やdelivery targetは未実装。
+state-onlyのactivity/presence observationはintegration後に `PresentedOutput(text=None)` を返し、通常のtext response生成へ流さない。ただし、trusted `ActivityEventObservation` のうち `EventReactionPolicy` で許可された kind / availability の組み合わせに対しては、`EventReactionRunner` が決定論的な `PresentedOutput` を返す。これはtext response pipelineではなく、runtime層のcontext-local reactionである。
 
-現在のstoreはin-memoryのみ。将来の永続activity logは別adapterで実装し、memory extractionはraw `ActivityEventRecord` ではなく明示的な `MemoryCandidate` eventから行う。PR4 で availability と workspace context assembly を実装済み。PR5 で event reaction を実装済み。delivery target、persistenceは未実装。
+現在の runtime state は、current-state projection と durable state を分ける。`state.backend = "memory"` では全runtime stateが process-local。`state.backend = "sqlite"` では `ActivityJournal`、account / memory / relationship / affect、delivery outbox、scheduler target store、safety audit journal、runtime learning background jobs、memory candidate review lifecycle を SQLite に永続化する。Transcript は privacy-sensitive state として `conversation.transcript.enabled = true` の場合だけ SQLite に保存する。Activity projection、presence、space occupancy、ephemeral space binding、learning dispatch、short-term conversation history は process-local のままにする。
+
+memory extraction は raw `ActivityEventRecord` から直接行わず、`RuntimeLearningEvent` / `MemoryCandidate` と review lifecycle を通す。availability と workspace context assembly、event reaction、scheduler / delivery outbox / state persistence / runtime learning foundation は実装済み。
+
+未実装または後続拡張は Proactive text generation の高度化、production safety policy、Transcript 管理 API / export、Control Plane UI である。
 
 ---
 
@@ -201,9 +205,9 @@ Transcript persistence は opt-in で、`conversation.transcript.enabled = true`
 
 ---
 
-## Proactive（実装済み）
+## Proactive Scheduler / Delivery Foundation（基盤実装済み）
 
-Proactive は内部 Observation から始まる CognitiveCycle として実装されている。
+Proactive は内部 Observation から始まる CognitiveCycle として実装されている。Scheduler は外部送信 client を呼ばず、runtime service に typed internal observation を投入する。送信可能な output だけが delivery safety と outbox を通り、外部 client は `PollAppActions` で pull して `ReportActionResult` を返す。
 
 ```text
 Scheduler (runtime)
@@ -227,6 +231,22 @@ Scheduler (runtime)
 `IdleTickObservation` は基底 `Observation.context` に actor / account / device / space 情報を持つ。
 直接 `Observation.actor` / `Observation.space_id` は使わない。
 `features/proactive_talk/` が直接 memory や policy の内部実装を改造してはいけない。
+
+実装済みの foundation。
+
+- `IdleTickSource` / `SchedulerRunner`: due target から `IdleTickObservation` を生成し、runtime service へ投入する。
+- `SchedulerTargetStore`: `state.backend = "sqlite"` では `SQLiteSchedulerTargetStore` により restart 越しに保持する。
+- `DeliverySafetyGate`: quiet hours、availability、strict safety policy、同一targetの直近block履歴を評価する。
+- `DeliveryOutbox`: `state.backend = "sqlite"` では `SQLiteDeliveryOutbox` により lease / retry / idempotent report state を保持する。
+- `SafetyAuditJournal`: raw textを保存せず、output / delivery safety decision metadata と recent block count を保持する。
+- pull-based delivery API: `PollAppActions` / `ReportActionResult` で external client が送信結果を確定する。
+
+未実装または後続作業。
+
+- LLM-based proactive text generation refinement。
+- production safety policy / moderation policy の完成。
+- provider/channel 別の自律配送ポリシー。
+- Control Plane UI からの scheduler / delivery / transcript 管理。
 
 ---
 
