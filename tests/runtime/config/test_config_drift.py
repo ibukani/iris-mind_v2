@@ -138,9 +138,7 @@ def test_all_partial_example_configs_load_successfully() -> None:
 def _public_config_specs() -> tuple[ConfigFieldSpec, ...]:
     """Return specs that must be present in public examples and manifests."""
     return tuple(
-        spec
-        for spec in runtime_config_specs()
-        if spec.path not in _RUNTIME_ONLY_SPEC_PATHS
+        spec for spec in runtime_config_specs() if spec.path not in _RUNTIME_ONLY_SPEC_PATHS
     )
 
 

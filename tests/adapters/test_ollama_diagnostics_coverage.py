@@ -11,6 +11,7 @@ import pytest
 from iris.adapters.llm.diagnostics import ReadinessStatus
 from iris.adapters.llm.ollama import OllamaConfig
 from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
+from tests.helpers.approx import approx
 
 _TAGS_BODY: dict[str, object] = {"models": [{"name": "qwen3:8b"}]}
 _PS_LOADED: dict[str, object] = {"models": [{"name": "qwen3:8b"}]}
@@ -72,7 +73,7 @@ async def test_warmup_payload_includes_keep_alive_and_num_predict() -> None:
     assert handler.payload["keep_alive"] == "5m"
     options = handler.payload["options"]
     assert _is_dict(options)
-    assert options["temperature"] == pytest.approx(0.25)
+    assert options["temperature"] == approx(0.25)
     assert options["num_predict"] == 8
 
 
