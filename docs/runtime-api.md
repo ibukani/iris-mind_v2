@@ -113,29 +113,30 @@ request = runtime_pb2.SubmitObservationRequest(
 - **`style_hint`, `emotion_hint`, `expression_hint`**: 任意の UI 提示ヒント。
 - **`delay_ms`, `priority`, `interruptible`**: 提示タイミングと挙動のヒント。単純な CLI クライアントは最初は無視してよい。
 - **空の出力**: `output.text` が空の場合、CLI はクラッシュを避け、フォールバック表示するか何も出力しないかしてよい。
-## Identity and Space Resolution Semantics
 
-External clients should send stable external references. They should not send
-Iris-internal `account_id` values.
+## Identity / Space 解決セマンティクス
 
-- `provider` is a stable provider identifier such as `cli`, `discord`, or `web`.
-- `provider_subject` is stable within the provider and identifies the external account.
-- `display_name` is display-only and must not be used as an identity key.
-- `provider_space_ref` is stable within the provider and identifies the external interaction context.
-- `space_kind` should be specified by clients.
+外部クライアントは安定した外部参照を送る。Iris 内部の `account_id` は送らない。
 
-Examples:
+- `provider` は `cli`、`discord`、`web` などの安定した provider 識別子である。
+- `provider_subject` は provider 内で安定し、外部アカウントを識別する。
+- `display_name` は表示専用であり、identity key として使わない。
+- `provider_space_ref` は provider 内で安定し、外部インタラクションコンテキストを識別する。
+- `space_kind` はクライアントが指定することを推奨する。
 
-- CLI one-shot: `provider=cli`, stable local `provider_subject`, and an optional one-shot `space_ref`.
-- CLI REPL: same account ref across turns and a session-stable `provider_space_ref`.
-- Discord DM: Discord user ID as `provider_subject`; stable DM conversation ID as `provider_space_ref` when available.
-- Discord channel: Discord user ID as `provider_subject`; channel ID as `provider_space_ref`.
-- Discord thread: Discord user ID as `provider_subject`; thread ID as `provider_space_ref`.
-- Future proactive/system observation: use a system or Iris actor kind and a stable system/provider space ref when there is an interaction context.
+例:
 
-Actor identity is the primary owner for memory and relationship semantics.
-`space_id` is contextual scope, not the primary owner of user memory.
-## ExternalSpaceRef space semantics
+- CLI one-shot: `provider=cli`、安定したローカル `provider_subject`、必要なら one-shot 用 `space_ref` を送る。
+- CLI REPL: turn 間で同じ `account_ref` を使い、REPL セッション中は安定した `provider_space_ref` を送る。
+- Discord DM: Discord user ID を `provider_subject` にし、利用可能なら安定した DM conversation ID を `provider_space_ref` にする。
+- Discord channel: Discord user ID を `provider_subject` にし、channel ID を `provider_space_ref` にする。
+- Discord thread: Discord user ID を `provider_subject` にし、thread ID を `provider_space_ref` にする。
+- 将来の proactive / system observation: interaction context がある場合は、system または Iris actor kind と安定した system/provider space ref を使う。
+
+Memory と relationship の主要な所有者は actor identity である。
+`space_id` は contextual scope であり、user memory の主要所有者ではない。
+
+## `ExternalSpaceRef` の space セマンティクス
 
 `ExternalSpaceRef` は default server でエフェメラルかつ決定論的に解決される。default runtime は `SpaceBinding` を永続化しない。
 
@@ -149,13 +150,13 @@ Actor identity is the primary owner for memory and relationship semantics.
 - Discord channel: `provider = "discord"`、`provider_space_ref = "channel:<channel-id>"`
 - Discord thread: `provider = "discord"`、`provider_space_ref = "thread:<thread-id>"`
 
-`display_name`、metadata、`space_kind` は `space_id` のidentity keyではない。
+`display_name`、metadata、`space_kind` は `space_id` の identity key ではない。
 
-## Pull-based Delivery API
+## Pull-based Delivery API（pull型配送API）
 
 Retry 可能な `FAILED` は `PENDING` へ戻して `not_before` に次回 retry 時刻、`last_error_reason` に失敗理由を保持する。最大試行後のみ `FAILED_PERMANENT` へ遷移する。
 
-`PollAppActions` と `ReportActionResult` は proactive delivery outbox 用の pull 型 API である。この phase では信頼済み local/internal client 前提であり、public network に unauthenticated で公開してはならない。provider-level authorization は out of scope。
+`PollAppActions` と `ReportActionResult` は proactive delivery outbox 用の pull 型 API である。local development では local dev principal を使えるが、public network に unauthenticated で公開してはならない。remote / public bind では runtime auth boundary が `DELIVERY_POLL` / `DELIVERY_REPORT` scope と provider ownership を検査する。
 
 外部 client は `PollAppActions(provider, max_items)` で provider ごとの due action を lease する。`PollAppActions` は `LEASED` 状態の item のみ返す。terminal item（`SUCCEEDED` / `FAILED_PERMANENT` / `CANCELLED` / `BLOCKED`）は返さない。Mind runtime は Discord / CLI / voice などの platform send を直接実行しない。現 phase の delivery polling API は `SendMessageAction` のみを返し、`NoAction` は配送されない。
 

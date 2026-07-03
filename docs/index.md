@@ -25,8 +25,13 @@ Iris runtime foundation の主要ドキュメント入口。
 - [`adr/0006-proactive-scheduler-delivery-safety.md`](adr/0006-proactive-scheduler-delivery-safety.md): proactive scheduler と delivery outbox の安全境界。
 - [`adr/0007-runtime-boundary-guard.md`](adr/0007-runtime-boundary-guard.md): runtime boundary guard の方針。
 - [`adr/0008-runtime-observability-and-diagnostics.md`](adr/0008-runtime-observability-and-diagnostics.md): runtime observability と diagnostics。
+- [`adr/0009-feature-presentation-runtime-boundaries.md`](adr/0009-feature-presentation-runtime-boundaries.md): Feature / Presentation / Runtime の責務分離。
+- [`adr/0010-runtime-learning-delivery-history-boundary.md`](adr/0010-runtime-learning-delivery-history-boundary.md): Delivery result 後の learning / conversation history / transcript 境界。
+- [`adr/0011-memory-vector-index-backend.md`](adr/0011-memory-vector-index-backend.md): Memory vector index は derived retrieval backend。
+- [`adr/0012-sqlite-schema-migration-backup-recovery.md`](adr/0012-sqlite-schema-migration-backup-recovery.md): SQLite schema migration / backup / recovery。
 - [`adr/0013-local-llm-lifecycle-readiness-warmup.md`](adr/0013-local-llm-lifecycle-readiness-warmup.md): Local LLM lifecycle / readiness / warmup。
-- [`adr/0014-local-model-call-budget-and-cascade-policy.md`](adr/0014-local-model-call-budget-and-cascade-policy.md): Local model call budget と cascade policy。
+- [`adr/0014-public-remote-auth-boundary.md`](adr/0014-public-remote-auth-boundary.md): Public remote auth boundary。
+- [`adr/0015-local-model-call-budget-and-cascade-policy.md`](adr/0015-local-model-call-budget-and-cascade-policy.md): Local model call budget と cascade policy。
 
 ## Source Of Truth
 

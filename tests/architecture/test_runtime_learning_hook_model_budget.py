@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_LEARNING_ROOT = PROJECT_ROOT / "iris" / "runtime" / "learning"
-ADR_PATH = PROJECT_ROOT / "docs" / "adr" / "0014-local-model-call-budget-and-cascade-policy.md"
+ADR_PATH = PROJECT_ROOT / "docs" / "adr" / "0015-local-model-call-budget-and-cascade-policy.md"
 
 _FORBIDDEN_IMPORTS = (
     "iris.adapters.llm",
