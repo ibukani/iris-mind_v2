@@ -43,7 +43,11 @@ class _UnusedSuccessClient(LLMClient):
 
     @override
     async def generate(self, request: LLMRequest) -> LLMResponse:
-        """Fail if the unavailable path reaches provider generation."""
+        """Fail if the unavailable path reaches provider generation.
+
+        Raises:
+            AssertionError: Always raised when the provider is called.
+        """
         message = f"unexpected provider call for {request.model}"
         raise AssertionError(message)
 
@@ -62,7 +66,11 @@ class _UnavailableProbe:
 
 
 def _request() -> LLMRequest:
-    """Build a minimal LLM request."""
+    """Build a minimal LLM request.
+
+    Returns:
+        Request for the unavailable client wrapper.
+    """
     return LLMRequest(
         model="model-a",
         messages=(LLMMessage(role=LLMRole.USER, content="hello"),),
@@ -70,7 +78,11 @@ def _request() -> LLMRequest:
 
 
 def _context() -> RuntimeTraceContext:
-    """Build a trace context for model call accounting."""
+    """Build a trace context for model call accounting.
+
+    Returns:
+        Runtime trace context for one user-facing turn.
+    """
     return RuntimeTraceContext(
         correlation_id="corr-1",
         observation_id="obs-1",
