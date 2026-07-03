@@ -21,6 +21,7 @@ from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
     from iris.contracts.conversation import ConversationRecord
+    from iris.runtime.observability.ports import RuntimeLatencyBudget
 
 
 _KNOWN_LLM_PROVIDERS: frozenset[LLMProvider] = frozenset(LLMProvider)
@@ -165,7 +166,10 @@ class LLMClientFactory:
             self._known_providers,
         )
         client = _build_llm_client(provider, model_config, runtime_config)
-        return _wrap_with_observer(client)
+        return _wrap_with_observer(
+            client,
+            latency_budget=runtime_config.observability.latency_budget,
+        )
 
     def resolve_model(
         self,
@@ -347,7 +351,11 @@ def openai_adapter_config(
     )
 
 
-def _wrap_with_observer(client: LLMClient) -> LLMClient:
+def _wrap_with_observer(
+    client: LLMClient,
+    *,
+    latency_budget: RuntimeLatencyBudget,
+) -> LLMClient:
     """Wrap an LLM client with the default request-lifecycle observer.
 
     The runtime's LLM client factory always emits structured request
@@ -358,12 +366,16 @@ def _wrap_with_observer(client: LLMClient) -> LLMClient:
 
     Args:
         client: The bare LLM client returned by a provider constructor.
+        latency_budget: Runtime LLM generation latency budget.
 
     Returns:
         The same client wrapped in :class:`ObservableLLMClient` with
         a :class:`RuntimeLLMRequestObserver`.
     """
-    return ObservableLLMClient(client, RuntimeLLMRequestObserver())
+    return ObservableLLMClient(
+        client,
+        RuntimeLLMRequestObserver(latency_budget=latency_budget),
+    )
 
 
 def _is_fake_llm_model(model: str) -> bool:

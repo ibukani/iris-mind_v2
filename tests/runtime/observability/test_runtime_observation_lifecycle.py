@@ -132,6 +132,10 @@ def _event_names(observer: _RecordingObserver) -> list[str]:
     return [event for event, _ in observer.events]
 
 
+def _lifecycle_event_names(observer: _RecordingObserver) -> list[str]:
+    return [event for event, _ in observer.events if not event.startswith("runtime.latency.")]
+
+
 @pytest.mark.anyio
 async def test_actor_message_path_emits_lifecycle_events() -> None:
     """Actor message emits integration, context, route, cognitive, success events."""
@@ -149,7 +153,7 @@ async def test_actor_message_path_emits_lifecycle_events() -> None:
         ),
     )
 
-    assert _event_names(observer) == [
+    assert _lifecycle_event_names(observer) == [
         "runtime.observation.start",
         "runtime.observation.integrate.start",
         "runtime.observation.integrate.success",
@@ -160,6 +164,7 @@ async def test_actor_message_path_emits_lifecycle_events() -> None:
         "runtime.cognitive.success",
         "runtime.observation.success",
     ]
+    assert "runtime.latency.stage" in _event_names(observer)
     assert all(fields["correlation_id"] == "corr-1" for _, fields in observer.events)
 
 

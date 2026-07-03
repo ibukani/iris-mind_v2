@@ -56,6 +56,11 @@ from iris.runtime.config.llm import (
 )
 from iris.runtime.config.logging import RuntimeLoggingConfig
 from iris.runtime.config.memory import RuntimeMemoryConfig, apply_memory_toml
+from iris.runtime.config.observability import (
+    RuntimeObservabilityConfig,
+    apply_observability_toml,
+    validate_observability_config,
+)
 from iris.runtime.config.parsing import (
     parse_raw_config_version,
     table_or_empty,
@@ -124,6 +129,7 @@ class IrisRuntimeConfig:
     learning: RuntimeLearningConfig
     memory: RuntimeMemoryConfig
     conversation: RuntimeConversationConfig
+    observability: RuntimeObservabilityConfig
 
 
 @dataclass(frozen=True)
@@ -159,6 +165,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         learning=RuntimeLearningConfig(),
         memory=RuntimeMemoryConfig(),
         conversation=RuntimeConversationConfig(),
+        observability=RuntimeObservabilityConfig(),
     )
 
 
@@ -401,6 +408,10 @@ def _apply_toml_sections(
             config.conversation,
             table_or_empty(table, "conversation"),
         ),
+        observability=apply_observability_toml(
+            config.observability,
+            table_or_empty(table, "observability"),
+        ),
         models=models,
         ollama=ollama,
         openai=openai,
@@ -448,6 +459,7 @@ class _RuntimeConfigSections:
     safety: RuntimeSafetyConfig
     auth: RuntimeAuthConfig
     diagnostics: RuntimeDiagnosticsConfig
+    observability: RuntimeObservabilityConfig
     config_metadata: RuntimeConfigMetadata | None = None
 
 
@@ -475,6 +487,7 @@ def _apply_env_sections(
         learning=config.learning,
         memory=config.memory,
         conversation=config.conversation,
+        observability=config.observability,
         models=models,
         ollama=ollama,
         openai=openai,
@@ -509,6 +522,7 @@ def _compose_runtime_config(
         learning=sections.learning,
         memory=sections.memory,
         conversation=sections.conversation,
+        observability=sections.observability,
         models=sections.models,
         ollama=sections.ollama,
         openai=sections.openai,
@@ -539,6 +553,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
     validated_delivery = validate_delivery_config(config.delivery)
     validated_learning = validate_learning_config(config.learning)
     validated_conversation = validate_conversation_config(config.conversation)
+    validated_observability = validate_observability_config(config.observability)
     _validate_transcript_backend(
         state=validated_state,
         conversation=validated_conversation,
@@ -552,6 +567,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         delivery=validated_delivery,
         learning=validated_learning,
         conversation=validated_conversation,
+        observability=validated_observability,
     )
 
 

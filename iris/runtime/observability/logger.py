@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from loguru import logger
 
-from iris.runtime.observability.context import RuntimeLogFields, RuntimeLogValue, trace_extra
-from iris.runtime.observability.ports import RuntimeLogger
+from iris.runtime.observability.context import trace_extra
+from iris.runtime.observability.ports import RuntimeLogFields, RuntimeLogger, RuntimeLogValue
 
 __all__ = ["LoguruRuntimeLogger", "RuntimeLogger"]
 

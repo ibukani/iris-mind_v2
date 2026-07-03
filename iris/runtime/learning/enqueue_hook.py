@@ -12,12 +12,15 @@ from iris.runtime.learning.jobs import (
     BackgroundJobRecord,
     MemoryBackgroundJobPayload,
 )
+from iris.runtime.observability.ports import RuntimeLatencyStage
+from iris.runtime.observability.timing import RuntimeLatencyRecorder, latency_ms, perf_counter
 
 if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.learning import LearningEvent
     from iris.runtime.learning.queue import BackgroundJobQueue
+    from iris.runtime.observability.ports import RuntimeLatencyBudget, RuntimeObservationObserver
 
 
 class ExplicitMemoryPayloadResolver(Protocol):
@@ -37,11 +40,14 @@ class EnqueueExplicitMemoryLearningHook:
         resolver: ExplicitMemoryPayloadResolver,
         *,
         max_attempts: int = 3,
+        observation_observer: RuntimeObservationObserver | None = None,
+        latency_budget: RuntimeLatencyBudget | None = None,
     ) -> None:
         """キュー、明示入力 resolver、再試行上限を注入する。"""
         self._queue = queue
         self._resolver = resolver
         self._max_attempts = max_attempts
+        self._latency_recorder = RuntimeLatencyRecorder(observation_observer, latency_budget)
 
     async def after_action_result(self, event: LearningEvent) -> None:
         """成功以外や不十分な文脈を安全に無視する。"""
@@ -51,7 +57,14 @@ class EnqueueExplicitMemoryLearningHook:
         if payload is None:
             return
         key = _job_key(event, payload)
-        await self._queue.enqueue(_new_job(key, payload, event.reported_at, self._max_attempts))
+        started_at = perf_counter()
+        try:
+            await self._queue.enqueue(_new_job(key, payload, event.reported_at, self._max_attempts))
+        finally:
+            self._latency_recorder.record_stage(
+                RuntimeLatencyStage.BACKGROUND_ENQUEUE,
+                latency_ms=latency_ms(started_at),
+            )
 
 
 def _job_key(event: LearningEvent, payload: MemoryBackgroundJobPayload) -> str:
