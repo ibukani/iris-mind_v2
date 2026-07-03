@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+import sqlite3
 from typing import TYPE_CHECKING
 
 import pytest
@@ -176,7 +178,20 @@ async def test_scheduler_persists_output_and_delivery_blocks_to_sqlite(tmp_path:
     finally:
         await restarted.close()
 
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        rows = conn.execute(
+            """
+            SELECT observation_id, stage, allowed, reason
+            FROM safety_audit_records
+            ORDER BY observation_id
+            """
+        ).fetchall()
+
     assert count == 1
+    assert rows == [
+        ("obs-delivery", "delivery", 0, "proactive_sensitive_safety_context"),
+        ("obs-output", "output", 0, "output_block"),
+    ]
 
 
 def _blocked_record(observation_id: str) -> SafetyAuditRecord:
