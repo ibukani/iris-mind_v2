@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
+from iris.adapters.llm.observability import ObservableLLMClient
 from iris.adapters.llm.ollama import OllamaConfig, OllamaLLMClient
 from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.ports import LLMRole
@@ -17,6 +18,8 @@ from iris.core.ids import ObservationId, SessionId
 from iris.features.chat.definition import ResponsePrompt
 from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime_config
 from iris.runtime.config.llm import LLMProvider
+from iris.runtime.observability.llm import RuntimeLLMRequestObserver
+from iris.runtime.observability.ports import RuntimeLatencyBudget
 from iris.runtime.wiring.llm import (
     LLMClientFactory,
     LLMResponseGenerator,
@@ -98,6 +101,29 @@ def test_llm_client_factory_resolve_model_unknown_provider() -> None:
     config = default_runtime_config()
     with pytest.raises(ConfigError, match="Unknown LLM provider"):
         factory.resolve_model(_model_config_with_unknown_provider(), config)
+
+
+def test_llm_client_factory_wraps_client_with_runtime_observer_budget() -> None:
+    """Factory が生成 client に runtime latency budget 付き observer を接続する。"""
+    factory = LLMClientFactory()
+    config = default_runtime_config()
+    budget = RuntimeLatencyBudget(llm_generate_ms=12.5)
+    config = replace(
+        config,
+        observability=replace(config.observability, latency_budget=budget),
+    )
+
+    client = factory.create_client(
+        RuntimeModelConfig(provider=LLMProvider.FAKE, model="fake-llm"), config
+    )
+
+    assert isinstance(client, ObservableLLMClient)
+    observer = get_private_attr_as(
+        client,
+        "_observer",
+        RuntimeLLMRequestObserver,
+    )
+    assert get_private_attr_as(observer, "_latency_budget", RuntimeLatencyBudget) == budget
 
 
 def test_ollama_adapter_config_replaces_fake_llm_model() -> None:

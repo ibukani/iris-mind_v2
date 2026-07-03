@@ -356,21 +356,20 @@ def _wrap_with_observer(
     *,
     latency_budget: RuntimeLatencyBudget,
 ) -> LLMClient:
-    """Wrap an LLM client with the default request-lifecycle observer.
+    """LLM client を既定の request lifecycle observer で包む。
 
-    The runtime's LLM client factory always emits structured request
-    telemetry so operators can correlate cognitive-cycle logs with
-    provider latency and error rates. The wrapper preserves the
-    client type's call signature (request, response, exception
-    propagation) so existing call sites are unaffected.
+    Runtime の LLM client factory は、cognitive-cycle log と provider latency /
+    error rate を対応付けられるように、構造化された request telemetry を常に
+    出力する。wrapper は request / response / exception propagation の呼び出し
+    契約を保つため、既存の呼び出し側には影響しない。
 
     Args:
-        client: The bare LLM client returned by a provider constructor.
-        latency_budget: Runtime LLM generation latency budget.
+        client: provider constructor が返した素の LLM client。
+        latency_budget: Runtime LLM generation latency budget。
 
     Returns:
-        The same client wrapped in :class:`ObservableLLMClient` with
-        a :class:`RuntimeLLMRequestObserver`.
+        :class:`RuntimeLLMRequestObserver` を持つ :class:`ObservableLLMClient` で
+        包んだ LLM client。
     """
     return ObservableLLMClient(
         client,
