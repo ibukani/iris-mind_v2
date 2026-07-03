@@ -76,6 +76,10 @@ def _context() -> RuntimeTraceContext:
         observation_id="obs-1",
         observation_kind="actor_message",
         ingress_kind="trusted_adapter",
+        adapter_id="adapter-1",
+        provider="discord",
+        actor_id="actor-1",
+        space_id="space-1",
     )
 
 
