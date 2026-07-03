@@ -93,30 +93,39 @@ body:
     validations:
       required: true
   - type: textarea
+    id: supersedes
+    attributes:
+      label: Supersedes / Superseded by
+      description: 置き換えるIssue、または本Issueを置き換えるIssue。なければ「なし」。
+      placeholder: "- Supersedes #60\n- Superseded by #100"
+    validations:
+      required: true
+  - type: textarea
     id: background
     attributes:
-      label: Background
-      description: 現状、問題、必要性を記載してください。
+      label: 背景 / Context
+      description: 必要性、既存Issue・PR、設計判断、問題の発生源を記載してください。
     validations:
       required: true
   - type: textarea
     id: goal
     attributes:
-      label: Goal
-      description: 完了時に成立する状態を記載してください。
+      label: 目的 / Goal
+      description: 実装作業ではなく、完了時に成立する状態を記載してください。
     validations:
       required: true
   - type: textarea
     id: scope
     attributes:
-      label: Scope
+      label: スコープ / Scope
       placeholder: "- 変更対象\n- 対応するユースケース"
     validations:
       required: true
   - type: textarea
     id: out_of_scope
     attributes:
-      label: Out of scope
+      label: スコープ外 / Non-goals
+      description: このIssueで扱わないこと、関連Issueへ分離することを記載してください。
       placeholder: "- このIssueでは扱わない事項"
     validations:
       required: true
@@ -187,16 +196,24 @@ body:
     validations:
       required: true
   - type: textarea
+    id: implementation_targets
+    attributes:
+      label: 実装対象候補 / Implementation targets
+      description: 変更されそうな module / package / docs / tests を記載してください。
+      placeholder: "- iris/runtime/...\n- tests/runtime/...\n- docs/..."
+    validations:
+      required: true
+  - type: textarea
     id: acceptance_criteria
     attributes:
-      label: Acceptance criteria
+      label: 受け入れ条件 / Acceptance criteria
       placeholder: "- [ ] 条件1\n- [ ] 条件2"
     validations:
       required: true
   - type: textarea
     id: recommended_tests
     attributes:
-      label: Recommended tests
+      label: 推奨テスト / Test plan
       placeholder: "- 単体テスト: ...\n- 統合テスト: ...\n- 回帰テスト: ..."
     validations:
       required: true

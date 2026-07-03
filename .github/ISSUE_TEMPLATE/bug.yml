@@ -74,6 +74,43 @@ body:
     validations:
       required: true
   - type: textarea
+    id: supersedes
+    attributes:
+      label: Supersedes / Superseded by
+      description: 置き換えるIssue、または本Issueを置き換えるIssue。なければ「なし」。
+      placeholder: "- Supersedes #60"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 背景 / Context
+      description: 発生源、既存Issue・PR、関連する設計判断を記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目的 / Goal
+      description: 修正後に成立すべき状態を記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: スコープ / Scope
+      placeholder: "- このIssueで修正する範囲"
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: スコープ外 / Non-goals
+      description: 修正しない関連問題、別Issueへ分離する事項を記載してください。
+      placeholder: "- このIssueでは扱わない事項"
+    validations:
+      required: true
+  - type: textarea
     id: current_behavior
     attributes:
       label: Current behavior
@@ -100,16 +137,24 @@ body:
       label: Suspected cause
       description: 原因候補、最初に発生した版や変更。未調査なら「未調査」。
   - type: textarea
+    id: implementation_targets
+    attributes:
+      label: 実装対象候補 / Implementation targets
+      description: 変更されそうな module / package / docs / tests を記載してください。
+      placeholder: "- iris/...\n- tests/..."
+    validations:
+      required: true
+  - type: textarea
     id: acceptance_criteria
     attributes:
-      label: Acceptance criteria
+      label: 受け入れ条件 / Acceptance criteria
       placeholder: "- [ ] 期待動作を満たす\n- [ ] 回帰テストを追加する"
     validations:
       required: true
   - type: textarea
     id: recommended_tests
     attributes:
-      label: Recommended tests
+      label: 推奨テスト / Test plan
       description: 再現テスト、回帰テスト、関連する統合・安全性テストを記載してください。
       placeholder: "- 回帰テスト: ...\n- 統合テスト: ..."
     validations:

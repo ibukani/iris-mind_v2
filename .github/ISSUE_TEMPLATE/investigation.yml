@@ -68,10 +68,32 @@ body:
     validations:
       required: true
   - type: textarea
+    id: supersedes
+    attributes:
+      label: Supersedes / Superseded by
+      description: 置き換えるIssue、または本Issueを置き換えるIssue。なければ「なし」。
+      placeholder: "- Supersedes #60"
+    validations:
+      required: true
+  - type: textarea
     id: context
     attributes:
-      label: Context
+      label: 背景 / Context
       description: 背景、既知の制約、既存の証拠を記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目的 / Goal
+      description: 調査完了時に判断可能になっている状態を記載してください。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: スコープ / Scope
+      description: 調査・比較する範囲を記載してください。
     validations:
       required: true
   - type: textarea
@@ -101,8 +123,32 @@ body:
   - type: textarea
     id: out_of_scope
     attributes:
-      label: Out of scope
+      label: スコープ外 / Non-goals
       placeholder: "- この調査では実装しない"
+    validations:
+      required: true
+  - type: textarea
+    id: implementation_targets
+    attributes:
+      label: 実装対象候補 / Implementation targets
+      description: 調査対象および将来変更されそうな module / package / docs / tests を記載してください。
+      placeholder: "- iris/runtime/...\n- docs/adr/...\n- tests/..."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 受け入れ条件 / Acceptance criteria
+      description: 実装要件ではなく、調査成果物の完了判定を記載してください。
+      placeholder: "- [ ] 判断基準ごとの比較が完了\n- [ ] 推奨案と却下理由を文書化"
+    validations:
+      required: true
+  - type: textarea
+    id: recommended_tests
+    attributes:
+      label: 推奨テスト / Test plan
+      description: 推奨案の検証に必要な benchmark、実験、将来のテストケースを記載してください。
+      placeholder: "- benchmark: ...\n- safety validation: ..."
     validations:
       required: true
   - type: textarea
