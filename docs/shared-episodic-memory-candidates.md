@@ -1,12 +1,12 @@
-# Shared Episodic Memory Candidate Contract
+# 共有エピソード記憶候補の型付き契約
 
 ## 目的
 
-この文書は、AIコンパニオンとしての Iris が「一緒に過ごしてきた」「内輪ネタがある」「以前の出来事を覚えている」と感じられる体験を作るための shared episodic memory candidate contract を定義する。
+この文書は、AIコンパニオンとしての Iris が「一緒に過ごしてきた」「内輪ネタがある」「以前の出来事を覚えている」と感じられる体験を作るための共有エピソード記憶候補の型付き契約を定義する。
 
-この contract は profile / preference memory とは別物である。`MemoryCandidate` は名前、好み、応答スタイル、言語設定などの durable user profile / preference を扱う。Shared episodic memory candidate は、Iris とユーザーが共有した出来事、関係性に影響した体験、繰り返し参照される内輪ネタなどを review-required な候補として表現する。
+この契約は profile / preference memory とは別物である。`MemoryCandidate` は名前、好み、応答スタイル、言語設定などの durable user profile / preference を扱う。Shared episodic memory candidate は、Iris とユーザーが共有した出来事、関係性に影響した体験、繰り返し参照される内輪ネタなどを review-required な候補として表現する。
 
-## 実装 anchor
+## 実装上の参照先
 
 - `iris/contracts/shared_episodic_memory.py`
 - `iris/contracts/review_candidates.py`
@@ -44,7 +44,7 @@
 
 これにより #69 の implicit extraction worker、#70 の reflection / consolidation worker、#75 の review service、#94 の retrieval / reranking が同じ境界情報を参照できる。
 
-## Review-first policy
+## レビュー優先ポリシー
 
 Shared episodic memory candidate は canonical memory へ自動保存しない。既定値は次の通り。
 
@@ -58,7 +58,7 @@ admission_risk = normal
 
 `approve()` は review lifecycle を進めるだけで、canonical memory への promotion ではない。実際の promotion policy、canonical store、retrieval index への反映は後続 Issue の worker / promoter 側で扱う。
 
-## Sensitive / private / embarrassing admission policy
+## 機微・私的・羞恥内容の受け入れポリシー
 
 共有エピソードは親密さを作れる一方で、羞恥・攻撃・秘密の固定化につながりやすい。そのため admission risk を必ず持つ。
 
@@ -72,7 +72,7 @@ admission_risk = normal
 
 `secret_like` に `review_required` を指定すると contract validation で拒否する。`review_required` policy で `review_required=false` にすることも拒否する。
 
-## Retrieval metadata
+## 検索用メタデータ
 
 `SharedEpisodicRetrievalMetadata` は #94 の retrieval / reranking が参照する軽量 metadata である。
 
@@ -82,6 +82,13 @@ admission_risk = normal
 - `salience`: 0.0 以上 1.0 以下の候補重要度。
 
 これは retrieval 用の signal であり、関係性 snapshot や affect state の canonical store ではない。
+
+
+## 後続ワーカー・昇格処理の制約
+
+#69 の extractor、#70 の reflection / consolidation worker、将来の promoter は、この contract validation を迂回してはならない。ワーカーが shared episodic candidate を生成する場合も、まず `SharedEpisodicMemoryCandidate` または `ReviewSharedEpisodicMemoryCandidatePayload` を構築し、`review_required`、`admission_policy`、`admission_risk` の検証を通す。
+
+特に `secret_like` を `pending_review` として保存したり、`private` / `sensitive` / `embarrassing` を review なしに canonical memory へ昇格したりしてはならない。後続実装で store / service / worker fixture を追加する場合は、この文書の policy を regression test として固定する。
 
 ## スコープ外
 

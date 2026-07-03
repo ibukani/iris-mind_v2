@@ -180,6 +180,32 @@ def test_review_shared_episodic_payload_enforces_admission_contract() -> None:
         )
 
 
+def test_review_payload_rejects_secret_like_pending_review_bypass() -> None:
+    """後続 extractor が secret-like 候補を pending review に入れる迂回を拒否する。"""
+    with pytest.raises(ValidationError):
+        ReviewSharedEpisodicMemoryCandidatePayload(
+            summary="共有イベント。",
+            kind=SharedEpisodicMemoryKind.SHARED_EVENT,
+            actor_id=ActorId("actor-1"),
+            account_id=AccountId("account-1"),
+            space_id=SpaceId("space-1"),
+            source_events=(
+                SharedEpisodicSourceEventRef(
+                    source_event_id="event-1",
+                    observation_id=ObservationId("obs-1"),
+                    occurred_at=_NOW,
+                ),
+            ),
+            occurred_at=_NOW,
+            confidence=0.8,
+            reason="共有イベント候補。",
+            review_required=True,
+            admission_policy=SharedEpisodicAdmissionPolicy.REVIEW_REQUIRED,
+            admission_risk=SharedEpisodicAdmissionRisk.SECRET_LIKE,
+            retrieval=SharedEpisodicRetrievalMetadata(),
+        )
+
+
 def test_review_candidate_detail_rejects_mixed_memory_and_shared_payloads() -> None:
     """Memory payload と shared episodic payload の混在を境界で拒否する。"""
     memory_payload = ReviewMemoryCandidatePayload(
