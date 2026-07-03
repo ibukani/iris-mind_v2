@@ -83,7 +83,10 @@ async def test_startup_diagnostics_probe_provider_resolved_ollama_model(
     def _factory(
         model_config: RuntimeModelConfig,
         runtime_config: IrisRuntimeConfig,
-    ) -> _ResolvedModelStubDiagnostics:
+    ) -> _ResolvedModelStubDiagnostics | None:
+        del runtime_config
+        if model_config.provider is LLMProvider.FAKE:
+            return None
         return stub
 
     monkeypatch.setattr(diagnostics_module, "build_provider_diagnostics", _factory)
