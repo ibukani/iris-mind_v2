@@ -8,7 +8,7 @@ from iris.runtime.observability.logger import LoguruRuntimeLogger
 from iris.runtime.observability.ports import RuntimeLogger, RuntimeObservationObserver
 
 if TYPE_CHECKING:
-    from iris.runtime.observability.context import RuntimeLogValue
+    from iris.runtime.observability.ports import RuntimeLogValue
 
 
 class LoggingRuntimeObservationObserver(RuntimeObservationObserver):

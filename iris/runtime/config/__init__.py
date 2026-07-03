@@ -35,6 +35,7 @@ from iris.runtime.config.memory import (
     RuntimeMemoryVectorConfig,
     RuntimeMemoryVectorQdrantConfig,
 )
+from iris.runtime.config.observability import RuntimeObservabilityConfig
 from iris.runtime.config.root import (
     IrisRuntimeConfig,
     RuntimeConfigMetadata,
@@ -82,6 +83,7 @@ __all__ = [
     "RuntimeMemoryVectorQdrantConfig",
     "RuntimeModelConfig",
     "RuntimeModelsConfig",
+    "RuntimeObservabilityConfig",
     "RuntimeOllamaConfig",
     "RuntimeOpenAIConfig",
     "RuntimeQuietHoursConfig",

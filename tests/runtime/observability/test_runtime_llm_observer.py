@@ -12,6 +12,7 @@ from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRespon
 from iris.runtime.observability.context import RuntimeTraceContext, bind_trace_context
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 from iris.runtime.observability.logger import LoguruRuntimeLogger
+from iris.runtime.observability.ports import RuntimeLatencyBudget
 
 
 class _RecordingRuntimeLogger:
@@ -105,6 +106,9 @@ async def test_llm_logs_include_correlation_id_inside_bound_context() -> None:
     assert entries[1]["finish_reason"] == "stop"
     assert isinstance(entries[1]["latency_ms"], float)
     assert entries[1]["latency_ms"] >= 0.0
+    assert entries[1]["model_call_count"] == 1
+    assert entries[2]["stage"] == "llm_generate"
+    assert entries[2]["model_load_state"] == "unknown"
 
 
 @pytest.mark.anyio
@@ -118,6 +122,7 @@ async def test_llm_logs_work_without_runtime_trace_context() -> None:
     assert [event for _, event, _ in logger.events] == [
         "llm.request.start",
         "llm.request.success",
+        "runtime.latency.stage",
     ]
 
 
@@ -130,10 +135,13 @@ async def test_llm_error_logs_error_type_and_reraises() -> None:
     with pytest.raises(_LLMTestError, match="secret prompt"):
         await client.generate(_request())
 
-    assert logger.events[-1][1] == "llm.request.error"
-    assert logger.events[-1][2]["error_type"] == "_LLMTestError"
-    assert isinstance(logger.events[-1][2]["latency_ms"], float)
-    assert logger.events[-1][2]["latency_ms"] >= 0.0
+    error_event = next(event for event in logger.events if event[1] == "llm.request.error")
+    assert error_event[2]["error_type"] == "_LLMTestError"
+    assert isinstance(error_event[2]["latency_ms"], float)
+    assert error_event[2]["latency_ms"] >= 0.0
+    latency_event = next(event for event in logger.events if event[1] == "runtime.latency.stage")
+    assert latency_event[2]["stage"] == "llm_generate"
+    assert latency_event[2]["error_type"] == "_LLMTestError"
 
 
 @pytest.mark.anyio
@@ -148,3 +156,22 @@ async def test_llm_logs_do_not_include_sensitive_content() -> None:
     rendered = repr(logger.events)
     assert "sensitive user text" not in rendered
     assert "secret prompt should not appear" not in rendered
+
+
+@pytest.mark.anyio
+async def test_llm_slow_generation_emits_budget_warning() -> None:
+    """LLM generation over budget emits a slow warning event."""
+    logger = _RecordingRuntimeLogger()
+    client = ObservableLLMClient(
+        _SuccessClient(),
+        RuntimeLLMRequestObserver(
+            logger,
+            latency_budget=RuntimeLatencyBudget(llm_generate_ms=0.000001),
+        ),
+    )
+
+    await client.generate(_request())
+
+    slow_event = next(event for event in logger.events if event[1] == "runtime.latency.slow")
+    assert slow_event[2]["stage"] == "llm_generate"
+    assert slow_event[2]["budget_exceeded"] is True

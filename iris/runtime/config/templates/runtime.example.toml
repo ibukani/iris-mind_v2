@@ -136,6 +136,23 @@ retention = "7 days"
 mode = "development"
 max_output_chars = 4000
 
+[observability.latency_budget]
+enabled = true
+slow_warning_enabled = true
+handle_observation_ms = 3000.0
+observation_integration_ms = 50.0
+workspace_context_assembly_ms = 100.0
+conversation_context_load_ms = 100.0
+cognitive_processing_ms = 2500.0
+llm_generate_ms = 2200.0
+conversation_record_ms = 100.0
+transcript_append_ms = 100.0
+runtime_learning_hook_ms = 200.0
+background_enqueue_ms = 100.0
+classifier_call_ms = 50.0
+embedding_call_ms = 150.0
+reranker_call_ms = 100.0
+
 [diagnostics]
 mode = "warn"
 timeout_seconds = 5.0

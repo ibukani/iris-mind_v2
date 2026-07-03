@@ -6,8 +6,12 @@ from iris.runtime.observability.context import (
     RuntimeTraceContext,
     bind_trace_context,
     current_trace_context,
+    current_trace_counter_snapshot,
+    increment_trace_call,
+    trace_counter_extra,
     trace_extra,
 )
+from iris.runtime.observability.ports import RuntimeModelCallKind
 
 
 def _context(correlation_id: str = "corr-1") -> RuntimeTraceContext:
@@ -72,3 +76,33 @@ def test_trace_extra_omits_optional_none_fields() -> None:
     assert "provider" not in extra
     assert "space_id" not in extra
     assert extra["actor_id"] == "actor-1"
+
+
+def test_trace_call_counters_increment_inside_bound_context() -> None:
+    """Bound trace scope tracks model/classifier-like call counts."""
+    with bind_trace_context(_context()):
+        increment_trace_call(RuntimeModelCallKind.LLM_GENERATE)
+        increment_trace_call(RuntimeModelCallKind.LLM_GENERATE)
+        increment_trace_call(RuntimeModelCallKind.CLASSIFIER)
+        increment_trace_call(RuntimeModelCallKind.EMBEDDING)
+        increment_trace_call(RuntimeModelCallKind.RERANKER)
+        snapshot = current_trace_counter_snapshot()
+
+    assert snapshot.model_call_count == 2
+    assert snapshot.classifier_call_count == 1
+    assert snapshot.embedding_call_count == 1
+    assert snapshot.reranker_call_count == 1
+
+
+def test_trace_call_counters_reset_after_scope_exit() -> None:
+    """Trace call counters are request-local."""
+    with bind_trace_context(_context()):
+        increment_trace_call(RuntimeModelCallKind.LLM_GENERATE)
+
+    assert current_trace_counter_snapshot().model_call_count == 0
+    assert trace_counter_extra() == {
+        "model_call_count": 0,
+        "classifier_call_count": 0,
+        "embedding_call_count": 0,
+        "reranker_call_count": 0,
+    }

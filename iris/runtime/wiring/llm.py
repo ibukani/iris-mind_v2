@@ -21,6 +21,7 @@ from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
     from iris.contracts.conversation import ConversationRecord
+    from iris.runtime.observability.ports import RuntimeLatencyBudget
 
 
 _KNOWN_LLM_PROVIDERS: frozenset[LLMProvider] = frozenset(LLMProvider)
@@ -165,7 +166,10 @@ class LLMClientFactory:
             self._known_providers,
         )
         client = _build_llm_client(provider, model_config, runtime_config)
-        return _wrap_with_observer(client)
+        return _wrap_with_observer(
+            client,
+            latency_budget=runtime_config.observability.latency_budget,
+        )
 
     def resolve_model(
         self,
@@ -347,23 +351,30 @@ def openai_adapter_config(
     )
 
 
-def _wrap_with_observer(client: LLMClient) -> LLMClient:
-    """Wrap an LLM client with the default request-lifecycle observer.
+def _wrap_with_observer(
+    client: LLMClient,
+    *,
+    latency_budget: RuntimeLatencyBudget,
+) -> LLMClient:
+    """LLM client を既定の request lifecycle observer で包む。
 
-    The runtime's LLM client factory always emits structured request
-    telemetry so operators can correlate cognitive-cycle logs with
-    provider latency and error rates. The wrapper preserves the
-    client type's call signature (request, response, exception
-    propagation) so existing call sites are unaffected.
+    Runtime の LLM client factory は、cognitive-cycle log と provider latency /
+    error rate を対応付けられるように、構造化された request telemetry を常に
+    出力する。wrapper は request / response / exception propagation の呼び出し
+    契約を保つため、既存の呼び出し側には影響しない。
 
     Args:
-        client: The bare LLM client returned by a provider constructor.
+        client: provider constructor が返した素の LLM client。
+        latency_budget: Runtime LLM generation latency budget。
 
     Returns:
-        The same client wrapped in :class:`ObservableLLMClient` with
-        a :class:`RuntimeLLMRequestObserver`.
+        :class:`RuntimeLLMRequestObserver` を持つ :class:`ObservableLLMClient` で
+        包んだ LLM client。
     """
-    return ObservableLLMClient(client, RuntimeLLMRequestObserver())
+    return ObservableLLMClient(
+        client,
+        RuntimeLLMRequestObserver(latency_budget=latency_budget),
+    )
 
 
 def _is_fake_llm_model(model: str) -> bool:

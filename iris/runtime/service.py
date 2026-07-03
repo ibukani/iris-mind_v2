@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import time
 from typing import TYPE_CHECKING, Protocol
 
 from iris.contracts.actions import PresentedOutput
@@ -14,7 +13,14 @@ from iris.runtime.ingress.observation_ingress import (
     trusted_adapter_ingress,
     unauthenticated_external_ingress,
 )
-from iris.runtime.observability.context import RuntimeTraceContext, bind_trace_context, trace_extra
+from iris.runtime.observability.context import (
+    RuntimeTraceContext,
+    bind_trace_context,
+    trace_counter_extra,
+    trace_extra,
+)
+from iris.runtime.observability.ports import RuntimeLatencyStage
+from iris.runtime.observability.timing import RuntimeLatencyRecorder, latency_ms, perf_counter
 from iris.runtime.observation_router import (
     ActivityEventRoute,
     PresenceSignalRoute,
@@ -33,8 +39,11 @@ if TYPE_CHECKING:
     from iris.runtime.app import IrisApp
     from iris.runtime.ingress.observation_ingress import ObservationIngressContext
     from iris.runtime.ingress.observation_integrator import ObservationIntegrator
-    from iris.runtime.observability.context import RuntimeLogValue
-    from iris.runtime.observability.ports import RuntimeObservationObserver
+    from iris.runtime.observability.ports import (
+        RuntimeLatencyBudget,
+        RuntimeLogValue,
+        RuntimeObservationObserver,
+    )
 
 
 @dataclass(frozen=True)
@@ -114,6 +123,7 @@ class RuntimeServiceExtensions:
     observation_observer: RuntimeObservationObserver | None = None
     conversation_runtime: ConversationTurnRuntime | None = None
     runtime_learning_hook_runner: RuntimeLearningEventRunner | None = None
+    latency_budget: RuntimeLatencyBudget | None = None
 
 
 class ObservationRuntimeService(Protocol):
@@ -231,6 +241,10 @@ class IrisRuntimeService:
         self._observation_observer = runtime_extensions.observation_observer
         self._conversation_runtime = runtime_extensions.conversation_runtime
         self._runtime_learning_hook_runner = runtime_extensions.runtime_learning_hook_runner
+        self._latency_recorder = RuntimeLatencyRecorder(
+            self._observation_observer,
+            runtime_extensions.latency_budget,
+        )
         self._now = now or now_utc
 
     async def handle_observation(self, envelope: ObservationEnvelope) -> RuntimeResponse:
@@ -239,18 +253,30 @@ class IrisRuntimeService:
         Returns:
             RuntimeResponse: PresentedOutput と保持された correlation ID。
         """
-        started_at = time.perf_counter()
+        started_at = perf_counter()
         trace_context = _trace_context_from_envelope(envelope)
         with bind_trace_context(trace_context):
             try:
-                return await self._handle_observation_bound(envelope, started_at)
+                response = await self._handle_observation_bound(envelope, started_at)
             except Exception as exc:
+                self._record_stage_latency(
+                    RuntimeLatencyStage.HANDLE_OBSERVATION,
+                    started_at,
+                    error_type=type(exc).__name__,
+                )
                 self._record(
                     "runtime.observation.error",
-                    latency_ms=_latency_ms(started_at),
+                    latency_ms=latency_ms(started_at),
                     error_type=type(exc).__name__,
                 )
                 raise
+            else:
+                self._record_stage_latency(
+                    RuntimeLatencyStage.HANDLE_OBSERVATION,
+                    started_at,
+                    output_present=response.output.is_sendable,
+                )
+                return response
 
     async def _handle_observation_bound(
         self,
@@ -266,11 +292,21 @@ class IrisRuntimeService:
         self._record("runtime.observation.start")
 
         self._record("runtime.observation.integrate.start")
+        integration_started_at = perf_counter()
         await self._run_integrators(observation, envelope.ingress)
+        self._record_stage_latency(
+            RuntimeLatencyStage.OBSERVATION_INTEGRATION,
+            integration_started_at,
+        )
         self._record("runtime.observation.integrate.success")
 
         self._record("runtime.context.assemble.start")
+        context_started_at = perf_counter()
         situation_context = await self._assemble_situation_context(observation)
+        self._record_stage_latency(
+            RuntimeLatencyStage.WORKSPACE_CONTEXT_ASSEMBLY,
+            context_started_at,
+        )
         self._record("runtime.context.assemble.success")
 
         route = route_observation(observation)
@@ -298,7 +334,7 @@ class IrisRuntimeService:
             self._record(
                 "runtime.observation.success",
                 route=route_name,
-                latency_ms=_latency_ms(started_at),
+                latency_ms=latency_ms(started_at),
                 output_present=response.output.is_sendable,
             )
             return response
@@ -311,13 +347,26 @@ class IrisRuntimeService:
             )
 
         self._record("runtime.cognitive.start", route=route_name)
+        conversation_context_started_at = perf_counter()
         situation_context = await self._load_conversation_context(
             route.observation,
             situation_context,
         )
+        self._record_stage_latency(
+            RuntimeLatencyStage.CONVERSATION_CONTEXT_LOAD,
+            conversation_context_started_at,
+            route=route_name,
+        )
+        cognitive_started_at = perf_counter()
         output = await self._app.process_observation(
             route.observation,
             situation_context=situation_context,
+        )
+        self._record_stage_latency(
+            RuntimeLatencyStage.COGNITIVE_PROCESSING,
+            cognitive_started_at,
+            route=route_name,
+            output_present=output.is_sendable,
         )
         self._record(
             "runtime.cognitive.success",
@@ -334,7 +383,7 @@ class IrisRuntimeService:
         self._record(
             "runtime.observation.success",
             route=route_name,
-            latency_ms=_latency_ms(started_at),
+            latency_ms=latency_ms(started_at),
             output_present=output.is_sendable,
         )
         return RuntimeResponse(output=output, correlation_id=envelope.correlation_id)
@@ -359,8 +408,14 @@ class IrisRuntimeService:
         output: PresentedOutput,
     ) -> None:
         """Optional conversation runtimeへ成功出力を渡す。"""
+        stage_started_at = perf_counter()
         if self._conversation_runtime is not None:
             await self._conversation_runtime.record_response(observation, output)
+        self._record_stage_latency(
+            RuntimeLatencyStage.CONVERSATION_RECORD,
+            stage_started_at,
+            output_present=output.is_sendable,
+        )
 
     async def _run_integrators(
         self,
@@ -426,7 +481,7 @@ class IrisRuntimeService:
         self._record(
             "runtime.observation.success",
             route="activity_event",
-            latency_ms=_latency_ms(started_at),
+            latency_ms=latency_ms(started_at),
             output_present=output.is_sendable,
         )
         return RuntimeResponse(output=output, correlation_id=correlation_id)
@@ -457,7 +512,7 @@ class IrisRuntimeService:
         self._record(
             "runtime.observation.success",
             route="user_feedback",
-            latency_ms=_latency_ms(started_at),
+            latency_ms=latency_ms(started_at),
             output_present=False,
         )
         return response
@@ -471,23 +526,51 @@ class IrisRuntimeService:
         route: str,
     ) -> None:
         """任意配線されたruntime学習フックへpost-result eventを渡す。"""
-        if self._runtime_learning_hook_runner is None:
-            return
-        await self._runtime_learning_hook_runner.run(
-            RuntimeLearningEvent(
-                kind=kind,
-                observation=observation,
-                output=output,
-                occurred_at=self._now(),
+        stage_started_at = perf_counter()
+        try:
+            if self._runtime_learning_hook_runner is not None:
+                await self._runtime_learning_hook_runner.run(
+                    RuntimeLearningEvent(
+                        kind=kind,
+                        observation=observation,
+                        output=output,
+                        occurred_at=self._now(),
+                        route=route,
+                        source_observation_id=observation.observation_id,
+                    )
+                )
+        finally:
+            self._record_stage_latency(
+                RuntimeLatencyStage.RUNTIME_LEARNING_HOOK,
+                stage_started_at,
                 route=route,
-                source_observation_id=observation.observation_id,
+                output_present=output.is_sendable if output is not None else False,
             )
+
+    def _record_stage_latency(
+        self,
+        stage: RuntimeLatencyStage,
+        started_at: float,
+        *,
+        route: str | None = None,
+        output_present: bool | None = None,
+        error_type: str | None = None,
+    ) -> None:
+        """Stage latency を optional observer へ渡す。"""
+        self._latency_recorder.record_stage(
+            stage,
+            latency_ms=latency_ms(started_at),
+            route=route,
+            output_present=output_present,
+            error_type=error_type,
         )
 
     def _record(self, event: str, **fields: RuntimeLogValue) -> None:
         """Optional observer へ runtime event を渡す。"""
         if self._observation_observer is not None:
-            self._observation_observer.record(event, **trace_extra(**fields))
+            merged_fields = trace_counter_extra()
+            merged_fields.update(fields)
+            self._observation_observer.record(event, **trace_extra(**merged_fields))
 
 
 def _trace_context_from_envelope(
@@ -551,12 +634,3 @@ def _runtime_learning_event_kind(output: PresentedOutput) -> RuntimeLearningEven
     if output.is_sendable:
         return RuntimeLearningEventKind.INLINE_RESPONSE_GENERATED
     return RuntimeLearningEventKind.NO_ACTION
-
-
-def _latency_ms(started_at: float) -> float:
-    """開始時刻からの経過時間をミリ秒で返す。
-
-    Returns:
-        経過時間ミリ秒。
-    """
-    return (time.perf_counter() - started_at) * 1000.0

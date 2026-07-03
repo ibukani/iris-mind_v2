@@ -50,6 +50,106 @@ _RATE_LIMIT_RESERVED_DESC = (
 )
 
 
+def _latency_budget_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Runtime latency budget の ConfigSpec 群を返す。
+
+    Returns:
+        observability.latency_budget 配下の設定仕様。
+    """
+    return (
+        ConfigFieldSpec(
+            "observability.latency_budget.enabled",
+            ConfigValueType.BOOL,
+            default=True,
+            description="Runtime response latency event を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.slow_warning_enabled",
+            ConfigValueType.BOOL,
+            default=True,
+            description="Latency budget 超過時の slow warning event を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.handle_observation_ms",
+            ConfigValueType.FLOAT,
+            3000.0,
+            "handle_observation 全体の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.observation_integration_ms",
+            ConfigValueType.FLOAT,
+            50.0,
+            "Observation integration の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.workspace_context_assembly_ms",
+            ConfigValueType.FLOAT,
+            100.0,
+            "Workspace context assembly の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.conversation_context_load_ms",
+            ConfigValueType.FLOAT,
+            100.0,
+            "Conversation context load の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.cognitive_processing_ms",
+            ConfigValueType.FLOAT,
+            2500.0,
+            "Cognitive processing の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.llm_generate_ms",
+            ConfigValueType.FLOAT,
+            2200.0,
+            "LLM generate call の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.conversation_record_ms",
+            ConfigValueType.FLOAT,
+            100.0,
+            "Conversation record の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.transcript_append_ms",
+            ConfigValueType.FLOAT,
+            100.0,
+            "Transcript append の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.runtime_learning_hook_ms",
+            ConfigValueType.FLOAT,
+            200.0,
+            "Runtime learning hook の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.background_enqueue_ms",
+            ConfigValueType.FLOAT,
+            100.0,
+            "Background job enqueue の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.classifier_call_ms",
+            ConfigValueType.FLOAT,
+            50.0,
+            "Classifier call の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.embedding_call_ms",
+            ConfigValueType.FLOAT,
+            150.0,
+            "Embedding call の latency budget ミリ秒。",
+        ),
+        ConfigFieldSpec(
+            "observability.latency_budget.reranker_call_ms",
+            ConfigValueType.FLOAT,
+            100.0,
+            "Reranker call の latency budget ミリ秒。",
+        ),
+    )
+
+
 def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
     """全ユーザー向けランタイム設定フィールドの正規仕様を返す。
 
@@ -584,6 +684,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "出力可能な最大文字数。",
             env="IRIS_SAFETY_MAX_OUTPUT_CHARS",
         ),
+        *_latency_budget_specs(),
         ConfigFieldSpec(
             "diagnostics.mode",
             ConfigValueType.ENUM,

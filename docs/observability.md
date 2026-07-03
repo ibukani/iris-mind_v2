@@ -59,6 +59,72 @@ safe fields:
 
 runtime lifecycle logs は観測するだけで、routing、retry、safety、delivery、memory の判断を行わない。
 
+## Runtime Response Latency Budget
+
+Runtime response path は段階別 latency sample を `runtime.latency.stage` として記録する。
+各 sample は `correlation_id`、`observation_kind`、`ingress_kind`、任意の
+`actor_id` / `space_id`、`stage`、`latency_ms`、`budget_ms`、
+`budget_exceeded`、`model_call_count`、`classifier_call_count`、
+`embedding_call_count`、`reranker_call_count` を含む。budget を超えた場合、
+`slow_warning_enabled = true` なら同じ metadata で `runtime.latency.slow` も記録する。
+
+観測する stage:
+
+| stage | 既定 budget | 説明 |
+|-------|-------------|------|
+| `handle_observation` | 3000 ms | runtime request 全体 |
+| `observation_integration` | 50 ms | observation claim の state 統合 |
+| `workspace_context_assembly` | 100 ms | workspace / presence / availability context 組み立て |
+| `conversation_context_load` | 100 ms | 短期会話 window の読み込み |
+| `cognitive_processing` | 2500 ms | IrisApp / cognitive pipeline 全体 |
+| `llm_generate` | 2200 ms | LLM generation request |
+| `conversation_record` | 100 ms | 成功 response の短期会話履歴記録 |
+| `transcript_append` | 100 ms | confirmed transcript 追記 |
+| `runtime_learning_hook` | 200 ms | runtime outcome learning hook |
+| `background_enqueue` | 100 ms | background job enqueue |
+| `classifier_call` | 50 ms | 後続Issueで分類器 observer を接続する予約 stage |
+| `embedding_call` | 150 ms | 後続Issueで embedding observer を接続する予約 stage |
+| `reranker_call` | 100 ms | 後続Issueで reranker observer を接続する予約 stage |
+
+`classifier_call` / `embedding_call` / `reranker_call` は、このIssueでは runtime trace counter と
+stage 名を予約する。実際の classifier cascade、embedding、reranker adapter への接続は、
+後続Issueで同じ `RuntimeModelCallKind` / latency stage contract に接続する。
+
+P50 / P95 / P99 は metrics backend を持たせず、`runtime.latency.stage` event を
+外部 log/metrics pipeline で集計する。distributed tracing や dashboard はこの実装の範囲外。
+
+ローカル LLM の cold start は latency だけでは断定しない。`llm_generate` event は
+`model_load_state = "unknown"` を含め、Ollama など provider-specific diagnostics が
+model loaded state を提供できるようになった時点で `cold_start` / `warm` のような
+値へ拡張する。
+
+### 設定
+
+`[observability.latency_budget]` セクションで段階別 budget と warning を制御する。
+
+```toml
+[observability.latency_budget]
+enabled = true
+slow_warning_enabled = true
+handle_observation_ms = 3000.0
+observation_integration_ms = 50.0
+workspace_context_assembly_ms = 100.0
+conversation_context_load_ms = 100.0
+cognitive_processing_ms = 2500.0
+llm_generate_ms = 2200.0
+conversation_record_ms = 100.0
+transcript_append_ms = 100.0
+runtime_learning_hook_ms = 200.0
+background_enqueue_ms = 100.0
+classifier_call_ms = 50.0
+embedding_call_ms = 150.0
+reranker_call_ms = 100.0
+```
+
+すべての `*_ms` 値は正の数でなければならない。`enabled = false` の場合、
+latency stage event と slow warning は出力しない。`slow_warning_enabled = false` の場合、
+latency sample は出すが `runtime.latency.slow` は出力しない。
+
 ## Sensitive Data Policy
 
 ログに出してはいけないもの:

@@ -19,6 +19,8 @@ from iris.contracts.transcript import (
 from iris.contracts.workspace_context import SituationContextSnapshot
 from iris.core.datetime_utils import now_utc
 from iris.core.ids import ObservationId, TranscriptId
+from iris.runtime.observability.ports import RuntimeLatencyStage
+from iris.runtime.observability.timing import RuntimeLatencyRecorder, latency_ms, perf_counter
 from iris.runtime.observation_router import actor_message_observation
 from iris.runtime.state.conversation import (
     ConversationKey,
@@ -38,6 +40,7 @@ if TYPE_CHECKING:
     from iris.contracts.learning import LearningEvent
     from iris.contracts.metadata import ImmutableMetadata
     from iris.contracts.observations import ActorMessageObservation, Observation
+    from iris.runtime.observability.ports import RuntimeLatencyBudget, RuntimeObservationObserver
     from iris.runtime.state.conversation import ConversationHistoryStore
     from iris.runtime.state.transcript import TranscriptStore
 
@@ -156,6 +159,8 @@ class DeliveryConversationHistoryHook:
     store: ConversationHistoryStore
     transcript_store: TranscriptStore = field(default_factory=NullTranscriptStore)
     transcript_policy: TranscriptWritePolicy = TranscriptWritePolicy()
+    observation_observer: RuntimeObservationObserver | None = None
+    latency_budget: RuntimeLatencyBudget | None = None
 
     async def after_action_result(self, event: LearningEvent) -> None:
         """成功配送のみ assistant turn として確定する。
@@ -186,6 +191,8 @@ class DeliveryConversationHistoryHook:
                     ),
                 ),
             ),
+            observation_observer=self.observation_observer,
+            latency_budget=self.latency_budget,
         )
 
 
@@ -203,6 +210,8 @@ class ShortTermConversationRuntime:
     transcript_store: TranscriptStore = field(default_factory=NullTranscriptStore)
     policy: ConversationHistoryPolicy = ConversationHistoryPolicy()
     transcript_policy: TranscriptWritePolicy = TranscriptWritePolicy()
+    observation_observer: RuntimeObservationObserver | None = None
+    latency_budget: RuntimeLatencyBudget | None = None
     now: Callable[[], datetime] = now_utc
 
     async def load_context(
@@ -245,18 +254,30 @@ class ShortTermConversationRuntime:
                 recorded_at=recorded_at,
                 retention_until=self.transcript_policy.retention_until(recorded_at),
             ),
+            observation_observer=self.observation_observer,
+            latency_budget=self.latency_budget,
         )
 
 
 async def _append_transcripts_best_effort(
     store: TranscriptStore,
     records: tuple[TranscriptRecord, ...],
+    *,
+    observation_observer: RuntimeObservationObserver | None = None,
+    latency_budget: RuntimeLatencyBudget | None = None,
 ) -> None:
     """Transcript append failure を user-facing response path から隔離する。"""
+    recorder = RuntimeLatencyRecorder(observation_observer, latency_budget)
+    started_at = perf_counter()
     try:
         await store.append(records)
     except Exception:
         _LOGGER.exception("confirmed transcript append failed")
+    finally:
+        recorder.record_stage(
+            RuntimeLatencyStage.TRANSCRIPT_APPEND,
+            latency_ms=latency_ms(started_at),
+        )
 
 
 def _inline_records(

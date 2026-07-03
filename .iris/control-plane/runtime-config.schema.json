@@ -909,6 +909,156 @@
       "description": "出力可能な最大文字数。"
     },
     {
+      "path": "observability.latency_budget.enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Runtime response latency event を有効化する。"
+    },
+    {
+      "path": "observability.latency_budget.slow_warning_enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Latency budget 超過時の slow warning event を有効化する。"
+    },
+    {
+      "path": "observability.latency_budget.handle_observation_ms",
+      "type": "float",
+      "default": 3000.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "handle_observation 全体の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.observation_integration_ms",
+      "type": "float",
+      "default": 50.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Observation integration の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.workspace_context_assembly_ms",
+      "type": "float",
+      "default": 100.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Workspace context assembly の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.conversation_context_load_ms",
+      "type": "float",
+      "default": 100.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Conversation context load の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.cognitive_processing_ms",
+      "type": "float",
+      "default": 2500.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Cognitive processing の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.llm_generate_ms",
+      "type": "float",
+      "default": 2200.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "LLM generate call の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.conversation_record_ms",
+      "type": "float",
+      "default": 100.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Conversation record の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.transcript_append_ms",
+      "type": "float",
+      "default": 100.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Transcript append の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.runtime_learning_hook_ms",
+      "type": "float",
+      "default": 200.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Runtime learning hook の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.background_enqueue_ms",
+      "type": "float",
+      "default": 100.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Background job enqueue の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.classifier_call_ms",
+      "type": "float",
+      "default": 50.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Classifier call の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.embedding_call_ms",
+      "type": "float",
+      "default": 150.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Embedding call の latency budget ミリ秒。"
+    },
+    {
+      "path": "observability.latency_budget.reranker_call_ms",
+      "type": "float",
+      "default": 100.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Reranker call の latency budget ミリ秒。"
+    },
+    {
       "path": "diagnostics.mode",
       "type": "enum",
       "default": "warn",

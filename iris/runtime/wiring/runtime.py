@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 from typing import TYPE_CHECKING
 
@@ -35,6 +35,7 @@ from iris.runtime.learning.review_service import MemoryCandidateReviewService
 from iris.runtime.learning.runner import BackgroundJobRunner
 from iris.runtime.memory_vector_rebuilder import MemoryVectorIndexRebuilder
 from iris.runtime.observability.events import LoggingRuntimeObservationObserver
+from iris.runtime.observability.ports import RuntimeLatencyBudget
 from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
 from iris.runtime.service import (
     IntegratingObservationPipeline,
@@ -150,6 +151,7 @@ class RuntimeServiceBuildOptions:
     conversation_summary_min_records: int = 12
     transcript_retention_days: int = 30
     runtime_learning_hook_runner: RuntimeLearningHookRunner | None = None
+    latency_budget: RuntimeLatencyBudget = field(default_factory=RuntimeLatencyBudget)
     now: Callable[[], datetime] | None = None
 
 
@@ -207,13 +209,14 @@ def build_runtime_service(
         feature_catalog=feature_catalog,
         output_pipeline=output_pipeline,
     )
+    observation_observer = LoggingRuntimeObservationObserver()
     return IrisRuntimeService(
         app,
         observation_pipeline=observation_pipeline,
         workspace_context_assembler=workspace_context_assembler,
         activity_event_reaction_handler=activity_event_reaction_handler,
         extensions=RuntimeServiceExtensions(
-            observation_observer=LoggingRuntimeObservationObserver(),
+            observation_observer=observation_observer,
             conversation_runtime=ShortTermConversationRuntime(
                 stores.conversation_history_store,
                 transcript_store=stores.transcript_store,
@@ -225,8 +228,11 @@ def build_runtime_service(
                     summary_min_records=options.conversation_summary_min_records,
                 ),
                 transcript_policy=TranscriptWritePolicy(options.transcript_retention_days),
+                observation_observer=observation_observer,
+                latency_budget=options.latency_budget,
             ),
             runtime_learning_hook_runner=options.runtime_learning_hook_runner,
+            latency_budget=options.latency_budget,
         ),
         now=current_now,
     )
@@ -298,6 +304,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
             conversation_summary_max_chars=config.conversation.summary_max_chars,
             conversation_summary_min_records=config.conversation.summary_min_records,
             transcript_retention_days=config.conversation.transcript.retention_days,
+            latency_budget=config.observability.latency_budget,
             runtime_learning_hook_runner=_wire_runtime_learning_hook_runner(
                 config,
                 stores,
@@ -549,6 +556,8 @@ def _wire_action_result_hooks(
             stores.conversation_history_store,
             transcript_store=stores.transcript_store,
             transcript_policy=TranscriptWritePolicy(config.conversation.transcript.retention_days),
+            observation_observer=LoggingRuntimeObservationObserver(),
+            latency_budget=config.observability.latency_budget,
         ),
         *feature_hooks,
     )
@@ -602,6 +611,8 @@ def _wire_builtin_runtime_learning_hooks(
         FilteringImplicitMemoryCandidateHook(
             stores.background_job_queue,
             max_attempts=config.learning.max_attempts,
+            observation_observer=LoggingRuntimeObservationObserver(),
+            latency_budget=config.observability.latency_budget,
         ),
     )
 

@@ -27,6 +27,8 @@ from iris.runtime.learning.jobs import (
     BackgroundJobRecord,
     RuntimeLearningCandidateJobPayload,
 )
+from iris.runtime.observability.ports import RuntimeLatencyStage
+from iris.runtime.observability.timing import RuntimeLatencyRecorder, latency_ms, perf_counter
 from iris.runtime.observation_router import actor_message_observation, user_feedback_observation
 from iris.runtime.state.memory_candidates import (
     MemoryCandidateReviewId,
@@ -39,6 +41,7 @@ if TYPE_CHECKING:
 
     from iris.contracts.learning import RuntimeLearningEvent
     from iris.runtime.learning.queue import BackgroundJobQueue
+    from iris.runtime.observability.ports import RuntimeLatencyBudget, RuntimeObservationObserver
     from iris.runtime.state.memory_candidates import MemoryCandidateReviewStore
 
 _RESPONSE_STYLE_PATTERNS = (
@@ -85,10 +88,13 @@ class FilteringImplicitMemoryCandidateHook:
         queue: BackgroundJobQueue,
         *,
         max_attempts: int = 3,
+        observation_observer: RuntimeObservationObserver | None = None,
+        latency_budget: RuntimeLatencyBudget | None = None,
     ) -> None:
         """キューと再試行上限を注入する。"""
         self._queue = queue
         self._max_attempts = max_attempts
+        self._latency_recorder = RuntimeLatencyRecorder(observation_observer, latency_budget)
 
     async def after_runtime_event(self, event: RuntimeLearningEvent) -> None:
         """Candidate signal がある runtime event だけを冪等に enqueue する。"""
@@ -96,7 +102,15 @@ class FilteringImplicitMemoryCandidateHook:
         if payload is None or not has_implicit_candidate_signal(payload):
             return
         key = _job_key(payload)
-        await self._queue.enqueue(_new_job(key, payload, event.occurred_at, self._max_attempts))
+        started_at = perf_counter()
+        try:
+            await self._queue.enqueue(_new_job(key, payload, event.occurred_at, self._max_attempts))
+        finally:
+            self._latency_recorder.record_stage(
+                RuntimeLatencyStage.BACKGROUND_ENQUEUE,
+                latency_ms=latency_ms(started_at),
+                route=event.route,
+            )
 
 
 class EnqueueImplicitMemoryCandidateHook(FilteringImplicitMemoryCandidateHook):
