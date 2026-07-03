@@ -201,24 +201,40 @@ _TAGS_WITHOUT_MODEL: dict[str, object] = {"models": [{"name": "llama3:8b"}]}
 
 
 def _request(path: str) -> httpx.Request:
-    """Build a request object for a fixed mock endpoint."""
+    """Build a request object for a fixed mock endpoint.
+
+    Returns:
+        Mock request targeting the selected endpoint path.
+    """
     return httpx.Request("GET", f"http://testserver{path}")
 
 
 def _connect_error(request: httpx.Request) -> httpx.Response:
-    """Raise an Ollama daemon connection error for a lifecycle request."""
+    """Raise an Ollama daemon connection error for a lifecycle request.
+
+    Raises:
+        httpx.ConnectError: Always raised for the supplied request.
+    """
     message = "connection refused"
     raise httpx.ConnectError(message, request=request)
 
 
 def _timeout_error(request: httpx.Request) -> httpx.Response:
-    """Raise an Ollama lifecycle timeout for a lifecycle request."""
+    """Raise an Ollama lifecycle timeout for a lifecycle request.
+
+    Raises:
+        httpx.TimeoutException: Always raised for the supplied request.
+    """
     message = "probe timeout"
     raise httpx.TimeoutException(message, request=request)
 
 
 def _read_error(request: httpx.Request) -> httpx.Response:
-    """Raise a generic Ollama HTTP read error for a lifecycle request."""
+    """Raise a generic Ollama HTTP read error for a lifecycle request.
+
+    Raises:
+        httpx.ReadError: Always raised for the supplied request.
+    """
     message = "read failed"
     raise httpx.ReadError(message, request=request)
 
