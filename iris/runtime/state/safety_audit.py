@@ -35,6 +35,7 @@ class SafetyAuditRecord:
     target_key: str
     policy: str
     policy_version: str
+    retention_until: datetime | None = None
 
 
 class SafetyAuditJournal(Protocol):

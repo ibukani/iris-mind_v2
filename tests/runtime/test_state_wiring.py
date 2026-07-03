@@ -12,6 +12,7 @@ from iris.adapters.persistence.sqlite.stores.delivery_outbox import SQLiteDelive
 from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
     SQLiteMemoryCandidateReviewStore,
 )
+from iris.adapters.persistence.sqlite.stores.safety_audit import SQLiteSafetyAuditJournal
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
@@ -54,7 +55,7 @@ async def test_state_wiring_sqlite_uses_durable_delivery_and_scheduler_stores(
 
     assert isinstance(stores.delivery_outbox, SQLiteDeliveryOutbox)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
-    assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
+    assert isinstance(stores.safety_audit_journal, SQLiteSafetyAuditJournal)
     assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
 

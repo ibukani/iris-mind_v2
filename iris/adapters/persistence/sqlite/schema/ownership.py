@@ -87,6 +87,12 @@ SQLITE_SCHEMA_OWNERSHIP: tuple[SQLiteTableOwnership, ...] = (
         notes="proactive scheduler target の永続 state。",
     ),
     SQLiteTableOwnership(
+        table_name="safety_audit_records",
+        owner="SQLiteSafetyAuditJournal",
+        classification=SQLiteSchemaClassification.APPEND_ONLY_AUDIT_LOG,
+        notes="raw user text / generated output body を保存しない safety decision metadata。",
+    ),
+    SQLiteTableOwnership(
         table_name="background_jobs",
         owner="SQLiteBackgroundJobQueue",
         classification=SQLiteSchemaClassification.SOURCE_OF_TRUTH,

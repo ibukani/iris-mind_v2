@@ -25,6 +25,11 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.review_candidates import (
+    ReviewCandidateFilter,
+    ReviewCandidateStatus,
+    ReviewCandidateType,
+)
 from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 from iris.core.metadata import immutable_metadata
 from iris.runtime.state.memory_candidates import (
@@ -121,14 +126,14 @@ class SQLiteMemoryCandidateReviewStore(MemoryCandidateReviewStore):
             conn.execute(
                 """
                 INSERT INTO memory_candidate_reviews (
-                    candidate_id, idempotency_key, status, candidate_json,
+                    candidate_id, idempotency_key, status, candidate_type, candidate_json,
                     candidate_text, candidate_kind, candidate_source, candidate_reason,
                     candidate_confidence, candidate_salience,
                     candidate_retention_policy, candidate_sensitivity,
                     candidate_review_required, actor_id, account_id, space_id,
                     source_observation_id, reviewed_at, reviewed_by, review_reason,
                     promoted_memory_id, metadata_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 _record_to_row(record),
             )
@@ -183,14 +188,28 @@ class SQLiteMemoryCandidateReviewStore(MemoryCandidateReviewStore):
         Returns:
             作成時刻と candidate id で整列済みの matching record。
         """
-        return await asyncio.to_thread(
-            self._list_by_status_sync,
-            status,
-            actor_id,
-            account_id,
-            space_id,
-            limit,
+        return await self.list_by_filter(
+            ReviewCandidateFilter.model_construct(
+                status=ReviewCandidateStatus(status.value),
+                candidate_type=None,
+                actor_id=actor_id,
+                account_id=account_id,
+                space_id=space_id,
+                limit=limit,
+            )
         )
+
+    @override
+    async def list_by_filter(
+        self,
+        query: ReviewCandidateFilter,
+    ) -> tuple[MemoryCandidateReviewRecord, ...]:
+        """Review service boundary 用 filter で candidate を返す。
+
+        Returns:
+            作成時刻と candidate id で整列済みの matching record。
+        """
+        return await asyncio.to_thread(self._list_by_filter_sync, query)
 
     @override
     async def update_status(
@@ -230,24 +249,14 @@ class SQLiteMemoryCandidateReviewStore(MemoryCandidateReviewStore):
         with self._db.transaction() as conn:
             return _get(conn, candidate_id)
 
-    def _list_by_status_sync(
+    def _list_by_filter_sync(
         self,
-        status: MemoryCandidateReviewStatus,
-        actor_id: ActorId | None,
-        account_id: AccountId | None,
-        space_id: SpaceId | None,
-        limit: int,
+        query: ReviewCandidateFilter,
     ) -> tuple[MemoryCandidateReviewRecord, ...]:
-        _validate_positive_limit(limit)
-        query = _list_query(
-            status,
-            actor_id=actor_id,
-            account_id=account_id,
-            space_id=space_id,
-            limit=limit,
-        )
+        _validate_positive_limit(query.limit)
+        list_query = _list_query(query)
         with self._db.transaction() as conn:
-            rows = conn.execute(query.sql, query.params).fetchall()
+            rows = conn.execute(list_query.sql, list_query.params).fetchall()
             return tuple(_row_to_record(row) for row in rows)
 
     def _update_review_sync(
@@ -304,20 +313,16 @@ def _get(
     return _row_to_record(row)
 
 
-def _list_query(
-    status: MemoryCandidateReviewStatus,
-    *,
-    actor_id: ActorId | None,
-    account_id: AccountId | None,
-    space_id: SpaceId | None,
-    limit: int,
-) -> _ListQuery:
+def _list_query(query: ReviewCandidateFilter) -> _ListQuery:
+    status = query.status.value if query.status is not None else None
+    candidate_type = query.candidate_type.value if query.candidate_type is not None else None
     return _ListQuery(
         sql=(
             """
             SELECT *
             FROM memory_candidate_reviews
-            WHERE status = ?
+            WHERE (? IS NULL OR status = ?)
+            AND (? IS NULL OR candidate_type = ?)
             AND (? IS NULL OR actor_id = ?)
             AND (? IS NULL OR account_id = ?)
             AND (? IS NULL OR space_id = ?)
@@ -326,14 +331,17 @@ def _list_query(
             """
         ),
         params=(
-            status.value,
-            optional_text(actor_id),
-            optional_text(actor_id),
-            optional_text(account_id),
-            optional_text(account_id),
-            optional_text(space_id),
-            optional_text(space_id),
-            limit,
+            status,
+            status,
+            candidate_type,
+            candidate_type,
+            optional_text(query.actor_id),
+            optional_text(query.actor_id),
+            optional_text(query.account_id),
+            optional_text(query.account_id),
+            optional_text(query.space_id),
+            optional_text(query.space_id),
+            query.limit,
         ),
     )
 
@@ -365,6 +373,7 @@ def _record_to_row(record: MemoryCandidateReviewRecord) -> _SqlParams:
         str(record.candidate_id),
         record.idempotency_key,
         record.status.value,
+        record.candidate_type.value,
         _candidate_to_json(candidate),
         candidate.text,
         candidate.kind.value,
@@ -409,6 +418,7 @@ def _row_to_record(row: sqlite3.Row) -> MemoryCandidateReviewRecord:
         updated_at=text_to_datetime(row["updated_at"]),
         idempotency_key=row["idempotency_key"],
         status=MemoryCandidateReviewStatus(row["status"]),
+        candidate_type=ReviewCandidateType(row["candidate_type"]),
         actor_id=optional_new_type(ActorId, row["actor_id"]),
         account_id=optional_new_type(AccountId, row["account_id"]),
         space_id=optional_new_type(SpaceId, row["space_id"]),

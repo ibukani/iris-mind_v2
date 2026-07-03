@@ -11,6 +11,10 @@ from iris.adapters.persistence.sqlite.migrations.v0002_runtime_learning_state im
 from iris.adapters.persistence.sqlite.migrations.v0003_conversation_transcripts import (
     CONVERSATION_TRANSCRIPTS_V3,
 )
+from iris.adapters.persistence.sqlite.migrations.v0004_safety_audit import SAFETY_AUDIT_V4
+from iris.adapters.persistence.sqlite.migrations.v0005_review_candidate_type import (
+    REVIEW_CANDIDATE_TYPE_V5,
+)
 
 if TYPE_CHECKING:
     from iris.adapters.persistence.sqlite.migrator_types import SQLiteMigration
@@ -22,4 +26,10 @@ def available_migrations() -> tuple[SQLiteMigration, ...]:
     Returns:
         tuple[SQLiteMigration, ...]: version 昇順の migration 定義。
     """
-    return (BASELINE_V1, RUNTIME_LEARNING_STATE_V2, CONVERSATION_TRANSCRIPTS_V3)
+    return (
+        BASELINE_V1,
+        RUNTIME_LEARNING_STATE_V2,
+        CONVERSATION_TRANSCRIPTS_V3,
+        SAFETY_AUDIT_V4,
+        REVIEW_CANDIDATE_TYPE_V5,
+    )

@@ -18,6 +18,11 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.review_candidates import (
+    ReviewCandidateFilter,
+    ReviewCandidateStatus,
+    ReviewCandidateType,
+)
 from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 from iris.core.metadata import immutable_metadata
 from iris.runtime.state.memory_candidates import (
@@ -63,7 +68,18 @@ def _record(
         actor_id=resolved_actor_id,
         space_id=resolved_space_id,
         source_observation_id=ObservationId("obs-1"),
-        metadata=immutable_metadata({"runtime_event_kind": "user_feedback"}),
+        metadata=immutable_metadata(
+            {
+                "runtime_event_kind": "user_feedback",
+                "classifier_name": "style-detector",
+                "model_name": "local-style-classifier",
+                "model_version": "2026-07-01",
+                "confidence": "0.70",
+                "reason": "implicit style preference",
+                "source_event_id": "event-1",
+                "scope": "actor/account/space",
+            }
+        ),
     )
     return MemoryCandidateReviewRecord(
         candidate_id=MemoryCandidateReviewId(candidate_id),
@@ -75,7 +91,13 @@ def _record(
         account_id=resolved_account_id,
         space_id=resolved_space_id,
         source_observation_id=ObservationId("obs-1"),
-        metadata=immutable_metadata({"background_job_id": "job-1"}),
+        candidate_type=ReviewCandidateType.MEMORY,
+        metadata=immutable_metadata(
+            {
+                "background_job_id": "job-1",
+                "source_event_id": "event-1",
+            }
+        ),
     )
 
 
@@ -90,7 +112,10 @@ async def test_add_get_and_reopen_round_trip(tmp_path: Path) -> None:
 
     assert stored == record
     assert stored is not None
+    assert stored.candidate_type is ReviewCandidateType.MEMORY
     assert stored.candidate.metadata["runtime_event_kind"] == "user_feedback"
+    assert stored.candidate.metadata["classifier_name"] == "style-detector"
+    assert stored.candidate.metadata["model_version"] == "2026-07-01"
     assert stored.metadata["background_job_id"] == "job-1"
     reopened.close()
 
@@ -145,6 +170,16 @@ async def test_list_pending_and_status_filters(tmp_path: Path) -> None:
             account_id=AccountId("account-2"),
         )
     ) == (second.candidate_id,)
+    assert tuple(
+        record.candidate_id
+        for record in await store.list_by_filter(
+            ReviewCandidateFilter(
+                status=ReviewCandidateStatus.APPROVED,
+                candidate_type=ReviewCandidateType.MEMORY,
+                account_id=AccountId("account-2"),
+            )
+        )
+    ) == (second.candidate_id,)
     store.close()
 
 
@@ -186,6 +221,33 @@ async def test_update_review_persists_metadata_and_promotion(tmp_path: Path) -> 
     assert updated.review_reason == "stable preference"
     assert updated.promoted_memory_id == "memory-1"
     store.close()
+
+
+async def test_rejected_candidate_reopens_with_classifier_metadata(tmp_path: Path) -> None:
+    """Reject 後も小型 classifier 由来 metadata は suppression signal として残る。"""
+    store = _store(tmp_path)
+    record = await store.add(_record("candidate-1"))
+    await store.update_review(
+        record.candidate_id,
+        MemoryCandidateReviewUpdate(
+            status=MemoryCandidateReviewStatus.REJECTED,
+            updated_at=_REVIEWED,
+            reviewed_at=_REVIEWED,
+            reviewed_by="operator",
+            review_reason="noisy classifier output",
+        ),
+    )
+    store.close()
+
+    reopened = _store(tmp_path)
+    stored = await reopened.get(record.candidate_id)
+
+    assert stored is not None
+    assert stored.status is MemoryCandidateReviewStatus.REJECTED
+    assert stored.review_reason == "noisy classifier output"
+    assert stored.candidate.metadata["model_name"] == "local-style-classifier"
+    assert stored.candidate.metadata["source_event_id"] == "event-1"
+    reopened.close()
 
 
 async def test_update_missing_candidate_returns_none(tmp_path: Path) -> None:

@@ -80,17 +80,20 @@ Blocked / failed / cancelled delivery は、学習イベントとして観測可
 
 Proactive output は、生成時点ではなく successful delivery report 後にだけ confirmed conversation history へ入る。
 
-Implicit learning は `LearningEvent.source_observation_id` を使って traceability を持てる。Implicit conversation candidate は review-required として `MemoryCandidateReviewStore` に保存し、long-term memory へは直接書かない。`MemoryCandidate` / source / reason / confidence / retention / sensitivity は `iris/contracts/memory_candidates.py` の durable boundary contract として所有し、SQLite adapter は cognitive package を import せずこの contract を永続化する。`MemoryCandidateReviewService` で approved になった candidate だけが `ApprovedMemoryCandidatePromoter` 経由で durable `MemoryStore` に昇格できる。昇格時も source / reason / confidence / retention / review metadata を保持し、credential-like / sensitive profile / unsafe candidate は promotion policy で再拒否する。
+Implicit learning は `LearningEvent.source_observation_id` を使って traceability を持てる。Implicit conversation candidate は review-required として `MemoryCandidateReviewStore` に保存し、long-term memory へは直接書かない。`MemoryCandidate` / source / reason / confidence / retention / sensitivity は `iris/contracts/memory_candidates.py` の durable boundary contract として所有し、SQLite adapter は cognitive package を import せずこの contract を永続化する。`MemoryCandidateReviewService` は `iris/contracts/review_candidates.py` の `ReviewCandidateSummary` / `ReviewCandidateDetail` / `ReviewDecisionResult` を返し、runtime 内部の store record を service 境界の外へ公開しない。`MemoryCandidateReviewService` で approved になった candidate だけが `ApprovedMemoryCandidatePromoter` 経由で durable `MemoryStore` に昇格できる。昇格時も source / reason / confidence / retention / review metadata を保持し、credential-like / sensitive profile / unsafe candidate は promotion policy で再拒否する。
+
+Review candidate は `candidate_type` を持つ。現実装の promotion 対象は `memory` だが、review contract は将来の `shared_episodic_memory`、`persona_patch`、`relationship`、`internal_state`、`consolidation` を同じ list / read / approve / reject / discard lifecycle で扱える。Local AI / classifier 由来 candidate は model name/version、classifier name/version、confidence、reason、source event IDs、scope を metadata として保持する。Rejected candidate の metadata と review reason は将来の suppression signal として使えるが、suppression 実行 policy はこの ADR では実装しない。
 
 `state.backend = "sqlite"` では `BackgroundJobQueue` と `MemoryCandidateReviewStore` も durable runtime learning state として SQLite に保存する。これにより、queued learning jobs、retry / lease state、pending review、approved / rejected / discarded lifecycle、promotion metadata は再起動後も保持される。`state.backend = "memory"` では process-local のままである。Promotion は `MemoryStore.update()` 後に review record の `promoted_memory_id` を更新する二段階処理であり、既に promotion 済みの `promoted_memory_id` が canonical `MemoryStore` で見つからない場合は通常の冪等 hit ではなく `promoted_memory_missing` として診断可能にする。
 
-SQLite delivery outbox は nullable `source_observation_id` を保存する。既存 DB migration は現 phase では扱わず、fresh schema creation を対象にする。
+SQLite delivery outbox は nullable `source_observation_id` を保存する。`memory_candidate_reviews` は v4 migration で `candidate_type` を追加する。既存 review record は既定で `memory` candidate として扱う。
 
 ## Implementation anchors
 
 - `iris/contracts/delivery.py`
 - `iris/contracts/learning.py`
 - `iris/contracts/memory_candidates.py`
+- `iris/contracts/review_candidates.py`
 - `iris/runtime/delivery/broker.py`
 - `iris/runtime/conversation.py`
 - `iris/runtime/state/conversation.py`

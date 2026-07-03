@@ -15,6 +15,7 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.review_candidates import ReviewDecisionRequest
 from iris.core.ids import ActorId, ObservationId, SpaceId
 from iris.runtime.learning.review_promotion import (
     ApprovedMemoryCandidatePromoter,
@@ -41,8 +42,7 @@ async def test_approved_candidate_promotes_to_memory_store() -> None:
     record = await store.add(_record("candidate-1"))
     await MemoryCandidateReviewService(store, now=lambda: _NOW).approve(
         record.candidate_id,
-        reviewed_by="operator",
-        reason="stable preference",
+        ReviewDecisionRequest(reviewed_by="operator", reason="stable preference"),
     )
     promoter = ApprovedMemoryCandidatePromoter(store, memory_store, now=lambda: _PROMOTED_AT)
 

@@ -492,7 +492,7 @@ async def test_runtime_doctor_warns_on_pending_sqlite_migration(
 
     check = next(item for item in report.checks if item.name == "sqlite-state")
     assert check.status == "warn"
-    assert "pending=1,2" in check.summary
+    assert "pending=1,2,3,4" in check.summary
 
 
 @pytest.mark.anyio

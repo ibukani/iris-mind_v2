@@ -11,6 +11,7 @@ from iris.adapters.persistence.sqlite.schema.delivery import (
     DeliveryReportFingerprintModel,
 )
 from iris.adapters.persistence.sqlite.schema.relationship import RelationshipModel
+from iris.adapters.persistence.sqlite.schema.safety_audit import SafetyAuditRecordModel
 from iris.adapters.persistence.sqlite.schema.scheduler_target import SchedulerTargetModel
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "DeliveryOutboxModel",
     "DeliveryReportFingerprintModel",
     "RelationshipModel",
+    "SafetyAuditRecordModel",
     "SchedulerTargetModel",
 ]

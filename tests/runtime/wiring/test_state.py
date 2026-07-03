@@ -18,6 +18,7 @@ from iris.adapters.persistence.sqlite.stores.memory_candidate_reviews import (
     SQLiteMemoryCandidateReviewStore,
 )
 from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
+from iris.adapters.persistence.sqlite.stores.safety_audit import SQLiteSafetyAuditJournal
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.runtime.config import default_runtime_config
 from iris.runtime.config.state import RuntimeStateBackend, RuntimeStateConfig
@@ -88,7 +89,7 @@ async def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqli
     assert isinstance(stores.affect_store, SQLiteAffectStore)
     assert isinstance(stores.activity_journal, SQLiteActivityJournal)
     assert isinstance(stores.scheduler_target_store, SQLiteSchedulerTargetStore)
-    assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
+    assert isinstance(stores.safety_audit_journal, SQLiteSafetyAuditJournal)
     assert isinstance(stores.background_job_queue, SQLiteBackgroundJobQueue)
     assert isinstance(stores.memory_candidate_review_store, SQLiteMemoryCandidateReviewStore)
 
