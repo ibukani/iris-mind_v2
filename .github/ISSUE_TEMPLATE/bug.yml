@@ -1,121 +1,57 @@
 name: Bug
-description: 回帰、誤動作、壊れたテスト、production/runtime defect
+description: バグ報告
 title: "fix: "
 labels: ["bug"]
 body:
   - type: textarea
-    id: summary
+    id: description
     attributes:
-      label: Summary
-      description: 不具合と影響を簡潔に要約してください。
+      label: 概要
+      description: バグの簡単な説明
     validations:
       required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: バグを再現する手順
+      placeholder: |
+        1. 〜〜を実行
+        2. 〜〜を入力
+        3. エラーが発生
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待される動作
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作
+      description: エラーログやスクリーンショットがあれば添付
+    validations:
+      required: true
+
   - type: dropdown
-    id: severity
+    id: layer
     attributes:
-      label: Severity
-      options: [P0, P1, P2, P3]
+      label: 関連レイヤー
+      options:
+        - core/
+        - contracts/
+        - runtime/
+        - cognitive/
+        - presentation/
+        - safety/
+        - adapters/
+        - features/
+        - tests/
+        - その他
     validations:
       required: true
-  - type: dropdown
-    id: area
-    attributes:
-      label: Area
-      options: [runtime, safety, memory, local-ai, companion-semantics, grpc, cli, control-plane, docs, tests, refactor]
-    validations:
-      required: true
-  - type: dropdown
-    id: user_facing
-    attributes:
-      label: User-facing
-      options: ["yes", "no"]
-    validations:
-      required: true
-  - type: dropdown
-    id: regression
-    attributes:
-      label: Regression
-      options: ["yes", "no", unknown]
-    validations:
-      required: true
-  - type: markdown
-    attributes:
-      value: "## Relationship / Dependencies"
-  - type: textarea
-    id: parent
-    attributes:
-      label: Parent
-      description: 階層上の親Issue。なければ「なし」。
-      placeholder: "- #80 Production safety readiness"
-    validations:
-      required: true
-  - type: textarea
-    id: depends_on
-    attributes:
-      label: Depends on
-      description: 修正前に完了必須のIssue。なければ「なし」。
-      placeholder: "- #88 prerequisite"
-    validations:
-      required: true
-  - type: textarea
-    id: blocks_enables
-    attributes:
-      label: Blocks / Enables
-      description: この修正で安全・容易になる将来作業。なければ「なし」。
-      placeholder: "- #92 follow-up"
-    validations:
-      required: true
-  - type: textarea
-    id: related
-    attributes:
-      label: Related
-      description: 非ブロッカーの関連Issue。なければ「なし」。
-      placeholder: "- #75 context"
-    validations:
-      required: true
-  - type: textarea
-    id: current_behavior
-    attributes:
-      label: Current behavior
-      description: 実際の結果、エラー、頻度を記載してください。
-    validations:
-      required: true
-  - type: textarea
-    id: expected_behavior
-    attributes:
-      label: Expected behavior
-      description: 正しい結果を記載してください。
-    validations:
-      required: true
-  - type: textarea
-    id: reproduction_steps
-    attributes:
-      label: Reproduction steps
-      placeholder: "1. ...\n2. ...\n3. ..."
-    validations:
-      required: true
-  - type: textarea
-    id: suspected_cause
-    attributes:
-      label: Suspected cause
-      description: 原因候補、最初に発生した版や変更。未調査なら「未調査」。
-  - type: textarea
-    id: acceptance_criteria
-    attributes:
-      label: Acceptance criteria
-      placeholder: "- [ ] 期待動作を満たす\n- [ ] 回帰テストを追加する"
-    validations:
-      required: true
-  - type: textarea
-    id: recommended_tests
-    attributes:
-      label: Recommended tests
-      description: 再現テスト、回帰テスト、関連する統合・安全性テストを記載してください。
-      placeholder: "- 回帰テスト: ...\n- 統合テスト: ..."
-    validations:
-      required: true
-  - type: textarea
-    id: additional_context
-    attributes:
-      label: Additional context
-      description: ログ、環境、スクリーンショット、関連コミットなど。
