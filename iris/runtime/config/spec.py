@@ -1121,15 +1121,6 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "出力可能な最大文字数。",
             env="IRIS_SAFETY_MAX_OUTPUT_CHARS",
         ),
-        ConfigFieldSpec(
-            path="safety.high_risk_context_detection_enabled",
-            value_type=ConfigValueType.BOOL,
-            default=False,
-            description=(
-                "policy enforcement前のtyped high-risk context detection boundaryを有効化する。"
-            ),
-            env="IRIS_SAFETY_HIGH_RISK_CONTEXT_DETECTION_ENABLED",
-        ),
         *_latency_budget_specs(),
         ConfigFieldSpec(
             "diagnostics.mode",

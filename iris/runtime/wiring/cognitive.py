@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from iris.contracts.affect import AffectStore
     from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.relationship import RelationshipStore
-    from iris.runtime.config.safety import RuntimeSafetyConfig
 
 
 @dataclass(frozen=True)
@@ -172,26 +171,22 @@ def wire_core_cognitive_cycle(
     stores: CognitiveCycleStores | None = None,
     *,
     extension_steps: Sequence[PipelineStep[PipelineStepResult]] = (),
-    safety_config: RuntimeSafetyConfig | None = None,
 ) -> CognitiveCycle:
     """Policy inhibition 付きの感情・メモリ対応認知サイクルを組み立てる。
 
     Returns:
         memory → appraisal → persistence → safety context → policy → feature extension
         の CognitiveCycle。
+
+    Note:
+        Safety context classification は user-editable config ではなく常時有効な
+        internal boundary として扱う。Config v2 完了前に enablement flag を公開せず、
+        既存の `sensitive_safety_context` 付与経路を default 構成でも維持する。
     """
     stores = stores or CognitiveCycleStores()
     steps = _build_affect_memory_steps(stores)
-    if _safety_context_detection_enabled(safety_config):
-        steps.append(SafetyContextClassificationStep())
+    steps.append(SafetyContextClassificationStep())
     steps.append(PolicyInhibitionStep())
-    if _safety_context_detection_enabled(safety_config):
-        steps.append(SafetyResponsePolicyStep())
+    steps.append(SafetyResponsePolicyStep())
     steps.extend(extension_steps)
     return wire_cognitive_cycle(steps=steps)
-
-
-def _safety_context_detection_enabled(safety_config: RuntimeSafetyConfig | None) -> bool:
-    if safety_config is None:
-        return False
-    return safety_config.high_risk_context_detection_enabled

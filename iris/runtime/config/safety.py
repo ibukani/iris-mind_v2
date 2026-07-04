@@ -6,13 +6,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from iris.runtime.config.errors import ConfigError
-from iris.runtime.config.parsing import (
-    env_bool,
-    env_optional_int,
-    parse_bool,
-    parse_int,
-    parse_string,
-)
+from iris.runtime.config.parsing import env_optional_int, parse_int, parse_string
 from iris.runtime.config.validation import require_greater_than_zero
 
 if TYPE_CHECKING:
@@ -25,16 +19,13 @@ if TYPE_CHECKING:
 class RuntimeSafetyConfig:
     """ランタイム安全性設定。
 
-    mode が "development" の場合、出力安全性ゲートはパススルーになる。
+    mode が "development" の場合、すべての安全性ゲートはパススルーになる。
     mode が "basic" または "strict" の場合、BasicOutputSafetyGate が使用される。
     strict は deterministic な proactive delivery policy も有効化する。
-    high_risk_context_detection_enabled は、policy enforcement 前の typed safety context
-    boundary と user-initiated safe response / redirect を明示的に有効化する。
     """
 
     mode: str = "development"
     max_output_chars: int = 4000
-    high_risk_context_detection_enabled: bool = False
 
 
 def apply_safety_toml(
@@ -48,7 +39,6 @@ def apply_safety_toml(
     """
     mode = config.mode
     max_output_chars = config.max_output_chars
-    high_risk_context_detection_enabled = config.high_risk_context_detection_enabled
     if "mode" in table:
         mode = _validate_mode(parse_string(table["mode"], "safety.mode"))
     if "max_output_chars" in table:
@@ -56,17 +46,8 @@ def apply_safety_toml(
             table["max_output_chars"],
             "safety.max_output_chars",
         )
-    if "high_risk_context_detection_enabled" in table:
-        high_risk_context_detection_enabled = parse_bool(
-            table["high_risk_context_detection_enabled"],
-            "safety.high_risk_context_detection_enabled",
-        )
     return _validate_config(
-        RuntimeSafetyConfig(
-            mode=mode,
-            max_output_chars=max_output_chars,
-            high_risk_context_detection_enabled=high_risk_context_detection_enabled,
-        ),
+        RuntimeSafetyConfig(mode=mode, max_output_chars=max_output_chars),
     )
 
 
@@ -97,17 +78,8 @@ def apply_safety_env(
     if max_output_chars is None:
         message = "IRIS_SAFETY_MAX_OUTPUT_CHARS must be an integer"
         raise ConfigError(message)
-    high_risk_context_detection_enabled = env_bool(
-        env,
-        "IRIS_SAFETY_HIGH_RISK_CONTEXT_DETECTION_ENABLED",
-        default=config.high_risk_context_detection_enabled,
-    )
     return _validate_config(
-        RuntimeSafetyConfig(
-            mode=mode,
-            max_output_chars=max_output_chars,
-            high_risk_context_detection_enabled=high_risk_context_detection_enabled,
-        ),
+        RuntimeSafetyConfig(mode=mode, max_output_chars=max_output_chars),
     )
 
 

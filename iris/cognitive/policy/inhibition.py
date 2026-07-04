@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import PolicyResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
+from iris.cognitive.workspace.frame import interpreted_input_text
 from iris.contracts.policy import ActionPreference, PolicyConstraint
 from iris.contracts.safety import SafetyResponseDirective
 
@@ -17,6 +18,17 @@ if TYPE_CHECKING:
 _HIGH_AROUSAL_THRESHOLD = 0.75
 _NEGATIVE_VALENCE_THRESHOLD = -0.55
 _LOW_FAMILIARITY_THRESHOLD = 0.2
+_SELF_HARM_OR_ABUSE_TERMS = (
+    "abuse",
+    "abused",
+    "kill myself",
+    "self harm",
+    "self-harm",
+    "suicide",
+    "虐待",
+    "自傷",
+    "死にたい",
+)
 
 
 class PolicyInhibitionStep(PipelineStep[PolicyResult]):
@@ -37,7 +49,11 @@ class PolicyInhibitionStep(PipelineStep[PolicyResult]):
         constraints.extend(_constraints_for_candidate_actions(frame))
         constraints.extend(_constraints_for_affect(frame))
         constraints.extend(_constraints_for_relationship(frame))
-        constraints.extend(_constraints_for_safety_contexts(frame))
+        safety_constraints = _constraints_for_safety_contexts(frame)
+        if safety_constraints:
+            constraints.extend(safety_constraints)
+        else:
+            constraints.extend(_constraints_for_input_notes(frame))
 
         if any(item.name == "calm_response" for item in constraints):
             preferences.append(
@@ -96,6 +112,25 @@ def _constraints_for_relationship(frame: WorkspaceFrame) -> tuple[PolicyConstrai
             name="low_familiarity",
             reason="relationship familiarity is low",
             prompt_instruction="avoid over-familiarity",
+        ),
+    )
+
+
+def _constraints_for_input_notes(frame: WorkspaceFrame) -> tuple[PolicyConstraint, ...]:
+    text = interpreted_input_text(frame)
+    if text is None:
+        return ()
+    text = text.casefold()
+    if not any(term in text for term in _SELF_HARM_OR_ABUSE_TERMS):
+        return ()
+    return (
+        PolicyConstraint(
+            name="sensitive_safety_context",
+            reason=(
+                "input mentions self-harm or abuse-related content; "
+                "safety gate remains authoritative"
+            ),
+            prompt_instruction="avoid escalating beyond the safety layer",
         ),
     )
 

@@ -19,7 +19,6 @@ from iris.contracts.observations import (
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
-from iris.runtime.config import RuntimeSafetyConfig
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import (
@@ -91,8 +90,8 @@ async def test_policy_aware_one_turn_flow_includes_policy_context() -> None:
 
 
 @pytest.mark.anyio
-async def test_user_initiated_sensitive_support_is_not_silenced() -> None:
-    """User-initiated sensitive support は blanket silence せず LLM prompt へ制約を渡す。"""
+async def test_default_core_cycle_keeps_sensitive_support_constraint() -> None:
+    """Default core cycle は config flag なしで legacy sensitive constraint を維持する。"""
     llm = FakeLLMClient(responses=("supportive reply",))
     app = IrisApp(
         output_pipeline=make_output_pipeline(),
@@ -102,7 +101,6 @@ async def test_user_initiated_sensitive_support_is_not_silenced() -> None:
                 relationship_store=InMemoryRelationshipStore(),
                 affect_store=InMemoryAffectStore(),
             ),
-            safety_config=RuntimeSafetyConfig(high_risk_context_detection_enabled=True),
             extension_steps=collect_cognitive_steps(
                 [define_chat_feature(wire_response_generator(llm))]
             ),
@@ -118,8 +116,8 @@ async def test_user_initiated_sensitive_support_is_not_silenced() -> None:
 
 
 @pytest.mark.anyio
-async def test_user_initiated_high_risk_request_gets_safe_redirect_without_llm_call() -> None:
-    """Actionable high-risk request は LLM を呼ばず deterministic safe redirect を返す。"""
+async def test_default_core_cycle_redirects_high_risk_request_without_llm_call() -> None:
+    """Default core cycle は high-risk request を LLM 前に deterministic redirect する。"""
     llm = FakeLLMClient(responses=("unsafe direct answer",))
     app = IrisApp(
         output_pipeline=make_output_pipeline(),
@@ -129,7 +127,6 @@ async def test_user_initiated_high_risk_request_gets_safe_redirect_without_llm_c
                 relationship_store=InMemoryRelationshipStore(),
                 affect_store=InMemoryAffectStore(),
             ),
-            safety_config=RuntimeSafetyConfig(high_risk_context_detection_enabled=True),
             extension_steps=collect_cognitive_steps(
                 [define_chat_feature(wire_response_generator(llm))]
             ),
