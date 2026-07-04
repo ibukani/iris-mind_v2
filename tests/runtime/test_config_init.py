@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
 import tomllib
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from iris.runtime.config import ConfigError, load_runtime_config
 from iris.runtime.config import init as config_init
@@ -196,7 +199,3 @@ def test_init_config_output_is_loaded_by_default(
 
     assert config.models.default_chat.provider == "fake"
     assert config.models.default_chat.model == "fake-llm"
-
-
-def _repo_path(relative_path: str) -> Path:
-    return Path(__file__).resolve().parents[2] / relative_path

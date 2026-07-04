@@ -774,18 +774,6 @@ def test_parse_llm_provider_rejects_unknown_provider() -> None:
         parse_llm_provider("anthropic")
 
 
-def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
-    """Narrow object to dict[str, object] for item iteration.
-
-    Runtime check uses isinstance(dict) which erases type parameters, so the
-    narrowed type uses the widest compatible parameter types.
-
-    Returns:
-        True if value is a dict, narrowing to the widened type.
-    """
-    return isinstance(value, dict)
-
-
 # ---------------------------------------------------------------------------
 # Precedence regression coverage
 # ---------------------------------------------------------------------------

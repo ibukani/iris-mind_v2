@@ -6,7 +6,7 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 import tomllib
-from typing import TYPE_CHECKING, TypedDict, TypeGuard
+from typing import TYPE_CHECKING, TypeGuard
 
 from iris.runtime.config import (
     default_runtime_config,
@@ -19,31 +19,6 @@ from iris.runtime.config.schema import render_runtime_config_schema
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-    from iris.runtime.config.spec import ConfigFieldSpec
-
-_RUNTIME_ONLY_SPEC_PATHS = frozenset({"ollama.warmup_prompt"})
-
-
-class _ManifestField(TypedDict):
-    """Runtime config manifest field shape."""
-
-    path: str
-    type: str
-    default: str | int | float | bool | None
-    allowedValues: list[str]
-    env: str | None
-    secret: bool
-    editable: bool
-    advanced: bool
-    description: str
-
-
-class _Manifest(TypedDict):
-    """Runtime config manifest shape."""
-
-    version: int
-    fields: list[_ManifestField]
 
 
 def test_compact_template_paths_are_known_v2_paths() -> None:
@@ -111,11 +86,37 @@ def test_control_plane_manifest_matches_config_spec() -> None:
     assert path.read_text(encoding="utf-8") == render_runtime_config_schema()
 
 
-def _public_config_specs() -> tuple[ConfigFieldSpec, ...]:
-    """Return specs that must be present in public examples and manifests."""
-    return tuple(
-        spec for spec in runtime_config_specs() if spec.path not in _RUNTIME_ONLY_SPEC_PATHS
+def test_generated_schema_excludes_secret_fields() -> None:
+    """Secret field は generated public schema に含まれない。"""
+    schema_text = render_runtime_config_schema()
+    schema = json.loads(schema_text)
+    all_paths = _json_schema_leaf_paths(schema.get("properties", {}), "")
+    secret_paths = {spec.path for spec in runtime_config_specs_for_version(2) if spec.secret}
+    assert secret_paths, "No secret specs found; test cannot validate exclusion"
+    assert all_paths.isdisjoint(secret_paths), (
+        f"Secret fields leaked into public schema: {all_paths & secret_paths}"
     )
+
+
+def _json_schema_leaf_paths(
+    properties: Mapping[str, object],
+    prefix: str,
+) -> set[str]:
+    """JSON Schema properties から leaf path の集合を返す。
+
+    Returns:
+        leaf property path の集合。
+    """
+    paths: set[str] = set()
+    for key, value in properties.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if _is_dict(value) and "properties" in value:
+            child_props = value.get("properties")
+            if _is_dict(child_props):
+                paths.update(_json_schema_leaf_paths(child_props, path))
+        else:
+            paths.add(path)
+    return paths
 
 
 def _runtime_defaults() -> dict[str, str | int | float | bool | None]:
@@ -161,15 +162,6 @@ def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
     return isinstance(value, dict)
 
 
-def _is_list(value: object) -> TypeGuard[list[object]]:
-    """Narrow object to list[object].
-
-    Returns:
-        True if value is a list.
-    """
-    return isinstance(value, list)
-
-
 def _mapping_leaf_paths(table: Mapping[str, object], prefix: str) -> set[str]:
     paths: set[str] = set()
     for key, value in table.items():
@@ -180,64 +172,6 @@ def _mapping_leaf_paths(table: Mapping[str, object], prefix: str) -> set[str]:
         else:
             paths.add(path)
     return paths
-
-
-_MANIFEST_FIELD_REQUIRED_KEYS = ("default", "env")
-
-_MANIFEST_FIELD_TYPES = (
-    ("path", str),
-    ("type", str),
-    ("allowedValues", list),
-    ("secret", bool),
-    ("editable", bool),
-    ("description", str),
-)
-
-
-def _is_manifest(obj: object) -> TypeGuard[_Manifest]:
-    """Validate that obj matches the _Manifest TypedDict shape.
-
-    Returns:
-        True if obj is a valid _Manifest.
-    """
-    if not _is_dict(obj):
-        return False
-    version: object = obj.get("version")
-    if not isinstance(version, int):
-        return False
-    fields_raw: object = obj.get("fields")
-    if not _is_list(fields_raw):
-        return False
-    return all(_is_manifest_field(f) for f in fields_raw)
-
-
-def _is_manifest_field(obj: object) -> TypeGuard[_ManifestField]:
-    """Validate that obj matches the _ManifestField TypedDict shape.
-
-    Returns:
-        True if obj is a valid _ManifestField.
-    """
-    if not _is_dict(obj):
-        return False
-    for key in _MANIFEST_FIELD_REQUIRED_KEYS:
-        if key not in obj:
-            return False
-    for key, expected_type in _MANIFEST_FIELD_TYPES:
-        value: object = obj.get(key)
-        if not isinstance(value, expected_type):
-            return False
-    return True
-
-
-def _load_manifest() -> _Manifest:
-    text = _repo_path(".iris/control-plane/runtime-config.schema.json").read_text(
-        encoding="utf-8",
-    )
-    data = json.loads(text)
-    if not _is_manifest(data):
-        msg = "Invalid manifest structure"
-        raise AssertionError(msg)
-    return data
 
 
 def _full_example_path() -> Path:
