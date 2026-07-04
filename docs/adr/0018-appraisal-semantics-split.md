@@ -12,6 +12,8 @@ Issue #100 では、companion behavior 向けの appraisal 結果を raw VAD val
 
 ADR 0017 は companion affect state vocabulary として global mood、actor relationship、actor affect trace、space atmosphere、recent interaction tone を定義している。この ADR は、その state vocabulary と矛盾しない appraisal 出力形を固定する。
 
+Config exposure は Runtime Config v2 の方針に従う。`.iris/control-plane/runtime-config.schema.json` や full defaults dump を手書き更新・再追加せず、typed runtime config と generated schema/provider contract を source of truth にする。
+
 ## Decision
 
 `iris.contracts.appraisal` を追加し、typed appraisal semantics contract とする。
