@@ -38,13 +38,13 @@ def test_model_call_budget_toml_override_is_loaded(tmp_path: Path) -> None:
     config_path.write_text(
         """
 [config]
-version = 1
+version = 2
 
-[model_call_budget.user_response_hot_path]
+[advanced.model_call_budget.user_response_hot_path]
 confidence_threshold = 0.5
 low_confidence_fallback = "no_op"
 
-[model_call_budget.memory_extraction]
+[advanced.model_call_budget.memory_extraction]
 small_classifier_max_calls = 2
 """.strip(),
         encoding="utf-8",
@@ -87,9 +87,9 @@ def test_model_call_budget_rejects_negative_and_invalid_fallback(tmp_path: Path)
     negative_path.write_text(
         """
 [config]
-version = 1
+version = 2
 
-[model_call_budget.user_response_hot_path]
+[advanced.model_call_budget.user_response_hot_path]
 large_llm_max_calls = -1
 """.strip(),
         encoding="utf-8",
@@ -101,9 +101,9 @@ large_llm_max_calls = -1
     fallback_path.write_text(
         """
 [config]
-version = 1
+version = 2
 
-[model_call_budget.user_response_hot_path]
+[advanced.model_call_budget.user_response_hot_path]
 low_confidence_fallback = "unknown"
 """.strip(),
         encoding="utf-8",

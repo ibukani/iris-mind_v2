@@ -7,6 +7,7 @@ import tomllib
 from typing import TypeGuard
 
 from iris.runtime.config import load_runtime_config
+from iris.runtime.config.init import runtime_config_template
 
 _DENY = "deny"
 
@@ -32,11 +33,14 @@ def test_runtime_editable_config_path() -> None:
     assert runtime["path"] == ".iris/config/runtime.toml"
 
 
-def test_runtime_editable_config_template() -> None:
-    """Runtime editable configのtemplateは.iris/config/runtime.example.toml。"""
+def test_runtime_editable_config_template_provider() -> None:
+    """Runtime editable configは明示的template providerを使う。"""
     runtime = _find_editable_config(_editable_configs(), "runtime")
     assert runtime is not None
-    assert runtime["template"] == ".iris/config/runtime.example.toml"
+    provider = runtime["template_provider"]
+    assert isinstance(provider, dict)
+    assert provider["command"] == "uv"
+    assert "iris.runtime.config_provider" in provider["args"]
 
 
 def test_runtime_editable_config_schema_manifest() -> None:
@@ -54,10 +58,10 @@ def test_runtime_editable_config_format() -> None:
 
 
 def test_runtime_editable_config_schema() -> None:
-    """Runtime editable configのschemaはiris-mind.runtime.v1。"""
+    """Runtime editable configのschemaはiris-mind.runtime.v2。"""
     runtime = _find_editable_config(_editable_configs(), "runtime")
     assert runtime is not None
-    assert runtime["schema"] == "iris-mind.runtime.v1"
+    assert runtime["schema"] == "iris-mind.runtime.v2"
 
 
 def test_runtime_editable_config_restart_required() -> None:
@@ -81,21 +85,16 @@ def test_runtime_editable_config_provision() -> None:
     assert runtime["provision"] == "copy_if_missing"
 
 
-def test_runtime_example_file_exists() -> None:
-    """.iris/config/runtime.example.tomlが存在する。"""
-    path = _repo_path(".iris/config/runtime.example.toml")
-    assert path.is_file(), f"runtime example not found at {path}"
-
-
 def test_schema_manifest_file_exists() -> None:
     """.iris/control-plane/runtime-config.schema.jsonが存在する。"""
     path = _repo_path(".iris/control-plane/runtime-config.schema.json")
     assert path.is_file(), f"schema manifest not found at {path}"
 
 
-def test_runtime_example_loads_through_loader() -> None:
-    """runtime.example.tomlがload_runtime_configをパスする。"""
-    path = _repo_path(".iris/config/runtime.example.toml")
+def test_runtime_provider_template_loads_through_loader(tmp_path: Path) -> None:
+    """Provider templateがload_runtime_configをパスする。"""
+    path = tmp_path / "runtime.toml"
+    path.write_text(runtime_config_template(), encoding="utf-8")
     config = load_runtime_config(path, env={})
     assert config is not None
 

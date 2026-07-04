@@ -79,16 +79,17 @@ def test_diagnostics_env_overrides_toml(tmp_path: Path) -> None:
     assert config.diagnostics.warmup_models is True
 
 
-def test_diagnostics_mode_off_via_env() -> None:
+def test_diagnostics_mode_off_via_env(tmp_path: Path) -> None:
     """Diagnostics環境変数でmode=offを指定できる。"""
     config = load_runtime_config(
         None,
         env={"IRIS_DIAGNOSTICS_MODE": "off"},
+        cwd=tmp_path,
     )
     assert config.diagnostics.mode == DiagnosticsMode.OFF
 
 
-def test_diagnostics_env_accepts_common_bool_forms() -> None:
+def test_diagnostics_env_accepts_common_bool_forms(tmp_path: Path) -> None:
     """Diagnostics環境変数の真偽値は典型的な文字列を受理する。"""
     for raw, expected in (
         ("true", True),
@@ -103,16 +104,18 @@ def test_diagnostics_env_accepts_common_bool_forms() -> None:
         config = load_runtime_config(
             None,
             env={"IRIS_DIAGNOSTICS_WARMUP_MODELS": raw},
+            cwd=tmp_path,
         )
         assert config.diagnostics.warmup_models is expected, raw
 
 
-def test_diagnostics_env_rejects_invalid_bool() -> None:
+def test_diagnostics_env_rejects_invalid_bool(tmp_path: Path) -> None:
     """Diagnostics環境変数の真偽値として解釈できない値はConfigError。"""
     with pytest.raises(ConfigError, match="IRIS_DIAGNOSTICS_WARMUP_MODELS"):
         load_runtime_config(
             None,
             env={"IRIS_DIAGNOSTICS_WARMUP_MODELS": "maybe"},
+            cwd=tmp_path,
         )
 
 
@@ -179,18 +182,19 @@ def test_diagnostics_toml_stage_specific_timeouts(tmp_path: Path) -> None:
     assert config.diagnostics.warmup_timeout_seconds == approx(300.0)
 
 
-def test_diagnostics_env_legacy_timeout_sets_both() -> None:
+def test_diagnostics_env_legacy_timeout_sets_both(tmp_path: Path) -> None:
     """Legacy timeout_seconds ENV setting configures both timeouts."""
     config = load_runtime_config(
         None,
         env={"IRIS_DIAGNOSTICS_TIMEOUT_SECONDS": "60.0"},
+        cwd=tmp_path,
     )
     assert config.diagnostics.timeout_seconds == approx(60.0)
     assert config.diagnostics.readiness_timeout_seconds == approx(60.0)
     assert config.diagnostics.warmup_timeout_seconds == approx(60.0)
 
 
-def test_diagnostics_env_stage_specific_timeouts() -> None:
+def test_diagnostics_env_stage_specific_timeouts(tmp_path: Path) -> None:
     """Stage specific timeout ENV settings override defaults."""
     config = load_runtime_config(
         None,
@@ -198,6 +202,7 @@ def test_diagnostics_env_stage_specific_timeouts() -> None:
             "IRIS_DIAGNOSTICS_READINESS_TIMEOUT_SECONDS": "2.0",
             "IRIS_DIAGNOSTICS_WARMUP_TIMEOUT_SECONDS": "300.0",
         },
+        cwd=tmp_path,
     )
     assert config.diagnostics.readiness_timeout_seconds == approx(2.0)
     assert config.diagnostics.warmup_timeout_seconds == approx(300.0)

@@ -24,9 +24,9 @@ def _write(tmp_path: Path, text: str) -> Path:
     return path
 
 
-def test_scheduler_disabled_by_default() -> None:
+def test_scheduler_disabled_by_default(tmp_path: Path) -> None:
     """Scheduler is disabled by default."""
-    config = load_runtime_config(None, env={})
+    config = load_runtime_config(None, env={}, cwd=tmp_path)
     assert config.scheduler.enabled is False
 
 
@@ -55,15 +55,15 @@ max_due_per_run = 2
     assert config.scheduler.max_due_per_run == 2
 
 
-def test_scheduler_env_stale_after_seconds() -> None:
+def test_scheduler_env_stale_after_seconds(tmp_path: Path) -> None:
     """Env override of target_stale_after_seconds."""
     env = {"IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS": "123.0"}
-    config = load_runtime_config(None, env=env)
+    config = load_runtime_config(None, env=env, cwd=tmp_path)
     assert math.isclose(config.scheduler.target_stale_after_seconds, 123.0)
 
 
-def test_scheduler_env_stale_after_seconds_invalid() -> None:
+def test_scheduler_env_stale_after_seconds_invalid(tmp_path: Path) -> None:
     """Env override validation."""
     env = {"IRIS_SCHEDULER_TARGET_STALE_AFTER_SECONDS": "-1.0"}
     with pytest.raises(ConfigError, match=r"scheduler\.target_stale_after_seconds"):
-        load_runtime_config(None, env=env)
+        load_runtime_config(None, env=env, cwd=tmp_path)

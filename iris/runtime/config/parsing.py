@@ -205,7 +205,7 @@ def parse_raw_config_version(table: TomlTable) -> int:
         検証済みconfig version。省略時は後方互換として1。
     """
     config_table = table_or_empty(table, "config")
-    version = 1
+    version = 2
     if "version" in config_table:
         version = parse_int(config_table["version"], "config.version")
     runtime_config_specs_for_version(version)

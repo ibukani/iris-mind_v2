@@ -40,6 +40,8 @@ class ConfigValueType(StrEnum):
 
 type ConfigDefault = str | int | float | bool | None
 
+RUNTIME_CONFIG_VERSION = 2
+
 
 @dataclass(frozen=True)
 class ConfigFieldSpec:
@@ -510,7 +512,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ConfigFieldSpec(
             "config.version",
             ConfigValueType.INT,
-            1,
+            2,
             "ランタイム設定ファイル形式のバージョン。",
             control_plane_editable=False,
         ),
@@ -1171,7 +1173,55 @@ def runtime_config_specs_for_version(version: int) -> tuple[ConfigFieldSpec, ...
     Raises:
         ConfigError: versionが未対応の場合。
     """
-    if version == 1:
-        return runtime_config_specs()
-    message = f"Unsupported runtime config version: {version}. Supported version: 1"
+    if version == RUNTIME_CONFIG_VERSION:
+        return tuple(_v2_user_spec(spec) for spec in runtime_config_specs())
+    message = f"Unsupported runtime config version: {version}. Supported version: 2"
     raise ConfigError(message)
+
+
+def _v2_user_spec(spec: ConfigFieldSpec) -> ConfigFieldSpec:
+    """反復policy fieldをv2 advanced sparse override namespaceへ移す。
+
+    Returns:
+        v2 user configで利用するfield spec。
+    """
+    path = spec.path
+    prompt_detail = path.startswith("prompt_budget.") and path not in {
+        "prompt_budget.enabled",
+        "prompt_budget.chat_profile",
+        "prompt_budget.proactive_profile",
+    }
+    model_call_detail = (
+        path.startswith("model_call_budget.") and path != "model_call_budget.enabled"
+    )
+    if not (prompt_detail or model_call_detail):
+        if path == "config.version":
+            return ConfigFieldSpec(
+                path=path,
+                value_type=spec.value_type,
+                default=2,
+                description=spec.description,
+                toml=spec.toml,
+                env=spec.env,
+                cli=spec.cli,
+                secret=spec.secret,
+                control_plane_editable=spec.control_plane_editable,
+                example=spec.example,
+                allowed_values=spec.allowed_values,
+                deprecated=spec.deprecated,
+            )
+        return spec
+    return ConfigFieldSpec(
+        path=f"advanced.{path}",
+        value_type=spec.value_type,
+        default=spec.default,
+        description=spec.description,
+        toml=spec.toml,
+        env=spec.env,
+        cli=spec.cli,
+        secret=spec.secret,
+        control_plane_editable=spec.control_plane_editable,
+        example=False,
+        allowed_values=spec.allowed_values,
+        deprecated=spec.deprecated,
+    )

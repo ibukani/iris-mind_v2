@@ -66,15 +66,13 @@ uv run python -m iris.runtime.server
 ```
 
 `.iris/config/runtime.toml` はローカル開発者用設定であり、コミットしない。
-`.iris/config/runtime.example.toml` は全非secret user-editable項目を示すcomplete editable
-sampleであり、組み込みdefaultsのpure dumpではない。任意項目には実用的なsample値を
-含む場合がある。`init-config`はPython package内に同梱した同一templateを使うため、
-source checkout外のインストール環境でも生成できる。
+`init-config` はPython package内の短いv2 templateを使う。通常設定にはprofile選択と
+変更したい値だけを書き、完全なeffective configは組み込みpolicyからruntimeが構築する。
 OpenAIの認証情報などの秘密情報はTOMLには書かず、
 `OPENAI_API_KEY`などの環境変数で渡す。
 
-設定ファイル形式は`[config] version = 1`。version省略は後方互換としてv1扱い。
-未知version、未知section、未知key、未知model slotは`ConfigError`になる。
+設定ファイル形式は`[config] version = 2`。v1、未知version、未知section、未知key、
+未知model slotは`ConfigError`になる。
 
 LLM プロバイダの起動時診断モード (`off` / `warn` / `strict`)、warmup 設定、
 リクエスト可観測性、gRPC エラーマッピングの詳細については
@@ -103,14 +101,8 @@ make runtime-doctor-json
 API キー、auth トークン、パスワード、その他の認証情報を TOML ファイルに書かない。
 これらは環境変数 (またはシークレットマネージャ) を使う。
 
-目的別のサンプル設定が `examples/config/` にコミットされている:
-
-- `examples/config/minimal.toml` — `models.default_chat` のみを上書き。
-- `examples/config/local-ollama.toml` — 全モデルスロットと共通 `ollama` ブロックを設定。
-- `examples/config/openai.toml` — OpenAI のモデル設定を行う。`OPENAI_API_KEY` は含めない。env で供給する。
-
-これらはpartial override exampleであり、省略fieldは組み込みdefaultsへfallbackする。
-全`examples/config/*.toml`はruntime loaderでCI検証される。
+Ollama/OpenAIへ切り替える場合は`models.*.provider`と`model`だけをruntime.tomlへ追加する。
+`OPENAI_API_KEY`はenvで供給する。独立したexampleファイルは持たない。
 
 ### 設定の優先順位
 
@@ -129,7 +121,7 @@ Iris は設定を低い優先度から高い優先度まで順に適用し、後
 Control Planeは`iris-control-plane.toml`の`[[editable_configs]]`を通じてruntime configを管理する。
 
 - 管理対象config: `.iris/config/runtime.toml`
-- Template (copy_if_missing用): `.iris/config/runtime.example.toml`
+- Template: `iris.runtime.config_provider`経由でpackage resourceから取得
 - Schema manifest (field-level editing/validation用): `.iris/control-plane/runtime-config.schema.json`
 - SecretsはTOMLに書かず、環境変数またはsecret managerで供給する。
 

@@ -12,8 +12,10 @@ from iris.runtime.config import (
     default_runtime_config,
     load_runtime_config,
     runtime_config_specs,
+    runtime_config_specs_for_version,
 )
 from iris.runtime.config.model_slots import model_slot_specs
+from iris.runtime.config.schema import render_runtime_config_schema
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -33,6 +35,7 @@ class _ManifestField(TypedDict):
     env: str | None
     secret: bool
     editable: bool
+    advanced: bool
     description: str
 
 
@@ -43,14 +46,11 @@ class _Manifest(TypedDict):
     fields: list[_ManifestField]
 
 
-def test_full_example_and_spec_paths_match() -> None:
-    """Canonical example keys and public ConfigSpec paths are aligned."""
+def test_compact_template_paths_are_known_v2_paths() -> None:
+    """Compact templateはv2 user configの既知pathだけを含む。"""
     example_paths = _toml_leaf_paths(_full_example_path())
-    expected_example_paths = {
-        spec.path for spec in _public_config_specs() if spec.toml and spec.example
-    }
-
-    assert example_paths == expected_example_paths
+    known_paths = {spec.path for spec in runtime_config_specs_for_version(2) if spec.toml}
+    assert example_paths <= known_paths
 
 
 def test_runtime_defaults_match_config_spec() -> None:
@@ -106,33 +106,9 @@ def test_secret_specs_are_absent_from_full_example() -> None:
 
 
 def test_control_plane_manifest_matches_config_spec() -> None:
-    """Control Plane manifest matches public ConfigSpec metadata."""
-    manifest = _load_manifest()
-    expected = [
-        _ManifestField(
-            path=spec.path,
-            type=spec.value_type,
-            default=spec.default,
-            allowedValues=list(spec.allowed_values),
-            env=spec.env,
-            secret=spec.secret,
-            editable=spec.control_plane_editable,
-            description=spec.description,
-        )
-        for spec in _public_config_specs()
-    ]
-
-    assert manifest["version"] == 1
-    assert manifest["fields"] == expected
-
-
-def test_all_partial_example_configs_load_successfully() -> None:
-    """All partial config examples load successfully."""
-    paths = tuple(sorted(_repo_path("examples/config").glob("*.toml")))
-
-    assert paths, "expected at least one partial config example"
-    for path in paths:
-        load_runtime_config(path, env={})
+    """Committed schemaはConfigSpecからの生成結果と一致する。"""
+    path = _repo_path(".iris/control-plane/runtime-config.schema.json")
+    assert path.read_text(encoding="utf-8") == render_runtime_config_schema()
 
 
 def _public_config_specs() -> tuple[ConfigFieldSpec, ...]:
@@ -265,7 +241,7 @@ def _load_manifest() -> _Manifest:
 
 
 def _full_example_path() -> Path:
-    return _repo_path(".iris/config/runtime.example.toml")
+    return _repo_path("iris/runtime/config/templates/runtime.example.toml")
 
 
 def _repo_path(relative_path: str) -> Path:

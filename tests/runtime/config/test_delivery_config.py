@@ -23,9 +23,9 @@ def _write(tmp_path: Path, text: str) -> Path:
     return path
 
 
-def test_delivery_enabled_by_default() -> None:
+def test_delivery_enabled_by_default(tmp_path: Path) -> None:
     """Delivery is enabled by default."""
-    config = load_runtime_config(None, env={})
+    config = load_runtime_config(None, env={}, cwd=tmp_path)
     assert config.delivery.enabled is True
 
 

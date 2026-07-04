@@ -57,15 +57,15 @@ def test_prompt_budget_toml_override_is_loaded(tmp_path: Path) -> None:
     config_path.write_text(
         """
 [config]
-version = 1
+version = 2
 
 [prompt_budget]
 chat_profile = "local_low"
 
-[prompt_budget.local_low]
+[advanced.prompt_budget.local_low]
 total_max_chars = 4096
 
-[prompt_budget.local_low.user_memory]
+[advanced.prompt_budget.local_low.user_memory]
 max_chars = 123
 max_items = 2
 priority = 42
@@ -90,7 +90,7 @@ def test_prompt_budget_rejects_invalid_profile_and_behavior(tmp_path: Path) -> N
     invalid_profile.write_text(
         """
 [config]
-version = 1
+version = 2
 
 [prompt_budget]
 chat_profile = "huge"
@@ -104,9 +104,9 @@ chat_profile = "huge"
     invalid_behavior.write_text(
         """
 [config]
-version = 1
+version = 2
 
-[prompt_budget.local_low.user_memory]
+[advanced.prompt_budget.local_low.user_memory]
 overflow_behavior = "random"
 """.strip(),
         encoding="utf-8",

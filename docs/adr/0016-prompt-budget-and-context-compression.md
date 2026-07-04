@@ -101,7 +101,7 @@ prompt text、user text、memory content、system instruction、raw provider res
 - `iris/runtime/prompting/assembler.py`
 - `iris/runtime/prompting/observability.py`
 - `iris/runtime/wiring/llm.py`
-- `.iris/config/runtime.example.toml`
+- `iris/runtime/config/templates/runtime.example.toml`
 - `.iris/control-plane/runtime-config.schema.json`
 - `tests/runtime/prompting/`
 - `tests/runtime/observability/test_prompt_budget_observability.py`

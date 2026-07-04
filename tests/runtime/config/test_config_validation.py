@@ -12,24 +12,24 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_missing_config_version_is_treated_as_version_one(tmp_path: Path) -> None:
-    """version省略は後方互換としてv1扱いになる。"""
+def test_missing_config_version_uses_version_two(tmp_path: Path) -> None:
+    """version省略時も現行v2として扱う。"""
     config = load_runtime_config(_write(tmp_path, "[state]\nbackend = 'memory'\n"), env={})
 
-    assert config.config.version == 1
+    assert config.config.version == 2
 
 
-def test_explicit_config_version_one_is_accepted(tmp_path: Path) -> None:
-    """Version 1は受理される。"""
-    config = load_runtime_config(_write(tmp_path, "[config]\nversion = 1\n"), env={})
+def test_explicit_config_version_two_is_accepted(tmp_path: Path) -> None:
+    """Version 2は受理される。"""
+    config = load_runtime_config(_write(tmp_path, "[config]\nversion = 2\n"), env={})
 
-    assert config.config.version == 1
+    assert config.config.version == 2
 
 
 def test_unsupported_config_version_is_rejected(tmp_path: Path) -> None:
     """未知versionは明確なConfigErrorになる。"""
-    with pytest.raises(ConfigError, match="Unsupported runtime config version: 2"):
-        load_runtime_config(_write(tmp_path, "[config]\nversion = 2\n"), env={})
+    with pytest.raises(ConfigError, match="Unsupported runtime config version: 1"):
+        load_runtime_config(_write(tmp_path, "[config]\nversion = 1\n"), env={})
 
 
 def test_unsupported_config_version_is_reported_before_unknown_keys(
@@ -40,14 +40,14 @@ def test_unsupported_config_version_is_reported_before_unknown_keys(
         tmp_path,
         """
         [config]
-        version = 2
+        version = 1
 
         [future_section]
         enabled = true
         """,
     )
 
-    with pytest.raises(ConfigError, match="Unsupported runtime config version: 2"):
+    with pytest.raises(ConfigError, match="Unsupported runtime config version: 1"):
         load_runtime_config(config_path, env={})
 
 
@@ -84,13 +84,13 @@ def test_config_section_must_be_table(tmp_path: Path) -> None:
         load_runtime_config(config_path, env={})
 
 
-def test_version_one_still_rejects_unknown_keys(tmp_path: Path) -> None:
-    """Version 1ではstrict key検証を維持する。"""
+def test_version_two_rejects_unknown_keys(tmp_path: Path) -> None:
+    """Version 2ではstrict key検証を維持する。"""
     config_path = _write(
         tmp_path,
         """
         [config]
-        version = 1
+        version = 2
 
         [server]
         address = "localhost"
@@ -99,6 +99,26 @@ def test_version_one_still_rejects_unknown_keys(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigError, match=r"server\.address"):
         load_runtime_config(config_path, env={})
+
+
+def test_v2_rejects_policy_detail_outside_advanced(tmp_path: Path) -> None:
+    """詳細policyを通常namespaceへ置けない。"""
+    path = _write(
+        tmp_path,
+        "[prompt_budget.local_low]\ntotal_max_chars = 1000\n",
+    )
+    with pytest.raises(ConfigError, match=r"prompt_budget\.local_low"):
+        load_runtime_config(path, env={})
+
+
+def test_v2_rejects_unknown_advanced_target(tmp_path: Path) -> None:
+    """Advanced overrideは新しいprofileやsectionを作れない。"""
+    path = _write(
+        tmp_path,
+        "[advanced.prompt_budget.custom.user_memory]\nmax_chars = 1000\n",
+    )
+    with pytest.raises(ConfigError, match=r"advanced\.prompt_budget\.custom"):
+        load_runtime_config(path, env={})
 
 
 def test_safety_toml_is_applied(tmp_path: Path) -> None:
@@ -124,7 +144,7 @@ def test_invalid_safety_mode_is_rejected(tmp_path: Path) -> None:
         )
 
 
-def test_safety_env_is_applied() -> None:
+def test_safety_env_is_applied(tmp_path: Path) -> None:
     """Safety env overrides are applied to the runtime config."""
     config = load_runtime_config(
         None,
@@ -132,18 +152,20 @@ def test_safety_env_is_applied() -> None:
             "IRIS_SAFETY_MODE": "basic",
             "IRIS_SAFETY_MAX_OUTPUT_CHARS": "1200",
         },
+        cwd=tmp_path,
     )
 
     assert config.safety.mode == "basic"
     assert config.safety.max_output_chars == 1200
 
 
-def test_invalid_safety_env_max_output_chars_is_rejected() -> None:
+def test_invalid_safety_env_max_output_chars_is_rejected(tmp_path: Path) -> None:
     """Safety env max_output_chars must be an integer."""
     with pytest.raises(ConfigError, match="IRIS_SAFETY_MAX_OUTPUT_CHARS"):
         load_runtime_config(
             None,
             env={"IRIS_SAFETY_MAX_OUTPUT_CHARS": "invalid"},
+            cwd=tmp_path,
         )
 
 
@@ -188,9 +210,9 @@ def _write(tmp_path: Path, content: str) -> Path:
     return path
 
 
-def test_background_job_policy_is_config_gated_by_default() -> None:
+def test_background_job_policy_is_config_gated_by_default(tmp_path: Path) -> None:
     """Background job pressure policy は明示設定まで permissive に保つ。"""
-    config = load_runtime_config(None, env={})
+    config = load_runtime_config(None, env={}, cwd=tmp_path)
 
     assert config.learning.background_job_policy.enabled is False
 

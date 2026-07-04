@@ -14,7 +14,7 @@ from iris.runtime.config.init import init_runtime_config, runtime_config_templat
 from iris.runtime.server import main
 
 _TEMPLATE = """[config]
-version = 1
+version = 2
 
 [models.default_chat]
 provider = "fake"
@@ -44,68 +44,23 @@ def test_init_runtime_config_creates_default_config(
     assert target_path.read_text(encoding="utf-8") == _TEMPLATE
 
 
-def test_committed_init_template_is_complete_and_loadable(tmp_path: Path) -> None:
-    """Canonical templateから生成したconfigは全sectionを持ちload可能。"""
+def test_committed_init_template_is_compact_and_loadable(tmp_path: Path) -> None:
+    """Canonical templateは通常利用向けの短いv2 config。"""
     target_path = tmp_path / "runtime.toml"
 
     init_runtime_config(path=target_path)
     document = tomllib.loads(target_path.read_text(encoding="utf-8"))
     config = load_runtime_config(target_path, env={})
 
-    assert set(document) == {
-        "config",
-        "server",
-        "state",
-        "scheduler",
-        "conversation",
-        "delivery",
-        "learning",
-        "memory",
-        "model_call_budget",
-        "models",
-        "prompt_budget",
-        "ollama",
-        "openai",
-        "logging",
-        "observability",
-        "safety",
-        "diagnostics",
-        "auth",
-    }
-    assert config.config.version == 1
+    assert set(document) == {"config", "models", "prompt_budget", "model_call_budget"}
+    assert config.config.version == 2
 
 
-def test_committed_runtime_example_matches_packaged_template() -> None:
-    """Repository sample and packaged init template cannot drift."""
-    committed = _repo_path(".iris/config/runtime.example.toml").read_text(encoding="utf-8")
-
-    assert committed == runtime_config_template()
-
-
-def test_runtime_config_template_returns_packaged_full_template() -> None:
-    """Packaged template includes every supported runtime section."""
+def test_runtime_config_template_returns_packaged_compact_template() -> None:
+    """Packaged templateは通常利用に必要なsectionだけを含む。"""
     document = tomllib.loads(runtime_config_template())
 
-    assert set(document) == {
-        "config",
-        "server",
-        "state",
-        "scheduler",
-        "conversation",
-        "delivery",
-        "learning",
-        "memory",
-        "model_call_budget",
-        "models",
-        "prompt_budget",
-        "ollama",
-        "openai",
-        "logging",
-        "observability",
-        "safety",
-        "diagnostics",
-        "auth",
-    }
+    assert set(document) == {"config", "models", "prompt_budget", "model_call_budget"}
 
 
 def test_init_runtime_config_creates_parent_directories(

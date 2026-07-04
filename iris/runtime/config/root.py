@@ -112,7 +112,7 @@ if TYPE_CHECKING:
 _PROJECT_CONFIG_PATH = Path(".iris/config/runtime.toml")
 _ENV_CONFIG_KEY = "IRIS_MIND_CONFIG"
 _XDG_CONFIG_PATH = Path("iris-mind/runtime.toml")
-_SUPPORTED_CONFIG_VERSION = 1
+_SUPPORTED_CONFIG_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -155,6 +155,21 @@ class RuntimeConfigOverrides:
     ollama_host: str | None = None
     server_host: str | None = None
     server_port: int | None = None
+
+
+@dataclass(frozen=True)
+class _RuntimeUserConfigV2:
+    """検証済みv2 user configとeffective config構築境界。"""
+
+    table: TomlTable
+
+    def materialize(self) -> TomlTable:
+        """Sparse overrideをdomain parser向けtableへ展開する。
+
+        Returns:
+            effective config構築用TOML table。
+        """
+        return _materialize_user_config(self.table)
 
 
 def default_runtime_config() -> IrisRuntimeConfig:
@@ -373,10 +388,39 @@ def _apply_toml(config: IrisRuntimeConfig, table: TomlTable) -> IrisRuntimeConfi
     Returns:
         TOML 値を反映したランタイム設定。
     """
+    effective_table = _RuntimeUserConfigV2(table).materialize()
     return _compose_runtime_config(
         config,
-        _apply_toml_sections(config, table),
+        _apply_toml_sections(config, effective_table),
     )
+
+
+def _materialize_user_config(table: TomlTable) -> TomlTable:
+    """v2 user configをeffective parser向けtableへ展開する。
+
+    Returns:
+        組み込みpolicyへsparse overrideを重ねたtable。
+    """
+    effective = {key: value for key, value in table.items() if key != "advanced"}
+    advanced = table_or_empty(table, "advanced")
+    for section in ("prompt_budget", "model_call_budget"):
+        overrides = table_or_empty(advanced, section, path=f"advanced.{section}")
+        if not overrides:
+            continue
+        base = table_or_empty(effective, section)
+        effective[section] = _merge_toml_tables(base, overrides)
+    return effective
+
+
+def _merge_toml_tables(base: TomlTable, overrides: TomlTable) -> TomlTable:
+    merged: TomlTable = dict(base)
+    for key, value in overrides.items():
+        current = merged.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merged[key] = _merge_toml_tables(current, value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def _apply_config_toml(table: TomlTable) -> RuntimeConfigMetadata:

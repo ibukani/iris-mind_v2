@@ -17,7 +17,11 @@ def test_strict_safety_mode_from_toml(tmp_path: Path) -> None:
     assert load_runtime_config(path, env={}).safety.mode == "strict"
 
 
-def test_strict_safety_mode_from_env() -> None:
+def test_strict_safety_mode_from_env(tmp_path: Path) -> None:
     """Strict mode は env override から読み込める。"""
-    config = load_runtime_config(None, env={"IRIS_SAFETY_MODE": "strict"})
+    config = load_runtime_config(
+        None,
+        env={"IRIS_SAFETY_MODE": "strict"},
+        cwd=tmp_path,
+    )
     assert config.safety.mode == "strict"

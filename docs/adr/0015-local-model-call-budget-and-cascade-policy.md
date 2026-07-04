@@ -114,7 +114,7 @@ Runtime trace counter は次を出す。
 - `iris/runtime/model_call_budget.py`
 - `iris/runtime/wiring/llm.py`
 - `iris/runtime/observability/context.py`
-- `.iris/config/runtime.example.toml`
+- `iris/runtime/config/templates/runtime.example.toml`
 - `.iris/control-plane/runtime-config.schema.json`
 - `tests/runtime/test_model_call_budget.py`
 - `tests/architecture/test_runtime_learning_hook_model_budget.py`

@@ -7,7 +7,7 @@ toolchain = "python"
 
 [setup]
 required_tools = ["uv", "python"]
-check_files = ["pyproject.toml", "iris/runtime/server.py", ".iris/config/runtime.example.toml"]
+check_files = ["pyproject.toml", "iris/runtime/server.py", "iris/runtime/config_provider.py"]
 
 [launch]
 cwd = "."
@@ -51,9 +51,9 @@ args = ["check"]
 id = "runtime"
 label = "Runtime Config"
 path = ".iris/config/runtime.toml"
-template = ".iris/config/runtime.example.toml"
+template_provider = { command = "uv", args = ["run", "python", "-m", "iris.runtime.config_provider", "template", "--config-id", "runtime"] }
 format = "toml"
-schema = "iris-mind.runtime.v1"
+schema = "iris-mind.runtime.v2"
 schema_manifest = ".iris/control-plane/runtime-config.schema.json"
 restart_required = true
 secret_policy = "deny"

@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-import tomllib
 from typing import TYPE_CHECKING, TypeGuard, override
 
 import pytest
@@ -24,13 +23,9 @@ from iris.features.proactive_talk import define_proactive_talk_feature
 import iris.runtime.config as config_pkg
 from iris.runtime.config import (
     ConfigError,
-    DiagnosticsMode,
     IrisRuntimeConfig,
     RuntimeConfigOverrides,
     RuntimeModelConfig,
-    RuntimeModelsConfig,
-    RuntimeOllamaConfig,
-    RuntimeOpenAIConfig,
     default_runtime_config,
     discover_default_config_path,
     load_runtime_config,
@@ -48,7 +43,6 @@ if TYPE_CHECKING:
     from iris.contracts.memory import MemoryQuery, MemorySearchResult
 
 from tests.helpers.approx import approx
-from tests.helpers.exact_eq import assert_exact_eq
 from tests.helpers.private_access import get_private_attr_as
 
 
@@ -157,7 +151,7 @@ def test_local_runtime_config_files_are_gitignored() -> None:
 
     assert ".iris/config/runtime.toml" in gitignore
     assert ".iris/config/local.toml" in gitignore
-    assert ".iris/config/runtime.example.toml" not in gitignore
+    assert "iris/runtime/config/templates/runtime.example.toml" not in gitignore
 
 
 @pytest.mark.parametrize(
@@ -482,10 +476,14 @@ def test_invalid_provider_raises_config_error(tmp_path: Path) -> None:
         ({"IRIS_OPENAI_MAX_OUTPUT_TOKENS": "not-int"}, "OPENAI"),
     ],
 )
-def test_invalid_env_values_raise_config_error(env: dict[str, str], error_key: str) -> None:
+def test_invalid_env_values_raise_config_error(
+    tmp_path: Path,
+    env: dict[str, str],
+    error_key: str,
+) -> None:
     """Invalid numeric environment overrides raise ConfigError."""
     with pytest.raises(ConfigError, match=error_key):
-        load_runtime_config(None, env=env)
+        load_runtime_config(None, env=env, cwd=tmp_path)
 
 
 @pytest.mark.anyio
@@ -657,7 +655,7 @@ def _write_toml(path: Path, content: str) -> Path:
 
 
 def _example_config_path() -> Path:
-    return _repo_path(".iris/config/runtime.example.toml")
+    return _repo_path("iris/runtime/config/templates/runtime.example.toml")
 
 
 def _repo_path(relative_path: str) -> Path:
@@ -776,15 +774,6 @@ def test_parse_llm_provider_rejects_unknown_provider() -> None:
         parse_llm_provider("anthropic")
 
 
-# ---------------------------------------------------------------------------
-# Example config files
-# ---------------------------------------------------------------------------
-
-
-def _example_config_paths() -> tuple[Path, ...]:
-    return tuple(sorted(_repo_path("examples/config").glob("*.toml")))
-
-
 def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
     """Narrow object to dict[str, object] for item iteration.
 
@@ -795,125 +784,6 @@ def _is_dict(value: object) -> TypeGuard[dict[str, object]]:
         True if value is a dict, narrowing to the widened type.
     """
     return isinstance(value, dict)
-
-
-def test_examples_directory_exists() -> None:
-    """A committed examples/config directory must exist."""
-    assert _repo_path("examples/config").is_dir()
-
-
-@pytest.mark.parametrize("config_path", _example_config_paths(), ids=lambda p: p.name)
-def test_example_config_parses_through_loader(config_path: Path) -> None:
-    """Every committed example config must parse via load_runtime_config."""
-    config = load_runtime_config(config_path, env={})
-
-    assert isinstance(config, IrisRuntimeConfig)
-    assert isinstance(config.models, RuntimeModelsConfig)
-    assert isinstance(config.ollama, RuntimeOllamaConfig)
-    assert isinstance(config.openai, RuntimeOpenAIConfig)
-
-
-@pytest.mark.parametrize("config_path", _example_config_paths(), ids=lambda p: p.name)
-def test_example_config_contains_no_secret_like_keys(config_path: Path) -> None:
-    """Committed example configs must not include API key or token fields."""
-    text = config_path.read_text(encoding="utf-8")
-    document = tomllib.loads(text)
-
-    forbidden_substrings = (
-        "api_key",
-        "apikey",
-        "secret",
-        "access_token",
-        "auth_token",
-        "bearer_token",
-        "password",
-        "credential",
-    )
-
-    def _walk(value: object, path: str) -> tuple[str, ...]:
-        if not _is_dict(value):
-            return ()
-        table: dict[str, object] = {}
-        for k, v in value.items():
-            assert isinstance(k, str)
-            table[k] = v
-        violations: list[str] = []
-        for key, child in table.items():
-            child_path = f"{path}.{key}" if path else key
-            if any(token in key.lower() for token in forbidden_substrings):
-                violations.append(child_path)
-            violations.extend(_walk(child, child_path))
-        return tuple(violations)
-
-    violations = _walk(document, "")
-    assert not violations, (
-        f"{config_path.name} contains forbidden secret-like keys: {', '.join(violations)}"
-    )
-
-
-def test_minimal_example_overrides_only_default_chat() -> None:
-    """The minimal example only overrides models.default_chat."""
-    minimal = _repo_path("examples/config/minimal.toml")
-
-    config = load_runtime_config(minimal, env={})
-
-    assert config.models.default_chat.provider == "ollama"
-    assert config.models.fast_judge.provider == "fake"
-    assert config.models.reasoning.provider == "fake"
-
-
-@pytest.mark.parametrize(
-    ("example", "slot_values", "ollama_base_url", "diagnostics_warmup_text"),
-    [
-        (
-            "local-ollama.toml",
-            {
-                "default_chat": "qwen3:8b",
-                "fast_judge": "qwen3:4b",
-                "reasoning": "deepseek-r1:8b",
-            },
-            "http://localhost:11434",
-            "false",
-        ),
-        (
-            "openai.toml",
-            {
-                "default_chat": "gpt-5-mini",
-                "fast_judge": "gpt-5-mini",
-                "reasoning": "gpt-5-mini",
-            },
-            None,
-            "false",
-        ),
-        (
-            "minimal.toml",
-            {
-                "default_chat": "qwen3:8b",
-                "fast_judge": "fake-llm",
-                "reasoning": "fake-llm",
-            },
-            None,
-            "false",
-        ),
-    ],
-)
-def test_examples_keep_documented_model_and_diagnostics_defaults(
-    example: str,
-    slot_values: dict[str, str],
-    ollama_base_url: str | None,
-    diagnostics_warmup_text: str,
-) -> None:
-    """Committed examples keep the documented model and diagnostics defaults."""
-    config = load_runtime_config(_repo_path(f"examples/config/{example}"), env={})
-
-    assert config.models.default_chat.model == slot_values["default_chat"]
-    assert config.models.fast_judge.model == slot_values["fast_judge"]
-    assert config.models.reasoning.model == slot_values["reasoning"]
-    if ollama_base_url is not None:
-        assert config.ollama.base_url == ollama_base_url
-    assert config.diagnostics.mode == DiagnosticsMode.WARN
-    assert_exact_eq(config.diagnostics.timeout_seconds, 5.0)
-    assert config.diagnostics.warmup_models is (diagnostics_warmup_text == "true")
 
 
 # ---------------------------------------------------------------------------
@@ -1009,7 +879,11 @@ def test_invalid_toml_field_type_raises_config_error(tmp_path: Path) -> None:
         load_runtime_config(config_path, env={})
 
 
-def test_invalid_env_provider_raises_config_error() -> None:
+def test_invalid_env_provider_raises_config_error(tmp_path: Path) -> None:
     """An unknown provider in IRIS_DEFAULT_CHAT_PROVIDER raises ConfigError."""
     with pytest.raises(ConfigError):
-        load_runtime_config(None, env={"IRIS_DEFAULT_CHAT_PROVIDER": "anthropic"})
+        load_runtime_config(
+            None,
+            env={"IRIS_DEFAULT_CHAT_PROVIDER": "anthropic"},
+            cwd=tmp_path,
+        )
