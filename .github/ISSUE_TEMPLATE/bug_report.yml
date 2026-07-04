@@ -1,0 +1,73 @@
+name: 不具合報告
+description: 再現可能な不具合やリグレッションを報告するためのテンプレートです。
+title: "bug: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        不具合の内容、再現条件、期待結果、実際の結果をできるだけ具体的に記載してください。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 何が問題なのかを簡潔に説明してください。
+      placeholder: 例）gRPC SubmitObservation が特定条件で RuntimeResponse を返さない。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 第三者が同じ状態を再現できる手順を番号付きで書いてください。
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待される動作
+      description: 本来どう動くべきかを書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作
+      description: 実際に起きた結果、ログ、エラーメッセージなどを書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 実行環境
+      description: OS、Python バージョン、主要依存関係、実行コマンドなどを記載してください。
+      placeholder: |
+        - OS:
+        - Python:
+        - ブランチ / コミット:
+        - 実行コマンド:
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: 関連ログ・スクリーンショット
+      description: 必要に応じてログ、スクリーンショット、トレースを貼り付けてください。
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: related
+    attributes:
+      label: 関連 Issue / PR
+      description: 依存・ブロック・関連する Issue や PR があれば記載してください。
+      placeholder: |
+        - Depends on #...
+        - Blocks #...
+        - Related to #...
+    validations:
+      required: false
