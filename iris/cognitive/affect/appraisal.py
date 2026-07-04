@@ -156,7 +156,62 @@ _DEPENDENCY_RISK_KEYWORDS: tuple[str, ...] = (
     "cannot live without you",
     "you decide everything",
 )
-_TOKEN_RE = re.compile(r"[a-zA-Z']+|[^\s]+")
+_ATTITUDE_POSITIVE_KEYWORDS: tuple[str, ...] = (
+    *_GRATITUDE_KEYWORDS,
+    "好き",
+    "最高",
+    "安心",
+    "love",
+    "great",
+)
+_ATTITUDE_NEGATIVE_KEYWORDS: tuple[str, ...] = (
+    "嫌い",
+    "役に立たない",
+    "使えない",
+    "hate",
+    "bad",
+    "useless",
+)
+_DIRECT_COMPLAINT_KEYWORDS: tuple[str, ...] = (
+    "役に立たない",
+    "使えない",
+    "useless",
+)
+_TOPIC_POSITIVE_KEYWORDS: tuple[str, ...] = (
+    "好き",
+    "最高",
+    "楽しい",
+    "great",
+    "love",
+)
+_TOPIC_NEGATIVE_KEYWORDS: tuple[str, ...] = (
+    "嫌い",
+    "最悪",
+    "bad",
+    "hate",
+)
+_USER_EMOTION_POSITIVE_KEYWORDS: tuple[str, ...] = (
+    "嬉しい",
+    "うれしい",
+    "楽しい",
+    "安心",
+    "happy",
+)
+_USER_EMOTION_NEGATIVE_KEYWORDS: tuple[str, ...] = (
+    "悲しい",
+    "つらい",
+    "辛い",
+    "困った",
+    "不安",
+    "怖い",
+    "sad",
+    "upset",
+    "afraid",
+    "scared",
+    "confused",
+)
+_SEGMENT_RE = re.compile(r"[^。.!?\uFF01\uFF1F\n]+")
+_ASCII_WORD_RE = re.compile(r"[a-z']+")
 _CLASSIFIER_METADATA = immutable_metadata({"classifier": "deterministic_appraisal_v1"})
 
 
@@ -214,7 +269,7 @@ def classify_appraisal_signals(
     candidates = (
         _dependency_risk_candidate(lowered, enabled=dependency_risk_hint_enabled),
         _care_intent_candidate(lowered),
-        _sentiment_candidate(lowered),
+        *_sentiment_candidates(lowered),
         _uncertain_emotion_candidate(lowered),
     )
     return tuple(
@@ -255,27 +310,40 @@ def _care_intent_candidate(lowered: str) -> _SignalCandidate | None:
     )
 
 
-def _sentiment_candidate(lowered: str) -> _SignalCandidate | None:
-    positive_hits = _count_matches(lowered, _POSITIVE_KEYWORDS)
-    negative_hits = _count_matches(lowered, _NEGATIVE_KEYWORDS)
+def _sentiment_candidates(lowered: str) -> tuple[_SignalCandidate, ...]:
+    candidates = (
+        _attitude_candidate(lowered),
+        _topic_sentiment_candidate(lowered),
+        _user_emotion_candidate(lowered),
+    )
+    return tuple(candidate for candidate in candidates if candidate is not None)
+
+
+def _attitude_candidate(lowered: str) -> _SignalCandidate | None:
+    iris_referenced = _matches_any(lowered, _IRIS_REFERENCE_KEYWORDS)
+    gratitude = _matches_any(lowered, _GRATITUDE_KEYWORDS)
+    implicit_complaint = _implicit_direct_complaint(lowered)
+    if not (iris_referenced or gratitude or implicit_complaint):
+        return None
+
+    positive_hits = _count_contextual_matches(
+        lowered,
+        context_keywords=_IRIS_REFERENCE_KEYWORDS + _GRATITUDE_KEYWORDS,
+        sentiment_keywords=_ATTITUDE_POSITIVE_KEYWORDS,
+    )
+    negative_hits = _count_contextual_matches(
+        lowered,
+        context_keywords=_IRIS_REFERENCE_KEYWORDS + _DIRECT_COMPLAINT_KEYWORDS,
+        sentiment_keywords=_ATTITUDE_NEGATIVE_KEYWORDS,
+    )
+    if implicit_complaint:
+        negative_hits = max(negative_hits, 1)
+    if gratitude:
+        positive_hits = max(positive_hits, 1)
+    polarity = _semantic_polarity(positive_hits, negative_hits)
     if positive_hits == 0 and negative_hits == 0:
         return None
 
-    polarity = _semantic_polarity(positive_hits, negative_hits)
-    attitude = _attitude_candidate(lowered, polarity)
-    if attitude is not None:
-        return attitude
-    topic = _topic_sentiment_candidate(lowered, polarity)
-    if topic is not None:
-        return topic
-    return _user_emotion_candidate(lowered, polarity)
-
-
-def _attitude_candidate(lowered: str, polarity: float) -> _SignalCandidate | None:
-    iris_referenced = _matches_any(lowered, _IRIS_REFERENCE_KEYWORDS)
-    gratitude = _matches_any(lowered, _GRATITUDE_KEYWORDS)
-    if not (iris_referenced or gratitude or _implicit_direct_complaint(lowered)):
-        return None
     return _SignalCandidate(
         kind=AppraisalSignalKind.ATTITUDE_TOWARD_IRIS,
         label=_polarity_label("positive_attitude", "negative_attitude", polarity),
@@ -286,9 +354,22 @@ def _attitude_candidate(lowered: str, polarity: float) -> _SignalCandidate | Non
     )
 
 
-def _topic_sentiment_candidate(lowered: str, polarity: float) -> _SignalCandidate | None:
+def _topic_sentiment_candidate(lowered: str) -> _SignalCandidate | None:
     if not _matches_any(lowered, _TOPIC_REFERENCE_KEYWORDS):
         return None
+    positive_hits = _count_contextual_matches(
+        lowered,
+        context_keywords=_TOPIC_REFERENCE_KEYWORDS,
+        sentiment_keywords=_TOPIC_POSITIVE_KEYWORDS,
+    )
+    negative_hits = _count_contextual_matches(
+        lowered,
+        context_keywords=_TOPIC_REFERENCE_KEYWORDS,
+        sentiment_keywords=_TOPIC_NEGATIVE_KEYWORDS,
+    )
+    if positive_hits == 0 and negative_hits == 0:
+        return None
+    polarity = _semantic_polarity(positive_hits, negative_hits)
     return _SignalCandidate(
         kind=AppraisalSignalKind.TOPIC_SENTIMENT,
         label=_polarity_label("positive_topic", "negative_topic", polarity),
@@ -299,9 +380,12 @@ def _topic_sentiment_candidate(lowered: str, polarity: float) -> _SignalCandidat
     )
 
 
-def _user_emotion_candidate(lowered: str, polarity: float) -> _SignalCandidate | None:
-    if not _matches_any(lowered, _USER_EMOTION_KEYWORDS):
+def _user_emotion_candidate(lowered: str) -> _SignalCandidate | None:
+    positive_hits = _count_matches(lowered, _USER_EMOTION_POSITIVE_KEYWORDS)
+    negative_hits = _count_matches(lowered, _USER_EMOTION_NEGATIVE_KEYWORDS)
+    if positive_hits == 0 and negative_hits == 0:
         return None
+    polarity = _semantic_polarity(positive_hits, negative_hits)
     return _SignalCandidate(
         kind=AppraisalSignalKind.USER_EMOTION,
         label=_polarity_label("positive_emotion", "negative_emotion", polarity),
@@ -428,6 +512,28 @@ def _build_signal(
     )
 
 
+def _count_contextual_matches(
+    text: str,
+    *,
+    context_keywords: tuple[str, ...],
+    sentiment_keywords: tuple[str, ...],
+) -> int:
+    segments = _semantic_segments(text)
+    contextual_segments = tuple(
+        segment for segment in segments if _matches_any(segment, context_keywords)
+    )
+    if not contextual_segments:
+        return 0
+    return sum(_count_matches(segment, sentiment_keywords) for segment in contextual_segments)
+
+
+def _semantic_segments(text: str) -> tuple[str, ...]:
+    segments = tuple(match.group(0) for match in _SEGMENT_RE.finditer(text))
+    if segments:
+        return segments
+    return (text,)
+
+
 def _semantic_polarity(positive_hits: int, negative_hits: int) -> float:
     total = max(positive_hits + negative_hits, 1)
     return clamp_value((positive_hits - negative_hits) / total)
@@ -458,17 +564,22 @@ def _emotion_keywords(polarity: float) -> tuple[str, ...]:
 
 
 def _implicit_direct_complaint(text: str) -> bool:
-    return _matches_any(text, ("役に立たない", "使えない", "useless")) and not _matches_any(
+    return _matches_any(text, _DIRECT_COMPLAINT_KEYWORDS) and not _matches_any(
         text,
         _TOPIC_REFERENCE_KEYWORDS,
     )
 
 
 def _count_matches(text: str, keywords: tuple[str, ...]) -> int:
-    tokens = tuple(match.group(0).casefold() for match in _TOKEN_RE.finditer(text))
-    return sum(
-        1 for keyword in keywords if keyword.casefold() in text or keyword.casefold() in tokens
-    )
+    return sum(1 for keyword in keywords if _keyword_matches(text, keyword))
+
+
+def _keyword_matches(text: str, keyword: str) -> bool:
+    normalized = keyword.casefold()
+    if _ASCII_WORD_RE.fullmatch(normalized):
+        pattern = rf"(?<![a-z']){re.escape(normalized)}(?![a-z'])"
+        return re.search(pattern, text) is not None
+    return normalized in text
 
 
 def _matches_any(text: str, keywords: tuple[str, ...]) -> bool:

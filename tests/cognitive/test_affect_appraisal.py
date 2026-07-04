@@ -114,6 +114,60 @@ def test_appraisal_signals_can_emit_dependency_risk_safety_hint() -> None:
     assert signals[0].state_boundary is None
 
 
+def test_appraisal_signals_keep_user_emotion_and_iris_attitude_in_mixed_input() -> None:
+    """Mixed input でも user emotion と attitude_toward_iris を同時に保持する。"""
+    signals = classify_appraisal_signals("今日は悲しい。でもIrisは好き")
+
+    by_kind = {signal.kind: signal for signal in signals}
+
+    assert set(by_kind) == {
+        AppraisalSignalKind.USER_EMOTION,
+        AppraisalSignalKind.ATTITUDE_TOWARD_IRIS,
+    }
+    assert by_kind[AppraisalSignalKind.USER_EMOTION].polarity < 0.0
+    assert by_kind[AppraisalSignalKind.ATTITUDE_TOWARD_IRIS].polarity > 0.0
+
+
+def test_appraisal_signals_keep_topic_sentiment_and_iris_attitude_in_mixed_input() -> None:
+    """Mixed input でも topic sentiment と attitude_toward_iris を同時に保持する。"""
+    signals = classify_appraisal_signals("この映画は最悪。でもIrisありがとう")
+
+    by_kind = {signal.kind: signal for signal in signals}
+
+    assert set(by_kind) == {
+        AppraisalSignalKind.TOPIC_SENTIMENT,
+        AppraisalSignalKind.ATTITUDE_TOWARD_IRIS,
+    }
+    assert by_kind[AppraisalSignalKind.TOPIC_SENTIMENT].polarity < 0.0
+    assert by_kind[AppraisalSignalKind.ATTITUDE_TOWARD_IRIS].polarity > 0.0
+
+
+def test_appraisal_signals_keep_dependency_and_care_intent_in_mixed_input() -> None:
+    """dependency-risk / care intent は mixed input で他 signal を隠さない。"""
+    signals = classify_appraisal_signals(
+        "君がいないと生きていけない。でも今日は悲しい。大丈夫?無理しないで"
+    )
+
+    by_kind = {signal.kind: signal for signal in signals}
+
+    assert {
+        AppraisalSignalKind.DEPENDENCY_RISK_HINT,
+        AppraisalSignalKind.CARE_INTENT,
+        AppraisalSignalKind.USER_EMOTION,
+    }.issubset(by_kind)
+    assert by_kind[AppraisalSignalKind.DEPENDENCY_RISK_HINT].safety_hint is (
+        AppraisalSafetyHintKind.DEPENDENCY_RISK
+    )
+    assert by_kind[AppraisalSignalKind.USER_EMOTION].polarity < 0.0
+
+
+def test_english_keyword_matching_uses_word_boundaries_for_short_words() -> None:
+    """English keyword は部分文字列ではなく token として扱い、誤爆を抑える。"""
+    signals = classify_appraisal_signals("The badge is ready, and your idea works")
+
+    assert not signals
+
+
 def test_appraisal_step_can_disable_typed_signals_by_config_gate() -> None:
     """Classifier helper は deterministic だが step の初期有効化は config-gated。"""
     result = classify_appraisal("Irisが好き")
