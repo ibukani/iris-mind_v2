@@ -16,7 +16,6 @@ class LocalInferenceResourcePolicy:
     small_classifier_concurrency_limit: int = 4
     embedding_concurrency_limit: int = 2
     reranker_concurrency_limit: int = 2
-    preempt_background_for_user_facing: bool = True
     background_when_busy: InferenceLeaseDecision = InferenceLeaseDecision.DEFER
     proactive_when_busy: InferenceLeaseDecision = InferenceLeaseDecision.NO_SEND
     low_priority_when_warming: InferenceLeaseDecision = InferenceLeaseDecision.DEFER

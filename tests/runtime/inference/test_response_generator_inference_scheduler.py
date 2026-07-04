@@ -5,10 +5,15 @@ from __future__ import annotations
 import pytest
 
 from iris.adapters.llm.fake import FakeLLMClient
-from iris.contracts.model_policy import CascadeDecision, CascadeFallbackBehavior
+from iris.contracts.model_policy import CascadeDecision, CascadeFallbackBehavior, ModelCallSite
 from iris.features.chat.definition import ResponsePrompt
 from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
-from iris.runtime.inference.models import InferenceResourceState
+from iris.runtime.inference.models import (
+    InferenceLeaseRequest,
+    InferenceResourceState,
+    InferenceSlotKind,
+    InferenceWorkPriority,
+)
 from iris.runtime.inference.policy import LocalInferenceResourcePolicy
 from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
 from iris.runtime.model_call_budget import ModelCallBudgetGate, bind_model_call_budget_scope
@@ -96,3 +101,35 @@ async def test_budgeted_response_generator_preserves_scheduler_fallback() -> Non
     assert response.cascade_result is not None
     assert response.cascade_result.decision is CascadeDecision.FALLBACK
     assert response.cascade_result.reason.startswith("local inference resource denied")
+
+
+async def test_response_generator_does_not_call_llm_while_background_large_lease_is_active() -> (
+    None
+):
+    """Background large lease 中の user-facing response は provider を並走させない。"""
+    scheduler = LocalInferenceResourceScheduler(policy=LocalInferenceResourcePolicy(enabled=True))
+    background = await scheduler.acquire(
+        InferenceLeaseRequest(
+            slot_kind=InferenceSlotKind.BACKGROUND_LLM,
+            priority=InferenceWorkPriority.BACKGROUND,
+            call_site=ModelCallSite.REFLECTION,
+        )
+    )
+    client = FakeLLMClient(("should not be used",), model="fake-local")
+    generator = wire_response_generator(
+        client,
+        options=ResponseGeneratorWiringOptions(
+            model="fake-local",
+            inference_scheduler=scheduler,
+        ),
+    )
+
+    response = await generator.generate_response(
+        ResponsePrompt(system_instruction="system", actor_text="hello")
+    )
+
+    assert background.lease_id is not None
+    assert client.requests == ()
+    assert response.cascade_result is not None
+    assert response.cascade_result.decision is CascadeDecision.DEFER
+    assert await scheduler.release(background.lease_id)

@@ -91,7 +91,7 @@ async def test_llm_job_is_deferred_when_large_slot_is_busy() -> None:
 
 
 async def test_llm_job_is_cancelled_when_resource_unavailable() -> None:
-    """Unavailable 時の background LLM job は policy どおり恒久失敗にできる。"""
+    """Unavailable 時の background LLM job は policy による cancellation になる。"""
     queue = InMemoryBackgroundJobQueue()
     job = await queue.enqueue(_job("unavailable", uses_llm=True))
     scheduler = LocalInferenceResourceScheduler(policy=LocalInferenceResourcePolicy(enabled=True))
@@ -109,7 +109,7 @@ async def test_llm_job_is_cancelled_when_resource_unavailable() -> None:
 
     stored = await queue.get(job.job_id)
     assert worker.calls == []
-    assert stored.status is BackgroundJobStatus.FAILED_PERMANENT
+    assert stored.status is BackgroundJobStatus.CANCELLED
     assert stored.last_error is not None
     assert "inference resource cancel" in stored.last_error
 
@@ -138,7 +138,7 @@ async def test_non_llm_job_runs_when_resource_unavailable() -> None:
     assert stored.status is BackgroundJobStatus.SUCCEEDED
 
 
-class _PreemptingWorker:
+class _ConcurrentUserRequestWorker:
     kind = BackgroundJobKind.REFLECTION
 
     def __init__(
@@ -164,21 +164,16 @@ class _PreemptingWorker:
             self._loop,
         )
         result = future.result(timeout=1.0)
-        assert result.acquired
-        assert result.lease_id is not None
-        release = asyncio.run_coroutine_threadsafe(
-            self._scheduler.release(result.lease_id),
-            self._loop,
-        )
-        assert release.result(timeout=1.0)
+        assert not result.acquired
+        assert result.decision.value == "defer"
 
 
-async def test_preempted_background_job_is_deferred_after_worker_returns() -> None:
-    """user-facing lease に preempt された background job は成功扱いにしない。"""
+async def test_user_facing_request_does_not_get_large_lease_during_background_run() -> None:
+    """Background worker 実行中の user-facing request は large lease を並走させない。"""
     queue = InMemoryBackgroundJobQueue()
-    job = await queue.enqueue(_job("preempted", uses_llm=True))
+    job = await queue.enqueue(_job("concurrent-user", uses_llm=True))
     scheduler = LocalInferenceResourceScheduler(policy=LocalInferenceResourcePolicy(enabled=True))
-    worker = _PreemptingWorker(scheduler=scheduler, loop=asyncio.get_running_loop())
+    worker = _ConcurrentUserRequestWorker(scheduler=scheduler, loop=asyncio.get_running_loop())
     runner = BackgroundJobRunner(
         queue,
         (worker,),
@@ -191,6 +186,4 @@ async def test_preempted_background_job_is_deferred_after_worker_returns() -> No
 
     stored = await queue.get(job.job_id)
     assert worker.calls == [job.job_id]
-    assert stored.status is BackgroundJobStatus.PENDING
-    assert stored.not_before == _NOW.replace(second=30)
-    assert stored.defer_reason == "inference resource defer: low priority lease was preempted"
+    assert stored.status is BackgroundJobStatus.SUCCEEDED

@@ -168,7 +168,7 @@ class BackgroundJobRunner:
             await self._mark_retryable_failure(job, run_result.exception)
             return
         if not lease_still_active:
-            await self._defer_preempted_inference_job(job)
+            await self._defer_lost_inference_lease(job)
             return
         self._record_soft_timeout(job, run_result.elapsed_seconds)
         await self._queue.mark_succeeded(job.job_id, self._runtime_hooks.now())
@@ -234,13 +234,13 @@ class BackgroundJobRunner:
             await self._defer_leased_job(job, reason)
             logger.info("background job deferred by inference scheduler: {}", job.job_id)
             return
-        await self._queue.mark_permanent_failure(job.job_id, self._runtime_hooks.now(), reason)
+        await self._queue.mark_cancelled(job.job_id, self._runtime_hooks.now(), reason)
         logger.info("background job cancelled by inference scheduler: {}", job.job_id)
 
-    async def _defer_preempted_inference_job(self, job: BackgroundJobRecord) -> None:
-        reason = "inference resource defer: low priority lease was preempted"
+    async def _defer_lost_inference_lease(self, job: BackgroundJobRecord) -> None:
+        reason = "inference resource defer: active lease disappeared before completion"
         await self._defer_leased_job(job, reason)
-        logger.info("background job deferred after inference lease preemption: {}", job.job_id)
+        logger.info("background job deferred after lost inference lease: {}", job.job_id)
 
     async def _defer_leased_job(self, job: BackgroundJobRecord, reason: str) -> None:
         defer_seconds = self._queue_policy.for_kind(job.kind).defer_seconds_when_saturated

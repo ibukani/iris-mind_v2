@@ -132,6 +132,12 @@ class BackgroundJobQueue(Protocol):
         """ジョブを恒久失敗にする。"""
         ...
 
+    async def mark_cancelled(
+        self, job_id: BackgroundJobId, cancelled_at: datetime, reason: str
+    ) -> None:
+        """ジョブを policy による意図的な非実行として終了する。"""
+        ...
+
     async def get(self, job_id: BackgroundJobId) -> BackgroundJobRecord:
         """指定 ID のジョブを返す。"""
         ...
@@ -321,6 +327,12 @@ class InMemoryBackgroundJobQueue:
     ) -> None:
         """ジョブを恒久失敗にする。"""
         await self._update_terminal(job_id, BackgroundJobStatus.FAILED_PERMANENT, failed_at, reason)
+
+    async def mark_cancelled(
+        self, job_id: BackgroundJobId, cancelled_at: datetime, reason: str
+    ) -> None:
+        """ジョブを policy による意図的な非実行として終了する。"""
+        await self._update_terminal(job_id, BackgroundJobStatus.CANCELLED, cancelled_at, reason)
 
     async def get(self, job_id: BackgroundJobId) -> BackgroundJobRecord:
         """ジョブを取得する。

@@ -30,7 +30,6 @@ def inference_lease_log_fields(result: InferenceLeaseResult) -> dict[str, str | 
         "active_embedding_slots": result.snapshot.active_embedding_slots,
         "active_reranker_slots": result.snapshot.active_reranker_slots,
         "busy_duration_seconds": result.snapshot.busy_duration_seconds,
-        "cancelled_lease_count": len(result.cancelled_lease_ids),
     }
     fields.update(trace_counter_extra())
     return fields

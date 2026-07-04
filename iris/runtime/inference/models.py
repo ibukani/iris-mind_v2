@@ -87,7 +87,6 @@ class InferenceLeaseResult(BaseModel):
     request: InferenceLeaseRequest
     snapshot: InferenceResourceSnapshot
     lease_id: str | None = None
-    cancelled_lease_ids: tuple[str, ...] = ()
 
     @property
     def acquired(self) -> bool:

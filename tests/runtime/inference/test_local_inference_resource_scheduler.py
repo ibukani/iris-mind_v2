@@ -62,12 +62,7 @@ async def test_large_llm_lease_sets_busy_and_release_returns_idle() -> None:
 
 async def test_large_llm_concurrency_limit_is_one() -> None:
     """Large LLM は同時1本に固定され、追加 user-facing は block せず defer する。"""
-    scheduler = _scheduler(
-        LocalInferenceResourcePolicy(
-            enabled=True,
-            preempt_background_for_user_facing=False,
-        )
-    )
+    scheduler = _scheduler(LocalInferenceResourcePolicy(enabled=True))
     first = await scheduler.acquire(_request(priority=InferenceWorkPriority.USER_FACING_RESPONSE))
 
     second = await scheduler.acquire(_request(priority=InferenceWorkPriority.USER_FACING_RESPONSE))
@@ -94,8 +89,8 @@ async def test_background_large_llm_defers_when_user_facing_is_active() -> None:
     assert result.reason == "large LLM slot limit reached"
 
 
-async def test_user_facing_preempts_background_large_llm_lease() -> None:
-    """user-facing lease は低優先度 large LLM lease を cooperative preempt できる。"""
+async def test_user_facing_defers_while_background_large_llm_is_running() -> None:
+    """実行中 background LLM を安全停止できない間は user-facing も lease しない。"""
     scheduler = _scheduler()
     background = await scheduler.acquire(
         _request(
@@ -108,10 +103,10 @@ async def test_user_facing_preempts_background_large_llm_lease() -> None:
     result = await scheduler.acquire(_request(priority=InferenceWorkPriority.USER_FACING_RESPONSE))
 
     assert background.lease_id is not None
-    assert result.decision is InferenceLeaseDecision.ACQUIRED
-    assert result.cancelled_lease_ids == (background.lease_id,)
+    assert result.decision is InferenceLeaseDecision.DEFER
+    assert result.reason == "large LLM slot limit reached"
     assert result.snapshot.active_large_slots == 1
-    assert await scheduler.release(background.lease_id) is False
+    assert await scheduler.release(background.lease_id) is True
 
 
 async def test_small_classifier_uses_separate_capacity() -> None:

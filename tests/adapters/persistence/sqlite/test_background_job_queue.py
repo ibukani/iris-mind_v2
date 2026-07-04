@@ -428,3 +428,21 @@ async def test_expired_lease_is_reported_as_queue_backlog(tmp_path: Path) -> Non
     by_kind = {kind_metrics.kind: kind_metrics for kind_metrics in metrics.per_kind}
     assert by_kind[job.kind].pending == 1
     queue.close()
+
+
+async def test_mark_cancelled_persists_cancelled_metrics(tmp_path: Path) -> None:
+    """SQLite queue は policy cancellation を cancelled metrics に反映する。"""
+    queue = _queue(tmp_path)
+    job = await queue.enqueue(_job("cancelled"))
+    await queue.lease_due(_NOW, 1, 10.0)
+
+    await queue.mark_cancelled(job.job_id, _NOW, "scheduler no-send")
+
+    stored = await queue.get(job.job_id)
+    metrics = await queue.collect_metrics(_NOW)
+    assert stored.status is BackgroundJobStatus.CANCELLED
+    assert stored.last_error == "scheduler no-send"
+    assert metrics.cancelled == 1
+    assert metrics.failed_permanent == 0
+    assert metrics.queue_depth == 0
+    queue.close()

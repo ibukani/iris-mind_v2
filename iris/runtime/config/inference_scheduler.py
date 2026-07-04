@@ -42,7 +42,6 @@ class RuntimeInferenceSchedulerConfig:
     small_classifier_concurrency_limit: int = 4
     embedding_concurrency_limit: int = 2
     reranker_concurrency_limit: int = 2
-    preempt_background_for_user_facing: bool = True
     background_when_busy: RuntimeInferenceSchedulerBusyBehavior = (
         RuntimeInferenceSchedulerBusyBehavior.DEFER
     )
@@ -74,7 +73,6 @@ class RuntimeInferenceSchedulerConfig:
             small_classifier_concurrency_limit=self.small_classifier_concurrency_limit,
             embedding_concurrency_limit=self.embedding_concurrency_limit,
             reranker_concurrency_limit=self.reranker_concurrency_limit,
-            preempt_background_for_user_facing=self.preempt_background_for_user_facing,
             background_when_busy=_busy_behavior_to_decision(self.background_when_busy),
             proactive_when_busy=_busy_behavior_to_decision(self.proactive_when_busy),
             low_priority_when_warming=_busy_behavior_to_decision(self.low_priority_when_warming),
@@ -143,14 +141,6 @@ def _apply_behavior_toml(
     table: TomlTable,
 ) -> RuntimeInferenceSchedulerConfig:
     value = config
-    if "preempt_background_for_user_facing" in table:
-        value = replace(
-            value,
-            preempt_background_for_user_facing=parse_bool(
-                table["preempt_background_for_user_facing"],
-                "inference_scheduler.preempt_background_for_user_facing",
-            ),
-        )
     if "background_when_busy" in table:
         value = replace(
             value,

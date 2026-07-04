@@ -150,17 +150,6 @@ class LocalInferenceResourceScheduler:
         capacity_reason = self._capacity_reason(request)
         if capacity_reason is None:
             return self._acquire_locked(request, current_time, reason="resource lease acquired")
-        cancelled = self._preempt_lower_priority_large_leases(request)
-        if cancelled:
-            reason = (
-                f"resource lease acquired after preempting {len(cancelled)} low priority lease(s)"
-            )
-            return self._acquire_locked(
-                request,
-                current_time,
-                reason=reason,
-                cancelled_lease_ids=cancelled,
-            )
         return self._reject_locked(
             request,
             self._busy_decision_for(request),
@@ -180,7 +169,7 @@ class LocalInferenceResourceScheduler:
         )
 
     async def release(self, lease_id: str) -> bool:
-        """Lease を解放する。preempt 済み lease の release は no-op にする。
+        """Lease を解放する。
 
         Returns:
             bool: active lease を解放した場合 True。
@@ -241,33 +230,12 @@ class LocalInferenceResourceScheduler:
             reason = "reranker slot limit reached"
         return reason
 
-    def _preempt_lower_priority_large_leases(
-        self,
-        request: InferenceLeaseRequest,
-    ) -> tuple[str, ...]:
-        if not self._policy.preempt_background_for_user_facing:
-            return ()
-        if request.priority not in _HIGH_PRIORITIES or request.slot_kind not in _LARGE_SLOT_KINDS:
-            return ()
-        cancellable = tuple(
-            lease_id
-            for lease_id, lease in self._active_leases.items()
-            if (
-                lease.request.slot_kind in _LARGE_SLOT_KINDS
-                and lease.request.priority in _LOW_PRIORITIES
-            )
-        )
-        for lease_id in cancellable:
-            self._active_leases.pop(lease_id, None)
-        return cancellable
-
     def _acquire_locked(
         self,
         request: InferenceLeaseRequest,
         current_time: datetime,
         *,
         reason: str,
-        cancelled_lease_ids: tuple[str, ...] = (),
     ) -> InferenceLeaseResult:
         lease_id = str(uuid4())
         self._active_leases[lease_id] = _ActiveLease(
@@ -283,7 +251,6 @@ class LocalInferenceResourceScheduler:
             request=request,
             snapshot=self._snapshot_locked(current_time),
             lease_id=lease_id,
-            cancelled_lease_ids=cancelled_lease_ids,
         )
 
     def _reject_locked(

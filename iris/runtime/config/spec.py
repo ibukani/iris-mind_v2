@@ -409,14 +409,6 @@ def _inference_scheduler_specs() -> tuple[ConfigFieldSpec, ...]:
             "reranker 用の別枠同時実行上限。",
         ),
         ConfigFieldSpec(
-            "inference_scheduler.preempt_background_for_user_facing",
-            ConfigValueType.BOOL,
-            default=True,
-            description=(
-                "user-facing request 到着時に低優先度 large LLM lease を cooperative cancel する。"
-            ),
-        ),
-        ConfigFieldSpec(
             "inference_scheduler.background_when_busy",
             ConfigValueType.ENUM,
             "defer",

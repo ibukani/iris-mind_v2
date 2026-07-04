@@ -195,6 +195,18 @@ class SQLiteBackgroundJobQueue:
             reason,
         )
 
+    async def mark_cancelled(
+        self, job_id: BackgroundJobId, cancelled_at: datetime, reason: str
+    ) -> None:
+        """ジョブを policy による意図的な非実行として終了する。"""
+        await asyncio.to_thread(
+            self._update_terminal_sync,
+            job_id,
+            BackgroundJobStatus.CANCELLED,
+            cancelled_at,
+            reason,
+        )
+
     async def get(self, job_id: BackgroundJobId) -> BackgroundJobRecord:
         """ジョブを取得する。
 
