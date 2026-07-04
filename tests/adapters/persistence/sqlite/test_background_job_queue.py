@@ -252,6 +252,50 @@ async def test_enqueue_with_policy_rejects_retry_storm(tmp_path: Path) -> None:
     queue.close()
 
 
+async def test_enqueue_backpressure_counts_combined_backlog(tmp_path: Path) -> None:
+    """SQLite queue でも combined backlog で enqueue 上限判定する。"""
+    queue = _queue(tmp_path)
+    policy = BackgroundJobQueuePolicy(
+        default_policy=BackgroundJobKindPolicy(
+            max_pending_jobs=2,
+            backpressure_mode=BackgroundJobBackpressureMode.REJECT,
+        )
+    )
+    retryable = await queue.enqueue(_job("sqlite-aaa-retryable"))
+    await queue.lease_due(_NOW, 1, 10.0)
+    await queue.mark_retryable_failure(retryable.job_id, _NOW, "retry", _NOW)
+    await queue.enqueue(_job("sqlite-zzz-pending"))
+
+    result = await queue.enqueue_with_policy(_job("sqlite-third"), now=_NOW, policy=policy)
+
+    assert result.decision is BackgroundJobEnqueueDecision.REJECTED
+    assert result.reason is BackgroundJobBackpressureReason.RETRY_STORM_PREVENTION
+    queue.close()
+
+
+async def test_enqueue_backpressure_counts_expired_lease_as_backlog(tmp_path: Path) -> None:
+    """SQLite queue でも期限切れ lease を enqueue backlog として扱う。"""
+    queue = _queue(tmp_path)
+    policy = BackgroundJobQueuePolicy(
+        default_policy=BackgroundJobKindPolicy(
+            max_pending_jobs=1,
+            backpressure_mode=BackgroundJobBackpressureMode.REJECT,
+        )
+    )
+    await queue.enqueue(_job("sqlite-expired-backpressure"))
+    await queue.lease_due(_NOW, 1, 10.0)
+
+    result = await queue.enqueue_with_policy(
+        _job("sqlite-after-expired"),
+        now=_NOW + timedelta(seconds=10),
+        policy=policy,
+    )
+
+    assert result.decision is BackgroundJobEnqueueDecision.REJECTED
+    assert result.reason is BackgroundJobBackpressureReason.MAX_PENDING_JOBS
+    queue.close()
+
+
 async def test_collect_metrics_reports_per_kind_counts(tmp_path: Path) -> None:
     """SQLite queue metrics は kind 別状態件数を返す。"""
     queue = _queue(tmp_path)

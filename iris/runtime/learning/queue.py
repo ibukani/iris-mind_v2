@@ -368,12 +368,13 @@ def evaluate_enqueue_backpressure(
     reason: BackgroundJobBackpressureReason | None = None
     if (policy.idle_only or job.resource_profile.idle_only) and not idle_available:
         reason = BackgroundJobBackpressureReason.IDLE_ONLY_NOT_AVAILABLE
-    elif _pending_count(materialized_jobs, job.kind) >= policy.max_pending_jobs:
-        reason = BackgroundJobBackpressureReason.MAX_PENDING_JOBS
+    elif _backlog_count(materialized_jobs, job.kind, now) >= policy.max_pending_jobs:
+        if _retryable_count(materialized_jobs, job.kind) > 0:
+            reason = BackgroundJobBackpressureReason.RETRY_STORM_PREVENTION
+        else:
+            reason = BackgroundJobBackpressureReason.MAX_PENDING_JOBS
     elif _leased_counts(materialized_jobs, now)[job.kind] >= policy.concurrency_limit:
         reason = BackgroundJobBackpressureReason.KIND_CONCURRENCY_SATURATED
-    elif _retryable_count(materialized_jobs, job.kind) >= policy.max_pending_jobs:
-        reason = BackgroundJobBackpressureReason.RETRY_STORM_PREVENTION
     return reason
 
 
@@ -400,8 +401,17 @@ def _leased_counts(
     return Counter(job.kind for job in jobs if _active_lease(job, now))
 
 
-def _pending_count(jobs: Iterable[BackgroundJobRecord], kind: BackgroundJobKind) -> int:
-    return sum(1 for job in jobs if job.kind is kind and job.status is BackgroundJobStatus.PENDING)
+def _backlog_count(
+    jobs: Iterable[BackgroundJobRecord],
+    kind: BackgroundJobKind,
+    now: datetime,
+) -> int:
+    return sum(
+        1
+        for job in jobs
+        if job.kind is kind
+        and (_is_backlog_pending(job, now) or job.status is BackgroundJobStatus.FAILED_RETRYABLE)
+    )
 
 
 def _backlog_pending_count(

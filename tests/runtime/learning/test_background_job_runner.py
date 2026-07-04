@@ -99,32 +99,40 @@ async def test_missing_worker_is_permanent_failure() -> None:
     assert (await queue.get(job.job_id)).status is BackgroundJobStatus.FAILED_PERMANENT
 
 
-class _SleepingWorker:
+class _SideEffectWorker:
     kind = BackgroundJobKind.REFLECTION
 
+    def __init__(self) -> None:
+        self.side_effects: list[BackgroundJobId] = []
+
     def run(self, job: BackgroundJobRecord) -> None:
-        """Timeout test 用に worker thread を短時間ブロックする。"""
-        del job
-        threading.Event().wait(0.05)
+        """Soft timeout test 用に副作用を記録する。"""
+        self.side_effects.append(job.job_id)
 
 
-async def test_worker_timeout_is_retryable_failure() -> None:
-    """kind別 timeout 超過を retryable failure として扱う。"""
+async def test_worker_soft_timeout_does_not_retry_after_side_effect() -> None:
+    """同期 worker の soft timeout 超過は retryable failure にしない。"""
     queue = InMemoryBackgroundJobQueue()
     job = await queue.enqueue(_job("timeout"))
+    worker = _SideEffectWorker()
+    monotonic_values = iter((0.0, 2.0))
     runner = BackgroundJobRunner(
         queue,
-        (_SleepingWorker(),),
+        (worker,),
         queue_policy=BackgroundJobQueuePolicy(
-            default_policy=BackgroundJobKindPolicy(timeout_seconds=0.01)
+            default_policy=BackgroundJobKindPolicy(timeout_seconds=1.0)
         ),
-        runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: job.not_before),
+        runtime_hooks=BackgroundJobRunnerRuntimeHooks(
+            now=lambda: job.not_before,
+            monotonic_seconds=lambda: next(monotonic_values),
+        ),
     )
 
     assert await runner.run_once() == 1
 
     stored = await queue.get(job.job_id)
-    assert stored.status is BackgroundJobStatus.FAILED_RETRYABLE
+    assert worker.side_effects == [job.job_id]
+    assert stored.status is BackgroundJobStatus.SUCCEEDED
 
 
 async def test_worker_failure_uses_exponential_retry_backoff() -> None:

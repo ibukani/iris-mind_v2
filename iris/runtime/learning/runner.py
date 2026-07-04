@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
+import time
 from typing import TYPE_CHECKING, Protocol
 
 from loguru import logger
@@ -26,12 +27,17 @@ def _never_idle() -> bool:
     return False
 
 
+def _monotonic_seconds() -> float:
+    return time.monotonic()
+
+
 @dataclass(frozen=True)
 class BackgroundJobRunnerRuntimeHooks:
     """BackgroundJobRunner が参照する runtime 状態 provider。"""
 
     now: Callable[[], datetime] = now_utc
     idle_available: Callable[[], bool] = _never_idle
+    monotonic_seconds: Callable[[], float] = _monotonic_seconds
 
 
 class BackgroundJobWorker(Protocol):
@@ -109,15 +115,27 @@ class BackgroundJobRunner:
             )
             logger.error("background job worker missing: {}", job.kind)
             return
+        kind_policy = self._queue_policy.for_kind(job.kind)
+        started_at = self._runtime_hooks.monotonic_seconds()
         failure = _CaptureWorkerFailure()
         with failure:
-            await asyncio.wait_for(
-                asyncio.to_thread(worker.run, job),
-                timeout=self._queue_policy.for_kind(job.kind).timeout_seconds,
-            )
+            await asyncio.to_thread(worker.run, job)
+        elapsed_seconds = self._runtime_hooks.monotonic_seconds() - started_at
         if failure.exception is not None:
             await self._mark_retryable_failure(job, failure.exception)
             return
+        if elapsed_seconds > kind_policy.timeout_seconds:
+            message = (
+                "background job exceeded soft timeout: "
+                "job_id={} kind={} elapsed_seconds={:.3f} timeout_seconds={:.3f}"
+            )
+            logger.warning(
+                message,
+                job.job_id,
+                job.kind,
+                elapsed_seconds,
+                kind_policy.timeout_seconds,
+            )
         await self._queue.mark_succeeded(job.job_id, self._runtime_hooks.now())
 
     async def _mark_retryable_failure(self, job: BackgroundJobRecord, exc: Exception) -> None:

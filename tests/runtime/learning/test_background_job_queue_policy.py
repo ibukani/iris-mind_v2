@@ -81,6 +81,48 @@ async def test_enqueue_with_policy_rejects_retry_storm() -> None:
     assert result.reason is BackgroundJobBackpressureReason.RETRY_STORM_PREVENTION
 
 
+async def test_enqueue_backpressure_counts_combined_backlog() -> None:
+    """Pending と failed_retryable の合計 backlog で上限判定する。"""
+    queue = InMemoryBackgroundJobQueue()
+    policy = BackgroundJobQueuePolicy(
+        default_policy=BackgroundJobKindPolicy(
+            max_pending_jobs=2,
+            backpressure_mode=BackgroundJobBackpressureMode.REJECT,
+        )
+    )
+    retryable = await queue.enqueue(_job("aaa-retryable"))
+    await queue.lease_due(_NOW, 1, 10.0)
+    await queue.mark_retryable_failure(retryable.job_id, _NOW, "retry", _NOW)
+    await queue.enqueue(_job("zzz-pending"))
+
+    result = await queue.enqueue_with_policy(_job("third"), now=_NOW, policy=policy)
+
+    assert result.decision is BackgroundJobEnqueueDecision.REJECTED
+    assert result.reason is BackgroundJobBackpressureReason.RETRY_STORM_PREVENTION
+
+
+async def test_enqueue_backpressure_counts_expired_lease_as_backlog() -> None:
+    """期限切れ lease は enqueue 上限判定でも backlog として扱う。"""
+    queue = InMemoryBackgroundJobQueue()
+    policy = BackgroundJobQueuePolicy(
+        default_policy=BackgroundJobKindPolicy(
+            max_pending_jobs=1,
+            backpressure_mode=BackgroundJobBackpressureMode.REJECT,
+        )
+    )
+    await queue.enqueue(_job("expired"))
+    await queue.lease_due(_NOW, 1, 10.0)
+
+    result = await queue.enqueue_with_policy(
+        _job("after-expired"),
+        now=_NOW + timedelta(seconds=10),
+        policy=policy,
+    )
+
+    assert result.decision is BackgroundJobEnqueueDecision.REJECTED
+    assert result.reason is BackgroundJobBackpressureReason.MAX_PENDING_JOBS
+
+
 async def test_enqueue_with_policy_defers_idle_only_job_until_idle_available() -> None:
     """idle_only policy は idle でない enqueue を defer する。"""
     queue = InMemoryBackgroundJobQueue()
