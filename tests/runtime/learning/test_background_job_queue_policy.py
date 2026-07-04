@@ -10,6 +10,7 @@ from iris.runtime.learning.jobs import (
     BackgroundJobId,
     BackgroundJobKind,
     BackgroundJobRecord,
+    BackgroundJobResourceProfile,
     DeferredLearningJobPayload,
 )
 from iris.runtime.learning.policy import (
@@ -141,6 +142,40 @@ async def test_per_kind_concurrency_ignores_expired_leases() -> None:
     assert leased_first[0].job_id == first.job_id
     assert blocked == ()
     assert after_expiry[0].job_id == first.job_id
+
+
+async def test_lease_due_skips_idle_only_job_until_idle_available() -> None:
+    """idle_only job は runtime lease 時にも idle でなければ実行しない。"""
+    queue = InMemoryBackgroundJobQueue()
+    idle_job = await queue.enqueue(
+        _job("idle-runtime").model_copy(
+            update={"resource_profile": BackgroundJobResourceProfile(idle_only=True)}
+        )
+    )
+
+    blocked = await queue.lease_due(_NOW, 1, 10.0, idle_available=False)
+    leased = await queue.lease_due(_NOW, 1, 10.0, idle_available=True)
+
+    assert blocked == ()
+    assert leased[0].job_id == idle_job.job_id
+
+
+async def test_expired_lease_is_reported_as_queue_backlog() -> None:
+    """期限切れ lease は active lease ではなく backlog として metrics に出す。"""
+    queue = InMemoryBackgroundJobQueue()
+    old_created = _NOW - timedelta(seconds=90)
+    job = await queue.enqueue(_job("expired-metrics", created_at=old_created))
+    await queue.lease_due(_NOW, 1, 10.0)
+
+    metrics = await queue.collect_metrics(_NOW + timedelta(seconds=10))
+
+    assert metrics.leased == 0
+    assert metrics.queue_depth == 1
+    oldest_pending_age = metrics.oldest_pending_age_seconds
+    assert oldest_pending_age is not None
+    assert abs(oldest_pending_age - 100.0) < 1e-9
+    by_kind = {kind_metrics.kind: kind_metrics for kind_metrics in metrics.per_kind}
+    assert by_kind[job.kind].pending == 1
 
 
 async def test_enqueue_with_policy_treats_duplicate_job_id_as_existing() -> None:

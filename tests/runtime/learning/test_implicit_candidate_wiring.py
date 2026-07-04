@@ -16,7 +16,7 @@ from iris.runtime.learning.implicit_candidates import (
     FilteringImplicitMemoryCandidateHook,
 )
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
-from iris.runtime.learning.runner import BackgroundJobRunner
+from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunnerRuntimeHooks
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 
 pytestmark = pytest.mark.anyio
@@ -55,7 +55,7 @@ async def test_account_aware_worker_preserves_boundary_ids() -> None:
     await BackgroundJobRunner(
         queue,
         (AccountAwareImplicitMemoryCandidateWorker(store),),
-        now=lambda: _NOW,
+        runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: _NOW),
     ).run_once()
 
     record = (await store.list_pending())[0]
@@ -74,7 +74,7 @@ async def test_review_store_filters_by_account_and_space() -> None:
     await BackgroundJobRunner(
         queue,
         (AccountAwareImplicitMemoryCandidateWorker(store),),
-        now=lambda: _NOW,
+        runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: _NOW),
     ).run_once()
 
     assert len(await store.list_pending(account_id=AccountId("account-1"))) == 1

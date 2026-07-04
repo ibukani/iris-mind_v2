@@ -90,6 +90,7 @@ class BackgroundJobQueue(Protocol):
         lease_seconds: float,
         *,
         policy: BackgroundJobQueuePolicy | None = None,
+        idle_available: bool = False,
     ) -> tuple[BackgroundJobRecord, ...]:
         """期限到来済みジョブを lease する。"""
         ...
@@ -209,6 +210,7 @@ class InMemoryBackgroundJobQueue:
         lease_seconds: float,
         *,
         policy: BackgroundJobQueuePolicy | None = None,
+        idle_available: bool = False,
     ) -> tuple[BackgroundJobRecord, ...]:
         """期限到来済みジョブを決定的順序で lease する。
 
@@ -224,10 +226,14 @@ class InMemoryBackgroundJobQueue:
             for job in due:
                 if not _is_leaseable(job, now):
                     continue
-                if policy is not None:
-                    kind_policy = policy.for_kind(job.kind)
-                    if leased_counts[job.kind] >= kind_policy.concurrency_limit:
-                        continue
+                kind_policy = policy.for_kind(job.kind) if policy is not None else None
+                if _requires_idle(job, kind_policy) and not idle_available:
+                    continue
+                if (
+                    kind_policy is not None
+                    and leased_counts[job.kind] >= kind_policy.concurrency_limit
+                ):
+                    continue
                 updated = replace_job(
                     job,
                     JobUpdate(
@@ -398,6 +404,14 @@ def _pending_count(jobs: Iterable[BackgroundJobRecord], kind: BackgroundJobKind)
     return sum(1 for job in jobs if job.kind is kind and job.status is BackgroundJobStatus.PENDING)
 
 
+def _backlog_pending_count(
+    jobs: Iterable[BackgroundJobRecord],
+    kind: BackgroundJobKind,
+    now: datetime,
+) -> int:
+    return sum(1 for job in jobs if job.kind is kind and _is_backlog_pending(job, now))
+
+
 def _retryable_count(jobs: Iterable[BackgroundJobRecord], kind: BackgroundJobKind) -> int:
     return sum(
         1 for job in jobs if job.kind is kind and job.status is BackgroundJobStatus.FAILED_RETRYABLE
@@ -440,7 +454,7 @@ def _kind_metrics(
     kind_jobs = tuple(job for job in jobs if job.kind is kind)
     return BackgroundJobKindMetrics(
         kind=kind,
-        pending=_status_count(kind_jobs, BackgroundJobStatus.PENDING),
+        pending=_backlog_pending_count(kind_jobs, kind, now),
         leased=sum(1 for job in kind_jobs if _active_lease(job, now)),
         succeeded=_status_count(kind_jobs, BackgroundJobStatus.SUCCEEDED),
         failed_retryable=_status_count(kind_jobs, BackgroundJobStatus.FAILED_RETRYABLE),
@@ -454,6 +468,17 @@ def _status_count(jobs: Iterable[BackgroundJobRecord], status: BackgroundJobStat
     return sum(1 for job in jobs if job.status is status)
 
 
+def _is_backlog_pending(job: BackgroundJobRecord, now: datetime) -> bool:
+    return _is_leaseable(job, now) and job.status is not BackgroundJobStatus.FAILED_RETRYABLE
+
+
+def _requires_idle(
+    job: BackgroundJobRecord,
+    kind_policy: BackgroundJobKindPolicy | None,
+) -> bool:
+    return job.resource_profile.idle_only or (kind_policy is not None and kind_policy.idle_only)
+
+
 def _oldest_pending_age_seconds(
     jobs: Iterable[BackgroundJobRecord],
     now: datetime,
@@ -461,7 +486,8 @@ def _oldest_pending_age_seconds(
     created_values = tuple(
         job.created_at
         for job in jobs
-        if job.status in _QUEUE_DEPTH_STATUSES and job.not_before <= now
+        if (job.status is BackgroundJobStatus.FAILED_RETRYABLE or _is_backlog_pending(job, now))
+        and job.not_before <= now
     )
     if not created_values:
         return None

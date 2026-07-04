@@ -344,3 +344,43 @@ async def test_enqueue_with_policy_accept_mode_ignores_pressure_reason(tmp_path:
     assert second.record is not None
     assert await queue.get(second.record.job_id) == second.record
     queue.close()
+
+
+async def test_lease_due_skips_idle_only_job_until_idle_available(tmp_path: Path) -> None:
+    """SQLite queue でも idle_only job は idle でなければ lease しない。"""
+    queue = _queue(tmp_path)
+    idle_job = await queue.enqueue(
+        _job("sqlite-idle-runtime").model_copy(
+            update={"resource_profile": BackgroundJobResourceProfile(idle_only=True)}
+        )
+    )
+
+    blocked = await queue.lease_due(_NOW, 1, 10.0, idle_available=False)
+    leased = await queue.lease_due(_NOW, 1, 10.0, idle_available=True)
+
+    assert blocked == ()
+    assert leased[0].job_id == idle_job.job_id
+    queue.close()
+
+
+async def test_expired_lease_is_reported_as_queue_backlog(tmp_path: Path) -> None:
+    """SQLite metrics でも期限切れ lease は backlog として観測できる。"""
+    queue = _queue(tmp_path)
+    created_at = _NOW - timedelta(seconds=90)
+    job = await queue.enqueue(
+        _job("sqlite-expired-metrics").model_copy(
+            update={"created_at": created_at, "updated_at": created_at}
+        )
+    )
+    await queue.lease_due(_NOW, 1, 10.0)
+
+    metrics = await queue.collect_metrics(_NOW + timedelta(seconds=10))
+
+    assert metrics.leased == 0
+    assert metrics.queue_depth == 1
+    oldest_pending_age = metrics.oldest_pending_age_seconds
+    assert oldest_pending_age is not None
+    assert abs(oldest_pending_age - 100.0) < 1e-9
+    by_kind = {kind_metrics.kind: kind_metrics for kind_metrics in metrics.per_kind}
+    assert by_kind[job.kind].pending == 1
+    queue.close()

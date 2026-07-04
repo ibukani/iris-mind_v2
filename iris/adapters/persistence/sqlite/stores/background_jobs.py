@@ -30,6 +30,7 @@ from iris.runtime.learning.queue import (
     BackgroundJobEnqueueDecision,
     BackgroundJobEnqueueResult,
     BackgroundJobKindMetrics,
+    BackgroundJobKindPolicy,
     BackgroundJobQueueError,
     BackgroundJobQueueMetrics,
     BackgroundJobQueuePolicy,
@@ -118,13 +119,21 @@ class SQLiteBackgroundJobQueue:
         lease_seconds: float,
         *,
         policy: BackgroundJobQueuePolicy | None = None,
+        idle_available: bool = False,
     ) -> tuple[BackgroundJobRecord, ...]:
         """期限到来済みジョブを lease する。
 
         Returns:
             Lease したジョブ。
         """
-        return await asyncio.to_thread(self._lease_due_sync, now, max_items, lease_seconds, policy)
+        return await asyncio.to_thread(
+            self._lease_due_sync,
+            now,
+            max_items,
+            lease_seconds,
+            policy,
+            idle_available=idle_available,
+        )
 
     async def collect_metrics(self, now: datetime) -> BackgroundJobQueueMetrics:
         """現在の queue metrics snapshot を返す。
@@ -243,6 +252,8 @@ class SQLiteBackgroundJobQueue:
         max_items: int,
         lease_seconds: float,
         policy: BackgroundJobQueuePolicy | None,
+        *,
+        idle_available: bool,
     ) -> tuple[BackgroundJobRecord, ...]:
         if max_items <= 0:
             return ()
@@ -252,10 +263,14 @@ class SQLiteBackgroundJobQueue:
             leased_counts = _leased_counts(conn, now)
             leased: list[BackgroundJobRecord] = []
             for record in records:
-                if policy is not None:
-                    kind_policy = policy.for_kind(record.kind)
-                    if leased_counts.get(record.kind, 0) >= kind_policy.concurrency_limit:
-                        continue
+                kind_policy = policy.for_kind(record.kind) if policy is not None else None
+                if _requires_idle(record, kind_policy) and not idle_available:
+                    continue
+                if (
+                    kind_policy is not None
+                    and leased_counts.get(record.kind, 0) >= kind_policy.concurrency_limit
+                ):
+                    continue
                 leased_record = _lease_record(conn, record, now, leased_until)
                 leased_counts[record.kind] = leased_counts.get(record.kind, 0) + 1
                 leased.append(leased_record)
@@ -524,7 +539,7 @@ def _kind_metrics(
     kind_jobs = tuple(job for job in jobs if job.kind is kind)
     return BackgroundJobKindMetrics(
         kind=kind,
-        pending=_status_count(kind_jobs, BackgroundJobStatus.PENDING),
+        pending=sum(1 for job in kind_jobs if _is_backlog_pending(job, now)),
         leased=sum(1 for job in kind_jobs if _active_lease(job, now)),
         succeeded=_status_count(kind_jobs, BackgroundJobStatus.SUCCEEDED),
         failed_retryable=_status_count(kind_jobs, BackgroundJobStatus.FAILED_RETRYABLE),
@@ -550,6 +565,27 @@ def _status_count(jobs: tuple[BackgroundJobRecord, ...], status: BackgroundJobSt
     return sum(1 for job in jobs if job.status is status)
 
 
+def _is_expired_lease(job: BackgroundJobRecord, now: datetime) -> bool:
+    return (
+        job.status is BackgroundJobStatus.LEASED
+        and job.leased_until is not None
+        and job.leased_until <= now
+    )
+
+
+def _is_backlog_pending(job: BackgroundJobRecord, now: datetime) -> bool:
+    return (job.status is BackgroundJobStatus.PENDING or _is_expired_lease(job, now)) and (
+        job.not_before <= now
+    )
+
+
+def _requires_idle(
+    job: BackgroundJobRecord,
+    kind_policy: BackgroundJobKindPolicy | None,
+) -> bool:
+    return job.resource_profile.idle_only or (kind_policy is not None and kind_policy.idle_only)
+
+
 def _oldest_pending_age_seconds(
     jobs: tuple[BackgroundJobRecord, ...],
     now: datetime,
@@ -557,7 +593,7 @@ def _oldest_pending_age_seconds(
     created_values = tuple(
         job.created_at
         for job in jobs
-        if job.status in {BackgroundJobStatus.PENDING, BackgroundJobStatus.FAILED_RETRYABLE}
+        if (job.status is BackgroundJobStatus.FAILED_RETRYABLE or _is_backlog_pending(job, now))
         and job.not_before <= now
     )
     if not created_values:

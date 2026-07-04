@@ -106,6 +106,19 @@ class BackgroundJobQueuePolicy:
         """
         return self.per_kind.get(kind, self.default_policy)
 
+    def max_timeout_seconds(self) -> float:
+        """この policy で許可される最大 worker timeout 秒数を返す。
+
+        Returns:
+            default / kind specific policy の最大 timeout 秒数。
+        """
+        return max(
+            (
+                self.default_policy.timeout_seconds,
+                *(kind_policy.timeout_seconds for kind_policy in self.per_kind.values()),
+            )
+        )
+
 
 @dataclass(frozen=True)
 class BackgroundJobEnqueueResult:

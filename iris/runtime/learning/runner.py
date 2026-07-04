@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Protocol
 
@@ -19,6 +20,18 @@ if TYPE_CHECKING:
     from iris.runtime.learning.jobs import BackgroundJobKind, BackgroundJobRecord
     from iris.runtime.learning.policy import BackgroundJobQueueMetrics
     from iris.runtime.learning.queue import BackgroundJobQueue
+
+
+def _never_idle() -> bool:
+    return False
+
+
+@dataclass(frozen=True)
+class BackgroundJobRunnerRuntimeHooks:
+    """BackgroundJobRunner が参照する runtime 状態 provider。"""
+
+    now: Callable[[], datetime] = now_utc
+    idle_available: Callable[[], bool] = _never_idle
 
 
 class BackgroundJobWorker(Protocol):
@@ -42,7 +55,7 @@ class BackgroundJobRunner:
         max_jobs_per_run: int = 5,
         lease_seconds: float = 30.0,
         queue_policy: BackgroundJobQueuePolicy | None = None,
-        now: Callable[[], datetime] = now_utc,
+        runtime_hooks: BackgroundJobRunnerRuntimeHooks | None = None,
     ) -> None:
         """キュー、worker、batch/lease/retry 設定を注入する。"""
         self._queue = queue
@@ -52,7 +65,7 @@ class BackgroundJobRunner:
         self._queue_policy = queue_policy or BackgroundJobQueuePolicy(
             default_policy=BackgroundJobKindPolicy(concurrency_limit=max_jobs_per_run)
         )
-        self._now = now
+        self._runtime_hooks = runtime_hooks or BackgroundJobRunnerRuntimeHooks()
         self._latest_metrics: BackgroundJobQueueMetrics | None = None
 
     @property
@@ -73,16 +86,17 @@ class BackgroundJobRunner:
         Returns:
             Lease したジョブ数。
         """
-        started_at = self._now()
+        started_at = self._runtime_hooks.now()
         jobs = await self._queue.lease_due(
             started_at,
             self._max_jobs_per_run,
-            self._lease_seconds,
+            self._lease_seconds_for_policy(),
             policy=self._queue_policy,
+            idle_available=self._runtime_hooks.idle_available(),
         )
         for job in jobs:
             await self._run_job(job)
-        self._latest_metrics = await self._queue.collect_metrics(self._now())
+        self._latest_metrics = await self._queue.collect_metrics(self._runtime_hooks.now())
         return len(jobs)
 
     async def _run_job(self, job: BackgroundJobRecord) -> None:
@@ -90,7 +104,7 @@ class BackgroundJobRunner:
         if worker is None:
             await self._queue.mark_permanent_failure(
                 job.job_id,
-                self._now(),
+                self._runtime_hooks.now(),
                 f"no worker registered for {job.kind}",
             )
             logger.error("background job worker missing: {}", job.kind)
@@ -104,10 +118,10 @@ class BackgroundJobRunner:
         if failure.exception is not None:
             await self._mark_retryable_failure(job, failure.exception)
             return
-        await self._queue.mark_succeeded(job.job_id, self._now())
+        await self._queue.mark_succeeded(job.job_id, self._runtime_hooks.now())
 
     async def _mark_retryable_failure(self, job: BackgroundJobRecord, exc: Exception) -> None:
-        failed_at = self._now()
+        failed_at = self._runtime_hooks.now()
         retry_after = failed_at + timedelta(seconds=self._retry_delay_seconds(job))
         await self._queue.mark_retryable_failure(
             job.job_id,
@@ -122,6 +136,9 @@ class BackgroundJobRunner:
 
     def _retry_delay_seconds(self, job: BackgroundJobRecord) -> float:
         return self._queue_policy.for_kind(job.kind).retry_delay_seconds(job.attempts)
+
+    def _lease_seconds_for_policy(self) -> float:
+        return max(self._lease_seconds, self._queue_policy.max_timeout_seconds())
 
 
 class _CaptureWorkerFailure:
