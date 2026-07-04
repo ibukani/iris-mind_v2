@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from iris.features.definition import FeatureDefinition
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
+    from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig
     from iris.runtime.output_pipeline import RuntimeOutputPipeline
 
 
@@ -122,7 +123,7 @@ def build_app_from_config(
         temperature=model_config.temperature,
         max_tokens=model_config.max_output_tokens,
         model_call_budget=config.model_call_budget,
-        model_slot="default_chat",
+        prompt_budget=config.prompt_budget,
     )
     all_features = collect_feature_items((features, (chat_feature,)))
     cycle = wire_core_cognitive_cycle(
@@ -147,7 +148,7 @@ def _wire_chat_feature(
     temperature: float,
     max_tokens: int | None,
     model_call_budget: RuntimeModelCallBudgetConfig | None = None,
-    model_slot: str = "default_chat",
+    prompt_budget: RuntimePromptBudgetConfig | None = None,
 ) -> FeatureDefinition:
     """Chat feature を再利用可能な形で組み立てる。
 
@@ -159,6 +160,7 @@ def _wire_chat_feature(
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
+        prompt_budget_config=prompt_budget,
     )
     if model_call_budget is not None:
         return define_chat_feature(
@@ -166,7 +168,7 @@ def _wire_chat_feature(
                 generator,
                 model_call_budget,
                 model=model,
-                model_slot=model_slot,
+                model_slot="default_chat",
             )
         )
     return define_chat_feature(generator)

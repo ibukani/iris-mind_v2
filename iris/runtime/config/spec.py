@@ -4,11 +4,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.contracts.model_policy import CascadeFallbackBehavior, ModelCallSite
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.model_slots import model_slot_specs
+from iris.runtime.config.prompt_budget import (
+    default_prompt_budget_config,
+    iter_profile_sections,
+    prompt_overflow_behavior_values,
+    prompt_profile_names,
+)
+
+if TYPE_CHECKING:
+    from iris.contracts.prompting import PromptProfileName, PromptSectionKind
+    from iris.runtime.config.prompt_budget import (
+        RuntimePromptProfileBudget,
+        RuntimePromptSectionBudget,
+    )
 
 
 class ConfigValueType(StrEnum):
@@ -263,6 +277,98 @@ _MODEL_CALL_BUDGET_DEFAULTS: tuple[_ModelCallBudgetSpecDefaults, ...] = (
 )
 
 
+def _prompt_budget_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Prompt budget の ConfigSpec 群を返す。
+
+    Returns:
+        prompt_budget 配下の設定仕様。
+    """
+    defaults = default_prompt_budget_config()
+    return (
+        ConfigFieldSpec(
+            "prompt_budget.enabled",
+            ConfigValueType.BOOL,
+            default=defaults.enabled,
+            description="Prompt section budget と deterministic overflow policy を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "prompt_budget.chat_profile",
+            ConfigValueType.ENUM,
+            default=defaults.chat_profile.value,
+            description="通常 chat response generation で使う prompt budget profile。",
+            allowed_values=tuple(profile.value for profile in prompt_profile_names()),
+        ),
+        ConfigFieldSpec(
+            "prompt_budget.proactive_profile",
+            ConfigValueType.ENUM,
+            default=defaults.proactive_profile.value,
+            description="proactive text generation で使う短い prompt budget profile。",
+            allowed_values=tuple(profile.value for profile in prompt_profile_names()),
+        ),
+        *tuple(
+            spec
+            for profile_name in prompt_profile_names()
+            for spec in _prompt_profile_specs(profile_name, defaults.profile_budget(profile_name))
+        ),
+    )
+
+
+def _prompt_profile_specs(
+    profile_name: PromptProfileName,
+    profile: RuntimePromptProfileBudget,
+) -> tuple[ConfigFieldSpec, ...]:
+    prefix = f"prompt_budget.{profile_name.value}"
+    return (
+        ConfigFieldSpec(
+            f"{prefix}.total_max_chars",
+            ConfigValueType.INT,
+            profile.total_max_chars,
+            f"{profile_name.value} profile の prompt 全体最大文字数。",
+        ),
+        *tuple(
+            spec
+            for section, budget in iter_profile_sections(profile)
+            for spec in _prompt_section_specs(profile_name, section, budget)
+        ),
+    )
+
+
+def _prompt_section_specs(
+    profile_name: PromptProfileName,
+    section: PromptSectionKind,
+    budget: RuntimePromptSectionBudget,
+) -> tuple[ConfigFieldSpec, ...]:
+    prefix = f"prompt_budget.{profile_name.value}.{section.value}"
+    label = f"{profile_name.value}.{section.value}"
+    return (
+        ConfigFieldSpec(
+            f"{prefix}.max_chars",
+            ConfigValueType.INT,
+            budget.max_chars,
+            f"{label} section の最大文字数。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.max_items",
+            ConfigValueType.INT,
+            budget.max_items,
+            f"{label} section の最大 item 数。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.priority",
+            ConfigValueType.INT,
+            budget.priority,
+            f"{label} section の total overflow 時優先度。",
+        ),
+        ConfigFieldSpec(
+            f"{prefix}.overflow_behavior",
+            ConfigValueType.ENUM,
+            budget.overflow_behavior.value,
+            f"{label} section の overflow 挙動。",
+            allowed_values=prompt_overflow_behavior_values(),
+        ),
+    )
+
+
 def _model_call_budget_specs() -> tuple[ConfigFieldSpec, ...]:
     """Feature 別 model call budget の ConfigSpec 群を返す。
 
@@ -485,6 +591,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "Review store に入れる implicit candidate の最大文字数。",
         ),
         *_model_call_budget_specs(),
+        *_prompt_budget_specs(),
         ConfigFieldSpec(
             "server.tls.enabled",
             ConfigValueType.BOOL,

@@ -20,6 +20,7 @@ ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
         "lifecycle",
         "learning",
         "observability",
+        "prompting",
         "scheduler",
         "state",
         "wiring",

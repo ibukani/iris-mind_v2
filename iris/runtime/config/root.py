@@ -72,6 +72,12 @@ from iris.runtime.config.parsing import (
     table_or_empty,
     validate_toml_keys,
 )
+from iris.runtime.config.prompt_budget import (
+    RuntimePromptBudgetConfig,
+    apply_prompt_budget_toml,
+    default_prompt_budget_config,
+    validate_prompt_budget_config,
+)
 from iris.runtime.config.safety import RuntimeSafetyConfig, apply_safety_env, apply_safety_toml
 from iris.runtime.config.scheduler import (
     RuntimeSchedulerConfig,
@@ -137,6 +143,7 @@ class IrisRuntimeConfig:
     memory: RuntimeMemoryConfig
     conversation: RuntimeConversationConfig
     observability: RuntimeObservabilityConfig
+    prompt_budget: RuntimePromptBudgetConfig
 
 
 @dataclass(frozen=True)
@@ -174,6 +181,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         memory=RuntimeMemoryConfig(),
         conversation=RuntimeConversationConfig(),
         observability=RuntimeObservabilityConfig(),
+        prompt_budget=default_prompt_budget_config(),
     )
 
 
@@ -424,6 +432,10 @@ def _apply_toml_sections(
             config.observability,
             table_or_empty(table, "observability"),
         ),
+        prompt_budget=apply_prompt_budget_toml(
+            config.prompt_budget,
+            table_or_empty(table, "prompt_budget"),
+        ),
         models=models,
         ollama=ollama,
         openai=openai,
@@ -473,6 +485,7 @@ class _RuntimeConfigSections:
     auth: RuntimeAuthConfig
     diagnostics: RuntimeDiagnosticsConfig
     observability: RuntimeObservabilityConfig
+    prompt_budget: RuntimePromptBudgetConfig
     config_metadata: RuntimeConfigMetadata | None = None
 
 
@@ -502,6 +515,7 @@ def _apply_env_sections(
         memory=config.memory,
         conversation=config.conversation,
         observability=config.observability,
+        prompt_budget=config.prompt_budget,
         models=models,
         ollama=ollama,
         openai=openai,
@@ -538,6 +552,7 @@ def _compose_runtime_config(
         memory=sections.memory,
         conversation=sections.conversation,
         observability=sections.observability,
+        prompt_budget=sections.prompt_budget,
         models=sections.models,
         ollama=sections.ollama,
         openai=sections.openai,
@@ -570,6 +585,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
     validated_model_call_budget = validate_model_call_budget_config(config.model_call_budget)
     validated_conversation = validate_conversation_config(config.conversation)
     validated_observability = validate_observability_config(config.observability)
+    validated_prompt_budget = validate_prompt_budget_config(config.prompt_budget)
     _validate_transcript_backend(
         state=validated_state,
         conversation=validated_conversation,
@@ -585,6 +601,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         model_call_budget=validated_model_call_budget,
         conversation=validated_conversation,
         observability=validated_observability,
+        prompt_budget=validated_prompt_budget,
     )
 
 

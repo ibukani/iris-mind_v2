@@ -430,3 +430,31 @@ check 項目:
   (`warmup_skipped_model_missing`)。
 - OpenAI プロバイダは warmup を行わず `SKIPPED` を返す
   (`warmup_not_supported`)。
+
+## Prompt Budget Observability
+
+`LLMResponseGenerator` は prompt assembly 後、`runtime.prompt_budget.assembly` と `runtime.prompt_budget.section` を記録する。これは prompt 本文を観測するためではなく、local LLM の latency / resource usage に影響する prompt size を safe metadata として確認するための event である。
+
+`runtime.prompt_budget.assembly` は次を含む。
+
+- `profile`
+- `prompt_total_chars`
+- `prompt_total_max_chars`
+- `section_count`
+- `omitted_section_count`
+- `truncated_section_count`
+- `truncated_item_count`
+
+`runtime.prompt_budget.section` は section ごとに次を含む。
+
+- `section_kind`
+- `trust_boundary`
+- `input_chars` / `output_chars`
+- `input_items` / `output_items`
+- `max_chars` / `max_items`
+- `priority`
+- `overflow_behavior`
+- `omitted`
+- `truncated_chars` / `truncated_items`
+
+これらの event に prompt text、user text、memory content、system instruction、raw provider response を含めてはいけない。`PromptAssemblyReport` は size / count / kind / trust boundary のみを渡す。
