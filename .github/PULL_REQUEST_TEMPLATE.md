@@ -1,48 +1,136 @@
+## Linked Issues
+
+<!--
+直接解決するIssueだけ Closes を使う。
+前提・順序制約は Depends on、文脈共有は Related、後続を止める場合は Blocks。
+該当なしは N/A と書く。
+-->
+
+- Closes: N/A
+- Depends on: N/A
+- Related: N/A
+- Blocks: N/A
+
 ## 概要
 
-この PR で行った変更の目的と要点を簡潔に記載してください。
+<!--
+何を、なぜ変更したか。
+Issueの目的・acceptance criteriaとの対応が分かるように書く。
+-->
 
-## 関連 Issue
+-
 
-- Closes #
-- Related to #
+## 変更点
 
-## 変更内容
+<!--
+必要な項目だけ残す。
+-->
 
-- 
-- 
-- 
+- Code:
+- Tests:
+- Docs / ADR:
+- Config / schema / proto:
+- Other:
 
-## 変更理由・設計判断
+## Issue 要件との対応
 
-なぜこの実装にしたのか、代替案、既知の制約、破壊的変更の有無を記載してください。
+<!--
+Issue本文の acceptance criteria / checklist / review comment と対応させる。
+未対応がある場合は理由と後続Issueを書く。
+-->
 
-## 確認方法
+- [ ] 要件1:
+- [ ] 要件2:
+- [ ] 要件3:
 
-実行したテスト・静的解析・手動確認を記載してください。
+## アーキテクチャ影響
 
-- [ ] `pytest`
-- [ ] `mypy`
-- [ ] `pyright`
-- [ ] 手動確認: 
+<!--
+Iris runtime の境界を壊していないか確認する。
+該当なしでも N/A だけにせず、影響なしと判断した理由を書く。
+-->
 
-## 影響範囲
+Touched layers:
 
-影響するモジュール、API、設定、ドキュメント、既存挙動を記載してください。
+- [ ] contracts
+- [ ] core
+- [ ] cognitive
+- [ ] features
+- [ ] adapters
+- [ ] presentation
+- [ ] safety
+- [ ] runtime
+- [ ] docs / ADR
+- [ ] tests
+- [ ] scripts / AI harness
 
-- 
+Boundary checks:
+
+- [ ] `cognitive/` から `adapters/`, `runtime/`, `features/` へ依存していない
+- [ ] `contracts/` から `cognitive/`, `adapters/`, `runtime` へ依存していない
+- [ ] feature-specific data を `WorkspaceFrame` に広げていない
+- [ ] `FeatureDefinition` を迂回して cognitive internals を直接変更していない
+- [ ] service locator / global mutable registry / temporary compatibility shim を追加していない
+- [ ] internal boundary に `dict[str, Any]` / `dict[str, object]` を追加していない
+- [ ] 新しい `action: str` dispatcher branch を追加していない
+
+Notes:
+
+-
+
+## Runtime / Safety 影響
+
+<!--
+runtime, scheduler, delivery, ingress, safety, presenter, proactive behavior に触る場合は必須。
+触らない場合も「影響なし」と書く。
+-->
+
+- No-action semantics:
+- Safety gate / presenter / output boundary:
+- Ingress trust boundary:
+- Persistence / activity journal / memory impact:
+- Observability / diagnostics impact:
+
+## 検証
+
+<!--
+実行したものだけチェック。
+実行できない場合は、理由と代替確認を書く。
+-->
+
+- [ ] `make ai-quick`
+- [ ] `make quick`
+- [ ] `make ai-check`
+- [ ] `make check`
+- [ ] Targeted pytest: `uv run pytest ...`
+- [ ] Docs-only review
+- [ ] Not run
+
+Results:
+
+```text
+# paste concise command results here
+```
+
+Commands not run:
+
+-
 
 ## レビュー観点
 
-レビュアーに重点的に確認してほしい点を記載してください。
+<!--
+レビュアーに特に見てほしい観点。
+例: architecture boundary, persistence policy, no-action semantics, docs/ADR drift, test coverage.
+-->
 
-- 
+-
 
-## チェックリスト
+## リスク・後続作業
 
-- [ ] 関連 Issue の要件を満たしている
-- [ ] 必要なテストを追加または更新した
-- [ ] 既存テストが通ることを確認した
-- [ ] 型チェック・静的解析の結果を確認した
-- [ ] 必要なドキュメントを更新した
-- [ ] 依存関係・ブロッカー・後続 Issue を整理した
+<!--
+残リスクがなければ「なし」。
+後続Issueが必要なら Related / Blocks と揃える。
+-->
+
+- Risk:
+- Follow-up:
