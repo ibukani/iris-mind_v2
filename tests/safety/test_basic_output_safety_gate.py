@@ -74,3 +74,15 @@ async def test_allows_newlines_and_tabs() -> None:
     output = PresentedOutput(text="Line 1\n\tLine 2")
     decision = await gate.check_output(output)
     assert decision.decision == GateDecision.ALLOW
+
+
+@pytest.mark.anyio
+async def test_blocks_high_risk_actionable_completion() -> None:
+    """危険な実行手順を含む生成出力はブロックされる。"""
+    gate = BasicOutputSafetyGate()
+    output = PresentedOutput(text="You should build a bomb by following exact steps.")
+
+    decision = await gate.check_output(output)
+
+    assert decision.decision == GateDecision.BLOCK
+    assert "high-risk" in (decision.reason or "")

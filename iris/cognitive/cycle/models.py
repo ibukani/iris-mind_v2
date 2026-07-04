@@ -10,7 +10,9 @@ if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
     from iris.contracts.actions import ActionPlan
     from iris.contracts.memory import MemorySearchResult
+    from iris.contracts.model_invocation import ModelInvocationMetadata
     from iris.contracts.policy import ActionPreference, PolicyConstraint
+    from iris.contracts.safety import SafetyContext
 
 
 class StepStatus(StrEnum):
@@ -95,6 +97,15 @@ class MotivationResult(PipelineStepResult):
     """動機付けステップの結果。"""
 
     goals: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SafetyContextResult(PipelineStepResult):
+    """高リスク文脈検出ステップの結果。"""
+
+    safety_contexts: tuple[SafetyContext, ...] = ()
+    classifier_metadata: ModelInvocationMetadata | None = None
+    classifier_latency_ms: float = 0.0
 
 
 @dataclass(frozen=True)

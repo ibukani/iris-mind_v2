@@ -14,6 +14,8 @@ from iris.cognitive.memory.retrieval import MemoryRetrievalStep, MemoryRetriever
 from iris.cognitive.memory.write import MemoryWriteStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
+from iris.cognitive.policy.safety_context import SafetyContextClassificationStep
+from iris.cognitive.policy.safety_response import SafetyResponsePolicyStep
 from iris.contracts.actions import ActionPlan
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.contracts.memory import MemoryStore, MutableMemoryStore, VectorMemoryIndex
@@ -173,10 +175,18 @@ def wire_core_cognitive_cycle(
     """Policy inhibition 付きの感情・メモリ対応認知サイクルを組み立てる。
 
     Returns:
-        memory → appraisal → persistence → policy → feature extension の CognitiveCycle。
+        memory → appraisal → persistence → safety context → policy → feature extension
+        の CognitiveCycle。
+
+    Note:
+        Safety context classification は user-editable config ではなく常時有効な
+        internal boundary として扱う。Config v2 完了前に enablement flag を公開せず、
+        既存の `sensitive_safety_context` 付与経路を default 構成でも維持する。
     """
     stores = stores or CognitiveCycleStores()
     steps = _build_affect_memory_steps(stores)
+    steps.append(SafetyContextClassificationStep())
     steps.append(PolicyInhibitionStep())
+    steps.append(SafetyResponsePolicyStep())
     steps.extend(extension_steps)
     return wire_cognitive_cycle(steps=steps)

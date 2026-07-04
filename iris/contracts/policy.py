@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from iris.contracts.safety import SafetyContext
+
 
 class PolicyConstraint(BaseModel):
     """応答動作をブロックまたは変更するポリシー制約。"""
@@ -14,6 +16,7 @@ class PolicyConstraint(BaseModel):
     reason: str
     prompt_instruction: str | None = None
     blocks_response: bool = False
+    safety_context: SafetyContext | None = None
 
 
 class ActionPreference(BaseModel):

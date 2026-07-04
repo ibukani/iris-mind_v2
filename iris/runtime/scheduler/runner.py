@@ -154,6 +154,7 @@ class SchedulerRunner:
                 source=_delivery_source(scheduled),
                 target_key=target_key,
                 policy_constraint_names=response.output.policy_constraint_names,
+                safety_contexts=response.output.safety_contexts,
                 recent_block_count=recent_block_count,
             ),
         )

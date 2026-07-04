@@ -63,6 +63,20 @@ async def test_policy_step_returns_typed_result_without_mutating_frame() -> None
     assert enriched.constraints == ()
 
 
+@pytest.mark.anyio
+async def test_policy_step_preserves_legacy_sensitive_fallback_without_classifier() -> None:
+    """SafetyContext が無い custom cycle でも legacy sensitive constraint を維持する。"""
+    frame = WorkspaceFrame(observation=_observation("I have thoughts about suicide"))
+    builder = FrameBuilder()
+    perceived = builder.apply(frame, await SimplePerceptionStep().run(frame))
+
+    result = await PolicyInhibitionStep().run(perceived)
+
+    assert [item.name for item in result.constraints] == ["sensitive_safety_context"]
+    assert result.constraints[0].prompt_instruction == "avoid escalating beyond the safety layer"
+    assert result.constraints[0].safety_context is None
+
+
 def test_frame_builder_enriches_frame_from_policy_result() -> None:
     """FrameBuilder.applyがポリシー結果データでフレームをエンリッチすることを確認する。"""
     frame = WorkspaceFrame(observation=_observation())

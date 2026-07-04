@@ -213,6 +213,7 @@ class StrictDeliverySafetyGate:
             source=context.source,
             target_key=context.target_key,
             policy_constraint_names=context.policy_constraint_names,
+            safety_contexts=context.safety_contexts,
             availability_status=availability_status,
             in_quiet_hours=self.basic.is_quiet_hours(now),
             recent_block_count=context.recent_block_count,

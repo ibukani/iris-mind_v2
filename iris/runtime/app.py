@@ -13,7 +13,7 @@ from iris.cognitive.cycle.service import CognitiveCycle
 from iris.contracts.actions import (
     ActionPlan,
     PresentedOutput,
-    presented_output_with_policy_constraints,
+    presented_output_with_policy_metadata,
 )
 from iris.runtime.wiring.presentation import wire_output_pipeline
 
@@ -88,4 +88,14 @@ class IrisApp:
 
         output = await self._output_pipeline.present_action_plan(plan)
         constraint_names = tuple(item.name for item in cycle_result.frame.constraints)
-        return presented_output_with_policy_constraints(output, constraint_names)
+        safety_contexts = tuple(
+            context
+            for constraint in cycle_result.frame.constraints
+            if constraint.safety_context is not None
+            for context in (constraint.safety_context,)
+        )
+        return presented_output_with_policy_metadata(
+            output,
+            constraint_names=constraint_names,
+            safety_contexts=safety_contexts,
+        )

@@ -535,7 +535,7 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
     assert "Relationship context:" in context_messages
     assert "Mina: neutral relationship" in context_messages
     assert "Policy constraints:" in context_messages
-    assert "avoid escalating beyond the safety layer" in context_messages
+    assert "respond supportively, avoid actionable dangerous guidance" in context_messages
 
 
 @pytest.mark.anyio
