@@ -16,10 +16,10 @@ from iris.core.metadata import immutable_metadata
 
 
 class InferenceCancellationCallback(Protocol):
-    """協調キャンセル要求時の同期 callback。"""
+    """協調キャンセル通知を background/provider 文脈で処理する callback。"""
 
     def __call__(self) -> None:
-        """停止処理を同期実行する。"""
+        """停止処理を呼び出し側の文脈で実行する。"""
         ...
 
 
@@ -84,7 +84,7 @@ class InferenceLeaseCancellationToken:
     """Preemptible lease の協調キャンセル状態。
 
     background LLM worker は provider call を開始する前、または provider 側の
-    cancellation callback からこの token を確認し、停止できた時点で
+    execution context でこの token を確認し、停止できた時点で
     acknowledge_stopped() を呼ぶ。scheduler は acknowledge 済みの低優先度
     lease だけを user-facing lease に置き換える。
     """
@@ -126,27 +126,41 @@ class InferenceLeaseCancellationToken:
         return self._stopped.is_set()
 
     def request_cancellation(self) -> None:
-        """協調キャンセルを要求し、登録済み callback を同期実行する。"""
+        """協調キャンセルを要求する。
+
+        この method は user-facing hot path の lease acquisition から呼ばれるため、
+        登録 callback を同期実行しない。background worker / provider 側は
+        cancellation_requested を観測した自分の実行文脈で
+        run_cancellation_callbacks() を呼び、停止処理を進める。
+        """
+        self._cancel_requested.set()
+
+    def register_cancellation_callback(self, callback: InferenceCancellationCallback) -> None:
+        """キャンセル要求後に実行できる callback を登録する。
+
+        callback は登録時にも request_cancellation() 時にも実行されない。
+        background worker / provider 側が自分の文脈で run_cancellation_callbacks() を
+        呼んだときだけ実行される。
+        """
         with self._lock:
-            self._cancel_requested.set()
+            if self._stopped.is_set():
+                return
+            self._callbacks.append(callback)
+
+    def run_cancellation_callbacks(self) -> int:
+        """登録 callback を呼び出し側の文脈で実行する。
+
+        Returns:
+            実行した callback 件数。
+        """
+        if not self._cancel_requested.is_set():
+            return 0
+        with self._lock:
             callbacks = tuple(self._callbacks)
             self._callbacks.clear()
         for callback in callbacks:
             callback()
-
-    def register_cancellation_callback(self, callback: InferenceCancellationCallback) -> None:
-        """キャンセル要求時に呼ばれる callback を登録する。
-
-        既にキャンセル要求済みの場合は即時に callback を呼ぶ。
-        """
-        call_now = False
-        with self._lock:
-            if self._cancel_requested.is_set():
-                call_now = True
-            else:
-                self._callbacks.append(callback)
-        if call_now:
-            callback()
+        return len(callbacks)
 
     def acknowledge_stopped(self) -> None:
         """Worker / provider call が停止済みであることを通知する。"""

@@ -10,6 +10,7 @@ import pytest
 from iris.contracts.model_policy import ModelCallSite
 from iris.runtime.inference.models import (
     InferenceLeaseCancellationToken,
+    InferenceLeaseDecision,
     InferenceLeaseRequest,
     InferenceResourceState,
     InferenceSlotKind,
@@ -180,7 +181,7 @@ class _ConcurrentUserRequestWorker:
             cancellation_token.acknowledge_stopped()
 
         cancellation_token.register_cancellation_callback(stop_provider_call)
-        future = asyncio.run_coroutine_threadsafe(
+        first_future = asyncio.run_coroutine_threadsafe(
             self._scheduler.acquire(
                 InferenceLeaseRequest(
                     slot_kind=InferenceSlotKind.LARGE_LLM,
@@ -190,19 +191,34 @@ class _ConcurrentUserRequestWorker:
             ),
             self._loop,
         )
-        result = future.result(timeout=1.0)
-        assert result.acquired
-        assert not self.provider_active
-        if result.lease_id is not None:
+        first_result = first_future.result(timeout=1.0)
+        assert first_result.decision is InferenceLeaseDecision.DEFER
+        assert self.provider_active
+
+        assert cancellation_token.run_cancellation_callbacks() == 1
+
+        second_future = asyncio.run_coroutine_threadsafe(
+            self._scheduler.acquire(
+                InferenceLeaseRequest(
+                    slot_kind=InferenceSlotKind.LARGE_LLM,
+                    priority=InferenceWorkPriority.USER_FACING_RESPONSE,
+                    call_site=ModelCallSite.USER_RESPONSE_HOT_PATH,
+                )
+            ),
+            self._loop,
+        )
+        second_result = second_future.result(timeout=1.0)
+        assert second_result.acquired
+        if second_result.lease_id is not None:
             release_future = asyncio.run_coroutine_threadsafe(
-                self._scheduler.release(result.lease_id),
+                self._scheduler.release(second_result.lease_id),
                 self._loop,
             )
             assert release_future.result(timeout=1.0) is True
 
 
-async def test_user_facing_request_preempts_background_run_without_parallel_llm() -> None:
-    """User-facing request は background LLM を停止確認後に lease を取得する。"""
+async def test_user_facing_request_does_not_run_cancellation_callback_in_hot_path() -> None:
+    """User-facing request は callback を実行せず、停止確認後に lease を取得する。"""
     queue = InMemoryBackgroundJobQueue()
     job = await queue.enqueue(_job("concurrent-user", uses_llm=True))
     scheduler = LocalInferenceResourceScheduler(policy=LocalInferenceResourcePolicy(enabled=True))

@@ -104,8 +104,8 @@ async def test_budgeted_response_generator_preserves_scheduler_fallback() -> Non
     assert response.cascade_result.reason.startswith("local inference resource denied")
 
 
-async def test_response_generator_preempts_cooperative_background_large_lease() -> None:
-    """停止確認済み background large lease 中でも user-facing provider call を優先する。"""
+async def test_response_generator_does_not_run_background_callback_in_hot_path() -> None:
+    """User-facing fallback 中に background cancellation callback を同期実行しない。"""
     scheduler = LocalInferenceResourceScheduler(policy=LocalInferenceResourcePolicy(enabled=True))
     background = await scheduler.acquire(
         InferenceLeaseRequest(
@@ -118,7 +118,14 @@ async def test_response_generator_preempts_cooperative_background_large_lease() 
     assert background.lease_id is not None
     token = await scheduler.cancellation_token(background.lease_id)
     assert isinstance(token, InferenceLeaseCancellationToken)
-    token.register_cancellation_callback(token.acknowledge_stopped)
+    callback_calls = 0
+
+    def acknowledge_stop() -> None:
+        nonlocal callback_calls
+        callback_calls += 1
+        token.acknowledge_stopped()
+
+    token.register_cancellation_callback(acknowledge_stop)
     client = FakeLLMClient(("ok",), model="fake-local")
     generator = wire_response_generator(
         client,
@@ -128,11 +135,20 @@ async def test_response_generator_preempts_cooperative_background_large_lease() 
         ),
     )
 
-    response = await generator.generate_response(
+    first = await generator.generate_response(
         ResponsePrompt(system_instruction="system", actor_text="hello")
     )
 
-    assert response.text == "ok"
+    assert len(client.requests) == 0
+    assert first.cascade_result is not None
+    assert first.cascade_result.reason.startswith("local inference resource defer")
+    assert token.cancellation_requested
+    assert callback_calls == 0
+
+    assert token.run_cancellation_callbacks() == 1
+    second = await generator.generate_response(
+        ResponsePrompt(system_instruction="system", actor_text="hello again")
+    )
+
+    assert second.model == "fake-local"
     assert len(client.requests) == 1
-    assert response.cascade_result is None
-    assert await scheduler.release(background.lease_id) is False
