@@ -176,6 +176,287 @@ high_risk_escalation_allowed = false
 uncertain_escalation_allowed = false
 enqueue_only = true
 
+[prompt_budget]
+enabled = true
+chat_profile = "local_balanced"
+proactive_profile = "proactive_short"
+
+[prompt_budget.local_low]
+total_max_chars = 6000
+
+[prompt_budget.local_low.system]
+max_chars = 1100
+max_items = 1
+priority = 100
+overflow_behavior = "required"
+
+[prompt_budget.local_low.persona]
+max_chars = 500
+max_items = 1
+priority = 95
+overflow_behavior = "truncate"
+
+[prompt_budget.local_low.safety_constraints]
+max_chars = 900
+max_items = 8
+priority = 98
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_low.recent_conversation]
+max_chars = 1800
+max_items = 6
+priority = 70
+overflow_behavior = "use_existing_summary_then_truncate"
+
+[prompt_budget.local_low.user_memory]
+max_chars = 800
+max_items = 3
+priority = 55
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_low.project_memory]
+max_chars = 500
+max_items = 2
+priority = 45
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_low.relationship_signal]
+max_chars = 450
+max_items = 2
+priority = 65
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_low.internal_state]
+max_chars = 550
+max_items = 4
+priority = 60
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_low.interaction_policy]
+max_chars = 500
+max_items = 4
+priority = 75
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_low.task_context]
+max_chars = 800
+max_items = 4
+priority = 50
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_low.user_input]
+max_chars = 1600
+max_items = 1
+priority = 100
+overflow_behavior = "required"
+
+[prompt_budget.local_balanced]
+total_max_chars = 10000
+
+[prompt_budget.local_balanced.system]
+max_chars = 1400
+max_items = 1
+priority = 100
+overflow_behavior = "required"
+
+[prompt_budget.local_balanced.persona]
+max_chars = 900
+max_items = 1
+priority = 95
+overflow_behavior = "truncate"
+
+[prompt_budget.local_balanced.safety_constraints]
+max_chars = 1200
+max_items = 10
+priority = 98
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_balanced.recent_conversation]
+max_chars = 3600
+max_items = 12
+priority = 70
+overflow_behavior = "use_existing_summary_then_truncate"
+
+[prompt_budget.local_balanced.user_memory]
+max_chars = 1400
+max_items = 5
+priority = 55
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_balanced.project_memory]
+max_chars = 1000
+max_items = 4
+priority = 45
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_balanced.relationship_signal]
+max_chars = 700
+max_items = 3
+priority = 65
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_balanced.internal_state]
+max_chars = 800
+max_items = 5
+priority = 60
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_balanced.interaction_policy]
+max_chars = 700
+max_items = 5
+priority = 75
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_balanced.task_context]
+max_chars = 1200
+max_items = 6
+priority = 50
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_balanced.user_input]
+max_chars = 2400
+max_items = 1
+priority = 100
+overflow_behavior = "required"
+
+[prompt_budget.local_quality]
+total_max_chars = 16000
+
+[prompt_budget.local_quality.system]
+max_chars = 1800
+max_items = 1
+priority = 100
+overflow_behavior = "required"
+
+[prompt_budget.local_quality.persona]
+max_chars = 1400
+max_items = 1
+priority = 95
+overflow_behavior = "truncate"
+
+[prompt_budget.local_quality.safety_constraints]
+max_chars = 1600
+max_items = 12
+priority = 98
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_quality.recent_conversation]
+max_chars = 6400
+max_items = 20
+priority = 70
+overflow_behavior = "use_existing_summary_then_truncate"
+
+[prompt_budget.local_quality.user_memory]
+max_chars = 2400
+max_items = 8
+priority = 55
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_quality.project_memory]
+max_chars = 1800
+max_items = 6
+priority = 45
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_quality.relationship_signal]
+max_chars = 1000
+max_items = 4
+priority = 65
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_quality.internal_state]
+max_chars = 1200
+max_items = 6
+priority = 60
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_quality.interaction_policy]
+max_chars = 1000
+max_items = 6
+priority = 75
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_quality.task_context]
+max_chars = 2000
+max_items = 8
+priority = 50
+overflow_behavior = "truncate_items"
+
+[prompt_budget.local_quality.user_input]
+max_chars = 3200
+max_items = 1
+priority = 100
+overflow_behavior = "required"
+
+[prompt_budget.proactive_short]
+total_max_chars = 3000
+
+[prompt_budget.proactive_short.system]
+max_chars = 900
+max_items = 1
+priority = 100
+overflow_behavior = "required"
+
+[prompt_budget.proactive_short.persona]
+max_chars = 350
+max_items = 1
+priority = 95
+overflow_behavior = "truncate"
+
+[prompt_budget.proactive_short.safety_constraints]
+max_chars = 700
+max_items = 6
+priority = 98
+overflow_behavior = "truncate_items"
+
+[prompt_budget.proactive_short.recent_conversation]
+max_chars = 500
+max_items = 3
+priority = 45
+overflow_behavior = "truncate_items"
+
+[prompt_budget.proactive_short.user_memory]
+max_chars = 300
+max_items = 1
+priority = 35
+overflow_behavior = "omit"
+
+[prompt_budget.proactive_short.project_memory]
+max_chars = 0
+max_items = 0
+priority = 20
+overflow_behavior = "omit"
+
+[prompt_budget.proactive_short.relationship_signal]
+max_chars = 450
+max_items = 2
+priority = 70
+overflow_behavior = "truncate_items"
+
+[prompt_budget.proactive_short.internal_state]
+max_chars = 350
+max_items = 3
+priority = 55
+overflow_behavior = "truncate_items"
+
+[prompt_budget.proactive_short.interaction_policy]
+max_chars = 400
+max_items = 3
+priority = 80
+overflow_behavior = "truncate_items"
+
+[prompt_budget.proactive_short.task_context]
+max_chars = 450
+max_items = 3
+priority = 50
+overflow_behavior = "truncate_items"
+
+[prompt_budget.proactive_short.user_input]
+max_chars = 700
+max_items = 1
+priority = 100
+overflow_behavior = "required"
+
 [delivery.quiet_hours]
 enabled = false
 start = "22:00"

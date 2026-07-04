@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any
 
 import pytest
 
@@ -20,6 +19,7 @@ from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime
 from iris.runtime.config.llm import LLMProvider
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 from iris.runtime.observability.ports import RuntimeLatencyBudget
+from iris.runtime.prompting.assembler import RuntimePromptAssembler
 from iris.runtime.wiring.llm import (
     LLMClientFactory,
     LLMResponseGenerator,
@@ -33,8 +33,6 @@ from iris.runtime.wiring.llm import (
 from tests.helpers.private_access import (
     get_private_attr_as,
     get_private_attr_path_as,
-    import_private_matching,
-    is_callable,
 )
 
 
@@ -170,11 +168,8 @@ def test_openai_adapter_config_uses_runtime_max_tokens() -> None:
     assert result.max_output_tokens == config.openai.max_output_tokens
 
 
-def test_build_user_content_with_no_sections() -> None:
-    """_build_user_content returns actor_text when no optional sections are present."""
-    build_user_content: Any = import_private_matching(
-        "iris.runtime.wiring.llm", "_build_user_content", is_callable
-    )
+def test_prompt_assembler_user_message_with_no_sections() -> None:
+    """RuntimePromptAssembler keeps actor_text in the final user message."""
     prompt = ResponsePrompt(
         system_instruction="sys",
         actor_text="hello",
@@ -184,15 +179,13 @@ def test_build_user_content_with_no_sections() -> None:
         constraints=(),
         goals=(),
     )
-    content = build_user_content(prompt)
-    assert content == "hello"
+    messages = RuntimePromptAssembler().assemble(prompt).messages
+    assert messages[-1].role is LLMRole.USER
+    assert messages[-1].content == "hello"
 
 
-def test_build_user_content_excludes_internal_context() -> None:
-    """_build_user_content returns only actor_text, even when internal context exists."""
-    build_user_content: Any = import_private_matching(
-        "iris.runtime.wiring.llm", "_build_user_content", is_callable
-    )
+def test_prompt_assembler_user_message_excludes_internal_context() -> None:
+    """RuntimePromptAssembler keeps internal context out of the final user message."""
     prompt = ResponsePrompt(
         system_instruction="sys",
         actor_text="ありがとう。最後に一言だけ返してください。",
@@ -203,7 +196,8 @@ def test_build_user_content_excludes_internal_context() -> None:
         goals=("respond_to_user",),
     )
 
-    content = build_user_content(prompt)
+    messages = RuntimePromptAssembler().assemble(prompt).messages
+    content = messages[-1].content
 
     assert content == "ありがとう。最後に一言だけ返してください。"
     assert "Affect context" not in content
@@ -266,8 +260,8 @@ async def test_llm_response_generator_includes_prior_conversation_messages() -> 
 
 
 @pytest.mark.anyio
-async def test_llm_response_generator_separates_internal_context_from_user_message() -> None:
-    """Internal context is system-only; the user message remains clean actor text."""
+async def test_llm_response_generator_separates_context_from_system_and_latest_user() -> None:
+    """Internal/external context は system と latest user から role message 上も分離する。"""
     client = FakeLLMClient(responses=("reply",), model="test-model")
     gen = LLMResponseGenerator(client, model="test-model")
     actor_text = "ありがとう。最後に一言だけ返してください。"
@@ -295,26 +289,36 @@ async def test_llm_response_generator_separates_internal_context_from_user_messa
     ]
 
     assert len(system_messages) == 1
-    assert len(user_messages) == 1
+    assert len(user_messages) == 3
 
     system_content = system_messages[0]
-    user_content = user_messages[0]
+    internal_context = user_messages[0]
+    external_context = user_messages[1]
+    latest_user_content = user_messages[-1]
 
-    assert user_content == actor_text
-    assert "Affect context" not in user_content
-    assert "Relationship context" not in user_content
-    assert "Policy constraints" not in user_content
-    assert "trust=0.50" not in user_content
-    assert "familiarity=0.00" not in user_content
-    assert "VAD" not in user_content
-    assert "response-generation process" not in user_content
+    assert latest_user_content == actor_text
+    assert "Affect context" not in latest_user_content
+    assert "Relationship context" not in latest_user_content
+    assert "Policy constraints" not in latest_user_content
+    assert "trust=0.50" not in latest_user_content
+    assert "familiarity=0.00" not in latest_user_content
+    assert "VAD" not in latest_user_content
+    assert "response-generation process" not in latest_user_content
 
-    assert "Internal context:" in system_content
-    assert "Affect context" in system_content
-    assert "Relationship context" in system_content
-    assert "Policy constraints" in system_content
-    assert "trust=0.50" in system_content
-    assert "familiarity=0.00" in system_content
-    assert "VAD" in system_content
+    assert "Internal runtime context" not in system_content
+    assert "Untrusted external context" not in system_content
+    assert "User likes concise replies" not in system_content
+    assert "Affect context" not in system_content
     assert "Never mention affect scores" in system_content
     assert "response-generation process" in system_content
+
+    assert "Internal runtime context" in internal_context
+    assert "Affect context" in internal_context
+    assert "Relationship context" in internal_context
+    assert "Policy constraints" in internal_context
+    assert "trust=0.50" in internal_context
+    assert "familiarity=0.00" in internal_context
+    assert "VAD" in internal_context
+
+    assert "Untrusted external context" in external_context
+    assert "User likes concise replies" in external_context

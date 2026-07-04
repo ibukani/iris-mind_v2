@@ -1,4 +1,4 @@
-# ADR 0016: Companion Affect State Model
+# ADR 0017: Companion Affect State Model
 
 ## Status
 

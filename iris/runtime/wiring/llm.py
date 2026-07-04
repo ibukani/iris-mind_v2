@@ -11,8 +11,7 @@ from iris.adapters.llm.ollama_diagnostics import OllamaDiagnostics
 from iris.adapters.llm.ollama_lifecycle import OllamaModelLifecycleProbe
 from iris.adapters.llm.openai import OpenAIAdapterError, OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.openai_diagnostics import OpenAIDiagnostics
-from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest, LLMRole
-from iris.contracts.conversation import ConversationRole
+from iris.adapters.llm.ports import LLMClient, LLMRequest
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.contracts.model_policy import (
     CascadeDecision,
@@ -30,12 +29,14 @@ from iris.runtime.model_call_budget import ModelCallBudgetGate, current_model_ca
 from iris.runtime.observability.context import trace_counter_extra
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 from iris.runtime.observability.logger import LoguruRuntimeLogger
+from iris.runtime.prompting.assembler import RuntimePromptAssembler
+from iris.runtime.prompting.observability import record_prompt_assembly_report
 
 if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
     from iris.adapters.llm.lifecycle import ModelLifecycleProbe
-    from iris.contracts.conversation import ConversationRecord
     from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
+    from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig
     from iris.runtime.observability.ports import RuntimeLatencyBudget, RuntimeLogger
 
 
@@ -53,6 +54,8 @@ class LLMResponseGenerator(ResponseGenerator):
         *,
         temperature: float = 0.0,
         max_tokens: int | None = None,
+        prompt_assembler: RuntimePromptAssembler | None = None,
+        runtime_logger: RuntimeLogger | None = None,
     ) -> None:
         """LLM バックエンドの応答生成器を作成する。
 
@@ -61,11 +64,15 @@ class LLMResponseGenerator(ResponseGenerator):
             model: LLM プロバイダに渡すモデル名。
             temperature: LLM プロバイダに渡すサンプリング温度。
             max_tokens: LLM プロバイダに渡す任意の出力トークン上限。
+            prompt_assembler: prompt budget と section assembly を担当する境界。
+            runtime_logger: prompt budget observability を記録する logger。
         """
         self._client = client
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
+        self._prompt_assembler = prompt_assembler or RuntimePromptAssembler()
+        self._logger = runtime_logger or LoguruRuntimeLogger()
 
     @override
     async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
@@ -77,13 +84,11 @@ class LLMResponseGenerator(ResponseGenerator):
         Returns:
             生成された応答テキストとモデルメタデータ。
         """
+        assembly = self._prompt_assembler.assemble(prompt)
+        record_prompt_assembly_report(assembly.report, runtime_logger=self._logger)
         request = LLMRequest(
             model=self._model,
-            messages=(
-                LLMMessage(role=LLMRole.SYSTEM, content=_build_system_content(prompt)),
-                *tuple(_conversation_message(record) for record in prompt.conversation_history),
-                LLMMessage(role=LLMRole.USER, content=_build_user_content(prompt)),
-            ),
+            messages=assembly.messages,
             temperature=self._temperature,
             max_tokens=self._max_tokens,
         )
@@ -236,6 +241,8 @@ def wire_response_generator(
     model: str = DEFAULT_FAKE_LLM_MODEL,
     temperature: float = 0.0,
     max_tokens: int | None = None,
+    prompt_budget_config: RuntimePromptBudgetConfig | None = None,
+    runtime_logger: RuntimeLogger | None = None,
 ) -> LLMResponseGenerator:
     """応答生成器を組み立てる。
 
@@ -244,6 +251,8 @@ def wire_response_generator(
         model: LLM プロバイダに渡すモデル名。
         temperature: LLM プロバイダに渡すサンプリング温度。
         max_tokens: LLM プロバイダに渡す任意の出力トークン上限。
+        prompt_budget_config: prompt section budget 設定。
+        runtime_logger: prompt budget observability を記録する logger。
 
     Returns:
         LLMResponseGenerator インスタンス。
@@ -255,6 +264,8 @@ def wire_response_generator(
         model,
         temperature=temperature,
         max_tokens=max_tokens,
+        prompt_assembler=RuntimePromptAssembler(prompt_budget_config),
+        runtime_logger=runtime_logger,
     )
 
 
@@ -666,67 +677,3 @@ def _resolve_openai_model(model: str, runtime_config: IrisRuntimeConfig) -> str:
     if _is_fake_llm_model(model):
         return runtime_config.openai.model
     return model
-
-
-_INTERNAL_CONTEXT_GUARDRAIL = (
-    "Use the internal context only to shape tone and response selection. "
-    "Never mention affect scores, relationship scores, trust, familiarity, "
-    "policy constraints, memory retrieval metadata, or the response-generation process. "
-    "Respond directly as Iris."
-)
-
-_LANGUAGE_GUARDRAIL = (
-    "Respond in the same natural language as the user's latest message. "
-    "If the latest user message is Japanese, respond in natural Japanese only. "
-    "Do not mix Chinese unless the user explicitly asks for Chinese."
-)
-
-
-def _build_system_content(prompt: ResponsePrompt) -> str:
-    sections = [
-        prompt.system_instruction,
-        _INTERNAL_CONTEXT_GUARDRAIL,
-        _LANGUAGE_GUARDRAIL,
-    ]
-    internal_context = _build_internal_context(prompt)
-    if internal_context is not None:
-        sections.append(f"Internal context:\n{internal_context}")
-    return "\n\n".join(section for section in sections if section.strip())
-
-
-def _build_internal_context(prompt: ResponsePrompt) -> str | None:
-    sections: list[str] = []
-    if prompt.conversation_summary is not None:
-        sections.append(_build_context_section("Conversation summary", prompt.conversation_summary))
-    if prompt.memory_snippets:
-        snippets = "\n".join(f"- {snippet}" for snippet in prompt.memory_snippets)
-        sections.append(_build_context_section("Relevant memories", snippets))
-    if prompt.affect_context is not None:
-        sections.append(_build_context_section("Affect context", prompt.affect_context))
-    if prompt.relationship_context is not None:
-        sections.append(_build_context_section("Relationship context", prompt.relationship_context))
-    if prompt.constraints:
-        sections.append(_build_context_section("Policy constraints", "; ".join(prompt.constraints)))
-    if prompt.goals:
-        sections.append(_build_context_section("Goals", "; ".join(prompt.goals)))
-    if not sections:
-        return None
-    return "\n\n".join(sections)
-
-
-def _build_context_section(title: str, body: str) -> str:
-    return f"{title}:\n{body}"
-
-
-def _build_user_content(prompt: ResponsePrompt) -> str:
-    return prompt.actor_text
-
-
-def _conversation_message(record: ConversationRecord) -> LLMMessage:
-    """短期会話recordをLLM messageへ変換する。
-
-    Returns:
-        roleを保持したLLM message。
-    """
-    role = LLMRole.USER if record.role is ConversationRole.USER else LLMRole.ASSISTANT
-    return LLMMessage(role=role, content=record.content)

@@ -884,6 +884,2110 @@
       "description": "runtime_learning_hook を同期 model call 禁止の enqueue-only 経路として扱う。"
     },
     {
+      "path": "prompt_budget.enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "Prompt section budget と deterministic overflow policy を有効化する。"
+    },
+    {
+      "path": "prompt_budget.chat_profile",
+      "type": "enum",
+      "default": "local_balanced",
+      "allowedValues": [
+        "local_low",
+        "local_balanced",
+        "local_quality",
+        "proactive_short"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "通常 chat response generation で使う prompt budget profile。"
+    },
+    {
+      "path": "prompt_budget.proactive_profile",
+      "type": "enum",
+      "default": "proactive_short",
+      "allowedValues": [
+        "local_low",
+        "local_balanced",
+        "local_quality",
+        "proactive_short"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive text generation で使う短い prompt budget profile。"
+    },
+    {
+      "path": "prompt_budget.local_low.total_max_chars",
+      "type": "int",
+      "default": 6000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low profile の prompt 全体最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.system.max_chars",
+      "type": "int",
+      "default": 1100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.system section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.system.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.system section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.system.priority",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.system section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.system.overflow_behavior",
+      "type": "enum",
+      "default": "required",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.system section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.persona.max_chars",
+      "type": "int",
+      "default": 500,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.persona section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.persona.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.persona section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.persona.priority",
+      "type": "int",
+      "default": 95,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.persona section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.persona.overflow_behavior",
+      "type": "enum",
+      "default": "truncate",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.persona section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.safety_constraints.max_chars",
+      "type": "int",
+      "default": 900,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.safety_constraints section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.safety_constraints.max_items",
+      "type": "int",
+      "default": 8,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.safety_constraints section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.safety_constraints.priority",
+      "type": "int",
+      "default": 98,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.safety_constraints section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.safety_constraints.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.safety_constraints section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.recent_conversation.max_chars",
+      "type": "int",
+      "default": 1800,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.recent_conversation section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.recent_conversation.max_items",
+      "type": "int",
+      "default": 6,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.recent_conversation section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.recent_conversation.priority",
+      "type": "int",
+      "default": 70,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.recent_conversation section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.recent_conversation.overflow_behavior",
+      "type": "enum",
+      "default": "use_existing_summary_then_truncate",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.recent_conversation section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.user_memory.max_chars",
+      "type": "int",
+      "default": 800,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.user_memory section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.user_memory.max_items",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.user_memory section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.user_memory.priority",
+      "type": "int",
+      "default": 55,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.user_memory section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.user_memory.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.user_memory section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.project_memory.max_chars",
+      "type": "int",
+      "default": 500,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.project_memory section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.project_memory.max_items",
+      "type": "int",
+      "default": 2,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.project_memory section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.project_memory.priority",
+      "type": "int",
+      "default": 45,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.project_memory section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.project_memory.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.project_memory section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.relationship_signal.max_chars",
+      "type": "int",
+      "default": 450,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.relationship_signal section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.relationship_signal.max_items",
+      "type": "int",
+      "default": 2,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.relationship_signal section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.relationship_signal.priority",
+      "type": "int",
+      "default": 65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.relationship_signal section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.relationship_signal.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.relationship_signal section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.internal_state.max_chars",
+      "type": "int",
+      "default": 550,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.internal_state section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.internal_state.max_items",
+      "type": "int",
+      "default": 4,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.internal_state section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.internal_state.priority",
+      "type": "int",
+      "default": 60,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.internal_state section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.internal_state.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.internal_state section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.interaction_policy.max_chars",
+      "type": "int",
+      "default": 500,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.interaction_policy section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.interaction_policy.max_items",
+      "type": "int",
+      "default": 4,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.interaction_policy section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.interaction_policy.priority",
+      "type": "int",
+      "default": 75,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.interaction_policy section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.interaction_policy.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.interaction_policy section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.task_context.max_chars",
+      "type": "int",
+      "default": 800,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.task_context section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.task_context.max_items",
+      "type": "int",
+      "default": 4,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.task_context section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.task_context.priority",
+      "type": "int",
+      "default": 50,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.task_context section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.task_context.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.task_context section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_low.user_input.max_chars",
+      "type": "int",
+      "default": 1600,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.user_input section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_low.user_input.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.user_input section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_low.user_input.priority",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.user_input section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_low.user_input.overflow_behavior",
+      "type": "enum",
+      "default": "required",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_low.user_input section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.total_max_chars",
+      "type": "int",
+      "default": 10000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced profile の prompt 全体最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.system.max_chars",
+      "type": "int",
+      "default": 1400,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.system section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.system.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.system section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.system.priority",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.system section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.system.overflow_behavior",
+      "type": "enum",
+      "default": "required",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.system section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.persona.max_chars",
+      "type": "int",
+      "default": 900,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.persona section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.persona.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.persona section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.persona.priority",
+      "type": "int",
+      "default": 95,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.persona section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.persona.overflow_behavior",
+      "type": "enum",
+      "default": "truncate",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.persona section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.safety_constraints.max_chars",
+      "type": "int",
+      "default": 1200,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.safety_constraints section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.safety_constraints.max_items",
+      "type": "int",
+      "default": 10,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.safety_constraints section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.safety_constraints.priority",
+      "type": "int",
+      "default": 98,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.safety_constraints section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.safety_constraints.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.safety_constraints section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.recent_conversation.max_chars",
+      "type": "int",
+      "default": 3600,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.recent_conversation section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.recent_conversation.max_items",
+      "type": "int",
+      "default": 12,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.recent_conversation section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.recent_conversation.priority",
+      "type": "int",
+      "default": 70,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.recent_conversation section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.recent_conversation.overflow_behavior",
+      "type": "enum",
+      "default": "use_existing_summary_then_truncate",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.recent_conversation section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.user_memory.max_chars",
+      "type": "int",
+      "default": 1400,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.user_memory section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.user_memory.max_items",
+      "type": "int",
+      "default": 5,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.user_memory section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.user_memory.priority",
+      "type": "int",
+      "default": 55,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.user_memory section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.user_memory.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.user_memory section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.project_memory.max_chars",
+      "type": "int",
+      "default": 1000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.project_memory section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.project_memory.max_items",
+      "type": "int",
+      "default": 4,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.project_memory section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.project_memory.priority",
+      "type": "int",
+      "default": 45,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.project_memory section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.project_memory.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.project_memory section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.relationship_signal.max_chars",
+      "type": "int",
+      "default": 700,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.relationship_signal section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.relationship_signal.max_items",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.relationship_signal section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.relationship_signal.priority",
+      "type": "int",
+      "default": 65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.relationship_signal section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.relationship_signal.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.relationship_signal section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.internal_state.max_chars",
+      "type": "int",
+      "default": 800,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.internal_state section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.internal_state.max_items",
+      "type": "int",
+      "default": 5,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.internal_state section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.internal_state.priority",
+      "type": "int",
+      "default": 60,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.internal_state section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.internal_state.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.internal_state section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.interaction_policy.max_chars",
+      "type": "int",
+      "default": 700,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.interaction_policy section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.interaction_policy.max_items",
+      "type": "int",
+      "default": 5,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.interaction_policy section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.interaction_policy.priority",
+      "type": "int",
+      "default": 75,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.interaction_policy section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.interaction_policy.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.interaction_policy section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.task_context.max_chars",
+      "type": "int",
+      "default": 1200,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.task_context section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.task_context.max_items",
+      "type": "int",
+      "default": 6,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.task_context section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.task_context.priority",
+      "type": "int",
+      "default": 50,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.task_context section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.task_context.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.task_context section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.user_input.max_chars",
+      "type": "int",
+      "default": 2400,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.user_input section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.user_input.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.user_input section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.user_input.priority",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.user_input section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_balanced.user_input.overflow_behavior",
+      "type": "enum",
+      "default": "required",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_balanced.user_input section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.total_max_chars",
+      "type": "int",
+      "default": 16000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality profile の prompt 全体最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.system.max_chars",
+      "type": "int",
+      "default": 1800,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.system section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.system.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.system section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.system.priority",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.system section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.system.overflow_behavior",
+      "type": "enum",
+      "default": "required",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.system section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.persona.max_chars",
+      "type": "int",
+      "default": 1400,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.persona section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.persona.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.persona section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.persona.priority",
+      "type": "int",
+      "default": 95,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.persona section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.persona.overflow_behavior",
+      "type": "enum",
+      "default": "truncate",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.persona section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.safety_constraints.max_chars",
+      "type": "int",
+      "default": 1600,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.safety_constraints section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.safety_constraints.max_items",
+      "type": "int",
+      "default": 12,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.safety_constraints section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.safety_constraints.priority",
+      "type": "int",
+      "default": 98,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.safety_constraints section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.safety_constraints.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.safety_constraints section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.recent_conversation.max_chars",
+      "type": "int",
+      "default": 6400,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.recent_conversation section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.recent_conversation.max_items",
+      "type": "int",
+      "default": 20,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.recent_conversation section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.recent_conversation.priority",
+      "type": "int",
+      "default": 70,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.recent_conversation section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.recent_conversation.overflow_behavior",
+      "type": "enum",
+      "default": "use_existing_summary_then_truncate",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.recent_conversation section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.user_memory.max_chars",
+      "type": "int",
+      "default": 2400,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.user_memory section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.user_memory.max_items",
+      "type": "int",
+      "default": 8,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.user_memory section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.user_memory.priority",
+      "type": "int",
+      "default": 55,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.user_memory section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.user_memory.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.user_memory section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.project_memory.max_chars",
+      "type": "int",
+      "default": 1800,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.project_memory section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.project_memory.max_items",
+      "type": "int",
+      "default": 6,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.project_memory section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.project_memory.priority",
+      "type": "int",
+      "default": 45,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.project_memory section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.project_memory.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.project_memory section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.relationship_signal.max_chars",
+      "type": "int",
+      "default": 1000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.relationship_signal section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.relationship_signal.max_items",
+      "type": "int",
+      "default": 4,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.relationship_signal section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.relationship_signal.priority",
+      "type": "int",
+      "default": 65,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.relationship_signal section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.relationship_signal.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.relationship_signal section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.internal_state.max_chars",
+      "type": "int",
+      "default": 1200,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.internal_state section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.internal_state.max_items",
+      "type": "int",
+      "default": 6,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.internal_state section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.internal_state.priority",
+      "type": "int",
+      "default": 60,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.internal_state section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.internal_state.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.internal_state section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.interaction_policy.max_chars",
+      "type": "int",
+      "default": 1000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.interaction_policy section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.interaction_policy.max_items",
+      "type": "int",
+      "default": 6,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.interaction_policy section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.interaction_policy.priority",
+      "type": "int",
+      "default": 75,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.interaction_policy section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.interaction_policy.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.interaction_policy section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.task_context.max_chars",
+      "type": "int",
+      "default": 2000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.task_context section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.task_context.max_items",
+      "type": "int",
+      "default": 8,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.task_context section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.task_context.priority",
+      "type": "int",
+      "default": 50,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.task_context section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.task_context.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.task_context section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.local_quality.user_input.max_chars",
+      "type": "int",
+      "default": 3200,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.user_input section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.user_input.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.user_input section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.local_quality.user_input.priority",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.user_input section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.local_quality.user_input.overflow_behavior",
+      "type": "enum",
+      "default": "required",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "local_quality.user_input section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.total_max_chars",
+      "type": "int",
+      "default": 3000,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short profile の prompt 全体最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.system.max_chars",
+      "type": "int",
+      "default": 900,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.system section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.system.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.system section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.system.priority",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.system section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.system.overflow_behavior",
+      "type": "enum",
+      "default": "required",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.system section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.persona.max_chars",
+      "type": "int",
+      "default": 350,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.persona section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.persona.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.persona section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.persona.priority",
+      "type": "int",
+      "default": 95,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.persona section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.persona.overflow_behavior",
+      "type": "enum",
+      "default": "truncate",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.persona section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.safety_constraints.max_chars",
+      "type": "int",
+      "default": 700,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.safety_constraints section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.safety_constraints.max_items",
+      "type": "int",
+      "default": 6,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.safety_constraints section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.safety_constraints.priority",
+      "type": "int",
+      "default": 98,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.safety_constraints section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.safety_constraints.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.safety_constraints section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.recent_conversation.max_chars",
+      "type": "int",
+      "default": 500,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.recent_conversation section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.recent_conversation.max_items",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.recent_conversation section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.recent_conversation.priority",
+      "type": "int",
+      "default": 45,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.recent_conversation section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.recent_conversation.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.recent_conversation section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.user_memory.max_chars",
+      "type": "int",
+      "default": 300,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.user_memory section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.user_memory.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.user_memory section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.user_memory.priority",
+      "type": "int",
+      "default": 35,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.user_memory section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.user_memory.overflow_behavior",
+      "type": "enum",
+      "default": "omit",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.user_memory section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.project_memory.max_chars",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.project_memory section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.project_memory.max_items",
+      "type": "int",
+      "default": 0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.project_memory section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.project_memory.priority",
+      "type": "int",
+      "default": 20,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.project_memory section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.project_memory.overflow_behavior",
+      "type": "enum",
+      "default": "omit",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.project_memory section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.relationship_signal.max_chars",
+      "type": "int",
+      "default": 450,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.relationship_signal section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.relationship_signal.max_items",
+      "type": "int",
+      "default": 2,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.relationship_signal section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.relationship_signal.priority",
+      "type": "int",
+      "default": 70,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.relationship_signal section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.relationship_signal.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.relationship_signal section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.internal_state.max_chars",
+      "type": "int",
+      "default": 350,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.internal_state section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.internal_state.max_items",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.internal_state section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.internal_state.priority",
+      "type": "int",
+      "default": 55,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.internal_state section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.internal_state.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.internal_state section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.interaction_policy.max_chars",
+      "type": "int",
+      "default": 400,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.interaction_policy section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.interaction_policy.max_items",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.interaction_policy section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.interaction_policy.priority",
+      "type": "int",
+      "default": 80,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.interaction_policy section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.interaction_policy.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.interaction_policy section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.task_context.max_chars",
+      "type": "int",
+      "default": 450,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.task_context section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.task_context.max_items",
+      "type": "int",
+      "default": 3,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.task_context section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.task_context.priority",
+      "type": "int",
+      "default": 50,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.task_context section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.task_context.overflow_behavior",
+      "type": "enum",
+      "default": "truncate_items",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.task_context section の overflow 挙動。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.user_input.max_chars",
+      "type": "int",
+      "default": 700,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.user_input section の最大文字数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.user_input.max_items",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.user_input section の最大 item 数。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.user_input.priority",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.user_input section の total overflow 時優先度。"
+    },
+    {
+      "path": "prompt_budget.proactive_short.user_input.overflow_behavior",
+      "type": "enum",
+      "default": "required",
+      "allowedValues": [
+        "required",
+        "truncate",
+        "truncate_items",
+        "omit",
+        "use_existing_summary_then_truncate"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "proactive_short.user_input section の overflow 挙動。"
+    },
+    {
       "path": "server.tls.enabled",
       "type": "bool",
       "default": false,

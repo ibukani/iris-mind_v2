@@ -36,6 +36,11 @@ from iris.runtime.config.memory import (
     RuntimeMemoryVectorQdrantConfig,
 )
 from iris.runtime.config.observability import RuntimeObservabilityConfig
+from iris.runtime.config.prompt_budget import (
+    RuntimePromptBudgetConfig,
+    RuntimePromptProfileBudget,
+    RuntimePromptSectionBudget,
+)
 from iris.runtime.config.root import (
     IrisRuntimeConfig,
     RuntimeConfigMetadata,
@@ -86,6 +91,9 @@ __all__ = [
     "RuntimeObservabilityConfig",
     "RuntimeOllamaConfig",
     "RuntimeOpenAIConfig",
+    "RuntimePromptBudgetConfig",
+    "RuntimePromptProfileBudget",
+    "RuntimePromptSectionBudget",
     "RuntimeQuietHoursConfig",
     "RuntimeSafetyConfig",
     "RuntimeSchedulerConfig",
