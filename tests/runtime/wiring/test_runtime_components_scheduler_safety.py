@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
     from iris.cognitive.workspace.frame import WorkspaceFrame
     from iris.features.definition import FeatureDefinition
+    from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
     from iris.runtime.output_pipeline import RuntimeOutputPipeline
     from iris.runtime.wiring.app import AppStateDependencies
     from iris.runtime.wiring.llm import LLMClientFactory
@@ -76,13 +77,14 @@ def _build_sendable_app(
     state: AppStateDependencies,
     output_pipeline: RuntimeOutputPipeline,
     features: Sequence[FeatureDefinition] = (),
+    inference_scheduler: LocalInferenceResourceScheduler | None = None,
 ) -> IrisApp:
     """標準 composition の app だけを送信可能な test double に差し替える。
 
     Returns:
         送信可能な step を持つ IrisApp。
     """
-    _ = config, client_factory, state, features
+    _ = config, client_factory, state, features, inference_scheduler
     return IrisApp(steps=(_SendableStep(),), output_pipeline=output_pipeline)
 
 
