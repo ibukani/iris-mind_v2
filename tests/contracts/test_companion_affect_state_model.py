@@ -118,9 +118,7 @@ def test_recent_interaction_tone_is_ephemeral_not_durable_memory() -> None:
         valence=0.5,
         confidence=0.9,
     )
-    boundary = companion_affect_state_boundary(
-        CompanionAffectStateKind.RECENT_INTERACTION_TONE
-    )
+    boundary = companion_affect_state_boundary(CompanionAffectStateKind.RECENT_INTERACTION_TONE)
 
     assert tone.persistence is CompanionAffectPersistence.EPHEMERAL
     assert boundary.durable_update_target is False

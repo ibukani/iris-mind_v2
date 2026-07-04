@@ -91,10 +91,7 @@ class CompanionAffectStateBoundary(BaseModel):
         if self.worker_candidate_target and not self.requires_candidate_update:
             message = "worker candidate targets must require candidate update"
             raise ValueError(message)
-        if (
-            self.production_ordering_required_for_durable_update
-            and not self.durable_update_target
-        ):
+        if self.production_ordering_required_for_durable_update and not self.durable_update_target:
             message = "production ordering gate is meaningful only for durable update targets"
             raise ValueError(message)
         return self
@@ -258,9 +255,7 @@ class RecentInteractionTone(BaseModel):
     kind: Literal[CompanionAffectStateKind.RECENT_INTERACTION_TONE] = (
         CompanionAffectStateKind.RECENT_INTERACTION_TONE
     )
-    owner_kind: Literal[CompanionAffectOwnerKind.INTERACTION] = (
-        CompanionAffectOwnerKind.INTERACTION
-    )
+    owner_kind: Literal[CompanionAffectOwnerKind.INTERACTION] = CompanionAffectOwnerKind.INTERACTION
     persistence: Literal[CompanionAffectPersistence.EPHEMERAL] = (
         CompanionAffectPersistence.EPHEMERAL
     )
