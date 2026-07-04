@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Protocol
 from loguru import logger
 
 from iris.core.datetime_utils import now_utc
+from iris.runtime.learning.policy import BackgroundJobKindPolicy, BackgroundJobQueuePolicy
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -39,7 +40,7 @@ class BackgroundJobRunner:
         *,
         max_jobs_per_run: int = 5,
         lease_seconds: float = 30.0,
-        retry_backoff_seconds: float = 30.0,
+        queue_policy: BackgroundJobQueuePolicy | None = None,
         now: Callable[[], datetime] = now_utc,
     ) -> None:
         """キュー、worker、batch/lease/retry 設定を注入する。"""
@@ -47,7 +48,9 @@ class BackgroundJobRunner:
         self._workers = {worker.kind: worker for worker in workers}
         self._max_jobs_per_run = max_jobs_per_run
         self._lease_seconds = lease_seconds
-        self._retry_backoff_seconds = retry_backoff_seconds
+        self._queue_policy = queue_policy or BackgroundJobQueuePolicy(
+            default_policy=BackgroundJobKindPolicy(concurrency_limit=max_jobs_per_run)
+        )
         self._now = now
 
     async def run_once(self) -> int:
@@ -61,35 +64,50 @@ class BackgroundJobRunner:
             started_at,
             self._max_jobs_per_run,
             self._lease_seconds,
+            policy=self._queue_policy,
         )
         for job in jobs:
-            worker = self._workers.get(job.kind)
-            if worker is None:
-                await self._queue.mark_permanent_failure(
-                    job.job_id,
-                    self._now(),
-                    f"no worker registered for {job.kind}",
-                )
-                logger.error("background job worker missing: {}", job.kind)
-                continue
-            failure = _CaptureWorkerFailure()
-            with failure:
-                await asyncio.to_thread(worker.run, job)
-            if failure.exception is not None:
-                failed_at = self._now()
-                await self._queue.mark_retryable_failure(
-                    job.job_id,
-                    failed_at,
-                    str(failure.exception),
-                    failed_at + timedelta(seconds=self._retry_backoff_seconds),
-                )
-                logger.opt(exception=failure.exception).error(
-                    "background job failed: {}",
-                    job.job_id,
-                )
-                continue
-            await self._queue.mark_succeeded(job.job_id, self._now())
+            await self._run_job(job)
+        await self._queue.collect_metrics(self._now())
         return len(jobs)
+
+    async def _run_job(self, job: BackgroundJobRecord) -> None:
+        worker = self._workers.get(job.kind)
+        if worker is None:
+            await self._queue.mark_permanent_failure(
+                job.job_id,
+                self._now(),
+                f"no worker registered for {job.kind}",
+            )
+            logger.error("background job worker missing: {}", job.kind)
+            return
+        failure = _CaptureWorkerFailure()
+        with failure:
+            await asyncio.wait_for(
+                asyncio.to_thread(worker.run, job),
+                timeout=self._queue_policy.for_kind(job.kind).timeout_seconds,
+            )
+        if failure.exception is not None:
+            await self._mark_retryable_failure(job, failure.exception)
+            return
+        await self._queue.mark_succeeded(job.job_id, self._now())
+
+    async def _mark_retryable_failure(self, job: BackgroundJobRecord, exc: Exception) -> None:
+        failed_at = self._now()
+        retry_after = failed_at + timedelta(seconds=self._retry_delay_seconds(job))
+        await self._queue.mark_retryable_failure(
+            job.job_id,
+            failed_at,
+            str(exc),
+            retry_after,
+        )
+        logger.opt(exception=exc).error(
+            "background job failed: {}",
+            job.job_id,
+        )
+
+    def _retry_delay_seconds(self, job: BackgroundJobRecord) -> float:
+        return self._queue_policy.for_kind(job.kind).retry_delay_seconds(job.attempts)
 
 
 class _CaptureWorkerFailure:

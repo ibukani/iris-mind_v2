@@ -15,6 +15,7 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.model_policy import ModelCallKind, ModelCallSite
 from iris.contracts.observations import (
     ActorMessageObservation,
     ObservationContext,
@@ -59,6 +60,11 @@ async def test_runtime_hook_enqueues_implicit_candidate_job_idempotently() -> No
     assert job.kind is BackgroundJobKind.MEMORY_EXTRACTION
     assert job.max_attempts == 4
     assert isinstance(job.payload, RuntimeLearningCandidateJobPayload)
+    assert job.resource_profile.uses_llm is True
+    descriptor = job.resource_profile.model_call_descriptor
+    assert descriptor is not None
+    assert descriptor.call_kind is ModelCallKind.BACKGROUND_LLM
+    assert descriptor.call_site is ModelCallSite.MEMORY_EXTRACTION
     assert job.payload.source_observation_id == event.source_observation_id
     assert job.payload.input_text == "次からもっと短く答えて"
 

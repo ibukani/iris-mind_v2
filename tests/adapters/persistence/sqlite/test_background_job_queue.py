@@ -15,16 +15,25 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.model_policy import ModelCallDescriptor, ModelCallKind, ModelCallSite
 from iris.contracts.observations import ObservationKind, UserFeedbackKind
 from iris.core.ids import AccountId, ActorId, ObservationId, SessionId, SpaceId
 from iris.runtime.learning.jobs import (
     BackgroundJobId,
     BackgroundJobKind,
     BackgroundJobRecord,
+    BackgroundJobResourceProfile,
     BackgroundJobStatus,
     DeferredLearningJobPayload,
     MemoryBackgroundJobPayload,
     RuntimeLearningCandidateJobPayload,
+)
+from iris.runtime.learning.policy import (
+    BackgroundJobBackpressureMode,
+    BackgroundJobBackpressureReason,
+    BackgroundJobEnqueueDecision,
+    BackgroundJobKindPolicy,
+    BackgroundJobQueuePolicy,
 )
 from iris.runtime.learning.queue import BackgroundJobQueueError
 
@@ -197,4 +206,141 @@ async def test_unknown_job_raises_queue_error(tmp_path: Path) -> None:
     with pytest.raises(BackgroundJobQueueError):
         await queue.get(BackgroundJobId("missing"))
 
+    queue.close()
+
+
+async def test_enqueue_with_policy_rejects_when_max_pending_reached(tmp_path: Path) -> None:
+    """SQLite queue でも kind別 pending 上限に達した enqueue は reject する。"""
+    queue = _queue(tmp_path)
+    policy = BackgroundJobQueuePolicy(
+        default_policy=BackgroundJobKindPolicy(
+            max_pending_jobs=1,
+            backpressure_mode=BackgroundJobBackpressureMode.REJECT,
+        )
+    )
+
+    accepted = await queue.enqueue_with_policy(_job("policy-first"), now=_NOW, policy=policy)
+    rejected = await queue.enqueue_with_policy(_job("policy-second"), now=_NOW, policy=policy)
+
+    assert accepted.decision is BackgroundJobEnqueueDecision.ACCEPTED
+    assert rejected.decision is BackgroundJobEnqueueDecision.REJECTED
+    assert rejected.reason is BackgroundJobBackpressureReason.MAX_PENDING_JOBS
+    queue.close()
+
+
+async def test_enqueue_with_policy_rejects_retry_storm(tmp_path: Path) -> None:
+    """SQLite queue でも failed_retryable backlog は retry storm として reject する。"""
+    queue = _queue(tmp_path)
+    policy = BackgroundJobQueuePolicy(
+        default_policy=BackgroundJobKindPolicy(
+            max_pending_jobs=1,
+            backpressure_mode=BackgroundJobBackpressureMode.REJECT,
+        )
+    )
+    first = await queue.enqueue(_job("retry-storm-first"))
+    await queue.lease_due(_NOW, 1, 10.0)
+    await queue.mark_retryable_failure(first.job_id, _NOW, "retry", _NOW)
+
+    result = await queue.enqueue_with_policy(
+        _job("retry-storm-second"),
+        now=_NOW,
+        policy=policy,
+    )
+
+    assert result.decision is BackgroundJobEnqueueDecision.REJECTED
+    assert result.reason is BackgroundJobBackpressureReason.RETRY_STORM_PREVENTION
+    queue.close()
+
+
+async def test_collect_metrics_reports_per_kind_counts(tmp_path: Path) -> None:
+    """SQLite queue metrics は kind 別状態件数を返す。"""
+    queue = _queue(tmp_path)
+    first = await queue.enqueue(_job("metrics-first"))
+    await queue.enqueue(
+        _job("metrics-second").model_copy(update={"kind": BackgroundJobKind.MEMORY_EXTRACTION})
+    )
+    leased = (await queue.lease_due(_NOW, 1, 30.0))[0]
+    assert leased.job_id == first.job_id
+
+    metrics = await queue.collect_metrics(_NOW)
+
+    by_kind = {kind_metrics.kind: kind_metrics for kind_metrics in metrics.per_kind}
+    assert metrics.queue_depth == 1
+    assert metrics.leased == 1
+    assert by_kind[BackgroundJobKind.REFLECTION].leased == 1
+    assert by_kind[BackgroundJobKind.MEMORY_EXTRACTION].pending == 1
+    queue.close()
+
+
+async def test_policy_lease_ignores_expired_leases(tmp_path: Path) -> None:
+    """SQLite queue の kind別 concurrency は期限切れ lease を active 扱いしない。"""
+    queue = _queue(tmp_path)
+    first = await queue.enqueue(_job("expired-first"))
+    await queue.enqueue(_job("expired-second"))
+    policy = BackgroundJobQueuePolicy(default_policy=BackgroundJobKindPolicy(concurrency_limit=1))
+
+    leased_first = await queue.lease_due(_NOW, 1, 10.0, policy=policy)
+    blocked = await queue.lease_due(_NOW, 1, 10.0, policy=policy)
+    after_expiry = await queue.lease_due(_NOW + timedelta(seconds=10), 2, 10.0, policy=policy)
+
+    assert leased_first[0].job_id == first.job_id
+    assert blocked == ()
+    assert after_expiry[0].job_id == first.job_id
+    queue.close()
+
+
+async def test_resource_profile_and_defer_reason_roundtrip(tmp_path: Path) -> None:
+    """Resource profile と defer reason は SQLite で永続化される。"""
+    queue = _queue(tmp_path)
+    policy = BackgroundJobQueuePolicy(
+        default_policy=BackgroundJobKindPolicy(idle_only=True, defer_seconds_when_saturated=45.0)
+    )
+    descriptor = ModelCallDescriptor(
+        call_kind=ModelCallKind.BACKGROUND_LLM,
+        call_site=ModelCallSite.MEMORY_EXTRACTION,
+    )
+    profile = BackgroundJobResourceProfile(
+        uses_llm=True,
+        idle_only=True,
+        model_call_descriptor=descriptor,
+    )
+
+    result = await queue.enqueue_with_policy(
+        _job("profile").model_copy(update={"resource_profile": profile}),
+        now=_NOW,
+        policy=policy,
+        idle_available=False,
+    )
+    assert result.record is not None
+    queue.close()
+
+    reopened = _queue(tmp_path)
+    stored = await reopened.get(result.record.job_id)
+
+    assert stored.defer_reason == BackgroundJobBackpressureReason.IDLE_ONLY_NOT_AVAILABLE.value
+    assert stored.not_before == _NOW + timedelta(seconds=45)
+    assert stored.resource_profile.uses_llm is True
+    assert stored.resource_profile.idle_only is True
+    assert stored.resource_profile.model_call_descriptor == descriptor
+    reopened.close()
+
+
+async def test_enqueue_with_policy_accept_mode_ignores_pressure_reason(tmp_path: Path) -> None:
+    """SQLite queue の Accept mode は pressure reason があっても保存する。"""
+    queue = _queue(tmp_path)
+    policy = BackgroundJobQueuePolicy(
+        default_policy=BackgroundJobKindPolicy(
+            max_pending_jobs=1,
+            backpressure_mode=BackgroundJobBackpressureMode.ACCEPT,
+        )
+    )
+
+    first = await queue.enqueue_with_policy(_job("accept-first"), now=_NOW, policy=policy)
+    second = await queue.enqueue_with_policy(_job("accept-second"), now=_NOW, policy=policy)
+
+    assert first.decision is BackgroundJobEnqueueDecision.ACCEPTED
+    assert second.decision is BackgroundJobEnqueueDecision.ACCEPTED
+    assert second.reason is None
+    assert second.record is not None
+    assert await queue.get(second.record.job_id) == second.record
     queue.close()

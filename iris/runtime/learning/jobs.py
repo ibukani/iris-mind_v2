@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import NewType
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from iris.contracts.learning import RuntimeLearningEventKind
 from iris.contracts.memory import MemoryKind
@@ -15,6 +15,7 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.model_policy import ModelCallDescriptor
 from iris.contracts.observations import ObservationKind, UserFeedbackKind
 from iris.core.ids import AccountId, ActorId, ObservationId, SessionId, SpaceId
 
@@ -42,6 +43,16 @@ class BackgroundJobKind(StrEnum):
     EPISODIC_TO_SEMANTIC_PROMOTION = "episodic_to_semantic_promotion"
     REFLECTION = "reflection"
     LANGMEM_EXTRACTION = "langmem_extraction"
+
+
+class BackgroundJobResourceProfile(BaseModel):
+    """ジョブが推論資源を使うかを表す lightweight metadata。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    uses_llm: bool = False
+    idle_only: bool = False
+    model_call_descriptor: ModelCallDescriptor | None = None
 
 
 class MemoryBackgroundJobPayload(BaseModel):
@@ -108,8 +119,12 @@ class BackgroundJobRecord(BaseModel):
     attempts: int = 0
     max_attempts: int = 3
     not_before: datetime
+    resource_profile: BackgroundJobResourceProfile = Field(
+        default_factory=BackgroundJobResourceProfile
+    )
     leased_until: datetime | None = None
     idempotency_key: str
     created_at: datetime
     updated_at: datetime
     last_error: str | None = None
+    defer_reason: str | None = None

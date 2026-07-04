@@ -15,6 +15,7 @@ from iris.runtime.learning.jobs import (
     BackgroundJobStatus,
     DeferredLearningJobPayload,
 )
+from iris.runtime.learning.policy import BackgroundJobKindPolicy, BackgroundJobQueuePolicy
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.learning.runner import BackgroundJobRunner
 
@@ -72,7 +73,6 @@ async def test_worker_failure_is_retryable_and_does_not_stop_batch() -> None:
     runner = BackgroundJobRunner(
         queue,
         (worker,),
-        retry_backoff_seconds=0.0,
         now=lambda: first.not_before,
     )
     messages: list[str] = []
@@ -92,3 +92,53 @@ async def test_missing_worker_is_permanent_failure() -> None:
     job = await queue.enqueue(_job("missing"))
     await BackgroundJobRunner(queue, (), now=lambda: job.not_before).run_once()
     assert (await queue.get(job.job_id)).status is BackgroundJobStatus.FAILED_PERMANENT
+
+
+class _SleepingWorker:
+    kind = BackgroundJobKind.REFLECTION
+
+    def run(self, job: BackgroundJobRecord) -> None:
+        """Timeout test 用に worker thread を短時間ブロックする。"""
+        del job
+        threading.Event().wait(0.05)
+
+
+async def test_worker_timeout_is_retryable_failure() -> None:
+    """kind別 timeout 超過を retryable failure として扱う。"""
+    queue = InMemoryBackgroundJobQueue()
+    job = await queue.enqueue(_job("timeout"))
+    runner = BackgroundJobRunner(
+        queue,
+        (_SleepingWorker(),),
+        queue_policy=BackgroundJobQueuePolicy(
+            default_policy=BackgroundJobKindPolicy(timeout_seconds=0.01)
+        ),
+        now=lambda: job.not_before,
+    )
+
+    assert await runner.run_once() == 1
+
+    stored = await queue.get(job.job_id)
+    assert stored.status is BackgroundJobStatus.FAILED_RETRYABLE
+
+
+async def test_worker_failure_uses_exponential_retry_backoff() -> None:
+    """Worker 失敗時は attempts に応じた指数 backoff を使う。"""
+    queue = InMemoryBackgroundJobQueue()
+    job = await queue.enqueue(_job("backoff"))
+    runner = BackgroundJobRunner(
+        queue,
+        (_Worker(fail=True),),
+        queue_policy=BackgroundJobQueuePolicy(
+            default_policy=BackgroundJobKindPolicy(
+                retry_backoff_base_seconds=5.0,
+                retry_backoff_max_seconds=5.0,
+            )
+        ),
+        now=lambda: job.not_before,
+    )
+
+    assert await runner.run_once() == 1
+
+    stored = await queue.get(job.job_id)
+    assert stored.not_before == job.not_before.replace(second=5)

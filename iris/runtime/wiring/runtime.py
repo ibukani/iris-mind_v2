@@ -29,7 +29,13 @@ from iris.runtime.learning.implicit_review_pipeline import (
     AccountAwareImplicitMemoryCandidateWorker,
     FilteringImplicitMemoryCandidateHook,
 )
+from iris.runtime.learning.jobs import BackgroundJobKind
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
+from iris.runtime.learning.policy import (
+    BackgroundJobBackpressureMode,
+    BackgroundJobKindPolicy,
+    BackgroundJobQueuePolicy,
+)
 from iris.runtime.learning.review_promotion import ApprovedMemoryCandidatePromoter
 from iris.runtime.learning.review_service import MemoryCandidateReviewService
 from iris.runtime.learning.runner import BackgroundJobRunner
@@ -76,6 +82,7 @@ if TYPE_CHECKING:
     from iris.features.definition import LearningHook
     from iris.runtime.app import IrisApp
     from iris.runtime.config import IrisRuntimeConfig
+    from iris.runtime.config.learning import RuntimeBackgroundJobKindPolicyConfig
     from iris.runtime.output_pipeline import RuntimeOutputPipeline
     from iris.runtime.scheduler.runner import SchedulerRunner
 
@@ -333,6 +340,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
             ),
         ),
         max_jobs_per_run=config.learning.max_jobs_per_run,
+        queue_policy=_background_job_queue_policy_from_config(config),
     )
     scheduler_runner = wire_scheduler_runner(
         runtime_service=runtime_service,
@@ -355,6 +363,73 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         background_job_runner=background_job_runner,
         memory_candidate_review_service=memory_candidate_review_service,
         memory_candidate_promoter=memory_candidate_promoter,
+    )
+
+
+def _background_job_queue_policy_from_config(config: IrisRuntimeConfig) -> BackgroundJobQueuePolicy:
+    """Runtime config から BackgroundJobQueuePolicy を構築する。
+
+    Returns:
+        BackgroundJobQueuePolicy。policy 無効時は permissive policy。
+    """
+    policy_config = config.learning.background_job_policy
+    if not policy_config.enabled:
+        return BackgroundJobQueuePolicy(
+            default_policy=BackgroundJobKindPolicy(
+                concurrency_limit=config.learning.max_jobs_per_run,
+                timeout_seconds=policy_config.default_timeout_seconds,
+                max_pending_jobs=1_000_000,
+                retry_backoff_base_seconds=policy_config.retry_backoff_base_seconds,
+                retry_backoff_max_seconds=policy_config.retry_backoff_max_seconds,
+                defer_seconds_when_saturated=policy_config.defer_seconds_when_saturated,
+                backpressure_mode=BackgroundJobBackpressureMode.ACCEPT,
+            ),
+            per_kind={},
+        )
+    default_policy = BackgroundJobKindPolicy(
+        concurrency_limit=policy_config.default_concurrency_limit,
+        timeout_seconds=policy_config.default_timeout_seconds,
+        max_pending_jobs=policy_config.default_max_pending_jobs,
+        retry_backoff_base_seconds=policy_config.retry_backoff_base_seconds,
+        retry_backoff_max_seconds=policy_config.retry_backoff_max_seconds,
+        defer_seconds_when_saturated=policy_config.defer_seconds_when_saturated,
+        backpressure_mode=BackgroundJobBackpressureMode(policy_config.backpressure_mode),
+    )
+    return BackgroundJobQueuePolicy(
+        default_policy=default_policy,
+        per_kind={
+            BackgroundJobKind.MEMORY_EXTRACTION: _background_job_kind_policy(
+                policy_config.kinds.memory_extraction,
+                default_policy=default_policy,
+            ),
+            BackgroundJobKind.REFLECTION: _background_job_kind_policy(
+                policy_config.kinds.reflection,
+                default_policy=default_policy,
+            ),
+        },
+    )
+
+
+def _background_job_kind_policy(
+    config: RuntimeBackgroundJobKindPolicyConfig,
+    *,
+    default_policy: BackgroundJobKindPolicy,
+) -> BackgroundJobKindPolicy:
+    """Runtime kind policy config から queue policy を構築する。
+
+    Returns:
+        BackgroundJobKindPolicy。
+    """
+    return BackgroundJobKindPolicy(
+        concurrency_limit=config.concurrency_limit,
+        timeout_seconds=config.timeout_seconds,
+        max_pending_jobs=config.max_pending_jobs,
+        retry_backoff_base_seconds=default_policy.retry_backoff_base_seconds,
+        retry_backoff_max_seconds=default_policy.retry_backoff_max_seconds,
+        defer_seconds_when_saturated=default_policy.defer_seconds_when_saturated,
+        backpressure_mode=default_policy.backpressure_mode,
+        uses_llm=config.uses_llm,
+        idle_only=config.idle_only,
     )
 
 
@@ -613,6 +688,7 @@ def _wire_builtin_runtime_learning_hooks(
             max_attempts=config.learning.max_attempts,
             observation_observer=LoggingRuntimeObservationObserver(),
             latency_budget=config.observability.latency_budget,
+            queue_policy=_background_job_queue_policy_from_config(config),
         ),
     )
 

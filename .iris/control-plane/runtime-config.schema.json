@@ -132,6 +132,190 @@
       "description": "Review store に入れる implicit candidate の最大文字数。"
     },
     {
+      "path": "learning.background_job_policy.enabled",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "BackgroundJobQueue の metrics / backpressure policy を有効化する。"
+    },
+    {
+      "path": "learning.background_job_policy.default_concurrency_limit",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "background job kind ごとの既定同時 lease 上限。"
+    },
+    {
+      "path": "learning.background_job_policy.default_timeout_seconds",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "background job worker の既定 soft timeout 秒数。"
+    },
+    {
+      "path": "learning.background_job_policy.default_max_pending_jobs",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "kind ごとの既定 pending job 上限。"
+    },
+    {
+      "path": "learning.background_job_policy.retry_backoff_base_seconds",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "retry storm を避ける指数 backoff の基準秒数。"
+    },
+    {
+      "path": "learning.background_job_policy.retry_backoff_max_seconds",
+      "type": "float",
+      "default": 1800.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "retry storm を避ける指数 backoff の最大秒数。"
+    },
+    {
+      "path": "learning.background_job_policy.defer_seconds_when_saturated",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "backpressure で defer するときの not_before 延長秒数。"
+    },
+    {
+      "path": "learning.background_job_policy.backpressure_mode",
+      "type": "enum",
+      "default": "defer",
+      "allowedValues": [
+        "accept",
+        "defer",
+        "reject"
+      ],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "kind pressure 発生時の既定 enqueue 方針。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.memory_extraction.concurrency_limit",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction job の同時 lease 上限。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.memory_extraction.timeout_seconds",
+      "type": "float",
+      "default": 30.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction job worker の soft timeout 秒数。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.memory_extraction.max_pending_jobs",
+      "type": "int",
+      "default": 100,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction job の pending 上限。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.memory_extraction.uses_llm",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction job が LLM 資源を使う可能性を示す。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.memory_extraction.idle_only",
+      "type": "bool",
+      "default": false,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "memory_extraction job を idle 時だけ enqueue する。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.reflection.concurrency_limit",
+      "type": "int",
+      "default": 1,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection job の同時 lease 上限。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.reflection.timeout_seconds",
+      "type": "float",
+      "default": 60.0,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection job worker の soft timeout 秒数。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.reflection.max_pending_jobs",
+      "type": "int",
+      "default": 50,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection job の pending 上限。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.reflection.uses_llm",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection job が LLM 資源を使う可能性を示す。"
+    },
+    {
+      "path": "learning.background_job_policy.kinds.reflection.idle_only",
+      "type": "bool",
+      "default": true,
+      "allowedValues": [],
+      "env": null,
+      "secret": false,
+      "editable": true,
+      "description": "reflection job を idle 時だけ enqueue する。"
+    },
+    {
       "path": "model_call_budget.enabled",
       "type": "bool",
       "default": true,
