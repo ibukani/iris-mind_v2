@@ -17,10 +17,12 @@ from iris.cognitive.cycle.models import (
     PipelineStepResult,
     PolicyResult,
     RelationshipResult,
+    SafetyContextResult,
     StepStatus,
 )
 from iris.cognitive.workspace.frame import (
     AffectSnapshot,
+    AppraisalSemanticsSnapshot,
     GoalCandidate,
     InterpretedInput,
     MemorySummary,
@@ -37,6 +39,7 @@ if TYPE_CHECKING:
     from iris.contracts.actions import ActionPlan
     from iris.contracts.observations import Observation
     from iris.contracts.policy import ActionPreference, PolicyConstraint
+    from iris.contracts.safety import SafetyContext
 
 
 class FrameBuilder:
@@ -113,6 +116,10 @@ class FrameBuilder:
                 dominance=result.dominance,
                 affect_summary=result.affect_summary,
             ),
+            appraisal=AppraisalSemanticsSnapshot(
+                signals=result.appraisal_signals,
+                summary=result.appraisal_summary,
+            ),
         )
         return _rebuild_frame(frame, updates)
 
@@ -157,6 +164,17 @@ class FrameBuilder:
                 GoalCandidate(name=goal, reason="pipeline", priority=index)
                 for index, goal in enumerate(result.goals)
             ),
+        )
+        return _rebuild_frame(frame, updates)
+
+    @staticmethod
+    def _apply_safety_context(
+        frame: WorkspaceFrame,
+        result: SafetyContextResult,
+    ) -> WorkspaceFrame:
+        updates = replace(
+            _current_updates(frame),
+            safety_contexts=result.safety_contexts,
         )
         return _rebuild_frame(frame, updates)
 
@@ -214,6 +232,8 @@ class FrameBuilder:
         match result:
             case AffectBaselineLoadResult():
                 return FrameBuilder._apply_affect_baseline_load(frame, result)
+            case SafetyContextResult():
+                return FrameBuilder._apply_safety_context(frame, result)
             case AffectPersistenceResult() | MemoryWriteResult():
                 return frame
             case _:
@@ -227,10 +247,12 @@ class _FrameUpdates:
     interpreted_input: InterpretedInput | None
     memory_summary: MemorySummary
     affect: AffectSnapshot
+    appraisal: AppraisalSemanticsSnapshot
     relationship: RelationshipSnapshot
     goals: tuple[GoalCandidate, ...]
     constraints: tuple[PolicyConstraint, ...]
     action_preferences: tuple[ActionPreference, ...]
+    safety_contexts: tuple[SafetyContext, ...]
     candidate_action_plans: tuple[ActionPlan, ...]
     policy_summary: str | None
 
@@ -240,10 +262,12 @@ def _current_updates(frame: WorkspaceFrame) -> _FrameUpdates:
         interpreted_input=frame.interpreted_input,
         memory_summary=frame.memory_summary,
         affect=frame.affect,
+        appraisal=frame.appraisal,
         relationship=frame.relationship,
         goals=frame.goals,
         constraints=frame.constraints,
         action_preferences=frame.action_preferences,
+        safety_contexts=frame.safety_contexts,
         candidate_action_plans=frame.candidate_action_plans,
         policy_summary=frame.policy_summary,
     )
@@ -263,10 +287,12 @@ def _rebuild_frame(
         interpreted_input=updates.interpreted_input,
         memory_summary=updates.memory_summary,
         affect=updates.affect,
+        appraisal=updates.appraisal,
         relationship=updates.relationship,
         goals=updates.goals,
         constraints=updates.constraints,
         action_preferences=updates.action_preferences,
+        safety_contexts=updates.safety_contexts,
         candidate_action_plans=updates.candidate_action_plans,
         policy_summary=updates.policy_summary,
         actor_context=frame.actor_context,

@@ -6,10 +6,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from iris.contracts.availability import AvailabilityStatus
+from iris.contracts.safety import SafetyContextSeverity
+
 if TYPE_CHECKING:
     from datetime import datetime
 
-from iris.contracts.availability import AvailabilityStatus
+    from iris.contracts.safety import SafetyContext
 
 
 class SafetyRiskLevel(StrEnum):
@@ -44,6 +47,7 @@ class SafetyPolicyContext:
     source: DeliverySource
     target_key: str
     policy_constraint_names: tuple[str, ...] = ()
+    safety_contexts: tuple[SafetyContext, ...] = ()
     availability_status: AvailabilityStatus | None = None
     in_quiet_hours: bool = False
     recent_block_count: int = 0
@@ -91,6 +95,11 @@ class SafetyPolicyEngine:
         if context.source is not DeliverySource.PROACTIVE_IDLE_TICK:
             return None
         checks = (
+            (
+                _has_high_risk_safety_context(context),
+                "proactive_high_risk_safety_context",
+                SafetyRiskLevel.HIGH,
+            ),
             (
                 "sensitive_safety_context" in context.policy_constraint_names,
                 "proactive_sensitive_safety_context",
@@ -141,3 +150,7 @@ def _block(
         not_before=None,
         audit=audit,
     )
+
+
+def _has_high_risk_safety_context(context: SafetyPolicyContext) -> bool:
+    return any(item.severity is SafetyContextSeverity.HIGH for item in context.safety_contexts)

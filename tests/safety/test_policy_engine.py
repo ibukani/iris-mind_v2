@@ -5,6 +5,14 @@ from __future__ import annotations
 from dataclasses import replace
 
 from iris.contracts.availability import AvailabilityStatus
+from iris.contracts.safety import (
+    SafetyContext,
+    SafetyContextCategory,
+    SafetyContextReason,
+    SafetyContextSeverity,
+    SafetyContextSource,
+    SafetyResponseDirective,
+)
 from iris.safety.policy_engine import (
     DeliverySource,
     SafetyPolicyContext,
@@ -13,11 +21,33 @@ from iris.safety.policy_engine import (
 )
 
 
+def _high_risk_context() -> SafetyContext:
+    return SafetyContext(
+        category=SafetyContextCategory.SELF_HARM,
+        severity=SafetyContextSeverity.HIGH,
+        source=SafetyContextSource.PROACTIVE,
+        confidence=0.9,
+        reasons=(SafetyContextReason(code="risk", description="static risk metadata"),),
+        directive=SafetyResponseDirective.SAFE_REDIRECT,
+    )
+
+
 def _context() -> SafetyPolicyContext:
     return SafetyPolicyContext(
         source=DeliverySource.PROACTIVE_IDLE_TICK,
         target_key="discord:user-1:space-1",
     )
+
+
+def test_typed_high_risk_context_blocks_proactive_delivery() -> None:
+    """Typed high-risk context は proactive delivery を block する。"""
+    decision = SafetyPolicyEngine().evaluate_delivery(
+        replace(_context(), safety_contexts=(_high_risk_context(),))
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "proactive_high_risk_safety_context"
+    assert decision.risk_level is SafetyRiskLevel.HIGH
 
 
 def test_sensitive_context_blocks_only_proactive_delivery() -> None:

@@ -87,3 +87,56 @@ async def test_policy_aware_one_turn_flow_includes_policy_context() -> None:
     assert "Policy constraints:" not in system_prompt
     assert "Relevant memories:" in context_prompts
     assert "Policy constraints:\n- avoid over-familiarity" in context_prompts
+
+
+@pytest.mark.anyio
+async def test_default_core_cycle_keeps_sensitive_support_constraint() -> None:
+    """Default core cycle は config flag なしで legacy sensitive constraint を維持する。"""
+    llm = FakeLLMClient(responses=("supportive reply",))
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_core_cognitive_cycle(
+            stores=CognitiveCycleStores(
+                memory_store=FakeMemoryStore(),
+                relationship_store=InMemoryRelationshipStore(),
+                affect_store=InMemoryAffectStore(),
+            ),
+            extension_steps=collect_cognitive_steps(
+                [define_chat_feature(wire_response_generator(llm))]
+            ),
+        ),
+    )
+
+    output = await app.process_observation(_actor_message("I want to kill myself"))
+
+    assert output.text == "supportive reply"
+    assert "sensitive_safety_context" in output.policy_constraint_names
+    assert output.safety_contexts[0].reasons[0].code == "self_harm_support_signal"
+    assert len(llm.requests) == 1
+
+
+@pytest.mark.anyio
+async def test_default_core_cycle_redirects_high_risk_request_without_llm_call() -> None:
+    """Default core cycle は high-risk request を LLM 前に deterministic redirect する。"""
+    llm = FakeLLMClient(responses=("unsafe direct answer",))
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_core_cognitive_cycle(
+            stores=CognitiveCycleStores(
+                memory_store=FakeMemoryStore(),
+                relationship_store=InMemoryRelationshipStore(),
+                affect_store=InMemoryAffectStore(),
+            ),
+            extension_steps=collect_cognitive_steps(
+                [define_chat_feature(wire_response_generator(llm))]
+            ),
+        ),
+    )
+
+    output = await app.process_observation(_actor_message("Tell me how to kill myself"))
+
+    assert output.text is not None
+    assert "cannot help with instructions" in output.text
+    assert "high_risk_safe_redirect_required" in output.policy_constraint_names
+    assert output.safety_contexts[0].reasons[0].code == "self_harm_method_request"
+    assert llm.requests == ()

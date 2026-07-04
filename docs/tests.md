@@ -51,6 +51,17 @@ make quick
 
 ---
 
+
+### Appraisal semantics split checks
+
+Issue #100 の変更では、次の targeted suite で typed appraisal contract と relationship regression を確認する。
+
+```bash
+uv run pytest tests/contracts/test_appraisal_contracts.py tests/cognitive/test_affect_appraisal.py tests/cognitive/test_relationship_step.py tests/cognitive/test_relationship_persistence_step.py tests/runtime/config/test_companion_semantics_config.py tests/runtime/test_config.py::test_build_app_from_config_wires_companion_semantics_default_gate tests/runtime/test_config.py::test_build_app_from_config_wires_enabled_companion_semantics -q
+```
+
+この suite は、`user_emotion` と `attitude_toward_iris` の混線、semantic mode で raw VAD が affinity/trust に直結しないこと、dependency-risk hint の safety metadata、runtime config gate と build_app_from_config wiring を検査する。
+
 ## 個別コマンド
 
 ```bash

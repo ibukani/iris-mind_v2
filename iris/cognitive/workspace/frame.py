@@ -5,10 +5,12 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from iris.contracts.actions import ActionPlan
+from iris.contracts.appraisal import AppraisalSemantics
 from iris.contracts.conversation import ConversationRecord
 from iris.contracts.memory import MemorySearchResult
 from iris.contracts.observations import Observation
 from iris.contracts.policy import ActionPreference, PolicyConstraint
+from iris.contracts.safety import SafetyContext
 from iris.contracts.workspace_context import (
     ActorContextSnapshot,
     SituationContextSnapshot,
@@ -46,6 +48,10 @@ class AffectSnapshot(BaseModel):
     affect_summary: str | None = None
 
 
+class AppraisalSemanticsSnapshot(AppraisalSemantics):
+    """現在のターンで分離された appraisal semantics。"""
+
+
 class RelationshipSnapshot(BaseModel):
     """現在のアクターとの関係状態。"""
 
@@ -77,10 +83,12 @@ class WorkspaceFrame(BaseModel):
     interpreted_input: InterpretedInput | None = None
     memory_summary: MemorySummary = Field(default_factory=MemorySummary)
     affect: AffectSnapshot = Field(default_factory=AffectSnapshot)
+    appraisal: AppraisalSemanticsSnapshot = Field(default_factory=AppraisalSemanticsSnapshot)
     relationship: RelationshipSnapshot = Field(default_factory=RelationshipSnapshot)
     goals: tuple[GoalCandidate, ...] = ()
     constraints: tuple[PolicyConstraint, ...] = ()
     action_preferences: tuple[ActionPreference, ...] = ()
+    safety_contexts: tuple[SafetyContext, ...] = ()
     candidate_action_plans: tuple[ActionPlan, ...] = ()
     policy_summary: str | None = None
     actor_context: ActorContextSnapshot = Field(default_factory=ActorContextSnapshot)

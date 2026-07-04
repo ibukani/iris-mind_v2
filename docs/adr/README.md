@@ -32,6 +32,7 @@ Implementation anchors
 | [0015](0015-local-model-call-budget-and-cascade-policy.md) | Accepted | Local model call budget と cascade policy で user-facing hot path の large LLM 呼び出しを制限する。 |
 | [0016](0016-prompt-budget-and-context-compression.md) | Accepted | Prompt section budget と context compression policy で prompt size、trust boundary、overflow を制御する。 |
 | [0017](0017-companion-affect-state-model.md) | Accepted | Companion affect state を global mood、relationship、affect trace、space atmosphere、recent tone に分離する。 |
+| [0018](0018-appraisal-semantics-split.md) | Accepted | Appraisal を user emotion、Iris への態度、topic sentiment、care intent、dependency-risk hint の typed signal に分離する。 |
 
 ## 現在の横断方針
 
@@ -41,3 +42,4 @@ Implementation anchors
 - ADR 0014 は重複していた public remote auth boundary の ADR 番号を末尾へ移動したもの。既存 0010〜0013 の番号は保持する。ADR 0015 は後続の model call budget / cascade policy。
 - ADR 0016 は #91 の prompt budget / context compression policy の source of truth であり、#94 / #98 / #78 の prompt integration gate になる。
 - ADR 0017 は #104 の companion affect state boundary を固定し、#100 / #102 / #72 が参照する state vocabulary を提供する。
+- ADR 0018 は #100 の appraisal semantics split を固定し、#102 / #72 / #82 が raw valence ではなく typed signal を参照できる境界を提供する。

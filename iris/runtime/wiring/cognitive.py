@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from iris.cognitive.affect.appraisal import AppraisalStep
@@ -14,9 +14,12 @@ from iris.cognitive.memory.retrieval import MemoryRetrievalStep, MemoryRetriever
 from iris.cognitive.memory.write import MemoryWriteStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
+from iris.cognitive.policy.safety_context import SafetyContextClassificationStep
+from iris.cognitive.policy.safety_response import SafetyResponsePolicyStep
 from iris.contracts.actions import ActionPlan
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.contracts.memory import MemoryStore, MutableMemoryStore, VectorMemoryIndex
+from iris.runtime.config.companion_semantics import RuntimeCompanionSemanticsConfig
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 
@@ -41,6 +44,15 @@ class CognitiveCycleStores:
     vector_index: VectorMemoryIndex | None = None
     embedding: EmbeddingModel | None = None
     fail_open_on_index_error: bool = True
+
+
+@dataclass(frozen=True)
+class CognitiveSemanticsOptions:
+    """認知サイクル内の companion semantics 有効化設定。"""
+
+    config: RuntimeCompanionSemanticsConfig = field(
+        default_factory=RuntimeCompanionSemanticsConfig,
+    )
 
 
 @dataclass(frozen=True)
@@ -129,6 +141,7 @@ def _build_memory_steps(
 
 def _build_affect_memory_steps(
     stores: CognitiveCycleStores,
+    semantics: CognitiveSemanticsOptions,
 ) -> list[PipelineStep[PipelineStepResult]]:
     """Memory、affect、relationship の共通 step 群を組み立てる。
 
@@ -141,9 +154,15 @@ def _build_affect_memory_steps(
     steps.extend(
         (
             AffectBaselineLoadStep(affect_store),
-            AppraisalStep(),
+            AppraisalStep(
+                appraisal_signals_enabled=semantics.config.appraisal_signals_enabled,
+                dependency_risk_hint_enabled=semantics.config.dependency_risk_hint_enabled,
+            ),
             AffectPersistenceStep(affect_store),
-            RelationshipStep(stores.relationship_store or InMemoryRelationshipStore()),
+            RelationshipStep(
+                stores.relationship_store or InMemoryRelationshipStore(),
+                semantic_appraisal_mode=semantics.config.appraisal_signals_enabled,
+            ),
         ),
     )
     return steps
@@ -153,6 +172,7 @@ def wire_affect_memory_aware_cognitive_cycle(
     stores: CognitiveCycleStores | None = None,
     *,
     extension_steps: Sequence[PipelineStep[PipelineStepResult]] = (),
+    semantics: CognitiveSemanticsOptions | None = None,
 ) -> CognitiveCycle:
     """メモリ、感情、関係性を使う認知サイクルを組み立てる。
 
@@ -160,7 +180,8 @@ def wire_affect_memory_aware_cognitive_cycle(
         affect/relationship persistence を持つ CognitiveCycle。
     """
     stores = stores or CognitiveCycleStores()
-    steps = _build_affect_memory_steps(stores)
+    semantics = semantics or CognitiveSemanticsOptions()
+    steps = _build_affect_memory_steps(stores, semantics)
     steps.extend(extension_steps)
     return wire_cognitive_cycle(steps=steps)
 
@@ -169,14 +190,24 @@ def wire_core_cognitive_cycle(
     stores: CognitiveCycleStores | None = None,
     *,
     extension_steps: Sequence[PipelineStep[PipelineStepResult]] = (),
+    semantics: CognitiveSemanticsOptions | None = None,
 ) -> CognitiveCycle:
     """Policy inhibition 付きの感情・メモリ対応認知サイクルを組み立てる。
 
     Returns:
-        memory → appraisal → persistence → policy → feature extension の CognitiveCycle。
+        memory → appraisal → persistence → safety context → policy → feature extension
+        の CognitiveCycle。
+
+    Note:
+        Safety context classification は user-editable config ではなく常時有効な
+        internal boundary として扱う。Config v2 完了前に enablement flag を公開せず、
+        既存の `sensitive_safety_context` 付与経路を default 構成でも維持する。
     """
     stores = stores or CognitiveCycleStores()
-    steps = _build_affect_memory_steps(stores)
+    semantics = semantics or CognitiveSemanticsOptions()
+    steps = _build_affect_memory_steps(stores, semantics)
+    steps.append(SafetyContextClassificationStep())
     steps.append(PolicyInhibitionStep())
+    steps.append(SafetyResponsePolicyStep())
     steps.extend(extension_steps)
     return wire_cognitive_cycle(steps=steps)
