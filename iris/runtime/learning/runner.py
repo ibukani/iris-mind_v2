@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import timedelta
+import time
 from typing import TYPE_CHECKING, Protocol
 
 from loguru import logger
 
 from iris.core.datetime_utils import now_utc
+from iris.runtime.learning.policy import BackgroundJobKindPolicy, BackgroundJobQueuePolicy
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -16,7 +19,25 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from iris.runtime.learning.jobs import BackgroundJobKind, BackgroundJobRecord
+    from iris.runtime.learning.policy import BackgroundJobQueueMetrics
     from iris.runtime.learning.queue import BackgroundJobQueue
+
+
+def _never_idle() -> bool:
+    return False
+
+
+def _monotonic_seconds() -> float:
+    return time.monotonic()
+
+
+@dataclass(frozen=True)
+class BackgroundJobRunnerRuntimeHooks:
+    """BackgroundJobRunner が参照する runtime 状態 provider。"""
+
+    now: Callable[[], datetime] = now_utc
+    idle_available: Callable[[], bool] = _never_idle
+    monotonic_seconds: Callable[[], float] = _monotonic_seconds
 
 
 class BackgroundJobWorker(Protocol):
@@ -39,16 +60,31 @@ class BackgroundJobRunner:
         *,
         max_jobs_per_run: int = 5,
         lease_seconds: float = 30.0,
-        retry_backoff_seconds: float = 30.0,
-        now: Callable[[], datetime] = now_utc,
+        queue_policy: BackgroundJobQueuePolicy | None = None,
+        runtime_hooks: BackgroundJobRunnerRuntimeHooks | None = None,
     ) -> None:
         """キュー、worker、batch/lease/retry 設定を注入する。"""
         self._queue = queue
         self._workers = {worker.kind: worker for worker in workers}
         self._max_jobs_per_run = max_jobs_per_run
         self._lease_seconds = lease_seconds
-        self._retry_backoff_seconds = retry_backoff_seconds
-        self._now = now
+        self._queue_policy = queue_policy or BackgroundJobQueuePolicy(
+            default_policy=BackgroundJobKindPolicy(concurrency_limit=max_jobs_per_run)
+        )
+        self._runtime_hooks = runtime_hooks or BackgroundJobRunnerRuntimeHooks()
+        self._latest_metrics: BackgroundJobQueueMetrics | None = None
+
+    @property
+    def latest_metrics(self) -> BackgroundJobQueueMetrics | None:
+        """最後の run_once() 後に収集した queue metrics snapshot を返す。
+
+        #93 や diagnostics wiring は runner を起動せず queue.collect_metrics() を直接参照できる。
+        ここでは worker 実行ループからも直近 snapshot を失わず公開する。
+
+        Returns:
+            直近の metrics snapshot。run_once() 未実行時は None。
+        """
+        return self._latest_metrics
 
     async def run_once(self) -> int:
         """1 batch を処理し、lease 件数を返す。
@@ -56,40 +92,71 @@ class BackgroundJobRunner:
         Returns:
             Lease したジョブ数。
         """
-        started_at = self._now()
+        started_at = self._runtime_hooks.now()
         jobs = await self._queue.lease_due(
             started_at,
             self._max_jobs_per_run,
-            self._lease_seconds,
+            self._lease_seconds_for_policy(),
+            policy=self._queue_policy,
+            idle_available=self._runtime_hooks.idle_available(),
         )
         for job in jobs:
-            worker = self._workers.get(job.kind)
-            if worker is None:
-                await self._queue.mark_permanent_failure(
-                    job.job_id,
-                    self._now(),
-                    f"no worker registered for {job.kind}",
-                )
-                logger.error("background job worker missing: {}", job.kind)
-                continue
-            failure = _CaptureWorkerFailure()
-            with failure:
-                await asyncio.to_thread(worker.run, job)
-            if failure.exception is not None:
-                failed_at = self._now()
-                await self._queue.mark_retryable_failure(
-                    job.job_id,
-                    failed_at,
-                    str(failure.exception),
-                    failed_at + timedelta(seconds=self._retry_backoff_seconds),
-                )
-                logger.opt(exception=failure.exception).error(
-                    "background job failed: {}",
-                    job.job_id,
-                )
-                continue
-            await self._queue.mark_succeeded(job.job_id, self._now())
+            await self._run_job(job)
+        self._latest_metrics = await self._queue.collect_metrics(self._runtime_hooks.now())
         return len(jobs)
+
+    async def _run_job(self, job: BackgroundJobRecord) -> None:
+        worker = self._workers.get(job.kind)
+        if worker is None:
+            await self._queue.mark_permanent_failure(
+                job.job_id,
+                self._runtime_hooks.now(),
+                f"no worker registered for {job.kind}",
+            )
+            logger.error("background job worker missing: {}", job.kind)
+            return
+        kind_policy = self._queue_policy.for_kind(job.kind)
+        started_at = self._runtime_hooks.monotonic_seconds()
+        failure = _CaptureWorkerFailure()
+        with failure:
+            await asyncio.to_thread(worker.run, job)
+        elapsed_seconds = self._runtime_hooks.monotonic_seconds() - started_at
+        if failure.exception is not None:
+            await self._mark_retryable_failure(job, failure.exception)
+            return
+        if elapsed_seconds > kind_policy.timeout_seconds:
+            message = (
+                "background job exceeded soft timeout: "
+                "job_id={} kind={} elapsed_seconds={:.3f} timeout_seconds={:.3f}"
+            )
+            logger.warning(
+                message,
+                job.job_id,
+                job.kind,
+                elapsed_seconds,
+                kind_policy.timeout_seconds,
+            )
+        await self._queue.mark_succeeded(job.job_id, self._runtime_hooks.now())
+
+    async def _mark_retryable_failure(self, job: BackgroundJobRecord, exc: Exception) -> None:
+        failed_at = self._runtime_hooks.now()
+        retry_after = failed_at + timedelta(seconds=self._retry_delay_seconds(job))
+        await self._queue.mark_retryable_failure(
+            job.job_id,
+            failed_at,
+            str(exc),
+            retry_after,
+        )
+        logger.opt(exception=exc).error(
+            "background job failed: {}",
+            job.job_id,
+        )
+
+    def _retry_delay_seconds(self, job: BackgroundJobRecord) -> float:
+        return self._queue_policy.for_kind(job.kind).retry_delay_seconds(job.attempts)
+
+    def _lease_seconds_for_policy(self) -> float:
+        return max(self._lease_seconds, self._queue_policy.max_timeout_seconds())
 
 
 class _CaptureWorkerFailure:

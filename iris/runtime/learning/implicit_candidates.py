@@ -19,12 +19,14 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.model_policy import ModelCallDescriptor, ModelCallKind, ModelCallSite
 from iris.contracts.observations import ObservationKind, UserFeedbackKind
 from iris.core.metadata import immutable_metadata
 from iris.runtime.learning.jobs import (
     BackgroundJobId,
     BackgroundJobKind,
     BackgroundJobRecord,
+    BackgroundJobResourceProfile,
     RuntimeLearningCandidateJobPayload,
 )
 from iris.runtime.observability.ports import RuntimeLatencyStage
@@ -40,6 +42,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.learning import RuntimeLearningEvent
+    from iris.runtime.learning.policy import BackgroundJobQueuePolicy
     from iris.runtime.learning.queue import BackgroundJobQueue
     from iris.runtime.observability.ports import RuntimeLatencyBudget, RuntimeObservationObserver
     from iris.runtime.state.memory_candidates import MemoryCandidateReviewStore
@@ -90,11 +93,13 @@ class FilteringImplicitMemoryCandidateHook:
         max_attempts: int = 3,
         observation_observer: RuntimeObservationObserver | None = None,
         latency_budget: RuntimeLatencyBudget | None = None,
+        queue_policy: BackgroundJobQueuePolicy | None = None,
     ) -> None:
         """キューと再試行上限を注入する。"""
         self._queue = queue
         self._max_attempts = max_attempts
         self._latency_recorder = RuntimeLatencyRecorder(observation_observer, latency_budget)
+        self._queue_policy = queue_policy
 
     async def after_runtime_event(self, event: RuntimeLearningEvent) -> None:
         """Candidate signal がある runtime event だけを冪等に enqueue する。"""
@@ -104,7 +109,15 @@ class FilteringImplicitMemoryCandidateHook:
         key = _job_key(payload)
         started_at = perf_counter()
         try:
-            await self._queue.enqueue(_new_job(key, payload, event.occurred_at, self._max_attempts))
+            job = _new_job(key, payload, event.occurred_at, self._max_attempts)
+            if self._queue_policy is None:
+                await self._queue.enqueue(job)
+            else:
+                await self._queue.enqueue_with_policy(
+                    job,
+                    now=event.occurred_at,
+                    policy=self._queue_policy,
+                )
         finally:
             self._latency_recorder.record_stage(
                 RuntimeLatencyStage.BACKGROUND_ENQUEUE,
@@ -501,6 +514,13 @@ def _new_job(
         payload=payload,
         max_attempts=max_attempts,
         not_before=now,
+        resource_profile=BackgroundJobResourceProfile(
+            uses_llm=True,
+            model_call_descriptor=ModelCallDescriptor(
+                call_kind=ModelCallKind.BACKGROUND_LLM,
+                call_site=ModelCallSite.MEMORY_EXTRACTION,
+            ),
+        ),
         idempotency_key=f"implicit-memory:{key}",
         created_at=now,
         updated_at=now,

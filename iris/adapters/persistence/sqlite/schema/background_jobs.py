@@ -13,10 +13,12 @@ BACKGROUND_JOB_REQUIRED_COLUMNS = frozenset(
         "attempts",
         "max_attempts",
         "not_before",
+        "resource_profile_json",
         "leased_until",
         "idempotency_key",
         "created_at",
         "updated_at",
         "last_error",
+        "defer_reason",
     }
 )

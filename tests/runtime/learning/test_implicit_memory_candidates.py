@@ -15,6 +15,7 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.model_policy import ModelCallKind, ModelCallSite
 from iris.contracts.observations import (
     ActorMessageObservation,
     ObservationContext,
@@ -33,7 +34,7 @@ from iris.runtime.learning.implicit_candidates import (
 from iris.runtime.learning.jobs import BackgroundJobKind, RuntimeLearningCandidateJobPayload
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
-from iris.runtime.learning.runner import BackgroundJobRunner
+from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunnerRuntimeHooks
 from iris.runtime.state.memory_candidates import (
     InMemoryMemoryCandidateReviewStore,
     MemoryCandidateReviewStatus,
@@ -59,6 +60,11 @@ async def test_runtime_hook_enqueues_implicit_candidate_job_idempotently() -> No
     assert job.kind is BackgroundJobKind.MEMORY_EXTRACTION
     assert job.max_attempts == 4
     assert isinstance(job.payload, RuntimeLearningCandidateJobPayload)
+    assert job.resource_profile.uses_llm is True
+    descriptor = job.resource_profile.model_call_descriptor
+    assert descriptor is not None
+    assert descriptor.call_kind is ModelCallKind.BACKGROUND_LLM
+    assert descriptor.call_site is ModelCallSite.MEMORY_EXTRACTION
     assert job.payload.source_observation_id == event.source_observation_id
     assert job.payload.input_text == "次からもっと短く答えて"
 
@@ -78,7 +84,7 @@ async def test_worker_stores_review_required_implicit_candidate() -> None:
             DeterministicMemoryConsolidationWorker(memory_store),
             ImplicitMemoryCandidateWorker(review_store),
         ),
-        now=lambda: _NOW,
+        runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: _NOW),
     )
 
     assert await runner.run_once() == 1
@@ -127,7 +133,7 @@ async def test_secret_like_feedback_is_not_stored_for_review() -> None:
     await BackgroundJobRunner(
         queue,
         (ImplicitMemoryCandidateWorker(review_store),),
-        now=lambda: _NOW,
+        runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: _NOW),
     ).run_once()
 
     assert await review_store.list_pending() == ()
@@ -148,7 +154,7 @@ async def test_low_confidence_candidates_are_rejected_by_admission_policy() -> N
                 policy=ImplicitCandidateAdmissionPolicy(min_confidence=0.5),
             ),
         ),
-        now=lambda: _NOW,
+        runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: _NOW),
     ).run_once()
 
     assert await review_store.list_pending() == ()

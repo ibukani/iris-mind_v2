@@ -19,14 +19,24 @@ from iris.runtime.learning.jobs import (
     BackgroundJobId,
     BackgroundJobKind,
     BackgroundJobRecord,
+    BackgroundJobResourceProfile,
     BackgroundJobStatus,
     DeferredLearningJobPayload,
     MemoryBackgroundJobPayload,
     RuntimeLearningCandidateJobPayload,
 )
 from iris.runtime.learning.queue import (
+    BackgroundJobBackpressureMode,
+    BackgroundJobEnqueueDecision,
+    BackgroundJobEnqueueResult,
+    BackgroundJobKindMetrics,
+    BackgroundJobKindPolicy,
     BackgroundJobQueueError,
+    BackgroundJobQueueMetrics,
+    BackgroundJobQueuePolicy,
     JobUpdate,
+    defer_job_record,
+    evaluate_enqueue_backpressure,
     replace_job,
     retry_failure_status,
 )
@@ -77,22 +87,61 @@ class SQLiteBackgroundJobQueue:
         """ジョブを冪等に登録する。
 
         Returns:
-            新規または同じ idempotency key の既存ジョブ。
+            新規または同じ idempotency key / job_id の既存ジョブ。
         """
         return await asyncio.to_thread(self._enqueue_sync, job)
+
+    async def enqueue_with_policy(
+        self,
+        job: BackgroundJobRecord,
+        *,
+        now: datetime,
+        policy: BackgroundJobQueuePolicy,
+        idle_available: bool = False,
+    ) -> BackgroundJobEnqueueResult:
+        """Backpressure policy を適用して enqueue する。
+
+        Returns:
+            enqueue 判定と保存 job。
+        """
+        return await asyncio.to_thread(
+            self._enqueue_with_policy_sync,
+            job,
+            now,
+            policy,
+            idle_available=idle_available,
+        )
 
     async def lease_due(
         self,
         now: datetime,
         max_items: int,
         lease_seconds: float,
+        *,
+        policy: BackgroundJobQueuePolicy | None = None,
+        idle_available: bool = False,
     ) -> tuple[BackgroundJobRecord, ...]:
         """期限到来済みジョブを lease する。
 
         Returns:
             Lease したジョブ。
         """
-        return await asyncio.to_thread(self._lease_due_sync, now, max_items, lease_seconds)
+        return await asyncio.to_thread(
+            self._lease_due_sync,
+            now,
+            max_items,
+            lease_seconds,
+            policy,
+            idle_available=idle_available,
+        )
+
+    async def collect_metrics(self, now: datetime) -> BackgroundJobQueueMetrics:
+        """現在の queue metrics snapshot を返す。
+
+        Returns:
+            queue metrics snapshot。
+        """
+        return await asyncio.to_thread(self._collect_metrics_sync, now)
 
     async def mark_succeeded(self, job_id: BackgroundJobId, finished_at: datetime) -> None:
         """Lease 中ジョブを成功完了にする。"""
@@ -145,30 +194,105 @@ class SQLiteBackgroundJobQueue:
             existing = _find_existing(conn, job)
             if existing is not None:
                 return existing
-            conn.execute(
-                """
-                INSERT INTO background_jobs (
-                    job_id, kind, payload_type, payload_json, status, attempts,
-                    max_attempts, not_before, leased_until, idempotency_key,
-                    created_at, updated_at, last_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                _record_to_row(job),
-            )
+            _insert(conn, job)
             return job
+
+    def _enqueue_with_policy_sync(
+        self,
+        job: BackgroundJobRecord,
+        now: datetime,
+        policy: BackgroundJobQueuePolicy,
+        *,
+        idle_available: bool,
+    ) -> BackgroundJobEnqueueResult:
+        with self._db.transaction(immediate=True) as conn:
+            existing = _find_existing(conn, job)
+            if existing is not None:
+                return BackgroundJobEnqueueResult(
+                    decision=BackgroundJobEnqueueDecision.EXISTING,
+                    record=existing,
+                )
+            jobs = _select_all(conn)
+            reason = evaluate_enqueue_backpressure(
+                job,
+                jobs=jobs,
+                now=now,
+                policy=policy.for_kind(job.kind),
+                idle_available=idle_available,
+            )
+            kind_policy = policy.for_kind(job.kind)
+            if (
+                reason is None
+                or kind_policy.backpressure_mode is BackgroundJobBackpressureMode.ACCEPT
+            ):
+                _insert(conn, job)
+                return BackgroundJobEnqueueResult(
+                    decision=BackgroundJobEnqueueDecision.ACCEPTED,
+                    record=job,
+                )
+            if kind_policy.backpressure_mode is BackgroundJobBackpressureMode.REJECT:
+                return BackgroundJobEnqueueResult(
+                    decision=BackgroundJobEnqueueDecision.REJECTED,
+                    record=None,
+                    reason=reason,
+                )
+            deferred_until = now + timedelta(seconds=kind_policy.defer_seconds_when_saturated)
+            deferred = defer_job_record(job, deferred_until=deferred_until, reason=reason)
+            _insert(conn, deferred)
+            return BackgroundJobEnqueueResult(
+                decision=BackgroundJobEnqueueDecision.DEFERRED,
+                record=deferred,
+                reason=reason,
+                deferred_until=deferred_until,
+            )
 
     def _lease_due_sync(
         self,
         now: datetime,
         max_items: int,
         lease_seconds: float,
+        policy: BackgroundJobQueuePolicy | None,
+        *,
+        idle_available: bool,
     ) -> tuple[BackgroundJobRecord, ...]:
         if max_items <= 0:
             return ()
         leased_until = now + timedelta(seconds=lease_seconds)
         with self._db.transaction(immediate=True) as conn:
-            records = _select_due(conn, now, max_items)
-            return tuple(_lease_record(conn, record, now, leased_until) for record in records)
+            records = _select_due(conn, now, max_items=None if policy is not None else max_items)
+            leased_counts = _leased_counts(conn, now)
+            leased: list[BackgroundJobRecord] = []
+            for record in records:
+                kind_policy = policy.for_kind(record.kind) if policy is not None else None
+                if _requires_idle(record, kind_policy) and not idle_available:
+                    continue
+                if (
+                    kind_policy is not None
+                    and leased_counts.get(record.kind, 0) >= kind_policy.concurrency_limit
+                ):
+                    continue
+                leased_record = _lease_record(conn, record, now, leased_until)
+                leased_counts[record.kind] = leased_counts.get(record.kind, 0) + 1
+                leased.append(leased_record)
+                if len(leased) >= max_items:
+                    break
+            return tuple(leased)
+
+    def _collect_metrics_sync(self, now: datetime) -> BackgroundJobQueueMetrics:
+        with self._db.transaction() as conn:
+            records = _select_all(conn)
+        per_kind = tuple(_kind_metrics(kind, records, now) for kind in _sorted_kinds(records))
+        return BackgroundJobQueueMetrics(
+            generated_at=now,
+            queue_depth=sum(metrics.queue_depth for metrics in per_kind),
+            leased=sum(metrics.leased for metrics in per_kind),
+            succeeded=sum(metrics.succeeded for metrics in per_kind),
+            failed_retryable=sum(metrics.failed_retryable for metrics in per_kind),
+            failed_permanent=sum(metrics.failed_permanent for metrics in per_kind),
+            cancelled=sum(metrics.cancelled for metrics in per_kind),
+            oldest_pending_age_seconds=_oldest_pending_age_seconds(records, now),
+            per_kind=per_kind,
+        )
 
     def _mark_retryable_failure_sync(
         self,
@@ -223,6 +347,19 @@ class SQLiteBackgroundJobQueue:
             return _require(conn, job_id)
 
 
+def _insert(conn: sqlite3.Connection, job: BackgroundJobRecord) -> None:
+    conn.execute(
+        """
+        INSERT INTO background_jobs (
+            job_id, kind, payload_type, payload_json, status, attempts,
+            max_attempts, not_before, resource_profile_json, leased_until,
+            idempotency_key, created_at, updated_at, last_error, defer_reason
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        _record_to_row(job),
+    )
+
+
 def _find_existing(
     conn: sqlite3.Connection,
     job: BackgroundJobRecord,
@@ -242,10 +379,21 @@ def _find_existing(
     return _row_to_record(row)
 
 
+def _select_all(conn: sqlite3.Connection) -> tuple[BackgroundJobRecord, ...]:
+    rows = conn.execute(
+        """
+        SELECT *
+        FROM background_jobs
+        ORDER BY not_before, created_at, job_id
+        """
+    ).fetchall()
+    return tuple(_row_to_record(row) for row in rows)
+
+
 def _select_due(
     conn: sqlite3.Connection,
     now: datetime,
-    max_items: int,
+    max_items: int | None,
 ) -> tuple[BackgroundJobRecord, ...]:
     now_text = required_datetime_to_text(now)
     rows = conn.execute(
@@ -266,7 +414,7 @@ def _select_due(
             BackgroundJobStatus.LEASED.value,
             now_text,
             now_text,
-            max_items,
+            -1 if max_items is None else max_items,
         ),
     ).fetchall()
     return tuple(_row_to_record(row) for row in rows)
@@ -290,6 +438,25 @@ def _lease_record(
     return updated
 
 
+def _leased_counts(
+    conn: sqlite3.Connection,
+    now: datetime,
+) -> dict[BackgroundJobKind, int]:
+    now_text = required_datetime_to_text(now)
+    rows = conn.execute(
+        """
+        SELECT kind, COUNT(*) AS count
+        FROM background_jobs
+        WHERE status = ?
+          AND leased_until IS NOT NULL
+          AND leased_until > ?
+        GROUP BY kind
+        """,
+        (BackgroundJobStatus.LEASED.value, now_text),
+    ).fetchall()
+    return {BackgroundJobKind(row["kind"]): int(row["count"]) for row in rows}
+
+
 def _require(conn: sqlite3.Connection, job_id: BackgroundJobId) -> BackgroundJobRecord:
     row = conn.execute(
         "SELECT * FROM background_jobs WHERE job_id = ?",
@@ -305,17 +472,19 @@ def _update(conn: sqlite3.Connection, record: BackgroundJobRecord) -> None:
     conn.execute(
         """
         UPDATE background_jobs
-        SET status = ?, attempts = ?, not_before = ?, leased_until = ?,
-            updated_at = ?, last_error = ?
+        SET status = ?, attempts = ?, not_before = ?, resource_profile_json = ?,
+            leased_until = ?, updated_at = ?, last_error = ?, defer_reason = ?
         WHERE job_id = ?
         """,
         (
             record.status.value,
             record.attempts,
             required_datetime_to_text(record.not_before),
+            record.resource_profile.model_dump_json(),
             datetime_to_text(record.leased_until),
             required_datetime_to_text(record.updated_at),
             record.last_error,
+            record.defer_reason,
             str(record.job_id),
         ),
     )
@@ -332,15 +501,18 @@ def _record_to_row(record: BackgroundJobRecord) -> tuple[object, ...]:
         record.attempts,
         record.max_attempts,
         required_datetime_to_text(record.not_before),
+        record.resource_profile.model_dump_json(),
         datetime_to_text(record.leased_until),
         record.idempotency_key,
         required_datetime_to_text(record.created_at),
         required_datetime_to_text(record.updated_at),
         record.last_error,
+        record.defer_reason,
     )
 
 
 def _row_to_record(row: sqlite3.Row) -> BackgroundJobRecord:
+    resource_profile_json = row["resource_profile_json"]
     return BackgroundJobRecord(
         job_id=BackgroundJobId(row["job_id"]),
         kind=BackgroundJobKind(row["kind"]),
@@ -349,12 +521,84 @@ def _row_to_record(row: sqlite3.Row) -> BackgroundJobRecord:
         attempts=int(row["attempts"]),
         max_attempts=int(row["max_attempts"]),
         not_before=text_to_datetime(row["not_before"]),
+        resource_profile=BackgroundJobResourceProfile.model_validate_json(resource_profile_json),
         leased_until=optional_datetime(row["leased_until"]),
         idempotency_key=row["idempotency_key"],
         created_at=text_to_datetime(row["created_at"]),
         updated_at=text_to_datetime(row["updated_at"]),
         last_error=row["last_error"],
+        defer_reason=row["defer_reason"],
     )
+
+
+def _kind_metrics(
+    kind: BackgroundJobKind,
+    jobs: tuple[BackgroundJobRecord, ...],
+    now: datetime,
+) -> BackgroundJobKindMetrics:
+    kind_jobs = tuple(job for job in jobs if job.kind is kind)
+    return BackgroundJobKindMetrics(
+        kind=kind,
+        pending=sum(1 for job in kind_jobs if _is_backlog_pending(job, now)),
+        leased=sum(1 for job in kind_jobs if _active_lease(job, now)),
+        succeeded=_status_count(kind_jobs, BackgroundJobStatus.SUCCEEDED),
+        failed_retryable=_status_count(kind_jobs, BackgroundJobStatus.FAILED_RETRYABLE),
+        failed_permanent=_status_count(kind_jobs, BackgroundJobStatus.FAILED_PERMANENT),
+        cancelled=_status_count(kind_jobs, BackgroundJobStatus.CANCELLED),
+        oldest_pending_age_seconds=_oldest_pending_age_seconds(kind_jobs, now),
+    )
+
+
+def _sorted_kinds(jobs: tuple[BackgroundJobRecord, ...]) -> tuple[BackgroundJobKind, ...]:
+    return tuple(sorted({job.kind for job in jobs}, key=lambda kind: kind.value))
+
+
+def _active_lease(job: BackgroundJobRecord, now: datetime) -> bool:
+    return (
+        job.status is BackgroundJobStatus.LEASED
+        and job.leased_until is not None
+        and job.leased_until > now
+    )
+
+
+def _status_count(jobs: tuple[BackgroundJobRecord, ...], status: BackgroundJobStatus) -> int:
+    return sum(1 for job in jobs if job.status is status)
+
+
+def _is_expired_lease(job: BackgroundJobRecord, now: datetime) -> bool:
+    return (
+        job.status is BackgroundJobStatus.LEASED
+        and job.leased_until is not None
+        and job.leased_until <= now
+    )
+
+
+def _is_backlog_pending(job: BackgroundJobRecord, now: datetime) -> bool:
+    return (job.status is BackgroundJobStatus.PENDING or _is_expired_lease(job, now)) and (
+        job.not_before <= now
+    )
+
+
+def _requires_idle(
+    job: BackgroundJobRecord,
+    kind_policy: BackgroundJobKindPolicy | None,
+) -> bool:
+    return job.resource_profile.idle_only or (kind_policy is not None and kind_policy.idle_only)
+
+
+def _oldest_pending_age_seconds(
+    jobs: tuple[BackgroundJobRecord, ...],
+    now: datetime,
+) -> float | None:
+    created_values = tuple(
+        job.created_at
+        for job in jobs
+        if (job.status is BackgroundJobStatus.FAILED_RETRYABLE or _is_backlog_pending(job, now))
+        and job.not_before <= now
+    )
+    if not created_values:
+        return None
+    return (now - min(created_values)).total_seconds()
 
 
 def _payload_type(payload: _PayloadModel) -> _PayloadType:

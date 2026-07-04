@@ -30,7 +30,7 @@ from iris.runtime.learning.jobs import (
 )
 from iris.runtime.learning.review_promotion import ApprovedMemoryCandidatePromoter
 from iris.runtime.learning.review_service import MemoryCandidateReviewService
-from iris.runtime.learning.runner import BackgroundJobRunner
+from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunnerRuntimeHooks
 from iris.runtime.state.memory_candidates import (
     MemoryCandidateReviewId,
     MemoryCandidateReviewRecord,
@@ -72,7 +72,9 @@ async def test_reopened_sqlite_background_job_queue_runs_with_runner(
 
     reopened = SQLiteBackgroundJobQueue(db_path)
     worker = _Worker()
-    runner = BackgroundJobRunner(reopened, (worker,), now=lambda: _NOW)
+    runner = BackgroundJobRunner(
+        reopened, (worker,), runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: _NOW)
+    )
 
     assert await runner.run_once() == 1
     assert worker.calls == [job.job_id]

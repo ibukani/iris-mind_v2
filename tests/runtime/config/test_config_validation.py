@@ -186,3 +186,26 @@ def _write(tmp_path: Path, content: str) -> Path:
     path = tmp_path / "runtime.toml"
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def test_background_job_policy_is_config_gated_by_default() -> None:
+    """Background job pressure policy は明示設定まで permissive に保つ。"""
+    config = load_runtime_config(None, env={})
+
+    assert config.learning.background_job_policy.enabled is False
+
+
+def test_background_job_policy_can_be_enabled_explicitly(tmp_path: Path) -> None:
+    """TOMLで明示した場合だけ pressure policy を有効化する。"""
+    config = load_runtime_config(
+        _write(
+            tmp_path,
+            """
+            [learning.background_job_policy]
+            enabled = true
+            """,
+        ),
+        env={},
+    )
+
+    assert config.learning.background_job_policy.enabled is True
