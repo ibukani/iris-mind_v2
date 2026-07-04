@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.llm.fake import FakeLLMClient
@@ -25,6 +26,14 @@ from iris.core.metadata import immutable_metadata
 from iris.features.chat.definition import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
 from iris.runtime.config.llm import LLMProvider
+from iris.runtime.inference.models import (
+    InferenceLeaseDecision,
+    InferenceLeaseRequest,
+    InferenceLeaseResult,
+    InferenceSlotKind,
+    model_call_site_priority,
+)
+from iris.runtime.inference.observability import inference_lease_log_fields
 from iris.runtime.model_call_budget import ModelCallBudgetGate, current_model_call_site
 from iris.runtime.observability.context import trace_counter_extra
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
@@ -37,11 +46,35 @@ if TYPE_CHECKING:
     from iris.adapters.llm.lifecycle import ModelLifecycleProbe
     from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
     from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig
+    from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
     from iris.runtime.observability.ports import RuntimeLatencyBudget, RuntimeLogger
 
 
 _KNOWN_LLM_PROVIDERS: frozenset[LLMProvider] = frozenset(LLMProvider)
 _DETERMINISTIC_BASELINE_TEXT = "受け取りました。必要なら、もう少し詳しく教えてください。"
+
+
+@dataclass(frozen=True)
+class LLMResponseGeneratorOptions:
+    """LLMResponseGenerator の任意設定を束ねる。"""
+
+    temperature: float = 0.0
+    max_tokens: int | None = None
+    prompt_assembler: RuntimePromptAssembler | None = None
+    runtime_logger: RuntimeLogger | None = None
+    inference_scheduler: LocalInferenceResourceScheduler | None = None
+
+
+@dataclass(frozen=True)
+class ResponseGeneratorWiringOptions:
+    """wire_response_generator の任意設定を束ねる。"""
+
+    model: str = DEFAULT_FAKE_LLM_MODEL
+    temperature: float = 0.0
+    max_tokens: int | None = None
+    prompt_budget_config: RuntimePromptBudgetConfig | None = None
+    runtime_logger: RuntimeLogger | None = None
+    inference_scheduler: LocalInferenceResourceScheduler | None = None
 
 
 class LLMResponseGenerator(ResponseGenerator):
@@ -52,27 +85,23 @@ class LLMResponseGenerator(ResponseGenerator):
         client: LLMClient,
         model: str = DEFAULT_FAKE_LLM_MODEL,
         *,
-        temperature: float = 0.0,
-        max_tokens: int | None = None,
-        prompt_assembler: RuntimePromptAssembler | None = None,
-        runtime_logger: RuntimeLogger | None = None,
+        options: LLMResponseGeneratorOptions | None = None,
     ) -> None:
         """LLM バックエンドの応答生成器を作成する。
 
         Args:
             client: LLM クライアント。
             model: LLM プロバイダに渡すモデル名。
-            temperature: LLM プロバイダに渡すサンプリング温度。
-            max_tokens: LLM プロバイダに渡す任意の出力トークン上限。
-            prompt_assembler: prompt budget と section assembly を担当する境界。
-            runtime_logger: prompt budget observability を記録する logger。
+            options: prompt assembly / logging / scheduler を束ねた任意設定。
         """
+        resolved_options = options or LLMResponseGeneratorOptions()
         self._client = client
         self._model = model
-        self._temperature = temperature
-        self._max_tokens = max_tokens
-        self._prompt_assembler = prompt_assembler or RuntimePromptAssembler()
-        self._logger = runtime_logger or LoguruRuntimeLogger()
+        self._temperature = resolved_options.temperature
+        self._max_tokens = resolved_options.max_tokens
+        self._prompt_assembler = resolved_options.prompt_assembler or RuntimePromptAssembler()
+        self._logger = resolved_options.runtime_logger or LoguruRuntimeLogger()
+        self._inference_scheduler = resolved_options.inference_scheduler
 
     @override
     async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
@@ -92,8 +121,51 @@ class LLMResponseGenerator(ResponseGenerator):
             temperature=self._temperature,
             max_tokens=self._max_tokens,
         )
-        response = await self._client.generate(request)
+        inference_scheduler = self._inference_scheduler
+        lease_result = await self._acquire_inference_lease()
+        if lease_result is not None:
+            self._logger.info(
+                "runtime.inference.lease_decision",
+                **inference_lease_log_fields(lease_result),
+            )
+            if not lease_result.acquired:
+                return _inference_scheduler_fallback_response(
+                    lease_result.decision,
+                    lease_result.reason,
+                    self._model,
+                )
+        try:
+            response = await self._client.generate(request)
+        finally:
+            if (
+                inference_scheduler is not None
+                and lease_result is not None
+                and lease_result.lease_id is not None
+            ):
+                await inference_scheduler.release(lease_result.lease_id)
         return GeneratedResponse(text=response.text, model=response.model)
+
+    async def _acquire_inference_lease(self) -> InferenceLeaseResult | None:
+        if self._inference_scheduler is None:
+            return None
+        call_site = current_model_call_site(ModelCallSite.USER_RESPONSE_HOT_PATH)
+        return await self._inference_scheduler.acquire(
+            InferenceLeaseRequest(
+                slot_kind=InferenceSlotKind.LARGE_LLM,
+                priority=model_call_site_priority(call_site),
+                call_site=call_site,
+                model_slot="default_chat",
+                model_name=self._model,
+                metadata=immutable_metadata(
+                    {
+                        "model_slot": "default_chat",
+                        "model": self._model,
+                        "call_kind": ModelCallKind.LARGE_LLM.value,
+                        "call_site": call_site.value,
+                    }
+                ),
+            )
+        )
 
 
 class BudgetedResponseGenerator(ResponseGenerator):
@@ -136,6 +208,8 @@ class BudgetedResponseGenerator(ResponseGenerator):
             return self._fallback_response(cascade_result)
 
         generated = await self._generator.generate_response(prompt)
+        if generated.cascade_result is not None and not generated.cascade_result.accepted:
+            return generated
         return GeneratedResponse(
             text=generated.text,
             model=generated.model,
@@ -223,6 +297,56 @@ class BudgetedResponseGenerator(ResponseGenerator):
         self._logger.info("runtime.model_call.cascade_result", **fields)
 
 
+def _inference_scheduler_fallback_response(
+    decision: InferenceLeaseDecision,
+    reason: str,
+    model_name: str,
+) -> GeneratedResponse:
+    fallback_behavior = _inference_fallback_behavior(decision)
+    cascade_decision = _inference_cascade_decision(decision)
+    text = ""
+    model = model_name
+    if fallback_behavior is CascadeFallbackBehavior.DETERMINISTIC_BASELINE:
+        text = _DETERMINISTIC_BASELINE_TEXT
+        model = f"{model_name}:inference_scheduler_baseline"
+    return GeneratedResponse(
+        text=text,
+        model=model,
+        cascade_result=CascadeResult(
+            decision=cascade_decision,
+            reason=f"local inference resource {decision.value}: {reason}",
+            confidence=1.0,
+            fallback_behavior=fallback_behavior,
+            model_metadata=immutable_metadata(
+                {
+                    "call_kind": ModelCallKind.LARGE_LLM.value,
+                    "scheduler_decision": decision.value,
+                }
+            ),
+        ),
+    )
+
+
+def _inference_cascade_decision(decision: InferenceLeaseDecision) -> CascadeDecision:
+    if decision is InferenceLeaseDecision.DEFER:
+        return CascadeDecision.DEFER
+    if decision is InferenceLeaseDecision.DENIED:
+        return CascadeDecision.FALLBACK
+    return CascadeDecision.DENY
+
+
+def _inference_fallback_behavior(
+    decision: InferenceLeaseDecision,
+) -> CascadeFallbackBehavior | None:
+    behavior_by_decision = {
+        InferenceLeaseDecision.DEFER: CascadeFallbackBehavior.DEFER,
+        InferenceLeaseDecision.DENIED: CascadeFallbackBehavior.DETERMINISTIC_BASELINE,
+        InferenceLeaseDecision.CANCEL: CascadeFallbackBehavior.REJECT,
+        InferenceLeaseDecision.NO_SEND: CascadeFallbackBehavior.NO_OP,
+    }
+    return behavior_by_decision.get(decision)
+
+
 def wire_fake_llm_client(responses: tuple[str, ...] | None = None) -> FakeLLMClient:
     """決定論的なフェイク LLM クライアントを組み立てる。
 
@@ -238,34 +362,30 @@ def wire_fake_llm_client(responses: tuple[str, ...] | None = None) -> FakeLLMCli
 def wire_response_generator(
     client: LLMClient | None = None,
     *,
-    model: str = DEFAULT_FAKE_LLM_MODEL,
-    temperature: float = 0.0,
-    max_tokens: int | None = None,
-    prompt_budget_config: RuntimePromptBudgetConfig | None = None,
-    runtime_logger: RuntimeLogger | None = None,
+    options: ResponseGeneratorWiringOptions | None = None,
 ) -> LLMResponseGenerator:
     """応答生成器を組み立てる。
 
     Args:
         client: 任意の LLM クライアント。省略時はフェイククライアントを使用。
-        model: LLM プロバイダに渡すモデル名。
-        temperature: LLM プロバイダに渡すサンプリング温度。
-        max_tokens: LLM プロバイダに渡す任意の出力トークン上限。
-        prompt_budget_config: prompt section budget 設定。
-        runtime_logger: prompt budget observability を記録する logger。
+        options: model / prompt budget / scheduler などの任意設定。
 
     Returns:
         LLMResponseGenerator インスタンス。
     """
     if client is None:
         client = wire_fake_llm_client()
+    resolved_options = options or ResponseGeneratorWiringOptions()
     return LLMResponseGenerator(
         client,
-        model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        prompt_assembler=RuntimePromptAssembler(prompt_budget_config),
-        runtime_logger=runtime_logger,
+        resolved_options.model,
+        options=LLMResponseGeneratorOptions(
+            temperature=resolved_options.temperature,
+            max_tokens=resolved_options.max_tokens,
+            prompt_assembler=RuntimePromptAssembler(resolved_options.prompt_budget_config),
+            runtime_logger=resolved_options.runtime_logger,
+            inference_scheduler=resolved_options.inference_scheduler,
+        ),
     )
 
 

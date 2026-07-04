@@ -153,6 +153,20 @@ class SQLiteBackgroundJobQueue:
             None,
         )
 
+    async def defer_leased(
+        self,
+        job_id: BackgroundJobId,
+        deferred_until: datetime,
+        reason: str,
+    ) -> None:
+        """Lease 中ジョブを pending に戻し、推論資源が空くまで実行を遅らせる。"""
+        await asyncio.to_thread(
+            self._defer_leased_sync,
+            job_id,
+            deferred_until,
+            reason,
+        )
+
     async def mark_retryable_failure(
         self,
         job_id: BackgroundJobId,
@@ -293,6 +307,29 @@ class SQLiteBackgroundJobQueue:
             oldest_pending_age_seconds=_oldest_pending_age_seconds(records, now),
             per_kind=per_kind,
         )
+
+    def _defer_leased_sync(
+        self,
+        job_id: BackgroundJobId,
+        deferred_until: datetime,
+        reason: str,
+    ) -> None:
+        with self._db.transaction(immediate=True) as conn:
+            job = _require(conn, job_id)
+            _update(
+                conn,
+                replace_job(
+                    job,
+                    JobUpdate(
+                        status=BackgroundJobStatus.PENDING,
+                        not_before=deferred_until,
+                        leased_until=None,
+                        updated_at=deferred_until,
+                        last_error=None,
+                        defer_reason=reason,
+                    ),
+                ),
+            )
 
     def _mark_retryable_failure_sync(
         self,

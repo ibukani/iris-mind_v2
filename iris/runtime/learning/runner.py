@@ -6,11 +6,24 @@ import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 import time
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, TypedDict, Unpack
 
 from loguru import logger
 
+from iris.contracts.model_policy import ModelCallSite
 from iris.core.datetime_utils import now_utc
+from iris.core.metadata import immutable_metadata
+from iris.runtime.inference.models import (
+    InferenceLeaseDecision,
+    InferenceLeaseRequest,
+    InferenceLeaseResult,
+    InferenceResourceSnapshot,
+    InferenceResourceState,
+    InferenceSlotKind,
+    model_call_site_priority,
+)
+from iris.runtime.inference.observability import inference_lease_log_fields
+from iris.runtime.learning.jobs import BackgroundJobKind
 from iris.runtime.learning.policy import BackgroundJobKindPolicy, BackgroundJobQueuePolicy
 
 if TYPE_CHECKING:
@@ -18,7 +31,8 @@ if TYPE_CHECKING:
     from datetime import datetime
     from types import TracebackType
 
-    from iris.runtime.learning.jobs import BackgroundJobKind, BackgroundJobRecord
+    from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
+    from iris.runtime.learning.jobs import BackgroundJobRecord
     from iris.runtime.learning.policy import BackgroundJobQueueMetrics
     from iris.runtime.learning.queue import BackgroundJobQueue
 
@@ -40,6 +54,27 @@ class BackgroundJobRunnerRuntimeHooks:
     monotonic_seconds: Callable[[], float] = _monotonic_seconds
 
 
+class BackgroundJobRunnerLegacyOptions(TypedDict, total=False):
+    """旧 constructor kwargs の型付き互換境界。"""
+
+    max_jobs_per_run: int
+    lease_seconds: float
+    queue_policy: BackgroundJobQueuePolicy
+    runtime_hooks: BackgroundJobRunnerRuntimeHooks
+    inference_scheduler: LocalInferenceResourceScheduler
+
+
+@dataclass(frozen=True)
+class BackgroundJobRunnerOptions:
+    """BackgroundJobRunner の batch / lease / policy 設定。"""
+
+    max_jobs_per_run: int = 5
+    lease_seconds: float = 30.0
+    queue_policy: BackgroundJobQueuePolicy | None = None
+    runtime_hooks: BackgroundJobRunnerRuntimeHooks | None = None
+    inference_scheduler: LocalInferenceResourceScheduler | None = None
+
+
 class BackgroundJobWorker(Protocol):
     """単一 kind を処理する worker。"""
 
@@ -58,20 +93,22 @@ class BackgroundJobRunner:
         queue: BackgroundJobQueue,
         workers: Sequence[BackgroundJobWorker],
         *,
-        max_jobs_per_run: int = 5,
-        lease_seconds: float = 30.0,
-        queue_policy: BackgroundJobQueuePolicy | None = None,
-        runtime_hooks: BackgroundJobRunnerRuntimeHooks | None = None,
+        options: BackgroundJobRunnerOptions | None = None,
+        **legacy_options: Unpack[BackgroundJobRunnerLegacyOptions],
     ) -> None:
         """キュー、worker、batch/lease/retry 設定を注入する。"""
+        resolved_options = _resolve_runner_options(options, legacy_options)
         self._queue = queue
         self._workers = {worker.kind: worker for worker in workers}
-        self._max_jobs_per_run = max_jobs_per_run
-        self._lease_seconds = lease_seconds
-        self._queue_policy = queue_policy or BackgroundJobQueuePolicy(
-            default_policy=BackgroundJobKindPolicy(concurrency_limit=max_jobs_per_run)
+        self._max_jobs_per_run = resolved_options.max_jobs_per_run
+        self._lease_seconds = resolved_options.lease_seconds
+        self._queue_policy = resolved_options.queue_policy or BackgroundJobQueuePolicy(
+            default_policy=BackgroundJobKindPolicy(
+                concurrency_limit=resolved_options.max_jobs_per_run
+            )
         )
-        self._runtime_hooks = runtime_hooks or BackgroundJobRunnerRuntimeHooks()
+        self._runtime_hooks = resolved_options.runtime_hooks or BackgroundJobRunnerRuntimeHooks()
+        self._inference_scheduler = resolved_options.inference_scheduler
         self._latest_metrics: BackgroundJobQueueMetrics | None = None
 
     @property
@@ -98,7 +135,7 @@ class BackgroundJobRunner:
             self._max_jobs_per_run,
             self._lease_seconds_for_policy(),
             policy=self._queue_policy,
-            idle_available=self._runtime_hooks.idle_available(),
+            idle_available=await self._idle_available_for_lease(),
         )
         for job in jobs:
             await self._run_job(job)
@@ -115,28 +152,103 @@ class BackgroundJobRunner:
             )
             logger.error("background job worker missing: {}", job.kind)
             return
-        kind_policy = self._queue_policy.for_kind(job.kind)
+        lease_result = await self._acquire_inference_lease(job)
+        logger.debug(
+            "background job inference lease decision: {}",
+            inference_lease_log_fields(lease_result),
+        )
+        if not lease_result.acquired:
+            await self._apply_inference_lease_rejection(job, lease_result)
+            return
+        run_result = await self._run_worker_with_failure_isolation(job)
+        lease_still_active = True
+        if lease_result.lease_id is not None and self._inference_scheduler is not None:
+            lease_still_active = await self._inference_scheduler.release(lease_result.lease_id)
+        if run_result.exception is not None:
+            await self._mark_retryable_failure(job, run_result.exception)
+            return
+        if not lease_still_active:
+            await self._defer_preempted_inference_job(job)
+            return
+        self._record_soft_timeout(job, run_result.elapsed_seconds)
+        await self._queue.mark_succeeded(job.job_id, self._runtime_hooks.now())
+
+    async def _run_worker_with_failure_isolation(
+        self,
+        job: BackgroundJobRecord,
+    ) -> _WorkerRunResult:
         started_at = self._runtime_hooks.monotonic_seconds()
         failure = _CaptureWorkerFailure()
+        worker = self._workers[job.kind]
         with failure:
             await asyncio.to_thread(worker.run, job)
         elapsed_seconds = self._runtime_hooks.monotonic_seconds() - started_at
-        if failure.exception is not None:
-            await self._mark_retryable_failure(job, failure.exception)
+        return _WorkerRunResult(exception=failure.exception, elapsed_seconds=elapsed_seconds)
+
+    def _record_soft_timeout(self, job: BackgroundJobRecord, elapsed_seconds: float) -> None:
+        kind_policy = self._queue_policy.for_kind(job.kind)
+        if elapsed_seconds <= kind_policy.timeout_seconds:
             return
-        if elapsed_seconds > kind_policy.timeout_seconds:
-            message = (
-                "background job exceeded soft timeout: "
-                "job_id={} kind={} elapsed_seconds={:.3f} timeout_seconds={:.3f}"
-            )
-            logger.warning(
-                message,
-                job.job_id,
-                job.kind,
-                elapsed_seconds,
-                kind_policy.timeout_seconds,
-            )
-        await self._queue.mark_succeeded(job.job_id, self._runtime_hooks.now())
+        message = (
+            "background job exceeded soft timeout: "
+            "job_id={} kind={} elapsed_seconds={:.3f} timeout_seconds={:.3f}"
+        )
+        logger.warning(
+            message,
+            job.job_id,
+            job.kind,
+            elapsed_seconds,
+            kind_policy.timeout_seconds,
+        )
+
+    async def _acquire_inference_lease(self, job: BackgroundJobRecord) -> InferenceLeaseResult:
+        scheduler = self._inference_scheduler
+        if scheduler is None or not _job_uses_llm(job, self._queue_policy.for_kind(job.kind)):
+            return _synthetic_acquired_lease(job)
+        descriptor = job.resource_profile.model_call_descriptor
+        call_site = (
+            descriptor.call_site if descriptor is not None else _call_site_for_job_kind(job.kind)
+        )
+        request = InferenceLeaseRequest(
+            slot_kind=InferenceSlotKind.BACKGROUND_LLM,
+            priority=model_call_site_priority(call_site),
+            call_site=call_site,
+            model_slot=descriptor.model_slot if descriptor is not None else None,
+            model_name=descriptor.model_name if descriptor is not None else None,
+            metadata=immutable_metadata(
+                {
+                    "background_job_kind": job.kind.value,
+                    "call_site": call_site.value,
+                }
+            ),
+        )
+        return await scheduler.acquire(request)
+
+    async def _apply_inference_lease_rejection(
+        self,
+        job: BackgroundJobRecord,
+        lease_result: InferenceLeaseResult,
+    ) -> None:
+        reason = f"inference resource {lease_result.decision.value}: {lease_result.reason}"
+        if lease_result.decision is InferenceLeaseDecision.DEFER:
+            await self._defer_leased_job(job, reason)
+            logger.info("background job deferred by inference scheduler: {}", job.job_id)
+            return
+        await self._queue.mark_permanent_failure(job.job_id, self._runtime_hooks.now(), reason)
+        logger.info("background job cancelled by inference scheduler: {}", job.job_id)
+
+    async def _defer_preempted_inference_job(self, job: BackgroundJobRecord) -> None:
+        reason = "inference resource defer: low priority lease was preempted"
+        await self._defer_leased_job(job, reason)
+        logger.info("background job deferred after inference lease preemption: {}", job.job_id)
+
+    async def _defer_leased_job(self, job: BackgroundJobRecord, reason: str) -> None:
+        defer_seconds = self._queue_policy.for_kind(job.kind).defer_seconds_when_saturated
+        await self._queue.defer_leased(
+            job.job_id,
+            self._runtime_hooks.now() + timedelta(seconds=defer_seconds),
+            reason,
+        )
 
     async def _mark_retryable_failure(self, job: BackgroundJobRecord, exc: Exception) -> None:
         failed_at = self._runtime_hooks.now()
@@ -152,11 +264,45 @@ class BackgroundJobRunner:
             job.job_id,
         )
 
+    async def _idle_available_for_lease(self) -> bool:
+        if self._runtime_hooks.idle_available():
+            return True
+        if self._inference_scheduler is None:
+            return False
+        snapshot = await self._inference_scheduler.snapshot()
+        return snapshot.state is InferenceResourceState.IDLE
+
     def _retry_delay_seconds(self, job: BackgroundJobRecord) -> float:
         return self._queue_policy.for_kind(job.kind).retry_delay_seconds(job.attempts)
 
     def _lease_seconds_for_policy(self) -> float:
         return max(self._lease_seconds, self._queue_policy.max_timeout_seconds())
+
+
+def _resolve_runner_options(
+    options: BackgroundJobRunnerOptions | None,
+    legacy_options: BackgroundJobRunnerLegacyOptions,
+) -> BackgroundJobRunnerOptions:
+    if not legacy_options:
+        return options or BackgroundJobRunnerOptions()
+    if options is not None:
+        message = "BackgroundJobRunner options cannot be combined with legacy kwargs"
+        raise TypeError(message)
+    return BackgroundJobRunnerOptions(
+        max_jobs_per_run=legacy_options.get("max_jobs_per_run", 5),
+        lease_seconds=legacy_options.get("lease_seconds", 30.0),
+        queue_policy=legacy_options.get("queue_policy"),
+        runtime_hooks=legacy_options.get("runtime_hooks"),
+        inference_scheduler=legacy_options.get("inference_scheduler"),
+    )
+
+
+@dataclass(frozen=True)
+class _WorkerRunResult:
+    """worker 実行結果を queue 状態更新前に保持する。"""
+
+    exception: Exception | None
+    elapsed_seconds: float
 
 
 class _CaptureWorkerFailure:
@@ -179,3 +325,33 @@ class _CaptureWorkerFailure:
             return False
         self.exception = exc
         return True
+
+
+def _job_uses_llm(job: BackgroundJobRecord, kind_policy: BackgroundJobKindPolicy) -> bool:
+    return job.resource_profile.uses_llm or kind_policy.uses_llm
+
+
+def _call_site_for_job_kind(kind: BackgroundJobKind) -> ModelCallSite:
+    if kind is BackgroundJobKind.MEMORY_EXTRACTION:
+        return ModelCallSite.MEMORY_EXTRACTION
+    if kind is BackgroundJobKind.REFLECTION:
+        return ModelCallSite.REFLECTION
+    if kind is BackgroundJobKind.RELATIONSHIP_UPDATE:
+        return ModelCallSite.RELATIONSHIP_UPDATE
+    return ModelCallSite.RUNTIME_LEARNING_HOOK
+
+
+def _synthetic_acquired_lease(job: BackgroundJobRecord) -> InferenceLeaseResult:
+    request = InferenceLeaseRequest(
+        slot_kind=InferenceSlotKind.BACKGROUND_LLM,
+        priority=model_call_site_priority(_call_site_for_job_kind(job.kind)),
+        call_site=_call_site_for_job_kind(job.kind),
+        metadata=immutable_metadata({"background_job_kind": job.kind.value}),
+    )
+    return InferenceLeaseResult(
+        decision=InferenceLeaseDecision.ACQUIRED,
+        reason="no inference resource lease required",
+        request=request,
+        snapshot=InferenceResourceSnapshot(state=InferenceResourceState.IDLE),
+        lease_id=None,
+    )

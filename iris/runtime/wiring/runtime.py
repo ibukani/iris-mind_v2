@@ -21,6 +21,7 @@ from iris.runtime.conversation import (
     ShortTermConversationRuntime,
     TranscriptWritePolicy,
 )
+from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.learning.hooks import LearningHookRunner, RuntimeLearningHookRunner
@@ -38,7 +39,7 @@ from iris.runtime.learning.policy import (
 )
 from iris.runtime.learning.review_promotion import ApprovedMemoryCandidatePromoter
 from iris.runtime.learning.review_service import MemoryCandidateReviewService
-from iris.runtime.learning.runner import BackgroundJobRunner
+from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunnerOptions
 from iris.runtime.memory_vector_rebuilder import MemoryVectorIndexRebuilder
 from iris.runtime.observability.events import LoggingRuntimeObservationObserver
 from iris.runtime.observability.ports import RuntimeLatencyBudget
@@ -102,6 +103,7 @@ class RuntimeOperationalWiringDiagnostics:
     proactive_talk_enabled: bool = False
     proactive_generation_mode: str = "not_configured"
     proactive_threshold: str = "not_configured"
+    inference_scheduler_enabled: bool = False
 
 
 def describe_runtime_operational_wiring(
@@ -124,6 +126,7 @@ def describe_runtime_operational_wiring(
     return RuntimeOperationalWiringDiagnostics(
         delivery_broker_wired=config.delivery.enabled,
         proactive_talk_enabled=_feature_enabled(feature_catalog, "proactive_talk"),
+        inference_scheduler_enabled=config.inference_scheduler.enabled,
     )
 
 
@@ -142,6 +145,7 @@ class RuntimeComponents:
     app_action_broker: AppActionBroker | None
     scheduler_runner: SchedulerRunner
     background_job_runner: BackgroundJobRunner
+    inference_scheduler: LocalInferenceResourceScheduler | None
     memory_candidate_review_service: MemoryCandidateReviewService
     memory_candidate_promoter: ApprovedMemoryCandidatePromoter
 
@@ -281,6 +285,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     """
     stores = wire_runtime_state(config)
     vector_index, embedding = _wire_memory_vector(config, stores)
+    inference_scheduler = _wire_inference_scheduler(config)
     feature_catalog = wire_runtime_features()
     output_pipeline = wire_output_pipeline(
         safety_config=config.safety,
@@ -297,6 +302,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         ),
         output_pipeline=output_pipeline,
         features=feature_catalog.features,
+        inference_scheduler=inference_scheduler,
     )
     runtime_service = build_runtime_service(
         app,
@@ -320,13 +326,6 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         ),
     )
     gateway_components = _wire_runtime_gateway_components(config, stores, feature_catalog)
-    memory_candidate_review_service = MemoryCandidateReviewService(
-        stores.memory_candidate_review_store
-    )
-    memory_candidate_promoter = ApprovedMemoryCandidatePromoter(
-        stores.memory_candidate_review_store,
-        stores.memory_store,
-    )
     background_job_runner = BackgroundJobRunner(
         stores.background_job_queue,
         (
@@ -339,8 +338,11 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
                 ),
             ),
         ),
-        max_jobs_per_run=config.learning.max_jobs_per_run,
-        queue_policy=_background_job_queue_policy_from_config(config),
+        options=BackgroundJobRunnerOptions(
+            max_jobs_per_run=config.learning.max_jobs_per_run,
+            queue_policy=_background_job_queue_policy_from_config(config),
+            inference_scheduler=inference_scheduler,
+        ),
     )
     scheduler_runner = wire_scheduler_runner(
         runtime_service=runtime_service,
@@ -361,9 +363,28 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         app_action_broker=gateway_components.app_action_broker,
         scheduler_runner=scheduler_runner,
         background_job_runner=background_job_runner,
-        memory_candidate_review_service=memory_candidate_review_service,
-        memory_candidate_promoter=memory_candidate_promoter,
+        inference_scheduler=inference_scheduler,
+        memory_candidate_review_service=MemoryCandidateReviewService(
+            stores.memory_candidate_review_store
+        ),
+        memory_candidate_promoter=ApprovedMemoryCandidatePromoter(
+            stores.memory_candidate_review_store,
+            stores.memory_store,
+        ),
     )
+
+
+def _wire_inference_scheduler(
+    config: IrisRuntimeConfig,
+) -> LocalInferenceResourceScheduler | None:
+    """Runtime config から local inference resource scheduler を構築する。
+
+    Returns:
+        config-gated scheduler。無効時は None。
+    """
+    if not config.inference_scheduler.enabled:
+        return None
+    return LocalInferenceResourceScheduler(policy=config.inference_scheduler.to_policy())
 
 
 def _background_job_queue_policy_from_config(config: IrisRuntimeConfig) -> BackgroundJobQueuePolicy:

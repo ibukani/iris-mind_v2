@@ -22,6 +22,7 @@ from iris.runtime.wiring.features import (
 )
 from iris.runtime.wiring.llm import (
     LLMClientFactory,
+    ResponseGeneratorWiringOptions,
     wire_budgeted_response_generator,
     wire_response_generator,
 )
@@ -41,7 +42,20 @@ if TYPE_CHECKING:
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
     from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig
+    from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
     from iris.runtime.output_pipeline import RuntimeOutputPipeline
+
+
+@dataclass(frozen=True)
+class ChatFeatureWiringOptions:
+    """Chat feature wiring に必要な LLM 周辺設定。"""
+
+    model: str
+    temperature: float
+    max_tokens: int | None
+    model_call_budget: RuntimeModelCallBudgetConfig | None = None
+    prompt_budget: RuntimePromptBudgetConfig | None = None
+    inference_scheduler: LocalInferenceResourceScheduler | None = None
 
 
 @dataclass(frozen=True)
@@ -69,9 +83,11 @@ def wire_default_app(
     """
     chat_feature = _wire_chat_feature(
         llm_client,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
+        ChatFeatureWiringOptions(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        ),
     )
     features = collect_feature_items(
         ((chat_feature,), (define_basic_action_feature(),)),
@@ -92,6 +108,7 @@ def build_app_from_config(
     state: AppStateDependencies,
     output_pipeline: RuntimeOutputPipeline,
     features: Sequence[FeatureDefinition] = (),
+    inference_scheduler: LocalInferenceResourceScheduler | None = None,
 ) -> IrisApp:
     """ランタイム設定から IrisApp を構築する。
 
@@ -119,11 +136,14 @@ def build_app_from_config(
 
     chat_feature = _wire_chat_feature(
         client,
-        model=model,
-        temperature=model_config.temperature,
-        max_tokens=model_config.max_output_tokens,
-        model_call_budget=config.model_call_budget,
-        prompt_budget=config.prompt_budget,
+        ChatFeatureWiringOptions(
+            model=model,
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_output_tokens,
+            model_call_budget=config.model_call_budget,
+            prompt_budget=config.prompt_budget,
+            inference_scheduler=inference_scheduler,
+        ),
     )
     all_features = collect_feature_items((features, (chat_feature,)))
     cycle = wire_core_cognitive_cycle(
@@ -143,12 +163,7 @@ def build_app_from_config(
 
 def _wire_chat_feature(
     llm_client: LLMClient,
-    *,
-    model: str,
-    temperature: float,
-    max_tokens: int | None,
-    model_call_budget: RuntimeModelCallBudgetConfig | None = None,
-    prompt_budget: RuntimePromptBudgetConfig | None = None,
+    options: ChatFeatureWiringOptions,
 ) -> FeatureDefinition:
     """Chat feature を再利用可能な形で組み立てる。
 
@@ -157,17 +172,20 @@ def _wire_chat_feature(
     """
     generator = wire_response_generator(
         llm_client,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        prompt_budget_config=prompt_budget,
+        options=ResponseGeneratorWiringOptions(
+            model=options.model,
+            temperature=options.temperature,
+            max_tokens=options.max_tokens,
+            prompt_budget_config=options.prompt_budget,
+            inference_scheduler=options.inference_scheduler,
+        ),
     )
-    if model_call_budget is not None:
+    if options.model_call_budget is not None:
         return define_chat_feature(
             wire_budgeted_response_generator(
                 generator,
-                model_call_budget,
-                model=model,
+                options.model_call_budget,
+                model=options.model,
                 model_slot="default_chat",
             )
         )

@@ -107,6 +107,15 @@ class BackgroundJobQueue(Protocol):
         """Lease 中ジョブを成功完了にする。"""
         ...
 
+    async def defer_leased(
+        self,
+        job_id: BackgroundJobId,
+        deferred_until: datetime,
+        reason: str,
+    ) -> None:
+        """Lease 中ジョブを pending に戻し、次回以降へ defer する。"""
+        ...
+
     async def mark_retryable_failure(
         self,
         job_id: BackgroundJobId,
@@ -261,6 +270,27 @@ class InMemoryBackgroundJobQueue:
     async def mark_succeeded(self, job_id: BackgroundJobId, finished_at: datetime) -> None:
         """Lease 中ジョブを成功完了にする。"""
         await self._update_terminal(job_id, BackgroundJobStatus.SUCCEEDED, finished_at, None)
+
+    async def defer_leased(
+        self,
+        job_id: BackgroundJobId,
+        deferred_until: datetime,
+        reason: str,
+    ) -> None:
+        """Lease 中ジョブを pending に戻し、推論資源が空くまで実行を遅らせる。"""
+        async with self._lock:
+            job = self._require(job_id)
+            self._jobs[job_id] = replace_job(
+                job,
+                JobUpdate(
+                    status=BackgroundJobStatus.PENDING,
+                    not_before=deferred_until,
+                    leased_until=None,
+                    updated_at=deferred_until,
+                    last_error=None,
+                    defer_reason=reason,
+                ),
+            )
 
     async def mark_retryable_failure(
         self,
@@ -518,6 +548,7 @@ class JobUpdate:
     not_before: datetime | None = None
     leased_until: datetime | None = None
     last_error: str | None = None
+    defer_reason: str | None = None
 
 
 def replace_job(job: BackgroundJobRecord, update: JobUpdate) -> BackgroundJobRecord:
@@ -540,5 +571,5 @@ def replace_job(job: BackgroundJobRecord, update: JobUpdate) -> BackgroundJobRec
         created_at=job.created_at,
         updated_at=update.updated_at,
         last_error=update.last_error,
-        defer_reason=job.defer_reason,
+        defer_reason=job.defer_reason if update.defer_reason is None else update.defer_reason,
     )

@@ -371,6 +371,96 @@ def _prompt_section_specs(
     )
 
 
+def _inference_scheduler_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Local inference resource scheduler の ConfigSpec 群を返す。
+
+    Returns:
+        inference_scheduler 配下の設定仕様。
+    """
+    return (
+        ConfigFieldSpec(
+            "inference_scheduler.enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="ローカル推論資源 scheduler boundary を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.large_llm_concurrency_limit",
+            ConfigValueType.INT,
+            1,
+            "large LLM / background LLM の同時実行上限。現在は 1 のみ許可する。",
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.small_classifier_concurrency_limit",
+            ConfigValueType.INT,
+            4,
+            "small classifier 用の別枠同時実行上限。",
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.embedding_concurrency_limit",
+            ConfigValueType.INT,
+            2,
+            "embedding 用の別枠同時実行上限。",
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.reranker_concurrency_limit",
+            ConfigValueType.INT,
+            2,
+            "reranker 用の別枠同時実行上限。",
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.preempt_background_for_user_facing",
+            ConfigValueType.BOOL,
+            default=True,
+            description=(
+                "user-facing request 到着時に低優先度 large LLM lease を cooperative cancel する。"
+            ),
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.background_when_busy",
+            ConfigValueType.ENUM,
+            "defer",
+            "busy 時の background LLM job の挙動。",
+            allowed_values=("defer", "cancel", "no_send"),
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.proactive_when_busy",
+            ConfigValueType.ENUM,
+            "no_send",
+            "busy 時の proactive generation の挙動。",
+            allowed_values=("defer", "cancel", "no_send"),
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.low_priority_when_warming",
+            ConfigValueType.ENUM,
+            "defer",
+            "warming 時の低優先度 work の挙動。",
+            allowed_values=("defer", "cancel", "no_send"),
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.background_when_unavailable",
+            ConfigValueType.ENUM,
+            "cancel",
+            "unavailable 時の background LLM job の挙動。",
+            allowed_values=("defer", "cancel", "no_send", "denied"),
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.proactive_when_unavailable",
+            ConfigValueType.ENUM,
+            "no_send",
+            "unavailable 時の proactive generation の挙動。",
+            allowed_values=("defer", "cancel", "no_send", "denied"),
+        ),
+        ConfigFieldSpec(
+            "inference_scheduler.user_facing_when_unavailable",
+            ConfigValueType.ENUM,
+            "denied",
+            "unavailable 時の user-facing generation の挙動。",
+            allowed_values=("defer", "cancel", "no_send", "denied"),
+        ),
+    )
+
+
 def _model_call_budget_specs() -> tuple[ConfigFieldSpec, ...]:
     """Feature 別 model call budget の ConfigSpec 群を返す。
 
@@ -703,6 +793,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             default=True,
             description="reflection job を idle 時だけ enqueue する。",
         ),
+        *_inference_scheduler_specs(),
         *_model_call_budget_specs(),
         *_prompt_budget_specs(),
         ConfigFieldSpec(
@@ -1194,7 +1285,10 @@ def _v2_user_spec(spec: ConfigFieldSpec) -> ConfigFieldSpec:
     model_call_detail = (
         path.startswith("model_call_budget.") and path != "model_call_budget.enabled"
     )
-    if not (prompt_detail or model_call_detail):
+    inference_scheduler_detail = (
+        path.startswith("inference_scheduler.") and path != "inference_scheduler.enabled"
+    )
+    if not (prompt_detail or model_call_detail or inference_scheduler_detail):
         if path == "config.version":
             return ConfigFieldSpec(
                 path=path,
