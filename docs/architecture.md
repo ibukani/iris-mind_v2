@@ -216,6 +216,7 @@ Deferred / future phase:
 - `InteractionSpace`
 - `Memory` / `MemorySearchResult`
 - `Policy` / `ActionPreference` / `PolicyConstraint`
+- `AppraisalSignal` / `AppraisalSemantics`
 
 `Identity` は人間・デバイス・サービス・システム・Iris 自身を区別する `ActorKind` を持つ。
 `AccountId` / `DeviceId` は任意の関連リンクで、認証・権限はここで扱わない。
@@ -955,3 +956,5 @@ Memory は検索可能な長期 content を扱う。対象は facts、preference
 Relationship は `ActorId` を主キーにした current per-actor state として `RelationshipSnapshotRecord` に保存する。Affect は Iris の baseline/current affect state として `AffectBaselineRecord` に保存する。Global affect baseline は `scope="global"` と `actor_id=None` を使う。
 
 SQLite backend は memory、relationship、affect、account、activity journal を durable にする。Activity projection、presence、space occupancy は ephemeral のままにする。`space_id` は durable relationship / affect の owner ではなく、memory でも補助的な interaction context として扱う。
+
+- `contracts/appraisal.py` — Appraisal semantics split の typed signal contract。詳細は ADR 0018。

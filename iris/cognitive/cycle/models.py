@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
     from iris.contracts.actions import ActionPlan
+    from iris.contracts.appraisal import AppraisalSignal
     from iris.contracts.memory import MemorySearchResult
     from iris.contracts.model_invocation import ModelInvocationMetadata
     from iris.contracts.policy import ActionPreference, PolicyConstraint
@@ -57,6 +58,8 @@ class AppraisalResult(PipelineStepResult):
     valence: float = 0.0
     dominance: float = 0.0
     affect_summary: str | None = None
+    appraisal_signals: tuple[AppraisalSignal, ...] = ()
+    appraisal_summary: str | None = None
 
 
 @dataclass(frozen=True)

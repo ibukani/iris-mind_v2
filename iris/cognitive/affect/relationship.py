@@ -25,13 +25,19 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
 
     name = "relationship"
 
-    def __init__(self, store: RelationshipStore) -> None:
+    def __init__(
+        self,
+        store: RelationshipStore,
+        *,
+        semantic_appraisal_mode: bool = False,
+    ) -> None:
         """関係性 state store を受け取る。"""
         self._store = store
+        self._semantic_appraisal_mode = semantic_appraisal_mode
 
     @override
     async def run(self, frame: WorkspaceFrame) -> RelationshipResult:
-        """現在の actor と affect から関係性 state を更新する。
+        """現在の actor と appraisal semantics から関係性 state を更新する。
 
         Returns:
             更新された関係性を表す RelationshipResult。
@@ -67,7 +73,7 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
             if current_record is not None
             else default_relationship_snapshot(actor.display_name)
         )
-        updated_snapshot = update_relationship(current_snapshot, frame.affect)
+        updated_snapshot = self._update_snapshot(current_snapshot, frame)
         record = _record_from_snapshot(
             actor_id=actor.actor_id,
             snapshot=updated_snapshot,
@@ -75,6 +81,15 @@ class RelationshipStep(PipelineStep[RelationshipResult]):
         )
         stored = await self._store.upsert(record)
         return _result_from_record(stored)
+
+    def _update_snapshot(
+        self,
+        current: RelationshipSnapshot,
+        frame: WorkspaceFrame,
+    ) -> RelationshipSnapshot:
+        if self._semantic_appraisal_mode:
+            return update_relationship_semantic_boundary(current)
+        return update_relationship(current, frame.affect)
 
 
 def default_relationship_snapshot(actor_label: str | None) -> RelationshipSnapshot:
@@ -96,7 +111,7 @@ def update_relationship(
     current: RelationshipSnapshot,
     affect: AffectSnapshot,
 ) -> RelationshipSnapshot:
-    """現在の affect を保守的に反映した新しい関係性 state を返す。
+    """Config gate 無効時の legacy VAD 反映を返す。
 
     Returns:
         更新後の RelationshipSnapshot。
@@ -108,6 +123,32 @@ def update_relationship(
     elif affect.valence < _NEGATIVE_VALENCE_TRUST_THRESHOLD:
         trust_delta = -0.02
 
+    return _apply_relationship_delta(
+        current, affinity_delta=affinity_delta, trust_delta=trust_delta
+    )
+
+
+def update_relationship_semantic_boundary(
+    current: RelationshipSnapshot,
+) -> RelationshipSnapshot:
+    """#100 の semantic mode では durable relationship へ valence を直結しない。
+
+    Appraisal signals は #102 の bounded candidate policy が導入されるまで
+    affinity/trust を直接 mutate しない。ここでは actor との接触事実として
+    familiarity だけを更新する。
+
+    Returns:
+        更新後の RelationshipSnapshot。
+    """
+    return _apply_relationship_delta(current, affinity_delta=0.0, trust_delta=0.0)
+
+
+def _apply_relationship_delta(
+    current: RelationshipSnapshot,
+    *,
+    affinity_delta: float,
+    trust_delta: float,
+) -> RelationshipSnapshot:
     familiarity = clamp_value(current.familiarity + 0.05, lower=0.0, upper=1.0)
     affinity = clamp_value(current.affinity + affinity_delta, lower=-1.0, upper=1.0)
     trust = clamp_value(current.trust + trust_delta, lower=0.0, upper=1.0)

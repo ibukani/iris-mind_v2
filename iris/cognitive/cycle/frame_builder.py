@@ -22,6 +22,7 @@ from iris.cognitive.cycle.models import (
 )
 from iris.cognitive.workspace.frame import (
     AffectSnapshot,
+    AppraisalSemanticsSnapshot,
     GoalCandidate,
     InterpretedInput,
     MemorySummary,
@@ -114,6 +115,10 @@ class FrameBuilder:
                 valence=result.valence,
                 dominance=result.dominance,
                 affect_summary=result.affect_summary,
+            ),
+            appraisal=AppraisalSemanticsSnapshot(
+                signals=result.appraisal_signals,
+                summary=result.appraisal_summary,
             ),
         )
         return _rebuild_frame(frame, updates)
@@ -242,6 +247,7 @@ class _FrameUpdates:
     interpreted_input: InterpretedInput | None
     memory_summary: MemorySummary
     affect: AffectSnapshot
+    appraisal: AppraisalSemanticsSnapshot
     relationship: RelationshipSnapshot
     goals: tuple[GoalCandidate, ...]
     constraints: tuple[PolicyConstraint, ...]
@@ -256,6 +262,7 @@ def _current_updates(frame: WorkspaceFrame) -> _FrameUpdates:
         interpreted_input=frame.interpreted_input,
         memory_summary=frame.memory_summary,
         affect=frame.affect,
+        appraisal=frame.appraisal,
         relationship=frame.relationship,
         goals=frame.goals,
         constraints=frame.constraints,
@@ -280,6 +287,7 @@ def _rebuild_frame(
         interpreted_input=updates.interpreted_input,
         memory_summary=updates.memory_summary,
         affect=updates.affect,
+        appraisal=updates.appraisal,
         relationship=updates.relationship,
         goals=updates.goals,
         constraints=updates.constraints,
