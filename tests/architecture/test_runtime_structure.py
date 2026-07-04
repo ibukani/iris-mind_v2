@@ -19,6 +19,7 @@ ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
         "ingress",
         "lifecycle",
         "learning",
+        "local_ai",
         "observability",
         "scheduler",
         "state",

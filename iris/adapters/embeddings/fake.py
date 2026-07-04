@@ -4,6 +4,15 @@ from __future__ import annotations
 
 import hashlib
 
+from iris.contracts.embeddings import (
+    EmbeddingBatchRequest,
+    EmbeddingBatchResult,
+    EmbeddingRequest,
+    EmbeddingResult,
+)
+from iris.contracts.model_invocation import ModelInvocationMetadata
+from iris.contracts.model_policy import ModelCallKind
+
 
 class DeterministicFakeEmbedding:
     """SHA-256 を使う外部依存なしの固定次元埋め込み。"""
@@ -19,6 +28,12 @@ class DeterministicFakeEmbedding:
             raise ValueError(msg)
         self._model_id = model
         self._dimension = dimension
+        self._model_metadata = ModelInvocationMetadata(
+            call_kind=ModelCallKind.EMBEDDING,
+            provider="fake",
+            model_name=model,
+            adapter_name="deterministic_fake_embedding",
+        )
 
     @property
     def provider(self) -> str:
@@ -58,3 +73,54 @@ class DeterministicFakeEmbedding:
             入力順の固定次元ベクトル。
         """
         return tuple(self.embed(text) for text in texts)
+
+    def embed_text(self, request: EmbeddingRequest) -> EmbeddingResult:
+        """EmbeddingClient contract の単一テキスト結果を返す。
+
+        Returns:
+            EmbeddingResult: 決定論的 fake embedding。
+        """
+        return EmbeddingResult(
+            vector=self.embed(request.text),
+            dimension=self._dimension,
+            reason="deterministic fake embedding",
+            model_metadata=self._metadata_for_slot(request.model_slot),
+            latency_ms=0.0,
+            metadata=request.metadata,
+        )
+
+    def embed_text_batch(self, request: EmbeddingBatchRequest) -> EmbeddingBatchResult:
+        """EmbeddingClient contract の batch 結果を入力順で返す。
+
+        Returns:
+            EmbeddingBatchResult: 入力順の fake embedding batch。
+        """
+        metadata = self._metadata_for_slot(request.model_slot)
+        embeddings = tuple(
+            EmbeddingResult(
+                vector=vector,
+                dimension=self._dimension,
+                reason="deterministic fake embedding",
+                model_metadata=metadata,
+                latency_ms=0.0,
+            )
+            for vector in self.embed_batch(request.texts)
+        )
+        return EmbeddingBatchResult(
+            embeddings=embeddings,
+            reason="deterministic fake embedding batch",
+            model_metadata=metadata,
+            latency_ms=0.0,
+            metadata=request.metadata,
+        )
+
+    def _metadata_for_slot(self, model_slot: str | None) -> ModelInvocationMetadata:
+        if model_slot is None:
+            return self._model_metadata
+        return ModelInvocationMetadata(
+            call_kind=ModelCallKind.EMBEDDING,
+            provider=self.provider,
+            model_name=self.model_id,
+            adapter_name="deterministic_fake_embedding",
+            model_slot=model_slot,
+        )
