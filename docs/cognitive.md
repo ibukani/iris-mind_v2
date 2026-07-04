@@ -186,7 +186,8 @@ retrieval / reranking / response policy selection に使えるようにする。
 
 Fake / rule implementation は `iris/adapters/` に閉じる。`cognitive/` は実装 adapter を import せず、必要な場合は
 constructor injection された port だけを見る。runtime 側では `Budgeted*` wrapper が #88 の call budget に接続し、
-`Observable*` wrapper が #90 の latency / call count observability に接続する。
+`Observable*` wrapper が #90 の latency / call count observability に接続する。実 runtime wiring で両方を使う場合は
+`compose_observable_budgeted_*` helper により `Observable(Budgeted(adapter))` の順序で合成し、budget denial も観測対象にする。
 
 この時点では特定 production model、training dataset、evaluation dashboard、#94 retrieval pipeline 本体は実装しない。
 #91 の prompt section budget が未適用の間、classifier / retrieval / reranker output を prompt に重く統合しない。

@@ -148,6 +148,11 @@ Runtime wrapper は2層に分ける。
 - `Budgeted*` wrapper: #88 の `ModelCallBudgetGate` を呼び出し前に通す。拒否時は adapter を呼ばず、typed fallback result を返す。
 - `Observable*` wrapper: #90 の trace counter と latency stage に接続する。prompt / user text / memory content は記録しない。
 
+実 runtime wiring へ接続する場合の推奨合成順序は `Observable(Budgeted(adapter))` とする。
+`iris/runtime/local_ai/composition.py` の `compose_observable_budgeted_*` helper がこの順序を固定する。
+この順序では、budget denial も classifier / embedding / reranker の latency sample と call count として観測される。
+`Budgeted(Observable(adapter))` にすると budget denial は observable wrapper の手前で止まるため、原則として使わない。
+
 `ClassificationResult`、`EmbeddingResult`、`RerankResult` は `ModelInvocationMetadata` と `latency_ms` を持つ。
 `ClassificationResult` は `label`、`confidence`、`reason`、`fallback_applied`、`original_label` を持ち、
 `ClassificationFallbackPolicy` により low-confidence result を deterministic に `unknown` へ正規化できる。

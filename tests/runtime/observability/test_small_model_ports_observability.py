@@ -30,6 +30,11 @@ from iris.runtime.local_ai.budgeted import (
     BudgetedReranker,
     BudgetedTextClassifier,
 )
+from iris.runtime.local_ai.composition import (
+    compose_observable_budgeted_embedding_client,
+    compose_observable_budgeted_reranker,
+    compose_observable_budgeted_text_classifier,
+)
 from iris.runtime.local_ai.observability import (
     ObservableEmbeddingClient,
     ObservableReranker,
@@ -262,3 +267,75 @@ def _budget_config(
             reranker_max_calls=reranker_max_calls,
         )
     )
+
+
+def test_composed_classifier_observes_budget_denial_without_adapter_call() -> None:
+    """推奨合成は budget denial も classifier call として観測する。"""
+    observer = _RecordingObserver()
+    classifier = _CountingTextClassifier()
+    composed = compose_observable_budgeted_text_classifier(
+        classifier,
+        observer,
+        budget_config=_budget_config(small_classifier_max_calls=0),
+    )
+
+    with bind_model_call_budget_scope(), bind_trace_context(_trace_context()):
+        result = composed.classify(ClassificationRequest(text="secret user text"))
+        counters = trace_counter_extra()
+
+    assert classifier.calls == 0
+    assert result.label == "unknown"
+    assert result.model_metadata.provider == "budget"
+    assert counters["classifier_call_count"] == 1
+    assert _stage_names(observer) == {"classifier_call"}
+    assert "secret user text" not in repr(observer.events)
+
+
+def test_composed_embedding_observes_budget_denial_without_adapter_call() -> None:
+    """推奨合成は budget denial も embedding call として観測する。"""
+    observer = _RecordingObserver()
+    client = _CountingEmbeddingClient()
+    composed = compose_observable_budgeted_embedding_client(
+        client,
+        observer,
+        budget_config=_budget_config(embedding_max_calls=0),
+    )
+
+    with bind_model_call_budget_scope(), bind_trace_context(_trace_context()):
+        result = composed.embed_text(EmbeddingRequest(text="secret query text"))
+        counters = trace_counter_extra()
+
+    assert client.calls == 0
+    assert result.vector == (0.0, 0.0, 0.0, 0.0)
+    assert result.model_metadata.provider == "budget"
+    assert counters["embedding_call_count"] == 1
+    assert _stage_names(observer) == {"embedding_call"}
+    assert "secret query text" not in repr(observer.events)
+
+
+def test_composed_reranker_observes_budget_denial_without_adapter_call() -> None:
+    """推奨合成は budget denial も reranker call として観測する。"""
+    observer = _RecordingObserver()
+    reranker = _CountingReranker()
+    composed = compose_observable_budgeted_reranker(
+        reranker,
+        observer,
+        budget_config=_budget_config(reranker_max_calls=0),
+    )
+
+    with bind_model_call_budget_scope(), bind_trace_context(_trace_context()):
+        result = composed.rerank(
+            RerankRequest(
+                query="secret query text",
+                candidates=(RerankCandidate(candidate_id="a", text="secret candidate text"),),
+            )
+        )
+        counters = trace_counter_extra()
+
+    assert reranker.calls == 0
+    assert tuple(item.candidate.candidate_id for item in result.items) == ("a",)
+    assert result.model_metadata.provider == "budget"
+    assert counters["reranker_call_count"] == 1
+    assert _stage_names(observer) == {"reranker_call"}
+    assert "secret query text" not in repr(observer.events)
+    assert "secret candidate text" not in repr(observer.events)
