@@ -49,7 +49,7 @@ class RuntimeBackgroundJobKindsPolicyConfig:
 class RuntimeBackgroundJobPolicyConfig:
     """BackgroundJobQueue pressure policy の runtime config。"""
 
-    enabled: bool = True
+    enabled: bool = False
     default_concurrency_limit: int = 1
     default_timeout_seconds: float = 30.0
     default_max_pending_jobs: int = 100

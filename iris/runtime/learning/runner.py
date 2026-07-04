@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from iris.runtime.learning.jobs import BackgroundJobKind, BackgroundJobRecord
+    from iris.runtime.learning.policy import BackgroundJobQueueMetrics
     from iris.runtime.learning.queue import BackgroundJobQueue
 
 
@@ -52,6 +53,19 @@ class BackgroundJobRunner:
             default_policy=BackgroundJobKindPolicy(concurrency_limit=max_jobs_per_run)
         )
         self._now = now
+        self._latest_metrics: BackgroundJobQueueMetrics | None = None
+
+    @property
+    def latest_metrics(self) -> BackgroundJobQueueMetrics | None:
+        """最後の run_once() 後に収集した queue metrics snapshot を返す。
+
+        #93 や diagnostics wiring は runner を起動せず queue.collect_metrics() を直接参照できる。
+        ここでは worker 実行ループからも直近 snapshot を失わず公開する。
+
+        Returns:
+            直近の metrics snapshot。run_once() 未実行時は None。
+        """
+        return self._latest_metrics
 
     async def run_once(self) -> int:
         """1 batch を処理し、lease 件数を返す。
@@ -68,7 +82,7 @@ class BackgroundJobRunner:
         )
         for job in jobs:
             await self._run_job(job)
-        await self._queue.collect_metrics(self._now())
+        self._latest_metrics = await self._queue.collect_metrics(self._now())
         return len(jobs)
 
     async def _run_job(self, job: BackgroundJobRecord) -> None:

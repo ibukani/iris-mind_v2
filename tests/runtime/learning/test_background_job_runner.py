@@ -142,3 +142,17 @@ async def test_worker_failure_uses_exponential_retry_backoff() -> None:
 
     stored = await queue.get(job.job_id)
     assert stored.not_before == job.not_before.replace(second=5)
+
+
+async def test_run_once_exposes_latest_queue_metrics() -> None:
+    """Worker loop が収集した queue metrics を diagnostics 用に保持する。"""
+    queue = InMemoryBackgroundJobQueue()
+    job = await queue.enqueue(_job("metrics"))
+    runner = BackgroundJobRunner(queue, (_Worker(),), now=lambda: job.not_before)
+
+    assert await runner.run_once() == 1
+
+    metrics = runner.latest_metrics
+    assert metrics is not None
+    assert metrics.succeeded == 1
+    assert metrics.queue_depth == 0

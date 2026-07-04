@@ -134,12 +134,12 @@
     {
       "path": "learning.background_job_policy.enabled",
       "type": "bool",
-      "default": true,
+      "default": false,
       "allowedValues": [],
       "env": null,
       "secret": false,
       "editable": true,
-      "description": "BackgroundJobQueue の metrics / backpressure policy を有効化する。"
+      "description": "BackgroundJobQueue の metrics / backpressure policy を明示的に有効化する。"
     },
     {
       "path": "learning.background_job_policy.default_concurrency_limit",

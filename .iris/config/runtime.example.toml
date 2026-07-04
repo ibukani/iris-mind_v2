@@ -90,7 +90,8 @@ implicit_candidate_min_confidence = 0.35
 implicit_candidate_max_text_length = 1000
 
 [learning.background_job_policy]
-enabled = true
+# Initial behavior is config-gated: set true to enable pressure controls.
+enabled = false
 default_concurrency_limit = 1
 default_timeout_seconds = 30.0
 default_max_pending_jobs = 100

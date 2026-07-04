@@ -487,8 +487,10 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ConfigFieldSpec(
             "learning.background_job_policy.enabled",
             ConfigValueType.BOOL,
-            default=True,
-            description="BackgroundJobQueue の metrics / backpressure policy を有効化する。",
+            default=False,
+            description=(
+                "BackgroundJobQueue の metrics / backpressure policy を明示的に有効化する。"
+            ),
         ),
         ConfigFieldSpec(
             "learning.background_job_policy.default_concurrency_limit",
