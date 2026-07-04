@@ -28,9 +28,9 @@ Implementation anchors
 | [0011](0011-memory-vector-index-backend.md) | Accepted | Vector index は memory record の正本ではなく derived retrieval backend として扱う。 |
 | [0012](0012-sqlite-schema-migration-backup-recovery.md) | Accepted | SQLite backend は明示的な schema migration、backup、recovery policy で運用する。 |
 | [0013](0013-local-llm-lifecycle-readiness-warmup.md) | Accepted | Local LLM lifecycle / readiness / warmup を provider-neutral state と request-time probe で扱う。 |
-<<<<<<< HEAD
 | [0014](0014-public-remote-auth-boundary.md) | Accepted | Runtime auth は RemoteAuthBoundary を介して provider payload から context を検証する。 |
 | [0015](0015-local-model-call-budget-and-cascade-policy.md) | Accepted | Local model call budget と cascade policy で user-facing hot path の large LLM 呼び出しを制限する。 |
+| [0016](0016-companion-affect-state-model.md) | Accepted | Companion affect state を global mood、relationship、affect trace、space atmosphere、recent tone に分離する。 |
 
 ## 現在の横断方針
 
@@ -38,3 +38,4 @@ Implementation anchors
 - activity projection、presence、space occupancy、ephemeral space bindings、short-term conversation history、learning dispatch は process-local。
 - ADR 0005 は欠番を埋めるため新規追加した。既存 ADR 0008 は diagnostics / observability の決定であり、LLM provider runtime policy の置き場としては広すぎる。
 - ADR 0014 は重複していた public remote auth boundary の ADR 番号を末尾へ移動したもの。既存 0010〜0013 の番号は保持する。ADR 0015 は後続の model call budget / cascade policy。
+- ADR 0016 は #104 の companion affect state boundary を固定し、#100 / #102 / #72 が参照する state vocabulary を提供する。
