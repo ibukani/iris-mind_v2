@@ -120,10 +120,11 @@ async def test_summary_reaches_llm_system_context_not_role_history() -> None:
     await service.handle_observation(ObservationEnvelope.external_client(observation=current))
 
     messages = llm.requests[0].messages
-    assert "Conversation summary" in messages[0].content
-    assert "turn-0" in messages[0].content
-    assert tuple(message.content for message in messages[1:]) == ("turn-4", "turn-5", "current")
-    assert tuple(message.role for message in messages[1:]) == (
+    assert "Conversation summary" not in messages[0].content
+    assert "Conversation summary" in messages[1].content
+    assert "turn-0" in messages[1].content
+    assert tuple(message.content for message in messages[2:]) == ("turn-4", "turn-5", "current")
+    assert tuple(message.role for message in messages[2:]) == (
         LLMRole.USER,
         LLMRole.ASSISTANT,
         LLMRole.USER,

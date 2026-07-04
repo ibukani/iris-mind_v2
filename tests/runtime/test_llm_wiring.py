@@ -260,8 +260,8 @@ async def test_llm_response_generator_includes_prior_conversation_messages() -> 
 
 
 @pytest.mark.anyio
-async def test_llm_response_generator_separates_internal_context_from_user_message() -> None:
-    """Internal context is system-only; the user message remains clean actor text."""
+async def test_llm_response_generator_separates_context_from_system_and_latest_user() -> None:
+    """Internal/external context は system と latest user から role message 上も分離する。"""
     client = FakeLLMClient(responses=("reply",), model="test-model")
     gen = LLMResponseGenerator(client, model="test-model")
     actor_text = "ありがとう。最後に一言だけ返してください。"
@@ -289,26 +289,36 @@ async def test_llm_response_generator_separates_internal_context_from_user_messa
     ]
 
     assert len(system_messages) == 1
-    assert len(user_messages) == 1
+    assert len(user_messages) == 3
 
     system_content = system_messages[0]
-    user_content = user_messages[0]
+    internal_context = user_messages[0]
+    external_context = user_messages[1]
+    latest_user_content = user_messages[-1]
 
-    assert user_content == actor_text
-    assert "Affect context" not in user_content
-    assert "Relationship context" not in user_content
-    assert "Policy constraints" not in user_content
-    assert "trust=0.50" not in user_content
-    assert "familiarity=0.00" not in user_content
-    assert "VAD" not in user_content
-    assert "response-generation process" not in user_content
+    assert latest_user_content == actor_text
+    assert "Affect context" not in latest_user_content
+    assert "Relationship context" not in latest_user_content
+    assert "Policy constraints" not in latest_user_content
+    assert "trust=0.50" not in latest_user_content
+    assert "familiarity=0.00" not in latest_user_content
+    assert "VAD" not in latest_user_content
+    assert "response-generation process" not in latest_user_content
 
-    assert "Internal context:" in system_content
-    assert "Affect context" in system_content
-    assert "Relationship context" in system_content
-    assert "Policy constraints" in system_content
-    assert "trust=0.50" in system_content
-    assert "familiarity=0.00" in system_content
-    assert "VAD" in system_content
+    assert "Internal runtime context" not in system_content
+    assert "Untrusted external context" not in system_content
+    assert "User likes concise replies" not in system_content
+    assert "Affect context" not in system_content
     assert "Never mention affect scores" in system_content
     assert "response-generation process" in system_content
+
+    assert "Internal runtime context" in internal_context
+    assert "Affect context" in internal_context
+    assert "Relationship context" in internal_context
+    assert "Policy constraints" in internal_context
+    assert "trust=0.50" in internal_context
+    assert "familiarity=0.00" in internal_context
+    assert "VAD" in internal_context
+
+    assert "Untrusted external context" in external_context
+    assert "User likes concise replies" in external_context

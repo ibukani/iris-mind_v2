@@ -295,6 +295,6 @@ Prompt section は次の trust boundary を持つ。
 - `external_context`: memory / project context / retrieval result。
 - `user_input`: recent conversation と latest user message。
 
-trusted sections と external context は混ぜない。latest user message は system message に入れず、`USER` role message として渡す。短期会話履歴は `recent_conversation` section budget の対象になり、古い record から deterministic に落とす。
+trusted sections と external context は provider message role 上でも混ぜない。`SYSTEM` role message には trusted instruction / runtime guardrails のみを入れ、internal-derived context と external context は separate context message として渡す。latest user message は system message に入れず、最後の `USER` role message として渡す。短期会話履歴は `recent_conversation` section budget の対象になり、古い record から deterministic に落とす。
 
 `local_low` / `local_balanced` / `local_quality` / `proactive_short` profile は `RuntimePromptBudgetConfig` が source of truth になる。#94 の retrieval top-k は profile の `user_memory` / `project_memory` section budget を参照する。#98 の persona や #78 の proactive prompt は section metadata と budget accounting を通して接続する。

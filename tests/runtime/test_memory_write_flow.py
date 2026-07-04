@@ -70,8 +70,12 @@ async def test_two_turn_memory_write_then_retrieval_flow() -> None:
 
     records = memory_store.filter(MemoryQuery(text="", include_archived=True))
     second_system_prompt = llm.requests[1].messages[0].content
+    second_context_prompts = "\n\n".join(
+        message.content for message in llm.requests[1].messages[1:-1]
+    )
 
     assert output1.text == "saved"
     assert output2.text == "how about jasmine tea?"
     assert any("jasmine tea" in record.text for record in records)
-    assert "jasmine tea" in second_system_prompt
+    assert "jasmine tea" not in second_system_prompt
+    assert "jasmine tea" in second_context_prompts

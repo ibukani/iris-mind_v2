@@ -15,7 +15,7 @@ from iris.runtime.prompting.assembler import RuntimePromptAssembler
 
 
 def test_prompt_assembler_separates_trusted_internal_external_and_user() -> None:
-    """trusted/system, internal, external, user input を混ぜずに message 化する。"""
+    """trusted/system, internal, external, user input を role message 上でも分離する。"""
     prompt = ResponsePrompt(
         system_instruction="sys",
         actor_text="こんにちは",
@@ -34,13 +34,22 @@ def test_prompt_assembler_separates_trusted_internal_external_and_user() -> None
     system = result.messages[0].content
     assert "System instruction" in system
     assert "Runtime response guardrails" in system
-    assert "Internal context:" in system
-    assert "Affect context" in system
-    assert "Relationship signal" in system
-    assert "Policy constraints" in system
-    assert "External context:" in system
-    assert "Relevant memories" in system
+    assert "Internal runtime context" not in system
+    assert "Affect context" not in system
+    assert "External context" not in system
+    assert "Relevant memories" not in system
     assert "こんにちは" not in system
+
+    internal_context = result.messages[1]
+    external_context = result.messages[2]
+    assert internal_context.role is LLMRole.USER
+    assert "Internal runtime context" in internal_context.content
+    assert "Affect context" in internal_context.content
+    assert "Relationship signal" in internal_context.content
+    assert "Policy constraints" in internal_context.content
+    assert external_context.role is LLMRole.USER
+    assert "Untrusted external context" in external_context.content
+    assert "Relevant memories" in external_context.content
     assert result.report.profile.value == "local_balanced"
 
 
@@ -162,7 +171,7 @@ def test_prompt_assembler_accounts_relationship_signal_separately() -> None:
         if report.kind is PromptSectionKind.RELATIONSHIP_SIGNAL
     )
     assert relationship_report.output_items == 1
-    assert "Relationship signal" in result.messages[0].content
+    assert "Relationship signal" in result.messages[1].content
 
 
 def test_prompt_assembler_total_budget_truncates_actual_history_messages() -> None:

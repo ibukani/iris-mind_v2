@@ -531,11 +531,13 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
     assert abs(client.request.temperature - 0.3) < 0.001
     assert client.request.max_tokens == 77
     system_message = client.request.messages[0].content
-    assert "Affect context:" in system_message
-    assert "Relationship context:" in system_message
-    assert "Mina: neutral relationship" in system_message
-    assert "Policy constraints:" in system_message
-    assert "avoid escalating beyond the safety layer" in system_message
+    context_messages = "\n\n".join(message.content for message in client.request.messages[1:-1])
+    assert "Affect context:" not in system_message
+    assert "Affect context:" in context_messages
+    assert "Relationship context:" in context_messages
+    assert "Mina: neutral relationship" in context_messages
+    assert "Policy constraints:" in context_messages
+    assert "avoid escalating beyond the safety layer" in context_messages
 
 
 @pytest.mark.anyio

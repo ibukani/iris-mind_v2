@@ -78,8 +78,12 @@ async def test_policy_aware_one_turn_flow_includes_policy_context() -> None:
     )
 
     output = await app.process_observation(_actor_message("hello"))
-    system_prompt = llm.requests[0].messages[0].content
+    prompt_messages = llm.requests[0].messages
+    system_prompt = prompt_messages[0].content
+    context_prompts = "\n\n".join(message.content for message in prompt_messages[1:-1])
 
     assert output.text == "policy-aware reply"
-    assert "Relevant memories:" in system_prompt
-    assert "Policy constraints:\n- avoid over-familiarity" in system_prompt
+    assert "Relevant memories:" not in system_prompt
+    assert "Policy constraints:" not in system_prompt
+    assert "Relevant memories:" in context_prompts
+    assert "Policy constraints:\n- avoid over-familiarity" in context_prompts

@@ -223,7 +223,7 @@ def test_state_models_reject_blank_owner_ids() -> None:
 
 
 def test_companion_affect_state_adr_documents_required_boundaries() -> None:
-    """ADR 0016 に Issue #104 の主要境界を固定する。"""
+    """ADR 0017 に Issue #104 の主要境界を固定する。"""
     adr = Path("docs/adr/0017-companion-affect-state-model.md").read_text(encoding="utf-8")
 
     for token in (

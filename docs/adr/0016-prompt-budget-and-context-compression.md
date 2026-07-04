@@ -38,9 +38,9 @@ Trusted sections と外部由来 context は混ぜない。
 
 | trust boundary | 例 | 扱い |
 |---|---|---|
-| `trusted` | system instruction、runtime safety guardrails、将来の persona section | system message の先頭側に置く |
-| `internal_derived` | affect / relationship summary、policy constraints、goals、conversation summary | `Internal context` としてまとめる |
-| `external_context` | memory / project context / retrieval result | `External context` として分離する |
+| `trusted` | system instruction、runtime safety guardrails、将来の persona section | `SYSTEM` role message に置く |
+| `internal_derived` | affect / relationship summary、policy constraints、goals、conversation summary | `SYSTEM` には入れず、internal context message として分離する |
+| `external_context` | memory / project context / retrieval result | `SYSTEM` には入れず、untrusted external context message として分離する |
 | `user_input` | recent conversation、latest user input | role message として扱い、trusted instruction と混ぜない |
 
 ### Overflow behavior
@@ -51,7 +51,7 @@ Overflow は LLM summarization を呼ばず、決定論的に処理する。
 - `truncate`: section 文字数で切り詰める。
 - `truncate_items`: item 数を先に絞り、その後文字数で切り詰める。
 - `omit`: section ごと落とす。
-- `use_existing_summary_then_truncate`: 既存 summary がある section 用。新規 LLM 要約は行わず、既存入力を切り詰める。
+- `use_existing_summary_then_truncate`: 既存 summary が別 section で supplied され得る section 用の deterministic truncate policy。新規 LLM 要約は行わず、現実装では追加の生成をせずに対象 section 自体を `truncate_items` / `truncate` と同じ決定論的手順で切り詰める。
 
 短期会話は古い item から落とし、memory / policy / task context は入力順を保って先頭から保持する。
 

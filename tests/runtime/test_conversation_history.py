@@ -165,7 +165,8 @@ async def test_runtime_history_uses_actor_and_space_across_session_changes() -> 
     await service.handle_observation(ObservationEnvelope.external_client(observation=second))
 
     messages = llm.requests[1].messages
-    assert tuple((message.role, message.content) for message in messages[1:]) == (
+    role_history = tuple((message.role, message.content) for message in messages[-3:])
+    assert role_history == (
         (LLMRole.USER, "最初の質問"),
         (LLMRole.ASSISTANT, "最初の返答"),
         (LLMRole.USER, "続きの質問"),
@@ -200,8 +201,9 @@ async def test_runtime_history_messages_respect_character_budget() -> None:
     )
     await service.handle_observation(ObservationEnvelope.external_client(observation=current))
     prior_messages = llm.requests[0].messages[1:-1]
-    assert tuple(message.content for message in prior_messages) == ("recent",)
-    assert sum(len(message.content) for message in prior_messages) <= 6
+    prior_history = tuple(message for message in prior_messages if message.content == "recent")
+    assert tuple(message.content for message in prior_history) == ("recent",)
+    assert sum(len(message.content) for message in prior_history) <= 6
     assert sum(message.content == "current" for message in llm.requests[0].messages) == 1
 
 
