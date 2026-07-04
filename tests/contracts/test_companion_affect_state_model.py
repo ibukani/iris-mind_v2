@@ -27,7 +27,6 @@ from iris.contracts.companion_affect import (
 )
 from iris.core.ids import AccountId, ActorId, SpaceId
 
-
 EXPECTED_STATE_KINDS = {
     "iris_global_mood",
     "actor_relationship_state",
