@@ -13,6 +13,8 @@ import pytest
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import PerceptionResult, PipelineStepResult, StepStatus
 from iris.cognitive.cycle.service import CognitiveCycle
+from iris.cognitive.perception.basic import SimplePerceptionStep
+from iris.cognitive.policy.safety_context import SafetyContextClassificationStep
 from iris.contracts.actions import ActionPlan
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
@@ -267,3 +269,30 @@ async def test_run_includes_observation_and_session_id() -> None:
     rendered = complete_logs[0].rendered
     assert "obs=obs-log-1" in rendered
     assert "session=session-log-1" in rendered
+
+
+@pytest.mark.anyio
+async def test_safety_context_classifier_latency_is_observed_by_step_log() -> None:
+    """Safety classifier hot-path latency は CognitiveCycle の step log で観測できる。"""
+    cycle = CognitiveCycle(
+        steps=(SimplePerceptionStep(), SafetyContextClassificationStep()),
+        frame_builder=FrameBuilder(),
+        fallback_plan=_fallback_plan(),
+    )
+
+    captured, handler_id = _make_capture_with_format(
+        "{message} | step={extra[step]} | latency={extra[latency_ms]}"
+    )
+    try:
+        await cycle.run(_observation())
+    finally:
+        logger.remove(handler_id)
+
+    safety_logs = [
+        log.rendered
+        for log in captured
+        if "cognitive.step.complete" in log.rendered
+        and "step=safety_context_classification" in log.rendered
+    ]
+    assert len(safety_logs) == 1
+    assert "latency=" in safety_logs[0]

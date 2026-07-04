@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from time import perf_counter
 from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import SafetyContextResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.workspace.frame import interpreted_input_text
+from iris.contracts.model_invocation import ModelInvocationMetadata
+from iris.contracts.model_policy import ModelCallKind
 from iris.contracts.observations import ActorMessageObservation, IdleTickObservation
 from iris.contracts.safety import (
     SafetyContext,
@@ -22,11 +25,24 @@ if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
 
 
+def _deterministic_model_metadata() -> ModelInvocationMetadata:
+    return ModelInvocationMetadata(
+        call_kind=ModelCallKind.SMALL_CLASSIFIER,
+        provider="internal-rule",
+        model_name="deterministic-safety-context-rules",
+        adapter_name="DeterministicSafetyContextClassifier",
+        model_version="v1",
+        model_slot="safety_context_hot_path",
+    )
+
+
 @dataclass(frozen=True)
 class SafetyContextClassification:
     """分類器が返す安全文脈の集合。"""
 
     contexts: tuple[SafetyContext, ...] = ()
+    model_metadata: ModelInvocationMetadata = field(default_factory=_deterministic_model_metadata)
+    latency_ms: float = 0.0
 
 
 class DeterministicSafetyContextClassifier:
@@ -49,11 +65,17 @@ class DeterministicSafetyContextClassifier:
         Returns:
             検出した安全文脈の集合。
         """
+        started = perf_counter()
         if text is None or not text.strip():
-            return SafetyContextClassification()
-        normalized = text.casefold()
-        contexts = tuple(_classify_text(normalized, source))
-        return SafetyContextClassification(contexts=contexts)
+            contexts: tuple[SafetyContext, ...] = ()
+        else:
+            normalized = text.casefold()
+            contexts = tuple(_classify_text(normalized, source))
+        return SafetyContextClassification(
+            contexts=contexts,
+            model_metadata=_deterministic_model_metadata(),
+            latency_ms=(perf_counter() - started) * 1000.0,
+        )
 
 
 class SafetyContextClassificationStep(PipelineStep[SafetyContextResult]):
@@ -87,6 +109,8 @@ class SafetyContextClassificationStep(PipelineStep[SafetyContextResult]):
             step_name=self.name,
             status=StepStatus.OK,
             safety_contexts=classification.contexts,
+            classifier_metadata=classification.model_metadata,
+            classifier_latency_ms=classification.latency_ms,
         )
 
 
@@ -103,16 +127,16 @@ def _classify_text(
     normalized: str,
     source: SafetyContextSource,
 ) -> tuple[SafetyContext, ...]:
-    context: SafetyContext | None = None
+    contexts: list[SafetyContext] = []
     if _mentions_self_harm(normalized):
-        context = _self_harm_context(normalized, source)
-    elif _mentions_abuse(normalized):
-        context = _abuse_context(source)
-    elif _requests_dangerous_instruction(normalized):
-        context = _dangerous_instruction_context(source)
-    elif _requests_personal_data_misuse(normalized):
-        context = _personal_data_context(source)
-    return () if context is None else (context,)
+        contexts.append(_self_harm_context(normalized, source))
+    if _mentions_abuse(normalized):
+        contexts.append(_abuse_context(source))
+    if _requests_dangerous_instruction(normalized):
+        contexts.append(_dangerous_instruction_context(source))
+    if _requests_personal_data_misuse(normalized):
+        contexts.append(_personal_data_context(source))
+    return _ordered_by_safety_precedence(contexts)
 
 
 def _mentions_self_harm(normalized: str) -> bool:
@@ -230,3 +254,39 @@ def _personal_data_context(source: SafetyContextSource) -> SafetyContext:
 
 def _reason(*, code: str, description: str) -> SafetyContextReason:
     return SafetyContextReason(code=code, description=description)
+
+
+def _ordered_by_safety_precedence(
+    contexts: list[SafetyContext],
+) -> tuple[SafetyContext, ...]:
+    return tuple(sorted(contexts, key=_safety_precedence, reverse=True))
+
+
+def _safety_precedence(context: SafetyContext) -> tuple[int, int, float]:
+    return (
+        _directive_precedence(context.directive),
+        _severity_precedence(context.severity),
+        context.confidence,
+    )
+
+
+def _directive_precedence(directive: SafetyResponseDirective) -> int:
+    match directive:
+        case SafetyResponseDirective.BLOCK:
+            return 4
+        case SafetyResponseDirective.REFUSE:
+            return 3
+        case SafetyResponseDirective.SAFE_REDIRECT:
+            return 2
+        case SafetyResponseDirective.ALLOW_SUPPORT:
+            return 1
+
+
+def _severity_precedence(severity: SafetyContextSeverity) -> int:
+    match severity:
+        case SafetyContextSeverity.HIGH:
+            return 3
+        case SafetyContextSeverity.MEDIUM:
+            return 2
+        case SafetyContextSeverity.LOW:
+            return 1

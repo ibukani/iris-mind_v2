@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, override
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.contracts.actions import ActionPlan
-from iris.contracts.safety import SafetyContextCategory, SafetyResponseDirective
+from iris.contracts.safety import (
+    SafetyContextCategory,
+    SafetyContextSeverity,
+    SafetyResponseDirective,
+)
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
@@ -28,7 +32,7 @@ class SafetyResponsePolicyStep(PipelineStep[ActionSelectionResult]):
         Returns:
             安全応答 ActionPlan、または該当なしの SKIPPED 結果。
         """
-        context = _first_blocking_context(frame)
+        context = _strictest_response_context(frame)
         if context is None:
             return ActionSelectionResult(
                 step_name=self.name,
@@ -49,14 +53,48 @@ class SafetyResponsePolicyStep(PipelineStep[ActionSelectionResult]):
         )
 
 
-def _first_blocking_context(frame: WorkspaceFrame) -> SafetyContext | None:
-    for context in frame.safety_contexts:
-        if context.directive in {
-            SafetyResponseDirective.SAFE_REDIRECT,
-            SafetyResponseDirective.REFUSE,
-        }:
-            return context
-    return None
+def _strictest_response_context(frame: WorkspaceFrame) -> SafetyContext | None:
+    candidates = tuple(
+        context for context in frame.safety_contexts if _has_response_directive(context)
+    )
+    if not candidates:
+        return None
+    return max(candidates, key=_safety_response_precedence)
+
+
+def _safety_response_precedence(context: SafetyContext) -> tuple[int, int, float]:
+    return (
+        _directive_precedence(context.directive),
+        _severity_precedence(context.severity),
+        context.confidence,
+    )
+
+
+def _has_response_directive(context: SafetyContext) -> bool:
+    return context.directive in {
+        SafetyResponseDirective.SAFE_REDIRECT,
+        SafetyResponseDirective.REFUSE,
+    }
+
+
+def _directive_precedence(directive: SafetyResponseDirective) -> int:
+    match directive:
+        case SafetyResponseDirective.REFUSE:
+            return 3
+        case SafetyResponseDirective.SAFE_REDIRECT:
+            return 2
+        case SafetyResponseDirective.BLOCK | SafetyResponseDirective.ALLOW_SUPPORT:
+            return 0
+
+
+def _severity_precedence(severity: SafetyContextSeverity) -> int:
+    match severity:
+        case SafetyContextSeverity.HIGH:
+            return 3
+        case SafetyContextSeverity.MEDIUM:
+            return 2
+        case SafetyContextSeverity.LOW:
+            return 1
 
 
 def _turn_intent(context: SafetyContext) -> str:

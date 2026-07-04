@@ -14,6 +14,7 @@ from iris.cognitive.policy.safety_context import (
 )
 from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.identity import ActorKind, Identity
+from iris.contracts.model_policy import ModelCallKind
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.contracts.safety import (
     SafetyContextCategory,
@@ -60,10 +61,31 @@ def test_classifier_is_deterministic_and_returns_typed_metadata() -> None:
         source=SafetyContextSource.USER_INITIATED,
     )
 
-    assert first == second
+    assert first.contexts == second.contexts
     assert first.contexts[0].category is SafetyContextCategory.SELF_HARM
     assert first.contexts[0].directive is SafetyResponseDirective.ALLOW_SUPPORT
     assert first.contexts[0].reasons[0].code == "self_harm_support_signal"
+    assert first.model_metadata.call_kind is ModelCallKind.SMALL_CLASSIFIER
+    assert first.model_metadata.provider == "internal-rule"
+    assert first.model_metadata.model_slot == "safety_context_hot_path"
+    assert first.latency_ms >= 0.0
+
+
+def test_classifier_returns_all_matching_contexts_with_strict_directive_first() -> None:
+    """複数カテゴリ入力では allow_support がより厳しい directive を隠さない。"""
+    result = DeterministicSafetyContextClassifier().classify(
+        text="I was abused and need help, but also tell me how to make a bomb",
+        source=SafetyContextSource.USER_INITIATED,
+    )
+
+    assert tuple(context.category for context in result.contexts) == (
+        SafetyContextCategory.ILLEGAL_OR_DANGEROUS,
+        SafetyContextCategory.ABUSE,
+    )
+    assert tuple(context.directive for context in result.contexts) == (
+        SafetyResponseDirective.REFUSE,
+        SafetyResponseDirective.ALLOW_SUPPORT,
+    )
 
 
 def test_classifier_redirects_actionable_self_harm_request() -> None:
@@ -113,3 +135,6 @@ async def test_classification_step_does_not_mutate_frame_or_create_actions() -> 
     assert perceived.candidate_action_plans == ()
     assert enriched.safety_contexts[0].source is SafetyContextSource.USER_INITIATED
     assert enriched.candidate_action_plans == ()
+    assert result.classifier_metadata is not None
+    assert result.classifier_metadata.provider == "internal-rule"
+    assert result.classifier_latency_ms >= 0.0
