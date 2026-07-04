@@ -8,6 +8,7 @@ import pytest
 
 from iris.contracts.model_policy import ModelCallSite
 from iris.runtime.inference.models import (
+    InferenceLeaseCancellationToken,
     InferenceLeaseDecision,
     InferenceLeaseRequest,
     InferenceResourceState,
@@ -36,11 +37,13 @@ def _request(
     priority: InferenceWorkPriority,
     slot_kind: InferenceSlotKind = InferenceSlotKind.LARGE_LLM,
     call_site: ModelCallSite = ModelCallSite.USER_RESPONSE_HOT_PATH,
+    preemptible: bool = False,
 ) -> InferenceLeaseRequest:
     return InferenceLeaseRequest(
         slot_kind=slot_kind,
         priority=priority,
         call_site=call_site,
+        preemptible=preemptible,
     )
 
 
@@ -89,8 +92,34 @@ async def test_background_large_llm_defers_when_user_facing_is_active() -> None:
     assert result.reason == "large LLM slot limit reached"
 
 
-async def test_user_facing_defers_while_background_large_llm_is_running() -> None:
-    """実行中 background LLM を安全停止できない間は user-facing も lease しない。"""
+async def test_user_facing_preempts_cooperative_background_large_llm() -> None:
+    """停止確認済み background LLM lease は user-facing lease に置き換わる。"""
+    scheduler = _scheduler()
+    background = await scheduler.acquire(
+        _request(
+            priority=InferenceWorkPriority.BACKGROUND,
+            slot_kind=InferenceSlotKind.BACKGROUND_LLM,
+            call_site=ModelCallSite.REFLECTION,
+            preemptible=True,
+        )
+    )
+    assert background.lease_id is not None
+    token = await scheduler.cancellation_token(background.lease_id)
+    assert isinstance(token, InferenceLeaseCancellationToken)
+    token.register_cancellation_callback(token.acknowledge_stopped)
+
+    result = await scheduler.acquire(_request(priority=InferenceWorkPriority.USER_FACING_RESPONSE))
+
+    assert result.decision is InferenceLeaseDecision.ACQUIRED
+    assert result.reason == "preempted lower-priority large LLM lease"
+    assert result.snapshot.active_large_slots == 1
+    assert await scheduler.release(background.lease_id) is False
+    assert result.lease_id is not None
+    assert await scheduler.release(result.lease_id) is True
+
+
+async def test_user_facing_defers_for_nonpreemptible_background_large_llm() -> None:
+    """停止確認できない background LLM lease は user-facing と並走させない。"""
     scheduler = _scheduler()
     background = await scheduler.acquire(
         _request(

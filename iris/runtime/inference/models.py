@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+import threading
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from iris.contracts.metadata import ImmutableMetadata
 from iris.contracts.model_policy import ModelCallSite
 from iris.core.metadata import immutable_metadata
+
+
+class InferenceCancellationCallback(Protocol):
+    """協調キャンセル要求時の同期 callback。"""
+
+    def __call__(self) -> None:
+        """停止処理を同期実行する。"""
+        ...
+
+
+def _empty_callbacks() -> list[InferenceCancellationCallback]:
+    return []
 
 
 class InferenceResourceState(StrEnum):
@@ -60,7 +75,82 @@ class InferenceLeaseRequest(BaseModel):
     call_site: ModelCallSite
     model_slot: str | None = None
     model_name: str | None = None
+    preemptible: bool = False
     metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
+
+
+@dataclass
+class InferenceLeaseCancellationToken:
+    """Preemptible lease の協調キャンセル状態。
+
+    background LLM worker は provider call を開始する前、または provider 側の
+    cancellation callback からこの token を確認し、停止できた時点で
+    acknowledge_stopped() を呼ぶ。scheduler は acknowledge 済みの低優先度
+    lease だけを user-facing lease に置き換える。
+    """
+
+    lease_id: str
+    _cancel_requested: threading.Event = field(
+        default_factory=threading.Event,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _stopped: threading.Event = field(
+        default_factory=threading.Event,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _callbacks: list[InferenceCancellationCallback] = field(
+        default_factory=_empty_callbacks,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _lock: threading.RLock = field(
+        default_factory=threading.RLock,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+
+    @property
+    def cancellation_requested(self) -> bool:
+        """Preemption が要求済みなら True。"""
+        return self._cancel_requested.is_set()
+
+    @property
+    def stopped(self) -> bool:
+        """Worker / provider call が停止済みなら True。"""
+        return self._stopped.is_set()
+
+    def request_cancellation(self) -> None:
+        """協調キャンセルを要求し、登録済み callback を同期実行する。"""
+        with self._lock:
+            self._cancel_requested.set()
+            callbacks = tuple(self._callbacks)
+            self._callbacks.clear()
+        for callback in callbacks:
+            callback()
+
+    def register_cancellation_callback(self, callback: InferenceCancellationCallback) -> None:
+        """キャンセル要求時に呼ばれる callback を登録する。
+
+        既にキャンセル要求済みの場合は即時に callback を呼ぶ。
+        """
+        call_now = False
+        with self._lock:
+            if self._cancel_requested.is_set():
+                call_now = True
+            else:
+                self._callbacks.append(callback)
+        if call_now:
+            callback()
+
+    def acknowledge_stopped(self) -> None:
+        """Worker / provider call が停止済みであることを通知する。"""
+        self._stopped.set()
 
 
 class InferenceResourceSnapshot(BaseModel):

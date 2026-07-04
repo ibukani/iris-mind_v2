@@ -18,15 +18,15 @@ provider 非依存の `iris.runtime.inference` boundary を追加する。
 - small classifier、embedding、reranker は large LLM とは別 slot として扱う。
 - user-facing response と safety-critical work は highest priority とする。
 - background / proactive work は low priority とし、busy / warming / unavailable 時に defer / cancel / no-send できる。
-- active な低優先度 large LLM provider call を安全に停止できない間は、その lease を scheduler 上だけで無効化しない。user-facing 側は large slot が空くまで provider call を開始せず、deterministic fallback / defer を返す。
+- active な低優先度 large LLM lease は、preemptible かつ停止確認済みの場合だけ user-facing / safety-critical lease に置き換える。停止確認できない lease は scheduler 上だけで無効化せず、large LLM 並走を防ぐ。
 - observability は prompt / payload を含めず、state、decision、reason、active slots、busy duration だけを記録する。
 
 scheduler は config-gated とし、typed effective runtime config からのみ配線する。user-facing LLM wrapper は provider call 前に large LLM lease を取得し、lease できない場合は provider を呼ばず deterministic cascade fallback を返す。BackgroundJobRunner は resource profile または kind policy が LLM 使用を宣言する job にだけ background LLM lease を要求し、拒否された job は queue boundary 経由で defer または cancel する。
 
 ## Non-goals
 
-この boundary は OS-level scheduling、GPU process management、distributed worker、provider-specific cancellation を実装しない。実行中 provider call を安全に停止できない段階では、scheduler は active low-priority lease を削除して high-priority lease を即時発行しない。これにより実プロセス上の large LLM 並走を避ける。将来 cooperative cancellation token を background worker / provider call 境界へ渡せるようになった場合だけ、低優先度 job の停止後に user-facing lease を発行する余地を残す。
+この boundary は OS-level scheduling、GPU process management、distributed worker、provider-specific cancellation を実装しない。preemption は `InferenceLeaseCancellationToken` による cooperative cancellation と停止 acknowledge に限定する。scheduler は cancellation request 後に worker / provider 側が停止を acknowledge した低優先度 lease だけを active set から外す。停止確認できない lease は削除せず、user-facing provider call との large LLM 並走を避ける。
 
 ## Consequences
 
-user-facing response generation は background work を待たずに deterministic resource decision を得られる。active background LLM call が large slot を占有している場合、user-facing 側は provider を並走させず fallback / defer へ進む。proactive / background LLM job は hot path を block せず defer / cancel / no-send できる。scheduler policy による cancel / no-send は queue 上では失敗ではなく `cancelled` terminal status として記録する。queue metrics と per-kind concurrency は #92 が所有し、local resource state と model-slot lease decision は inference scheduler が所有する。
+user-facing response generation は background work を待たずに deterministic resource decision を得られる。active background LLM call が preemptible で停止確認できる場合は user-facing lease を優先発行する。停止確認できない場合は provider を並走させず fallback / defer へ進む。LLM を使う background worker は cooperative cancellation に対応している場合だけ preemptible lease として扱われる。scheduler policy による cancel / no-send は queue 上では失敗ではなく `cancelled` terminal status として記録する。queue metrics と per-kind concurrency は #92 が所有し、local resource state と model-slot lease decision は inference scheduler が所有する。

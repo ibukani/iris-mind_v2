@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from iris.core.datetime_utils import now_utc
 from iris.runtime.inference.models import (
+    InferenceLeaseCancellationToken,
     InferenceLeaseDecision,
     InferenceLeaseRequest,
     InferenceLeaseResult,
@@ -39,6 +40,7 @@ class _ActiveLease:
     lease_id: str
     request: InferenceLeaseRequest
     acquired_at: datetime
+    cancellation_token: InferenceLeaseCancellationToken
 
 
 class LocalInferenceResourceScheduler:
@@ -150,12 +152,41 @@ class LocalInferenceResourceScheduler:
         capacity_reason = self._capacity_reason(request)
         if capacity_reason is None:
             return self._acquire_locked(request, current_time, reason="resource lease acquired")
+        if self._can_preempt_for(request):
+            preempted = self._preempt_lower_priority_large_leases_locked()
+            if preempted:
+                return self._acquire_locked(
+                    request,
+                    current_time,
+                    reason="preempted lower-priority large LLM lease",
+                )
         return self._reject_locked(
             request,
             self._busy_decision_for(request),
             capacity_reason,
             current_time,
         )
+
+    @staticmethod
+    def _can_preempt_for(request: InferenceLeaseRequest) -> bool:
+        return request.priority in _HIGH_PRIORITIES and request.slot_kind in _LARGE_SLOT_KINDS
+
+    def _preempt_lower_priority_large_leases_locked(self) -> bool:
+        targets = tuple(
+            lease
+            for lease in self._active_leases.values()
+            if lease.request.slot_kind in _LARGE_SLOT_KINDS
+            and lease.request.priority in _LOW_PRIORITIES
+        )
+        if not targets or any(not lease.request.preemptible for lease in targets):
+            return False
+        for lease in targets:
+            lease.cancellation_token.request_cancellation()
+        if any(not lease.cancellation_token.stopped for lease in targets):
+            return False
+        for lease in targets:
+            self._active_leases.pop(lease.lease_id, None)
+        return True
 
     def _busy_decision_for(self, request: InferenceLeaseRequest) -> InferenceLeaseDecision:
         if request.priority in _HIGH_PRIORITIES:
@@ -167,6 +198,19 @@ class LocalInferenceResourceScheduler:
             self._state_override is InferenceResourceState.BUSY
             and request.slot_kind in _LARGE_SLOT_KINDS
         )
+
+    async def cancellation_token(
+        self,
+        lease_id: str,
+    ) -> InferenceLeaseCancellationToken | None:
+        """Active lease に紐づく協調キャンセル token を返す。
+
+        Returns:
+            Active lease が存在する場合は cancellation token。存在しない場合は None。
+        """
+        async with self._lock:
+            lease = self._active_leases.get(lease_id)
+            return None if lease is None else lease.cancellation_token
 
     async def release(self, lease_id: str) -> bool:
         """Lease を解放する。
@@ -242,6 +286,7 @@ class LocalInferenceResourceScheduler:
             lease_id=lease_id,
             request=request,
             acquired_at=current_time,
+            cancellation_token=InferenceLeaseCancellationToken(lease_id),
         )
         if self._busy_since is None:
             self._busy_since = current_time

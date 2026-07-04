@@ -9,6 +9,7 @@ from iris.contracts.model_policy import CascadeDecision, CascadeFallbackBehavior
 from iris.features.chat.definition import ResponsePrompt
 from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
 from iris.runtime.inference.models import (
+    InferenceLeaseCancellationToken,
     InferenceLeaseRequest,
     InferenceResourceState,
     InferenceSlotKind,
@@ -103,19 +104,22 @@ async def test_budgeted_response_generator_preserves_scheduler_fallback() -> Non
     assert response.cascade_result.reason.startswith("local inference resource denied")
 
 
-async def test_response_generator_does_not_call_llm_while_background_large_lease_is_active() -> (
-    None
-):
-    """Background large lease 中の user-facing response は provider を並走させない。"""
+async def test_response_generator_preempts_cooperative_background_large_lease() -> None:
+    """停止確認済み background large lease 中でも user-facing provider call を優先する。"""
     scheduler = LocalInferenceResourceScheduler(policy=LocalInferenceResourcePolicy(enabled=True))
     background = await scheduler.acquire(
         InferenceLeaseRequest(
             slot_kind=InferenceSlotKind.BACKGROUND_LLM,
             priority=InferenceWorkPriority.BACKGROUND,
             call_site=ModelCallSite.REFLECTION,
+            preemptible=True,
         )
     )
-    client = FakeLLMClient(("should not be used",), model="fake-local")
+    assert background.lease_id is not None
+    token = await scheduler.cancellation_token(background.lease_id)
+    assert isinstance(token, InferenceLeaseCancellationToken)
+    token.register_cancellation_callback(token.acknowledge_stopped)
+    client = FakeLLMClient(("ok",), model="fake-local")
     generator = wire_response_generator(
         client,
         options=ResponseGeneratorWiringOptions(
@@ -128,8 +132,7 @@ async def test_response_generator_does_not_call_llm_while_background_large_lease
         ResponsePrompt(system_instruction="system", actor_text="hello")
     )
 
-    assert background.lease_id is not None
-    assert client.requests == ()
-    assert response.cascade_result is not None
-    assert response.cascade_result.decision is CascadeDecision.DEFER
-    assert await scheduler.release(background.lease_id)
+    assert response.text == "ok"
+    assert len(client.requests) == 1
+    assert response.cascade_result is None
+    assert await scheduler.release(background.lease_id) is False

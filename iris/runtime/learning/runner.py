@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 import time
-from typing import TYPE_CHECKING, Protocol, TypedDict, Unpack
+from typing import TYPE_CHECKING, Protocol, TypedDict, Unpack, runtime_checkable
 
 from loguru import logger
 
@@ -14,6 +14,7 @@ from iris.contracts.model_policy import ModelCallSite
 from iris.core.datetime_utils import now_utc
 from iris.core.metadata import immutable_metadata
 from iris.runtime.inference.models import (
+    InferenceLeaseCancellationToken,
     InferenceLeaseDecision,
     InferenceLeaseRequest,
     InferenceLeaseResult,
@@ -85,6 +86,19 @@ class BackgroundJobWorker(Protocol):
         ...
 
 
+@runtime_checkable
+class CancellableBackgroundJobWorker(BackgroundJobWorker, Protocol):
+    """#93 preemption を実際に観測できる LLM worker。"""
+
+    def run_with_cancellation(
+        self,
+        job: BackgroundJobRecord,
+        cancellation_token: InferenceLeaseCancellationToken,
+    ) -> None:
+        """協調キャンセル token を確認しながら Lease 済みジョブを処理する。"""
+        ...
+
+
 class BackgroundJobRunner:
     """due job を lease し、個別障害を隔離して worker へ渡す。"""
 
@@ -152,7 +166,7 @@ class BackgroundJobRunner:
             )
             logger.error("background job worker missing: {}", job.kind)
             return
-        lease_result = await self._acquire_inference_lease(job)
+        lease_result = await self._acquire_inference_lease(job, worker)
         logger.debug(
             "background job inference lease decision: {}",
             inference_lease_log_fields(lease_result),
@@ -160,28 +174,45 @@ class BackgroundJobRunner:
         if not lease_result.acquired:
             await self._apply_inference_lease_rejection(job, lease_result)
             return
-        run_result = await self._run_worker_with_failure_isolation(job)
+        cancellation_token = await self._lease_cancellation_token(lease_result)
+        run_result = await self._run_worker_with_failure_isolation(
+            worker,
+            job,
+            cancellation_token,
+        )
         lease_still_active = True
         if lease_result.lease_id is not None and self._inference_scheduler is not None:
             lease_still_active = await self._inference_scheduler.release(lease_result.lease_id)
+        cancellation_requested = (
+            cancellation_token is not None and cancellation_token.cancellation_requested
+        )
         if run_result.exception is not None:
             await self._mark_retryable_failure(job, run_result.exception)
-            return
-        if not lease_still_active:
+        elif cancellation_requested or not lease_still_active:
             await self._defer_lost_inference_lease(job)
-            return
-        self._record_soft_timeout(job, run_result.elapsed_seconds)
-        await self._queue.mark_succeeded(job.job_id, self._runtime_hooks.now())
+        else:
+            self._record_soft_timeout(job, run_result.elapsed_seconds)
+            await self._queue.mark_succeeded(job.job_id, self._runtime_hooks.now())
 
     async def _run_worker_with_failure_isolation(
         self,
+        worker: BackgroundJobWorker,
         job: BackgroundJobRecord,
+        cancellation_token: InferenceLeaseCancellationToken | None,
     ) -> _WorkerRunResult:
         started_at = self._runtime_hooks.monotonic_seconds()
         failure = _CaptureWorkerFailure()
-        worker = self._workers[job.kind]
         with failure:
-            await asyncio.to_thread(worker.run, job)
+            if cancellation_token is not None and isinstance(
+                worker, CancellableBackgroundJobWorker
+            ):
+                await asyncio.to_thread(
+                    worker.run_with_cancellation,
+                    job,
+                    cancellation_token,
+                )
+            else:
+                await asyncio.to_thread(worker.run, job)
         elapsed_seconds = self._runtime_hooks.monotonic_seconds() - started_at
         return _WorkerRunResult(exception=failure.exception, elapsed_seconds=elapsed_seconds)
 
@@ -201,7 +232,11 @@ class BackgroundJobRunner:
             kind_policy.timeout_seconds,
         )
 
-    async def _acquire_inference_lease(self, job: BackgroundJobRecord) -> InferenceLeaseResult:
+    async def _acquire_inference_lease(
+        self,
+        job: BackgroundJobRecord,
+        worker: BackgroundJobWorker,
+    ) -> InferenceLeaseResult:
         scheduler = self._inference_scheduler
         if scheduler is None or not _job_uses_llm(job, self._queue_policy.for_kind(job.kind)):
             return _synthetic_acquired_lease(job)
@@ -209,12 +244,14 @@ class BackgroundJobRunner:
         call_site = (
             descriptor.call_site if descriptor is not None else _call_site_for_job_kind(job.kind)
         )
+        worker_preemptible = isinstance(worker, CancellableBackgroundJobWorker)
         request = InferenceLeaseRequest(
             slot_kind=InferenceSlotKind.BACKGROUND_LLM,
             priority=model_call_site_priority(call_site),
             call_site=call_site,
             model_slot=descriptor.model_slot if descriptor is not None else None,
             model_name=descriptor.model_name if descriptor is not None else None,
+            preemptible=worker_preemptible,
             metadata=immutable_metadata(
                 {
                     "background_job_kind": job.kind.value,
@@ -222,7 +259,25 @@ class BackgroundJobRunner:
                 }
             ),
         )
-        return await scheduler.acquire(request)
+        lease_result = await scheduler.acquire(request)
+        if lease_result.acquired and not worker_preemptible:
+            if lease_result.lease_id is not None:
+                await scheduler.release(lease_result.lease_id)
+            return InferenceLeaseResult(
+                decision=InferenceLeaseDecision.DEFER,
+                reason="background LLM worker lacks cooperative cancellation",
+                request=request,
+                snapshot=await scheduler.snapshot(),
+            )
+        return lease_result
+
+    async def _lease_cancellation_token(
+        self,
+        lease_result: InferenceLeaseResult,
+    ) -> InferenceLeaseCancellationToken | None:
+        if self._inference_scheduler is None or lease_result.lease_id is None:
+            return None
+        return await self._inference_scheduler.cancellation_token(lease_result.lease_id)
 
     async def _apply_inference_lease_rejection(
         self,

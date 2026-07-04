@@ -9,6 +9,7 @@ import pytest
 
 from iris.contracts.model_policy import ModelCallSite
 from iris.runtime.inference.models import (
+    InferenceLeaseCancellationToken,
     InferenceLeaseRequest,
     InferenceResourceState,
     InferenceSlotKind,
@@ -41,6 +42,15 @@ class _Worker:
 
     def run(self, job: BackgroundJobRecord) -> None:
         self.calls.append(job.job_id)
+
+    def run_with_cancellation(
+        self,
+        job: BackgroundJobRecord,
+        cancellation_token: InferenceLeaseCancellationToken,
+    ) -> None:
+        self.run(job)
+        if cancellation_token.cancellation_requested:
+            cancellation_token.acknowledge_stopped()
 
 
 def _job(key: str, *, uses_llm: bool) -> BackgroundJobRecord:
@@ -150,9 +160,26 @@ class _ConcurrentUserRequestWorker:
         self._scheduler = scheduler
         self._loop = loop
         self.calls: list[BackgroundJobId] = []
+        self.provider_active = False
+        self.max_parallel_provider_calls = 0
 
     def run(self, job: BackgroundJobRecord) -> None:
         self.calls.append(job.job_id)
+
+    def run_with_cancellation(
+        self,
+        job: BackgroundJobRecord,
+        cancellation_token: InferenceLeaseCancellationToken,
+    ) -> None:
+        self.calls.append(job.job_id)
+        self.provider_active = True
+        self.max_parallel_provider_calls = max(self.max_parallel_provider_calls, 1)
+
+        def stop_provider_call() -> None:
+            self.provider_active = False
+            cancellation_token.acknowledge_stopped()
+
+        cancellation_token.register_cancellation_callback(stop_provider_call)
         future = asyncio.run_coroutine_threadsafe(
             self._scheduler.acquire(
                 InferenceLeaseRequest(
@@ -164,12 +191,18 @@ class _ConcurrentUserRequestWorker:
             self._loop,
         )
         result = future.result(timeout=1.0)
-        assert not result.acquired
-        assert result.decision.value == "defer"
+        assert result.acquired
+        assert not self.provider_active
+        if result.lease_id is not None:
+            release_future = asyncio.run_coroutine_threadsafe(
+                self._scheduler.release(result.lease_id),
+                self._loop,
+            )
+            assert release_future.result(timeout=1.0) is True
 
 
-async def test_user_facing_request_does_not_get_large_lease_during_background_run() -> None:
-    """Background worker 実行中の user-facing request は large lease を並走させない。"""
+async def test_user_facing_request_preempts_background_run_without_parallel_llm() -> None:
+    """User-facing request は background LLM を停止確認後に lease を取得する。"""
     queue = InMemoryBackgroundJobQueue()
     job = await queue.enqueue(_job("concurrent-user", uses_llm=True))
     scheduler = LocalInferenceResourceScheduler(policy=LocalInferenceResourcePolicy(enabled=True))
@@ -186,4 +219,7 @@ async def test_user_facing_request_does_not_get_large_lease_during_background_ru
 
     stored = await queue.get(job.job_id)
     assert worker.calls == [job.job_id]
-    assert stored.status is BackgroundJobStatus.SUCCEEDED
+    assert stored.status is BackgroundJobStatus.PENDING
+    assert stored.defer_reason is not None
+    assert "active lease disappeared" in stored.defer_reason
+    assert worker.max_parallel_provider_calls == 1
