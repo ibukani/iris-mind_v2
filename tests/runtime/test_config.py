@@ -11,6 +11,8 @@ import pytest
 
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
 from iris.adapters.memory.fake import FakeMemoryStore
+from iris.cognitive.affect.appraisal import AppraisalStep
+from iris.cognitive.affect.relationship import RelationshipStep
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActorMessageObservation,
@@ -32,10 +34,12 @@ from iris.runtime.config import (
     normalize_config_path,
     parse_llm_provider,
 )
+from iris.runtime.config.companion_semantics import RuntimeCompanionSemanticsConfig
 from iris.runtime.config.llm import LLMProvider
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.app import AppStateDependencies, build_app_from_config
+from iris.runtime.wiring.cognitive import CognitiveSemanticsOptions
 from iris.runtime.wiring.llm import LLMClientFactory
 from iris.runtime.wiring.presentation import wire_output_pipeline
 
@@ -569,6 +573,62 @@ async def test_build_app_from_config_resolves_openai_default_model() -> None:
     assert client.request.model == "gpt-5-mini"
 
 
+def test_direct_cognitive_semantics_options_default_stays_config_gated() -> None:
+    """Runtime config を通らない cognitive wiring でも #100 の初期有効化は off。"""
+    options = CognitiveSemanticsOptions()
+
+    assert options.config == RuntimeCompanionSemanticsConfig()
+
+
+def test_build_app_from_config_wires_companion_semantics_default_gate() -> None:
+    """build_app_from_config は default config の companion semantics gate を pipeline に渡す。"""
+    config = default_runtime_config()
+    app = build_app_from_config(
+        config,
+        state=AppStateDependencies(
+            memory_store=FakeMemoryStore(),
+            relationship_store=InMemoryRelationshipStore(),
+            affect_store=InMemoryAffectStore(),
+        ),
+        output_pipeline=wire_output_pipeline(safety_config=config.safety),
+    )
+
+    appraisal_step = _single_step_of_type(app, AppraisalStep)
+    relationship_step = _single_step_of_type(app, RelationshipStep)
+
+    assert get_private_attr_as(appraisal_step, "_appraisal_signals_enabled", bool) is False
+    assert get_private_attr_as(appraisal_step, "_dependency_risk_hint_enabled", bool) is True
+    assert get_private_attr_as(relationship_step, "_semantic_appraisal_mode", bool) is False
+
+
+def test_build_app_from_config_wires_enabled_companion_semantics() -> None:
+    """TOML 相当の enabled config は AppraisalStep / RelationshipStep の gate を有効化する。"""
+    base = default_runtime_config()
+    config = replace(
+        base,
+        companion_semantics=RuntimeCompanionSemanticsConfig(
+            appraisal_signals_enabled=True,
+            dependency_risk_hint_enabled=False,
+        ),
+    )
+    app = build_app_from_config(
+        config,
+        state=AppStateDependencies(
+            memory_store=FakeMemoryStore(),
+            relationship_store=InMemoryRelationshipStore(),
+            affect_store=InMemoryAffectStore(),
+        ),
+        output_pipeline=wire_output_pipeline(safety_config=config.safety),
+    )
+
+    appraisal_step = _single_step_of_type(app, AppraisalStep)
+    relationship_step = _single_step_of_type(app, RelationshipStep)
+
+    assert get_private_attr_as(appraisal_step, "_appraisal_signals_enabled", bool) is True
+    assert get_private_attr_as(appraisal_step, "_dependency_risk_hint_enabled", bool) is False
+    assert get_private_attr_as(relationship_step, "_semantic_appraisal_mode", bool) is True
+
+
 def test_build_app_from_config_includes_registered_feature_steps() -> None:
     """標準 app wiring は FeatureDefinition の認知ステップを cycle に含める。"""
     config = default_runtime_config()
@@ -594,6 +654,15 @@ def test_build_app_from_config_includes_registered_feature_steps() -> None:
     assert isinstance(steps[response_index], ResponseGenerationStep)
     assert extension_indexes == tuple(sorted(extension_indexes))
     assert all(index < response_index for index in extension_indexes)
+
+
+def _single_step_of_type(app: object, step_type: type[object]) -> object:
+    cycle = get_private_attr_as(app, "_cycle", object)
+    steps_value = get_private_attr_as(cycle, "_steps", tuple)
+    assert _is_object_tuple(steps_value)
+    matches = tuple(step for step in steps_value if isinstance(step, step_type))
+    assert len(matches) == 1
+    return matches[0]
 
 
 class _RecordingLLMClient:

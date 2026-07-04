@@ -12,6 +12,7 @@ from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
+    CognitiveSemanticsOptions,
     wire_basic_cognitive_cycle,
     wire_core_cognitive_cycle,
 )
@@ -137,6 +138,7 @@ def build_app_from_config(
             fail_open_on_index_error=config.memory.vector.fail_open_on_index_error,
         ),
         extension_steps=collect_cognitive_steps(all_features),
+        semantics=CognitiveSemanticsOptions(config=config.companion_semantics),
     )
     return IrisApp(cycle=cycle, output_pipeline=output_pipeline)
 

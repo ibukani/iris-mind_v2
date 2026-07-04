@@ -371,6 +371,28 @@ def _prompt_section_specs(
     )
 
 
+def _companion_semantics_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Companion semantics config の ConfigSpec 群を返す。
+
+    Returns:
+        tuple[ConfigFieldSpec, ...]: companion semantics 配下の ConfigSpec 群。
+    """
+    return (
+        ConfigFieldSpec(
+            "companion_semantics.appraisal_signals_enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="Companion behavior 向け typed appraisal signals を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "companion_semantics.dependency_risk_hint_enabled",
+            ConfigValueType.BOOL,
+            default=True,
+            description="Appraisal signal から safety 接続用 dependency-risk hint を生成する。",
+        ),
+    )
+
+
 def _model_call_budget_specs() -> tuple[ConfigFieldSpec, ...]:
     """Feature 別 model call budget の ConfigSpec 群を返す。
 
@@ -703,6 +725,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             default=True,
             description="reflection job を idle 時だけ enqueue する。",
         ),
+        *_companion_semantics_specs(),
         *_model_call_budget_specs(),
         *_prompt_budget_specs(),
         ConfigFieldSpec(

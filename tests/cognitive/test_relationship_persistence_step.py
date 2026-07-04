@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelationshipStore
+from iris.cognitive.affect.appraisal import classify_appraisal_signals
 from iris.cognitive.affect.relationship import RelationshipStep
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import AppraisalResult, PerceptionResult, StepStatus
@@ -80,6 +81,10 @@ def _frame(observation_id: str, *, valence: float = 0.7) -> WorkspaceFrame:
             arousal=0.2,
             dominance=0.1,
             affect_summary="positive affect",
+            appraisal_signals=classify_appraisal_signals(
+                "thanks, helped",
+                source_observation_id=ObservationId(observation_id),
+            ),
         ),
     )
 
@@ -119,8 +124,8 @@ def _missing_input_frame(observation_id: str) -> WorkspaceFrame:
 
 
 @pytest.mark.anyio
-async def test_positive_affect_increases_affinity_and_trust(tmp_path: Path) -> None:
-    """Positive affect は affinity/trust を上げる。"""
+async def test_positive_attitude_increases_affinity_and_trust(tmp_path: Path) -> None:
+    """Positive attitude signal は affinity/trust を上げる。"""
     db_path = tmp_path / "positive.db"
     store = SQLiteRelationshipStore(db_path)
 

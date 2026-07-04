@@ -20,8 +20,8 @@ class CognitiveCycle:
 |---|---|---|
 | `SimplePerceptionStep` | `cognitive/perception/basic.py` | Observation からテキスト抽出 |
 | `MemoryRetrievalStep` | `cognitive/memory/retrieval.py` | MemoryStore からの関連記憶検索 |
-| `AppraisalStep` | `cognitive/affect/appraisal.py` | 感情評価 (mood, arousal, valence, dominance) |
-| `RelationshipStep` | `cognitive/affect/relationship.py` | 関係性スナップショット更新 (affinity, trust, familiarity) |
+| `AppraisalStep` | `cognitive/affect/appraisal.py` | VAD 感情評価と typed appraisal signal 生成 |
+| `RelationshipStep` | `cognitive/affect/relationship.py` | 関係性スナップショット更新。semantic mode では #102 まで affinity/trust を直接更新しない |
 | `PolicyInhibitionStep` | `cognitive/policy/inhibition.py` | 発話抑制・行動制約 |
 | `ResponseGenerationStep` | `cognitive/action/response.py` | LLM 応答生成 → ActionPlan |
 
@@ -84,12 +84,13 @@ CognitiveCycle → action step
 
 1ターン中の状態を集約する。
 
-`WorkspaceFrame` は frozen dataclass。実際のフィールド:
+`WorkspaceFrame` は frozen Pydantic model。実際のフィールド:
 
 - `observation: Observation`
 - `interpreted_input: InterpretedInput | None`
 - `memory_summary: MemorySummary`
 - `affect: AffectSnapshot`
+- `appraisal: AppraisalSemanticsSnapshot`
 - `relationship: RelationshipSnapshot`
 - `goals: tuple[GoalCandidate, ...]`
 - `constraints: tuple[PolicyConstraint, ...]`
@@ -121,6 +122,26 @@ CognitiveCycle → action step
 認知サイクルはこの snapshot を読み取って応答判断に使うが、store へのアクセスは `runtime` 層に委ねる。
 
 `WorkspaceFrame` は「何でも入る箱」にしない。
+
+### Appraisal semantics split
+
+`AppraisalStep` は既存互換の `AffectSnapshot` に加えて、`AppraisalSemanticsSnapshot` へ typed signal を格納する。
+
+`frame.affect.valence` は mood / VAD の連続値であり、companion semantics 有効時は relationship state の affinity/trust 直接入力として扱わない。`attitude_toward_iris` signal は #102 の bounded policy が後続で参照する候補であり、#100 では durable relationship delta へ直結しない。
+
+Signal kind と責務。
+
+| Signal kind | 用途 | Relationship 直接更新 |
+|---|---|---|
+| `user_emotion` | actor affect trace | no |
+| `attitude_toward_iris` | actor relationship candidate | #102 scope |
+| `topic_sentiment` | recent interaction tone | no |
+| `care_intent` | recent interaction tone | no |
+| `dependency_risk_hint` | safety hint boundary | no |
+
+`dependency_risk_hint` は safety が後続で読むための hint であり、Iris への好意や信頼として扱わない。
+
+初期 classifier は deterministic / rule-based であり、user-facing hot path に追加の large LLM call を導入しない。runtime 構成から組み立てる場合は `[companion_semantics]` で有効化する。
 
 ---
 

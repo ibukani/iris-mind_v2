@@ -25,6 +25,11 @@ from iris.runtime.config.auth import (
     apply_auth_toml,
     validate_auth_config,
 )
+from iris.runtime.config.companion_semantics import (
+    RuntimeCompanionSemanticsConfig,
+    apply_companion_semantics_toml,
+    validate_companion_semantics_config,
+)
 from iris.runtime.config.conversation import (
     RuntimeConversationConfig,
     apply_conversation_toml,
@@ -144,6 +149,7 @@ class IrisRuntimeConfig:
     conversation: RuntimeConversationConfig
     observability: RuntimeObservabilityConfig
     prompt_budget: RuntimePromptBudgetConfig
+    companion_semantics: RuntimeCompanionSemanticsConfig
 
 
 @dataclass(frozen=True)
@@ -197,6 +203,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         conversation=RuntimeConversationConfig(),
         observability=RuntimeObservabilityConfig(),
         prompt_budget=default_prompt_budget_config(),
+        companion_semantics=RuntimeCompanionSemanticsConfig(),
     )
 
 
@@ -480,6 +487,10 @@ def _apply_toml_sections(
             config.prompt_budget,
             table_or_empty(table, "prompt_budget"),
         ),
+        companion_semantics=apply_companion_semantics_toml(
+            config.companion_semantics,
+            table_or_empty(table, "companion_semantics"),
+        ),
         models=models,
         ollama=ollama,
         openai=openai,
@@ -530,6 +541,7 @@ class _RuntimeConfigSections:
     diagnostics: RuntimeDiagnosticsConfig
     observability: RuntimeObservabilityConfig
     prompt_budget: RuntimePromptBudgetConfig
+    companion_semantics: RuntimeCompanionSemanticsConfig
     config_metadata: RuntimeConfigMetadata | None = None
 
 
@@ -560,6 +572,7 @@ def _apply_env_sections(
         conversation=config.conversation,
         observability=config.observability,
         prompt_budget=config.prompt_budget,
+        companion_semantics=config.companion_semantics,
         models=models,
         ollama=ollama,
         openai=openai,
@@ -597,6 +610,7 @@ def _compose_runtime_config(
         conversation=sections.conversation,
         observability=sections.observability,
         prompt_budget=sections.prompt_budget,
+        companion_semantics=sections.companion_semantics,
         models=sections.models,
         ollama=sections.ollama,
         openai=sections.openai,
@@ -630,6 +644,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
     validated_conversation = validate_conversation_config(config.conversation)
     validated_observability = validate_observability_config(config.observability)
     validated_prompt_budget = validate_prompt_budget_config(config.prompt_budget)
+    validated_companion_semantics = validate_companion_semantics_config(config.companion_semantics)
     _validate_transcript_backend(
         state=validated_state,
         conversation=validated_conversation,
@@ -646,6 +661,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         conversation=validated_conversation,
         observability=validated_observability,
         prompt_budget=validated_prompt_budget,
+        companion_semantics=validated_companion_semantics,
     )
 
 
