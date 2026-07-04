@@ -36,6 +36,23 @@ def _contains_control_characters(text: str) -> bool:
     return False
 
 
+def _contains_high_risk_instruction(text: str) -> bool:
+    normalized = text.casefold()
+    harmful_terms = (
+        "kill yourself",
+        "commit suicide",
+        "overdose",
+        "build a bomb",
+        "make a bomb",
+        "poison someone",
+        "steal password",
+        "exfiltrate credentials",
+        "自殺し",
+        "爆弾を作",
+    )
+    return any(term in normalized for term in harmful_terms)
+
+
 _MAX_OUTPUT_CHARS = 4000
 
 
@@ -80,6 +97,8 @@ class BasicOutputSafetyGate(OutputSafetyGate):
             reason = "output contains a secret-like pattern"
         elif _contains_control_characters(text):
             reason = "output contains control characters"
+        elif _contains_high_risk_instruction(text):
+            reason = "output contains high-risk actionable guidance"
 
         return SafetyDecision(
             decision=GateDecision.BLOCK if reason else GateDecision.ALLOW,

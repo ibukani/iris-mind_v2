@@ -109,44 +109,62 @@ class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):
         Returns:
             ActionSelectionResult: 生成されたアクションプラン。入力がない場合は SKIPPED。
         """
+        blocking_constraint = _first_blocking_constraint(frame)
+        if blocking_constraint is not None:
+            return _skipped_result(
+                self.name,
+                f"policy blocks response: {blocking_constraint.name}",
+            )
+
         prompt = build_response_prompt(frame)
         if prompt is None:
-            return ActionSelectionResult(
-                step_name=self.name,
-                status=StepStatus.SKIPPED,
-                reason="no interpreted input text",
-            )
+            return _skipped_result(self.name, "no interpreted input text")
 
         generated = await self._generator.generate_response(prompt)
-        if _cascade_blocks_response(generated):
-            cascade_result = generated.cascade_result
-            if cascade_result is None:
-                reason = "model call blocked"
-            else:
-                reason = f"model call {cascade_result.decision.value}: {cascade_result.reason}"
-            return ActionSelectionResult(
-                step_name=self.name,
-                status=StepStatus.SKIPPED,
-                reason=reason,
-            )
-        if not generated.text.strip():
-            return ActionSelectionResult(
-                step_name=self.name,
-                status=StepStatus.SKIPPED,
-                reason="empty generated response",
-            )
+        return _generated_response_result(self.name, generated, self._priority)
 
-        plan = ActionPlan(
-            turn_intent="respond",
-            candidate_text=generated.text,
-            should_respond=True,
-            priority=self._priority,
-        )
-        return ActionSelectionResult(
-            step_name=self.name,
-            status=StepStatus.OK,
-            action_plans=(plan,),
-        )
+
+def _skipped_result(step_name: str, reason: str) -> ActionSelectionResult:
+    return ActionSelectionResult(
+        step_name=step_name,
+        status=StepStatus.SKIPPED,
+        reason=reason,
+    )
+
+
+def _generated_response_result(
+    step_name: str,
+    generated: GeneratedResponse,
+    priority: int,
+) -> ActionSelectionResult:
+    if _cascade_blocks_response(generated):
+        cascade_result = generated.cascade_result
+        if cascade_result is None:
+            reason = "model call blocked"
+        else:
+            reason = f"model call {cascade_result.decision.value}: {cascade_result.reason}"
+        return _skipped_result(step_name, reason)
+    if not generated.text.strip():
+        return _skipped_result(step_name, "empty generated response")
+
+    plan = ActionPlan(
+        turn_intent="respond",
+        candidate_text=generated.text,
+        should_respond=True,
+        priority=priority,
+    )
+    return ActionSelectionResult(
+        step_name=step_name,
+        status=StepStatus.OK,
+        action_plans=(plan,),
+    )
+
+
+def _first_blocking_constraint(frame: WorkspaceFrame) -> PolicyConstraint | None:
+    for constraint in frame.constraints:
+        if constraint.blocks_response:
+            return constraint
+    return None
 
 
 def _cascade_blocks_response(generated: GeneratedResponse) -> bool:

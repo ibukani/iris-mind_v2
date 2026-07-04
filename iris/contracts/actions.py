@@ -7,6 +7,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from iris.contracts.safety import SafetyContext
 from iris.core.ids import ActionId, CorrelationId, ExternalRef, SessionId
 
 
@@ -88,6 +89,7 @@ class PresentedOutput(BaseModel):
     interruptible: bool = True
     safety_block_reason: str | None = None
     policy_constraint_names: tuple[str, ...] = ()
+    safety_contexts: tuple[SafetyContext, ...] = ()
 
     @property
     def is_sendable(self) -> bool:
@@ -128,6 +130,24 @@ def presented_output_with_policy_constraints(
     Returns:
         元の表示属性とpolicy constraint名を持つ出力。
     """
+    return presented_output_with_policy_metadata(
+        output,
+        constraint_names=constraint_names,
+        safety_contexts=(),
+    )
+
+
+def presented_output_with_policy_metadata(
+    output: PresentedOutput,
+    *,
+    constraint_names: tuple[str, ...],
+    safety_contexts: tuple[SafetyContext, ...],
+) -> PresentedOutput:
+    """PresentedOutput に policy constraint と safety context metadata を付与する。
+
+    Returns:
+        元の表示属性とpolicy metadataを持つ出力。
+    """
     return PresentedOutput(
         text=output.text,
         style_hint=output.style_hint,
@@ -141,7 +161,22 @@ def presented_output_with_policy_constraints(
             output.policy_constraint_names,
             constraint_names,
         ),
+        safety_contexts=_merge_safety_contexts(
+            output.safety_contexts,
+            safety_contexts,
+        ),
     )
+
+
+def _merge_safety_contexts(
+    existing: tuple[SafetyContext, ...],
+    additional: tuple[SafetyContext, ...],
+) -> tuple[SafetyContext, ...]:
+    merged: list[SafetyContext] = []
+    for context in (*existing, *additional):
+        if context not in merged:
+            merged.append(context)
+    return tuple(merged)
 
 
 def _merge_constraint_names(

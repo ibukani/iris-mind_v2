@@ -45,6 +45,8 @@ Scheduler lifecycle は default disabled とする。`state.backend = "memory"` 
 
 `safety.mode = "strict"` は決定論的な配送安全規則を追加する。包括的なproduction moderationを意味しない。`IdleTickObservation` によるproactive配送では、`sensitive_safety_context`、BUSY / UNAVAILABLE、quiet hours、同一targetの直近反復blockを配送blockとする。通常のuser-initiated応答は、`sensitive_safety_context`の存在だけではblockしない。decisionはreason、risk level、not-before、raw contentを含まないaudit metadataを保持する。
 
+`safety.high_risk_context_detection_enabled = true` は、policy enforcement 前に deterministic / provider-free な typed safety context boundary を挿入する。検出された `SafetyContext` は category、severity、source、confidence、reason code、response directive を持ち、raw user text を metadata に含めない。User-initiated な支援文脈は `allow_support` として通常応答を継続し、危険な手順要求は deterministic safe redirect / refusal を優先する。Proactive delivery では同じ typed context が `PresentedOutput` から `DeliverySafetyGate` へ伝播され、high severity context を配送 block として扱う。
+
 現MVPの `proactive_sensitive_safety_context` は、同じ認知処理結果から `PresentedOutput.policy_constraint_names` へ明示伝播された `sensitive_safety_context` だけを評価する。`IdleTickObservation` は過去のuser textを再解釈せず、最近のuser messageにsensitive語があったという理由だけで後続idle tickを自動blockしない。過去turnを跨ぐtyped safety provenanceは後続phaseとする。
 
 Output safetyとdelivery safetyのblock reasonはscheduler結果とruntime safety auditに保持する。Auditにはuser textや生成output本文を保存しない。

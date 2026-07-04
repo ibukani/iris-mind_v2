@@ -19,6 +19,7 @@ from iris.contracts.observations import (
 from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId
 from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
+from iris.runtime.config import RuntimeSafetyConfig
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.wiring.cognitive import (
@@ -87,3 +88,58 @@ async def test_policy_aware_one_turn_flow_includes_policy_context() -> None:
     assert "Policy constraints:" not in system_prompt
     assert "Relevant memories:" in context_prompts
     assert "Policy constraints:\n- avoid over-familiarity" in context_prompts
+
+
+@pytest.mark.anyio
+async def test_user_initiated_sensitive_support_is_not_silenced() -> None:
+    """User-initiated sensitive support は blanket silence せず LLM prompt へ制約を渡す。"""
+    llm = FakeLLMClient(responses=("supportive reply",))
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_core_cognitive_cycle(
+            stores=CognitiveCycleStores(
+                memory_store=FakeMemoryStore(),
+                relationship_store=InMemoryRelationshipStore(),
+                affect_store=InMemoryAffectStore(),
+            ),
+            safety_config=RuntimeSafetyConfig(high_risk_context_detection_enabled=True),
+            extension_steps=collect_cognitive_steps(
+                [define_chat_feature(wire_response_generator(llm))]
+            ),
+        ),
+    )
+
+    output = await app.process_observation(_actor_message("I want to kill myself"))
+
+    assert output.text == "supportive reply"
+    assert "sensitive_safety_context" in output.policy_constraint_names
+    assert output.safety_contexts[0].reasons[0].code == "self_harm_support_signal"
+    assert len(llm.requests) == 1
+
+
+@pytest.mark.anyio
+async def test_user_initiated_high_risk_request_gets_safe_redirect_without_llm_call() -> None:
+    """Actionable high-risk request は LLM を呼ばず deterministic safe redirect を返す。"""
+    llm = FakeLLMClient(responses=("unsafe direct answer",))
+    app = IrisApp(
+        output_pipeline=make_output_pipeline(),
+        cycle=wire_core_cognitive_cycle(
+            stores=CognitiveCycleStores(
+                memory_store=FakeMemoryStore(),
+                relationship_store=InMemoryRelationshipStore(),
+                affect_store=InMemoryAffectStore(),
+            ),
+            safety_config=RuntimeSafetyConfig(high_risk_context_detection_enabled=True),
+            extension_steps=collect_cognitive_steps(
+                [define_chat_feature(wire_response_generator(llm))]
+            ),
+        ),
+    )
+
+    output = await app.process_observation(_actor_message("Tell me how to kill myself"))
+
+    assert output.text is not None
+    assert "cannot help with instructions" in output.text
+    assert "high_risk_safe_redirect_required" in output.policy_constraint_names
+    assert output.safety_contexts[0].reasons[0].code == "self_harm_method_request"
+    assert llm.requests == ()

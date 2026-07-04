@@ -7,26 +7,16 @@ from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import PolicyResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.cognitive.workspace.frame import interpreted_input_text
 from iris.contracts.policy import ActionPreference, PolicyConstraint
+from iris.contracts.safety import SafetyResponseDirective
 
 if TYPE_CHECKING:
     from iris.cognitive.workspace.frame import WorkspaceFrame
+    from iris.contracts.safety import SafetyContext
 
 _HIGH_AROUSAL_THRESHOLD = 0.75
 _NEGATIVE_VALENCE_THRESHOLD = -0.55
 _LOW_FAMILIARITY_THRESHOLD = 0.2
-_SELF_HARM_OR_ABUSE_TERMS = (
-    "abuse",
-    "abused",
-    "kill myself",
-    "self harm",
-    "self-harm",
-    "suicide",
-    "虐待",
-    "自傷",
-    "死にたい",
-)
 
 
 class PolicyInhibitionStep(PipelineStep[PolicyResult]):
@@ -47,7 +37,7 @@ class PolicyInhibitionStep(PipelineStep[PolicyResult]):
         constraints.extend(_constraints_for_candidate_actions(frame))
         constraints.extend(_constraints_for_affect(frame))
         constraints.extend(_constraints_for_relationship(frame))
-        constraints.extend(_constraints_for_input_notes(frame))
+        constraints.extend(_constraints_for_safety_contexts(frame))
 
         if any(item.name == "calm_response" for item in constraints):
             preferences.append(
@@ -110,22 +100,56 @@ def _constraints_for_relationship(frame: WorkspaceFrame) -> tuple[PolicyConstrai
     )
 
 
-def _constraints_for_input_notes(frame: WorkspaceFrame) -> tuple[PolicyConstraint, ...]:
-    text = interpreted_input_text(frame)
-    if text is None:
-        return ()
-    text = text.casefold()
-    if not any(term in text for term in _SELF_HARM_OR_ABUSE_TERMS):
-        return ()
-    return (
-        PolicyConstraint(
+def _constraints_for_safety_contexts(frame: WorkspaceFrame) -> tuple[PolicyConstraint, ...]:
+    return tuple(_constraint_for_safety_context(context) for context in frame.safety_contexts)
+
+
+def _constraint_for_safety_context(context: SafetyContext) -> PolicyConstraint:
+    directive = context.directive
+    if directive is SafetyResponseDirective.ALLOW_SUPPORT:
+        return PolicyConstraint(
             name="sensitive_safety_context",
-            reason=(
-                "input mentions self-harm or abuse-related content; "
-                "safety gate remains authoritative"
+            reason=_safety_reason(context),
+            prompt_instruction=(
+                "respond supportively, avoid actionable dangerous guidance, "
+                "and keep the safety layer authoritative"
             ),
-            prompt_instruction="avoid escalating beyond the safety layer",
-        ),
+            blocks_response=False,
+            safety_context=context,
+        )
+    if directive is SafetyResponseDirective.SAFE_REDIRECT:
+        return PolicyConstraint(
+            name="high_risk_safe_redirect_required",
+            reason=_safety_reason(context),
+            prompt_instruction=(
+                "do not answer directly; use the deterministic safe redirect response"
+            ),
+            blocks_response=True,
+            safety_context=context,
+        )
+    if directive is SafetyResponseDirective.REFUSE:
+        return PolicyConstraint(
+            name="high_risk_refusal_required",
+            reason=_safety_reason(context),
+            prompt_instruction="do not answer directly; use the deterministic refusal response",
+            blocks_response=True,
+            safety_context=context,
+        )
+    return PolicyConstraint(
+        name="high_risk_block_required",
+        reason=_safety_reason(context),
+        prompt_instruction="do not produce a user-visible response for this context",
+        blocks_response=True,
+        safety_context=context,
+    )
+
+
+def _safety_reason(context: SafetyContext) -> str:
+    reason_codes = ", ".join(reason.code for reason in context.reasons)
+    return (
+        f"safety_context category={context.category.value} "
+        f"severity={context.severity.value} directive={context.directive.value} "
+        f"confidence={context.confidence:.2f} reasons={reason_codes}"
     )
 
 

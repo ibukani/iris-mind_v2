@@ -495,6 +495,7 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
     base = default_runtime_config()
     config = replace(
         base,
+        safety=replace(base.safety, high_risk_context_detection_enabled=True),
         models=replace(
             base.models,
             default_chat=RuntimeModelConfig(
@@ -535,7 +536,7 @@ async def test_build_app_from_config_uses_default_chat_and_full_cycle() -> None:
     assert "Relationship context:" in context_messages
     assert "Mina: neutral relationship" in context_messages
     assert "Policy constraints:" in context_messages
-    assert "avoid escalating beyond the safety layer" in context_messages
+    assert "respond supportively" in context_messages
 
 
 @pytest.mark.anyio

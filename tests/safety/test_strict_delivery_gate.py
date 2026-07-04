@@ -9,6 +9,14 @@ import pytest
 from iris.contracts.actions import PresentedOutput
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.delivery import DeliveryTarget
+from iris.contracts.safety import (
+    SafetyContext,
+    SafetyContextCategory,
+    SafetyContextReason,
+    SafetyContextSeverity,
+    SafetyContextSource,
+    SafetyResponseDirective,
+)
 from iris.core.ids import ExternalRef, SessionId
 from iris.safety.delivery_gate import (
     BasicDeliverySafetyGate,
@@ -20,6 +28,17 @@ from iris.safety.policy_engine import DeliverySource, SafetyPolicyContext, Safet
 
 pytestmark = pytest.mark.anyio
 _NOW = datetime(2026, 1, 1, 23, tzinfo=UTC)
+
+
+def _high_risk_context() -> SafetyContext:
+    return SafetyContext(
+        category=SafetyContextCategory.SELF_HARM,
+        severity=SafetyContextSeverity.HIGH,
+        source=SafetyContextSource.PROACTIVE,
+        confidence=0.9,
+        reasons=(SafetyContextReason(code="risk", description="static risk metadata"),),
+        directive=SafetyResponseDirective.SAFE_REDIRECT,
+    )
 
 
 def _target() -> DeliveryTarget:
@@ -47,6 +66,42 @@ async def test_strict_gate_blocks_sensitive_proactive_output() -> None:
     assert decision.allowed is False
     assert decision.reason == "proactive_sensitive_safety_context"
     assert decision.audit is not None
+
+
+async def test_strict_gate_blocks_typed_high_risk_proactive_output() -> None:
+    """Typed high-risk safety context は proactive delivery を block する。"""
+    decision = await StrictDeliverySafetyGate().check(
+        target=_target(),
+        output=PresentedOutput(text="safe rendered text", safety_contexts=(_high_risk_context(),)),
+        availability=None,
+        now=_NOW,
+        policy_context=SafetyPolicyContext(
+            source=DeliverySource.PROACTIVE_IDLE_TICK,
+            target_key="target",
+            safety_contexts=(_high_risk_context(),),
+        ),
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "proactive_high_risk_safety_context"
+    assert decision.risk_level is SafetyRiskLevel.HIGH
+
+
+async def test_strict_gate_does_not_block_user_initiated_typed_support_context() -> None:
+    """User-initiated delivery は typed high-risk context だけで blanket block しない。"""
+    decision = await StrictDeliverySafetyGate().check(
+        target=_target(),
+        output=PresentedOutput(text="supportive response"),
+        availability=None,
+        now=_NOW,
+        policy_context=SafetyPolicyContext(
+            source=DeliverySource.USER_INITIATED,
+            target_key="target",
+            safety_contexts=(_high_risk_context(),),
+        ),
+    )
+
+    assert decision.allowed is True
 
 
 async def test_strict_gate_rejects_invalid_target_before_policy_engine() -> None:

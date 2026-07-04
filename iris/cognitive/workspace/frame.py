@@ -9,6 +9,7 @@ from iris.contracts.conversation import ConversationRecord
 from iris.contracts.memory import MemorySearchResult
 from iris.contracts.observations import Observation
 from iris.contracts.policy import ActionPreference, PolicyConstraint
+from iris.contracts.safety import SafetyContext
 from iris.contracts.workspace_context import (
     ActorContextSnapshot,
     SituationContextSnapshot,
@@ -81,6 +82,7 @@ class WorkspaceFrame(BaseModel):
     goals: tuple[GoalCandidate, ...] = ()
     constraints: tuple[PolicyConstraint, ...] = ()
     action_preferences: tuple[ActionPreference, ...] = ()
+    safety_contexts: tuple[SafetyContext, ...] = ()
     candidate_action_plans: tuple[ActionPlan, ...] = ()
     policy_summary: str | None = None
     actor_context: ActorContextSnapshot = Field(default_factory=ActorContextSnapshot)

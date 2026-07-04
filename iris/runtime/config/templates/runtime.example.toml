@@ -15,3 +15,6 @@ proactive_profile = "proactive_short"
 
 [model_call_budget]
 enabled = true
+
+[safety]
+high_risk_context_detection_enabled = false

@@ -55,15 +55,18 @@ def test_committed_init_template_is_compact_and_loadable(tmp_path: Path) -> None
     document = tomllib.loads(target_path.read_text(encoding="utf-8"))
     config = load_runtime_config(target_path, env={})
 
-    assert set(document) == {"config", "models", "prompt_budget", "model_call_budget"}
+    assert set(document) == {"config", "models", "prompt_budget", "model_call_budget", "safety"}
+    assert document["safety"]["high_risk_context_detection_enabled"] is False
     assert config.config.version == 2
+    assert config.safety.high_risk_context_detection_enabled is False
 
 
 def test_runtime_config_template_returns_packaged_compact_template() -> None:
     """Packaged templateは通常利用に必要なsectionだけを含む。"""
     document = tomllib.loads(runtime_config_template())
 
-    assert set(document) == {"config", "models", "prompt_budget", "model_call_budget"}
+    assert set(document) == {"config", "models", "prompt_budget", "model_call_budget", "safety"}
+    assert document["safety"]["high_risk_context_detection_enabled"] is False
 
 
 def test_init_runtime_config_creates_parent_directories(

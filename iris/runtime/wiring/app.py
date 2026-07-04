@@ -137,6 +137,7 @@ def build_app_from_config(
             fail_open_on_index_error=config.memory.vector.fail_open_on_index_error,
         ),
         extension_steps=collect_cognitive_steps(all_features),
+        safety_config=config.safety,
     )
     return IrisApp(cycle=cycle, output_pipeline=output_pipeline)
 

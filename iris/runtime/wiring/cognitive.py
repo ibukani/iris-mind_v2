@@ -14,6 +14,8 @@ from iris.cognitive.memory.retrieval import MemoryRetrievalStep, MemoryRetriever
 from iris.cognitive.memory.write import MemoryWriteStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.cognitive.policy.inhibition import PolicyInhibitionStep
+from iris.cognitive.policy.safety_context import SafetyContextClassificationStep
+from iris.cognitive.policy.safety_response import SafetyResponsePolicyStep
 from iris.contracts.actions import ActionPlan
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.contracts.memory import MemoryStore, MutableMemoryStore, VectorMemoryIndex
@@ -28,6 +30,7 @@ if TYPE_CHECKING:
     from iris.contracts.affect import AffectStore
     from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.relationship import RelationshipStore
+    from iris.runtime.config.safety import RuntimeSafetyConfig
 
 
 @dataclass(frozen=True)
@@ -169,14 +172,26 @@ def wire_core_cognitive_cycle(
     stores: CognitiveCycleStores | None = None,
     *,
     extension_steps: Sequence[PipelineStep[PipelineStepResult]] = (),
+    safety_config: RuntimeSafetyConfig | None = None,
 ) -> CognitiveCycle:
     """Policy inhibition 付きの感情・メモリ対応認知サイクルを組み立てる。
 
     Returns:
-        memory → appraisal → persistence → policy → feature extension の CognitiveCycle。
+        memory → appraisal → persistence → safety context → policy → feature extension
+        の CognitiveCycle。
     """
     stores = stores or CognitiveCycleStores()
     steps = _build_affect_memory_steps(stores)
+    if _safety_context_detection_enabled(safety_config):
+        steps.append(SafetyContextClassificationStep())
     steps.append(PolicyInhibitionStep())
+    if _safety_context_detection_enabled(safety_config):
+        steps.append(SafetyResponsePolicyStep())
     steps.extend(extension_steps)
     return wire_cognitive_cycle(steps=steps)
+
+
+def _safety_context_detection_enabled(safety_config: RuntimeSafetyConfig | None) -> bool:
+    if safety_config is None:
+        return False
+    return safety_config.high_risk_context_detection_enabled
