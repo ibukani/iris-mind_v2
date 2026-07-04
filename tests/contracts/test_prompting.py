@@ -8,7 +8,9 @@ import pytest
 from iris.contracts.prompting import (
     PromptAssemblyReport,
     PromptOverflowBehavior,
+    PromptProfileBudget,
     PromptProfileName,
+    PromptProfileSectionBudget,
     PromptSectionAssemblyReport,
     PromptSectionBudget,
     PromptSectionKind,
@@ -69,3 +71,27 @@ def test_prompt_assembly_report_counts_overflow_results() -> None:
     assert report.omitted_section_count == 1
     assert report.truncated_section_count == 2
     assert report.truncated_item_count == 2
+
+
+def test_prompt_profile_budget_maps_sections_by_kind() -> None:
+    """Profile contract は section kind から budget を参照できる。"""
+    memory_budget = PromptSectionBudget(
+        max_chars=120,
+        max_items=3,
+        priority=50,
+        overflow_behavior=PromptOverflowBehavior.TRUNCATE_ITEMS,
+    )
+    profile = PromptProfileBudget(
+        name=PromptProfileName.LOCAL_BALANCED,
+        total_max_chars=1000,
+        sections=(
+            PromptProfileSectionBudget(
+                kind=PromptSectionKind.USER_MEMORY,
+                budget=memory_budget,
+            ),
+        ),
+    )
+
+    assert profile.section_budget(PromptSectionKind.USER_MEMORY) == memory_budget
+    with pytest.raises(KeyError):
+        profile.section_budget(PromptSectionKind.PROJECT_MEMORY)

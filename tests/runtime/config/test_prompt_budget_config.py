@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from iris.contracts.prompting import PromptOverflowBehavior, PromptProfileName
+from iris.contracts.prompting import PromptOverflowBehavior, PromptProfileName, PromptSectionKind
 from iris.runtime.config import ConfigError, default_runtime_config, load_runtime_config
 from iris.runtime.config.prompt_budget import (
     RuntimePromptBudgetConfig,
@@ -35,6 +35,20 @@ def test_default_prompt_budget_profiles_match_issue_91_policy() -> None:
     assert config.local_balanced.user_memory.max_items == 5
     assert memory_top_k_for_profile(config, PromptProfileName.LOCAL_BALANCED) == 5
     assert project_context_top_k_for_profile(config, PromptProfileName.LOCAL_BALANCED) == 4
+
+
+def test_runtime_prompt_profile_budget_exports_section_mapping_contract() -> None:
+    """Runtime profile budget は section kind 付き contract として公開できる。"""
+    runtime_budget = RuntimePromptBudgetConfig().local_balanced
+
+    contract = runtime_budget.to_contract(PromptProfileName.LOCAL_BALANCED)
+
+    assert contract.name is PromptProfileName.LOCAL_BALANCED
+    assert contract.total_max_chars == runtime_budget.total_max_chars
+    assert (
+        contract.section_budget(PromptSectionKind.USER_MEMORY).max_items
+        == runtime_budget.user_memory.max_items
+    )
 
 
 def test_prompt_budget_toml_override_is_loaded(tmp_path: Path) -> None:

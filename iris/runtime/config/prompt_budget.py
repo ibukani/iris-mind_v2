@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING
 
 from iris.contracts.prompting import (
     PromptOverflowBehavior,
+    PromptProfileBudget,
     PromptProfileName,
+    PromptProfileSectionBudget,
     PromptSectionBudget,
     PromptSectionKind,
 )
@@ -86,6 +88,24 @@ class RuntimePromptProfileBudget:
     interaction_policy: RuntimePromptSectionBudget
     task_context: RuntimePromptSectionBudget
     user_input: RuntimePromptSectionBudget
+
+    def to_contract(self, name: PromptProfileName) -> PromptProfileBudget:
+        """共有契約の `PromptProfileBudget` へ変換する。
+
+        Args:
+            name: 変換対象 profile の名前。
+
+        Returns:
+            section kind と budget の対応を含む profile budget 契約。
+        """
+        return PromptProfileBudget(
+            name=name,
+            total_max_chars=self.total_max_chars,
+            sections=tuple(
+                PromptProfileSectionBudget(kind=kind, budget=budget.to_contract())
+                for kind, budget in iter_profile_sections(self)
+            ),
+        )
 
     def section_budget(self, kind: PromptSectionKind) -> RuntimePromptSectionBudget:
         """Section kind に対応する budget を返す。

@@ -62,6 +62,15 @@ class PromptSectionBudget(BaseModel):
     overflow_behavior: PromptOverflowBehavior
 
 
+class PromptProfileSectionBudget(BaseModel):
+    """Profile 内の section kind と budget の対応。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: PromptSectionKind
+    budget: PromptSectionBudget
+
+
 class PromptProfileBudget(BaseModel):
     """Profile 全体の prompt budget。"""
 
@@ -69,7 +78,24 @@ class PromptProfileBudget(BaseModel):
 
     name: PromptProfileName
     total_max_chars: int = Field(ge=0)
-    sections: tuple[PromptSectionBudget, ...]
+    sections: tuple[PromptProfileSectionBudget, ...]
+
+    def section_budget(self, kind: PromptSectionKind) -> PromptSectionBudget:
+        """Section kind に対応する budget を返す。
+
+        Args:
+            kind: 参照対象の prompt section kind。
+
+        Returns:
+            対応する prompt section budget。
+
+        Raises:
+            KeyError: 指定 section kind が profile に含まれない場合。
+        """
+        for section in self.sections:
+            if section.kind is kind:
+                return section.budget
+        raise KeyError(kind.value)
 
 
 class PromptSectionInput(BaseModel):
