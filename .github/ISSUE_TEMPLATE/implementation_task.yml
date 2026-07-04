@@ -1,0 +1,87 @@
+name: 実装タスク
+description: 実装作業、リファクタリング、調査後の作業項目を管理するためのテンプレートです。
+title: "task: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        実装担当者がそのまま着手できるように、目的・作業項目・完了条件・依存関係を明確にしてください。
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目的
+      description: このタスクで達成したい状態を説明してください。
+    validations:
+      required: true
+  - type: textarea
+    id: current_state
+    attributes:
+      label: 現状
+      description: 現在の実装状況、既知の問題、前提条件を記載してください。
+    validations:
+      required: false
+  - type: textarea
+    id: work_items
+    attributes:
+      label: 作業内容
+      description: 実施する作業をチェックリストで記載してください。
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 完了条件
+      description: この Issue を close できる条件を明確にしてください。
+      placeholder: |
+        - [ ] 実装要件を満たしている
+        - [ ] 既存テストが通る
+        - [ ] 必要なテストが追加されている
+        - [ ] ドキュメント更新が必要な場合は反映済み
+    validations:
+      required: true
+  - type: textarea
+    id: affected_files
+    attributes:
+      label: 想定変更ファイル・領域
+      description: 変更が想定されるファイル、ディレクトリ、モジュールを記載してください。
+      placeholder: |
+        - iris/...
+        - tests/...
+        - docs/...
+    validations:
+      required: false
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 依存関係・ブロッカー
+      description: 先に完了すべき Issue、ブロックする Issue、並列実装時の注意点を記載してください。
+      placeholder: |
+        - Depends on #...
+        - Blocks #...
+        - Can run in parallel with #...
+    validations:
+      required: false
+  - type: textarea
+    id: verification
+    attributes:
+      label: 検証方法
+      description: 実装後に実行するコマンドや確認観点を記載してください。
+      placeholder: |
+        - pytest ...
+        - mypy ...
+        - pyright ...
+        - 手動確認: ...
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: 補足
+      description: レビュー時に注意してほしい点や未決事項があれば記載してください。
+    validations:
+      required: false
