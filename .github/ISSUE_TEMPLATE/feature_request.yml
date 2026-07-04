@@ -1,0 +1,77 @@
+name: 機能追加・改善提案
+description: 新機能、仕様変更、改善提案を整理するためのテンプレートです。
+title: "feat: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        実装に入る前に、目的・スコープ・完了条件・依存関係が分かるように記載してください。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 何を追加・改善したいのかを簡潔に説明してください。
+      placeholder: 例）Runtime ingress の E2E テストを追加し、gRPC 経由の SubmitObservation を保証する。
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景・目的
+      description: なぜ必要なのか、どの課題を解決するのかを書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 対象範囲
+      description: 今回含めること・含めないことを明確にしてください。
+      placeholder: |
+        含める:
+        - ...
+
+        含めない:
+        - ...
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 完了条件
+      description: 実装完了と判断できる条件をチェックリストで記載してください。
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+        - [ ] テスト・ドキュメントが更新されている
+    validations:
+      required: true
+  - type: textarea
+    id: design_notes
+    attributes:
+      label: 設計メモ
+      description: 方針、制約、代替案、破壊的変更の有無などを記載してください。
+    validations:
+      required: false
+  - type: textarea
+    id: related
+    attributes:
+      label: 依存関係・関連 Issue / PR
+      description: 実装順序や並列実装可否が分かるように、依存・ブロック・関連を記載してください。
+      placeholder: |
+        - Depends on #...
+        - Blocks #...
+        - Related to #...
+    validations:
+      required: false
+  - type: textarea
+    id: verification
+    attributes:
+      label: 検証方法
+      description: 想定するテスト、手動確認、回帰確認の観点を記載してください。
+      placeholder: |
+        - pytest ...
+        - mypy / pyright ...
+        - 手動確認: ...
+    validations:
+      required: false
