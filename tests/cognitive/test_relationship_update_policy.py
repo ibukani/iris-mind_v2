@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from iris.cognitive.affect.relationship_update_policy import compute_relationship_update_policy
 from iris.contracts.appraisal import (
     AppraisalSafetyHintKind,
@@ -244,6 +246,16 @@ def test_source_event_ids_are_attached_to_each_candidate_as_event_provenance() -
     assert all(
         candidate.source_event_ids == ("event-1", "event-2") for candidate in result.candidates
     )
+
+
+def test_policy_rejects_blank_source_event_ids_at_entrypoint() -> None:
+    """Public policy entrypoint でも blank source event ID を拒否する。"""
+    with pytest.raises(ValueError, match="source_event_ids"):
+        compute_relationship_update_policy(
+            (_signal(AppraisalSignalKind.ATTITUDE_TOWARD_IRIS, polarity=0.5),),
+            interaction_scope=CompanionInteractionScope.DIRECT_MESSAGE,
+            source_event_ids=(" ",),
+        )
 
 
 def test_policy_does_not_need_raw_affect_score_input() -> None:

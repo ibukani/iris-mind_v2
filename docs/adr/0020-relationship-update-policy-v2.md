@@ -60,7 +60,7 @@ group_space.max_abs_affinity_delta = 0.015
 group_space.max_abs_trust_delta = 0.005
 ```
 
-Group-space は誤帰属リスクがあるため、DM より小さい cap を使う。High-magnitude review threshold は少なくとも DM の最大 cap 範囲内で到達可能にし、threshold が全 cap より大きくなって無効化される config は拒否する。Group-space atmosphere と recent interaction tone は durable relationship update の直接 source にしない。
+Group-space は誤帰属リスクがあるため、DM 以下の cap を使う。Custom config でも group-space cap が DM cap を超える設定は拒否する。High-magnitude review threshold は少なくとも DM の最大 cap 範囲内で到達可能にし、threshold が全 cap より大きくなって無効化される config は拒否する。Review-required decision は non-zero delta に限定する。Group-space atmosphere と recent interaction tone は durable relationship update の直接 source にしない。
 
 `compute_relationship_update_policy` は pure function として `AppraisalSignal` 群、`CompanionInteractionScope`、optional source event IDs、decay multiplier、policy config を受け取り、`RelationshipUpdatePolicyResult` を返す。Raw VAD / `AffectSnapshot` は入力にしない。
 

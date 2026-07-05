@@ -155,7 +155,7 @@ Decision kind。
 
 Policy が automatic candidate の source にできるのは `attitude_toward_iris` だけ。`user_emotion`、`topic_sentiment`、`care_intent`、`dependency_risk_hint` は `ActorRelationshipState` の durable delta にしない。Candidate は `reason_kind`、`reason`、`confidence`、`source_observation_ids`、`source_event_ids`、`bounds` を保持する。
 
-Initial constants は Runtime Config v2 まで docs / contract / tests の固定値として扱い、Control Plane や user-editable config へ露出しない。DM は `affinity <= 0.03`、`trust <= 0.01`、group-space は `affinity <= 0.015`、`trust <= 0.005` の cap を使う。high-magnitude review threshold は `0.025` とし、少なくとも DM の最大 cap 範囲内で到達可能にする。
+Initial constants は Runtime Config v2 まで docs / contract / tests の固定値として扱い、Control Plane や user-editable config へ露出しない。DM は `affinity <= 0.03`、`trust <= 0.01`、group-space は `affinity <= 0.015`、`trust <= 0.005` の cap を使う。Custom config でも group-space cap は DM cap 以下に固定する。high-magnitude review threshold は `0.025` とし、少なくとも DM の最大 cap 範囲内で到達可能にする。Review-required decision は non-zero delta に限定する。
 
 初期 classifier は deterministic / rule-based であり、user-facing hot path に追加の large LLM call を導入しない。runtime 構成から組み立てる場合は `[companion_semantics]` で有効化する。
 

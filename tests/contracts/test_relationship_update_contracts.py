@@ -65,6 +65,21 @@ def test_policy_config_rejects_unreachable_high_magnitude_threshold() -> None:
         RelationshipUpdatePolicyConfig(high_magnitude_review_threshold=0.05)
 
 
+def test_policy_config_rejects_group_space_bounds_larger_than_dm() -> None:
+    """Group-space cap は DM cap 以下に固定し、誤帰属リスクを増やさない。"""
+    with pytest.raises(ValidationError, match="group_space_bounds"):
+        RelationshipUpdatePolicyConfig(
+            direct_message_bounds=RelationshipDeltaBounds(
+                max_abs_affinity_delta=0.03,
+                max_abs_trust_delta=0.01,
+            ),
+            group_space_bounds=RelationshipDeltaBounds(
+                max_abs_affinity_delta=0.04,
+                max_abs_trust_delta=0.01,
+            ),
+        )
+
+
 def test_source_ref_keeps_typed_signal_provenance() -> None:
     """Source ref は typed appraisal signal の provenance を保持する。"""
     source_ref = _source_ref()
@@ -178,6 +193,23 @@ def test_review_required_decision_requires_flag() -> None:
             source_refs=(_source_ref(),),
             source_observation_ids=(ObservationId("obs-relationship-update"),),
             source_event_ids=("event-relationship-update",),
+        )
+
+
+def test_review_required_decision_requires_non_zero_delta() -> None:
+    """review-required candidate は durable promotion 前の non-zero update に限定する。"""
+    with pytest.raises(ValidationError, match="non-zero delta"):
+        RelationshipUpdateCandidate(
+            decision_kind=RelationshipUpdateDecisionKind.REVIEW_REQUIRED,
+            delta=RelationshipStateDelta(),
+            bounds=_bounds(),
+            reason_kind=RelationshipUpdateReasonKind.LOW_CONFIDENCE_ATTITUDE,
+            reason="low confidence Iris-directed attitude",
+            confidence=0.4,
+            source_refs=(_source_ref(),),
+            source_observation_ids=(ObservationId("obs-relationship-update"),),
+            source_event_ids=("event-relationship-update",),
+            review_required=True,
         )
 
 

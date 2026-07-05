@@ -91,6 +91,17 @@ class RelationshipDeltaBounds(BaseModel):
         return self
 
 
+def _bounds_exceed(
+    candidate_bounds: RelationshipDeltaBounds,
+    reference_bounds: RelationshipDeltaBounds,
+) -> bool:
+    return (
+        candidate_bounds.max_abs_affinity_delta > reference_bounds.max_abs_affinity_delta
+        or candidate_bounds.max_abs_trust_delta > reference_bounds.max_abs_trust_delta
+        or candidate_bounds.max_abs_familiarity_delta > reference_bounds.max_abs_familiarity_delta
+    )
+
+
 class RelationshipUpdatePolicyConfig(BaseModel):
     """Config v2 以前に docs / tests で固定する policy constants。"""
 
@@ -112,15 +123,19 @@ class RelationshipUpdatePolicyConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _validate_high_magnitude_threshold_is_reachable(self) -> RelationshipUpdatePolicyConfig:
-        """High-magnitude review threshold が全 cap より大きくならないことを検証する。
+    def _validate_policy_bounds(self) -> RelationshipUpdatePolicyConfig:
+        """Policy bounds の不変条件を検証する。
 
         Returns:
             検証済み policy config。
 
         Raises:
-            ValueError: threshold が全 relationship delta cap を超える場合。
+            ValueError: threshold が全 relationship delta cap を超える場合、
+                または group-space cap が DM cap を超える場合。
         """
+        if _bounds_exceed(self.group_space_bounds, self.direct_message_bounds):
+            message = "group_space_bounds must not exceed direct_message_bounds"
+            raise ValueError(message)
         max_configured_bound = max(
             self.direct_message_bounds.max_abs_affinity_delta,
             self.direct_message_bounds.max_abs_trust_delta,
@@ -264,6 +279,9 @@ class RelationshipUpdateCandidate(BaseModel):
         """
         if not self.review_required:
             message = "review_required decision must set review_required=True"
+            raise ValueError(message)
+        if self.delta.is_zero:
+            message = "review_required updates require a non-zero delta"
             raise ValueError(message)
 
     def _validate_suppressed(self) -> None:
