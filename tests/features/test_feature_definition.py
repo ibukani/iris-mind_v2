@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 from iris.contracts.actions import ActionPlan, PresentedOutput
-from iris.features.definition import ActivityReactionPlanner, FeatureDefinition
+from iris.features.definition import ActivityReactionPlanner, FeatureDefinition, FeatureKind
 from iris.features.proactive_talk import define_proactive_talk_feature
 from iris.runtime.wiring.features import (
     collect_action_plan_presenters,
@@ -33,6 +33,7 @@ def test_feature_definition_defaults_are_empty_tuples() -> None:
     assert feature.learning_hooks == ()
     assert feature.runtime_learning_hooks == ()
     assert feature.background_loop_tasks == ()
+    assert feature.kind is FeatureKind.COMPANION
 
 
 def test_feature_definition_can_attach_activity_reaction_planner() -> None:
@@ -61,7 +62,8 @@ def test_runtime_features_register_event_reaction_through_feature_definition() -
     """標準 composition root は event reaction を FeatureDefinition として登録する。"""
     catalog = wire_runtime_features()
 
-    assert tuple(feature.name for feature in catalog.features) == ("basic_action", "event_reaction")
+    assert tuple(feature.name for feature in catalog.features) == ("event_reaction",)
+    assert tuple(feature.name for feature in catalog.disabled_features) == ("basic_action",)
     event_reaction_feature = next(f for f in catalog.features if f.name == "event_reaction")
     assert len(event_reaction_feature.activity_reaction_planners) == 1
     assert collect_learning_hooks(catalog.features) == ()

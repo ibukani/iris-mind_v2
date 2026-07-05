@@ -371,12 +371,12 @@ CognitiveCycle → action step
 
 `cognitive/` が決めた `ActionPlan`、または feature が生成した domain/action/reaction candidate を、実際にどのような形で見せるかに変換する。
 
-MVPでは軽量。`SimplePresenter` が `ActionPlan` を `PresentedOutput` に変換する。
+MVPでは軽量。`DefaultActionPlanPresenter` が通常 `ActionPlan` を `PresentedOutput` に変換する。
 `EventReactionPresenter` は `ReactionCandidate` を `PresentedOutput` に変換するだけで、反応可否の判断、trust check、safety gate は行わない。
 
 ```text
 ActionPlan
-→ SimplePresenter
+→ DefaultActionPlanPresenter
 → PresentedOutput
 ```
 
@@ -398,14 +398,20 @@ adapters/       = どこへ送るかを担当する
 
 各 feature は `features/<name>/` に縦切りで配置し、`FeatureDefinition` を返す `define_feature()` 関数を公開する。
 
+`FeatureDefinition.kind` は通常 companion behavior と diagnostic/dev behavior を分けるために使う。`basic_action` は production companion response ではなく diagnostic echo action であるため `FeatureKind.DIAGNOSTIC` とする。標準 runtime catalog では `features.diagnostic_actions_enabled = true` かつ `safety.mode = "development"` のときだけ登録し、`basic` / `strict` / future production-like mode では通常 response candidate に混ぜない。無効化理由は runtime wiring diagnostics / doctor の `feature-selection` check で確認できる。
+
 ```python
 @dataclass(frozen=True)
 class FeatureDefinition:
     name: str
-    pipeline_steps: Sequence[PipelineStep[PipelineStepResult]] = ()
-    observation_sources: Sequence[ObservationSource] = ()
-    learning_hooks: Sequence[LearningHook] = ()
-    background_jobs: Sequence[BackgroundJob] = ()
+    kind: FeatureKind = FeatureKind.COMPANION
+    cognitive_steps: tuple[PipelineStep[PipelineStepResult], ...] = ()
+    activity_reaction_planners: tuple[ActivityReactionPlanner, ...] = ()
+    observation_sources: tuple[ObservationSource, ...] = ()
+    learning_hooks: tuple[LearningHook, ...] = ()
+    runtime_learning_hooks: tuple[RuntimeLearningHook, ...] = ()
+    background_loop_tasks: tuple[BackgroundLoopTask, ...] = ()
+    action_plan_presenters: tuple[ActionPlanPresenter, ...] = ()
 ```
 
 現在実装済みの feature: `proactive_talk/`（salience scoring, goal proposal, proactive policy, expression抑制）と `event_reaction/`（activity event reaction policy、planning、template）。

@@ -34,6 +34,7 @@ Implementation anchors
 | [0017](0017-companion-affect-state-model.md) | Accepted | Companion affect state を global mood、relationship、affect trace、space atmosphere、recent tone に分離する。 |
 | [0018](0018-appraisal-semantics-split.md) | Accepted | Appraisal を user emotion、Iris への態度、topic sentiment、care intent、dependency-risk hint の typed signal に分離する。 |
 | [0019](0019-local-inference-resource-scheduler.md) | Accepted | ローカル推論資源を runtime lease boundary として扱い、user-facing / safety-critical work と background work の競合を deterministic decision で制御する。 |
+| [0020](0020-diagnostic-action-isolation.md) | Accepted | diagnostic echo action を development/debug runtime に隔離し、production-like response path から除外する。 |
 
 ## 現在の横断方針
 
@@ -45,3 +46,5 @@ Implementation anchors
 - ADR 0017 は #104 の companion affect state boundary を固定し、#100 / #102 / #72 が参照する state vocabulary を提供する。
 - ADR 0018 は #100 の appraisal semantics split を固定し、#102 / #72 / #82 が raw valence ではなく typed signal を参照できる境界を提供する。
 - ADR 0019 は #93 の local inference resource scheduler boundary を固定し、#78 / #69 / #70 / #72 が local inference resource policy を参照できる境界を提供する。
+
+- ADR 0020 は #107 の diagnostic action isolation の source of truth であり、#83 production mode validation では `feature-selection` diagnostics を確認対象にする。

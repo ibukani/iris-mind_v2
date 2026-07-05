@@ -4,7 +4,7 @@
   ActorMessageObservation
   → CognitiveCycle (PerceptionStep → ActionSelectionStep)
   → ActionSafetyGate
-  → SimplePresenter
+  → DefaultActionPlanPresenter
   → OutputSafetyGate
   → PresentedOutput
 """
@@ -19,7 +19,7 @@ from iris.cognitive.perception.basic import SimplePerceptionStep
 from iris.contracts.actions import ActionPlan, PresentedOutput
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import ObservationId, SessionId
-from iris.features.basic_action.definition import SimpleActionSelectionStep
+from iris.features.basic_action.definition import DiagnosticEchoActionSelectionStep
 from iris.runtime.app import IrisApp
 from iris.safety.action_gate import GateDecision, SafetyDecision
 from tests.helpers.output_pipeline import make_output_pipeline
@@ -33,7 +33,7 @@ def app() -> IrisApp:
         IrisApp: 設定済みのIrisAppインスタンス。
     """
     return IrisApp(
-        steps=[SimplePerceptionStep(), SimpleActionSelectionStep()],
+        steps=[SimplePerceptionStep(), DiagnosticEchoActionSelectionStep()],
         output_pipeline=make_output_pipeline(),
     )
 
@@ -90,7 +90,7 @@ async def test_action_safety_gate_blocks(actor_message: ActorMessageObservation)
             return SafetyDecision(decision=GateDecision.BLOCK, reason="test block")
 
     app = IrisApp(
-        steps=[SimplePerceptionStep(), SimpleActionSelectionStep()],
+        steps=[SimplePerceptionStep(), DiagnosticEchoActionSelectionStep()],
         output_pipeline=make_output_pipeline(action_gate=BlockingGate()),
     )
     result = await app.process_observation(actor_message)
@@ -108,7 +108,7 @@ async def test_output_safety_gate_blocks(actor_message: ActorMessageObservation)
             return SafetyDecision(decision=GateDecision.BLOCK, reason="test block")
 
     app = IrisApp(
-        steps=[SimplePerceptionStep(), SimpleActionSelectionStep()],
+        steps=[SimplePerceptionStep(), DiagnosticEchoActionSelectionStep()],
         output_pipeline=make_output_pipeline(output_gate=BlockingGate()),
     )
     result = await app.process_observation(actor_message)

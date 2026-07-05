@@ -59,6 +59,7 @@ from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.delivery import wire_app_action_broker, wire_delivery_safety_gate
 from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipeline
 from iris.runtime.wiring.features import (
+    DisabledRuntimeFeature,
     RuntimeFeatureCatalog,
     collect_action_plan_presenters,
     collect_learning_hooks,
@@ -104,6 +105,9 @@ class RuntimeOperationalWiringDiagnostics:
     proactive_generation_mode: str = "not_configured"
     proactive_threshold: str = "not_configured"
     inference_scheduler_enabled: bool = False
+    runtime_feature_mode: str = "development"
+    enabled_feature_names: tuple[str, ...] = ()
+    disabled_features: tuple[DisabledRuntimeFeature, ...] = ()
 
 
 def describe_runtime_operational_wiring(
@@ -122,11 +126,14 @@ def describe_runtime_operational_wiring(
     Returns:
         doctor へ渡す read-only wiring snapshot。
     """
-    feature_catalog = wire_runtime_features()
+    feature_catalog = wire_runtime_features(config)
     return RuntimeOperationalWiringDiagnostics(
         delivery_broker_wired=config.delivery.enabled,
         proactive_talk_enabled=_feature_enabled(feature_catalog, "proactive_talk"),
         inference_scheduler_enabled=config.inference_scheduler.enabled,
+        runtime_feature_mode=feature_catalog.mode.value,
+        enabled_feature_names=tuple(feature.name for feature in feature_catalog.features),
+        disabled_features=feature_catalog.disabled_features,
     )
 
 
@@ -286,7 +293,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     stores = wire_runtime_state(config)
     vector_index, embedding = _wire_memory_vector(config, stores)
     inference_scheduler = _wire_inference_scheduler(config)
-    feature_catalog = wire_runtime_features()
+    feature_catalog = wire_runtime_features(config)
     output_pipeline = wire_output_pipeline(
         safety_config=config.safety,
         extension_presenters=collect_action_plan_presenters(feature_catalog.features),

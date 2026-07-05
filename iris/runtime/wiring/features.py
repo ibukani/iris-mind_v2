@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from iris.features.basic_action.definition import define_basic_action_feature
@@ -25,34 +26,117 @@ if TYPE_CHECKING:
     from iris.features.definition import (
         BackgroundLoopTask,
         FeatureDefinition,
+        FeatureKind,
         LearningHook,
         RuntimeLearningHook,
     )
+    from iris.runtime.config import IrisRuntimeConfig
+
+
+class RuntimeFeatureMode(StrEnum):
+    """Feature selection が用いる runtime mode。"""
+
+    DEVELOPMENT = "development"
+    PRODUCTION_LIKE = "production_like"
+
+
+class RuntimeFeatureDisabledReason(StrEnum):
+    """Feature が標準 catalog から除外された理由。"""
+
+    DIAGNOSTIC_ACTIONS_DISABLED = "diagnostic_actions_disabled"
+    PRODUCTION_LIKE_MODE = "production_like_mode"
+
+
+@dataclass(frozen=True)
+class DisabledRuntimeFeature:
+    """無効化された feature と理由。"""
+
+    name: str
+    kind: FeatureKind
+    reason: RuntimeFeatureDisabledReason
 
 
 @dataclass(frozen=True)
 class RuntimeFeatureCatalog:
-    """標準ランタイムで有効なフィーチャー定義の集合。"""
+    """標準ランタイムで選択されたフィーチャー定義の集合。"""
 
     features: tuple[FeatureDefinition, ...]
+    disabled_features: tuple[DisabledRuntimeFeature, ...] = ()
+    mode: RuntimeFeatureMode = RuntimeFeatureMode.DEVELOPMENT
 
 
-def wire_runtime_features() -> RuntimeFeatureCatalog:
+@dataclass(frozen=True)
+class RuntimeFeatureSelectionOptions:
+    """feature selection に必要な設定の最小 snapshot。"""
+
+    safety_mode: str = "development"
+    diagnostic_actions_enabled: bool = False
+
+    @classmethod
+    def from_config(cls, config: IrisRuntimeConfig) -> RuntimeFeatureSelectionOptions:
+        """Runtime config から feature selection option を抽出する。
+
+        Returns:
+            feature selection 用の最小設定。
+        """
+        return cls(
+            safety_mode=config.safety.mode,
+            diagnostic_actions_enabled=config.features.diagnostic_actions_enabled,
+        )
+
+
+def wire_runtime_features(
+    options: RuntimeFeatureSelectionOptions | IrisRuntimeConfig | None = None,
+) -> RuntimeFeatureCatalog:
     """標準ランタイムのフィーチャー集合を組み立てる。
 
-    配送結果だけでは明示的ユーザー入力を復元できないため、標準 catalog は
-    memory enqueue hook を登録しない。十分な typed context を持つ integration が
-    `LearningHook` として明示注入する。
+    diagnostic feature は development かつ明示 flag の場合だけ登録する。
+    production-like mode では通常応答候補に混ぜない。
 
     Returns:
-        明示注入するフィーチャー定義の集合。
+        選択済みフィーチャー定義と無効化理由。
     """
-    return RuntimeFeatureCatalog(
-        features=(
-            define_basic_action_feature(),
-            define_event_reaction_feature(),
-        ),
+    selection_options = _normalize_feature_selection_options(options)
+    mode = _runtime_feature_mode(selection_options.safety_mode)
+    companion_features = (define_event_reaction_feature(),)
+    diagnostic_feature = define_basic_action_feature()
+    if mode is RuntimeFeatureMode.DEVELOPMENT and selection_options.diagnostic_actions_enabled:
+        return RuntimeFeatureCatalog(
+            features=(diagnostic_feature, *companion_features),
+            mode=mode,
+        )
+    reason = (
+        RuntimeFeatureDisabledReason.PRODUCTION_LIKE_MODE
+        if mode is RuntimeFeatureMode.PRODUCTION_LIKE
+        else RuntimeFeatureDisabledReason.DIAGNOSTIC_ACTIONS_DISABLED
     )
+    return RuntimeFeatureCatalog(
+        features=companion_features,
+        disabled_features=(
+            DisabledRuntimeFeature(
+                name=diagnostic_feature.name,
+                kind=diagnostic_feature.kind,
+                reason=reason,
+            ),
+        ),
+        mode=mode,
+    )
+
+
+def _normalize_feature_selection_options(
+    options: RuntimeFeatureSelectionOptions | IrisRuntimeConfig | None,
+) -> RuntimeFeatureSelectionOptions:
+    if options is None:
+        return RuntimeFeatureSelectionOptions()
+    if isinstance(options, RuntimeFeatureSelectionOptions):
+        return options
+    return RuntimeFeatureSelectionOptions.from_config(options)
+
+
+def _runtime_feature_mode(safety_mode: str) -> RuntimeFeatureMode:
+    if safety_mode == "development":
+        return RuntimeFeatureMode.DEVELOPMENT
+    return RuntimeFeatureMode.PRODUCTION_LIKE
 
 
 def collect_cognitive_steps(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
@@ -58,11 +59,19 @@ class ActivityReactionPlanner(Protocol):
         ...
 
 
+class FeatureKind(StrEnum):
+    """Runtime feature の運用上の種別。"""
+
+    COMPANION = "companion"
+    DIAGNOSTIC = "diagnostic"
+
+
 @dataclass(frozen=True)
 class FeatureDefinition:
     """パイプラインステップ、観測ソース、フックを持つ垂直フィーチャースライス。"""
 
     name: str
+    kind: FeatureKind = FeatureKind.COMPANION
     cognitive_steps: tuple[PipelineStep[PipelineStepResult], ...] = ()
     activity_reaction_planners: tuple[ActivityReactionPlanner, ...] = ()
     observation_sources: tuple[ObservationSource, ...] = ()
