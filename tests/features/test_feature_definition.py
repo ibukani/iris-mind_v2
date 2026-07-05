@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 from iris.contracts.actions import ActionPlan, PresentedOutput
-from iris.features.definition import ActivityReactionPlanner, FeatureDefinition
+from iris.features.definition import ActivityReactionPlanner, FeatureDefinition, FeatureKind
 from iris.features.proactive_talk import define_proactive_talk_feature
 from iris.runtime.wiring.features import (
     collect_action_plan_presenters,
@@ -33,6 +33,7 @@ def test_feature_definition_defaults_are_empty_tuples() -> None:
     assert feature.learning_hooks == ()
     assert feature.runtime_learning_hooks == ()
     assert feature.background_loop_tasks == ()
+    assert feature.kind is FeatureKind.COMPANION
 
 
 def test_feature_definition_can_attach_activity_reaction_planner() -> None:

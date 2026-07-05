@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import sqlite3
 import sys
+from typing import TYPE_CHECKING
 
 from iris.adapters.llm.diagnostics import ProviderReadinessResult, ReadinessStatus
 from iris.adapters.persistence.sqlite.backup import (
@@ -41,6 +42,9 @@ from iris.runtime.wiring.runtime import (
     RuntimeOperationalWiringDiagnostics,
     describe_runtime_operational_wiring,
 )
+
+if TYPE_CHECKING:
+    from iris.runtime.wiring.features import DisabledRuntimeFeature
 
 
 @dataclass(frozen=True)
@@ -455,6 +459,34 @@ def _model_slots_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     return _build_check("model-slots", status="ok", summary=", ".join(slots))
 
 
+def _feature_selection_check(
+    wiring: RuntimeOperationalWiringDiagnostics,
+) -> RuntimeDoctorCheck:
+    enabled = _feature_list_summary(wiring.enabled_feature_names)
+    disabled = _disabled_feature_list_summary(wiring.disabled_features)
+    return _build_check(
+        "feature-selection",
+        status="ok",
+        summary=(f"mode={wiring.runtime_feature_mode} enabled={enabled} disabled={disabled}"),
+    )
+
+
+def _feature_list_summary(values: tuple[str, ...]) -> str:
+    if not values:
+        return "none"
+    return ",".join(values)
+
+
+def _disabled_feature_list_summary(
+    values: tuple[DisabledRuntimeFeature, ...],
+) -> str:
+    if not values:
+        return "none"
+    return ",".join(
+        f"{feature.name}:{feature.kind.value}:{feature.reason.value}" for feature in values
+    )
+
+
 def _delivery_check(config: IrisRuntimeConfig) -> RuntimeDoctorCheck:
     status = "enabled" if config.delivery.enabled else "disabled"
     return _build_check("delivery", status="ok", summary=status)
@@ -805,6 +837,7 @@ def _runtime_doctor_base_checks(config: IrisRuntimeConfig) -> list[RuntimeDoctor
         _background_jobs_check(config),
         _server_check(config),
         _model_slots_check(config),
+        _feature_selection_check(wiring),
         _delivery_check(config),
         _delivery_outbox_check(config, wiring),
         _scheduler_check(config),

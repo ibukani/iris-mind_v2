@@ -1,4 +1,4 @@
-# ADR 0020: Relationship update policy v2
+# ADR 0021: Relationship update policy v2
 
 ## Status
 

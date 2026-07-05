@@ -50,6 +50,7 @@ async def test_runtime_doctor_default_config_reports_ok(
     assert "config-parse" in names
     assert "state-backend" in names
     assert "provider-readiness" in names
+    assert "feature-selection" in names
     assert "delivery" in names
     assert "delivery-outbox" in names
     assert "background-jobs" in names
@@ -81,6 +82,12 @@ async def test_runtime_doctor_default_memory_backend_reports_operational_status(
     assert scheduler_check.status == "ok"
     assert "enabled=disabled loop=disabled runner_wired=wired" in scheduler_check.summary
     assert "availability_provider=wired" in scheduler_check.summary
+    feature_check = next(item for item in report.checks if item.name == "feature-selection")
+    assert feature_check.status == "ok"
+    assert "mode=development" in feature_check.summary
+    assert "enabled=basic_action,event_reaction" in feature_check.summary
+    assert "disabled=none" in feature_check.summary
+
     proactive_check = next(item for item in report.checks if item.name == "proactive-safety")
     assert proactive_check.status == "ok"
     assert "proactive_talk=disabled" in proactive_check.summary
