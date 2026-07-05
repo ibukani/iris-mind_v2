@@ -10,6 +10,7 @@ from iris.cognitive.affect.appraisal import (
 from iris.cognitive.affect.mood import update_mood
 from iris.cognitive.affect.persistence import AffectBaselineLoadStep, AffectPersistenceStep
 from iris.cognitive.affect.relationship import RelationshipStep
+from iris.cognitive.affect.relationship_update_policy import compute_relationship_update_policy
 
 __all__ = [
     "AffectBaselineLoadStep",
@@ -18,5 +19,6 @@ __all__ = [
     "RelationshipStep",
     "classify_appraisal",
     "classify_appraisal_signals",
+    "compute_relationship_update_policy",
     "update_mood",
 ]
