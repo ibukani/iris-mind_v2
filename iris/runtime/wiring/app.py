@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
-from iris.features.basic_action.definition import define_basic_action_feature
 from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.cognitive import (
@@ -90,9 +89,7 @@ def wire_default_app(
             max_tokens=max_tokens,
         ),
     )
-    features = collect_feature_items(
-        ((chat_feature,), (define_basic_action_feature(),)),
-    )
+    features = (chat_feature,)
     cycle = wire_basic_cognitive_cycle(
         extension_steps=collect_cognitive_steps(features),
     )

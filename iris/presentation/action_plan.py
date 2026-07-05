@@ -1,4 +1,4 @@
-"""アクションプランを出力として提示するためのプロトコルとデフォルト実装."""
+"""汎用 ActionPlan presenter。"""
 
 from __future__ import annotations
 
@@ -11,27 +11,24 @@ if TYPE_CHECKING:
     from iris.contracts.actions import ActionPlan, PresentedOutput
 
 
-class SimplePresenter(ActionPlanPresenter):
-    """アクションプランのフィールドをそのまま出力に委譲するデフォルトプレゼンター."""
+class DefaultActionPlanPresenter(ActionPlanPresenter):
+    """専用 presenter が扱わない通常 ActionPlan を PresentedOutput に変換する。"""
 
     @override
     def can_present(self, plan: ActionPlan) -> bool:
-        """event_reactionなど専用Presenterがあるものを除きTrueを返す.
+        """event_reaction など専用 presenter がある intent は扱わない。
 
         Returns:
-            bool: event_reaction以外であればTrue.
+            専用 presenter に委譲すべき intent でなければ True。
         """
         return plan.turn_intent != "event_reaction"
 
     @override
     async def present(self, plan: ActionPlan) -> PresentedOutput:
-        """アクションプランを提示用出力に変換する.
-
-        Args:
-            plan: The action plan to present.
+        """ActionPlan を提示用出力へ変換する。
 
         Returns:
-            Presented output with text and metadata from the plan.
+            plan の text / metadata を引き継ぐ提示用出力。
         """
         _ = self
         return presented_output_from_plan(plan)

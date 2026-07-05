@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from iris.presentation.action_plan import DefaultActionPlanPresenter
 from iris.presentation.suite import PresentationSuite
 from iris.runtime.output_pipeline import RuntimeOutputPipeline
 from iris.safety.action_gate import ActionSafetyGate, AllowAllActionGate
@@ -28,7 +29,9 @@ def wire_presentation_suite(
     Returns:
         標準presenter群。
     """
-    return PresentationSuite(presenters=tuple(extension_presenters))
+    return PresentationSuite(
+        presenters=(*tuple(extension_presenters), DefaultActionPlanPresenter()),
+    )
 
 
 def wire_action_safety_gate() -> ActionSafetyGate:

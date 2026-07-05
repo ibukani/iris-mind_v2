@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.features.basic_action.presenter import SimplePresenter
 from iris.features.event_reaction.presenter import EventReactionPresenter
+from iris.presentation.action_plan import DefaultActionPlanPresenter
 from iris.presentation.suite import PresentationSuite
 from iris.runtime.output_pipeline import RuntimeOutputPipeline
 from iris.safety.action_gate import AllowAllActionGate
@@ -30,7 +30,7 @@ def make_output_pipeline(
     """
     return RuntimeOutputPipeline(
         presentation=PresentationSuite(
-            presenters=(presenter or SimplePresenter(), EventReactionPresenter()),
+            presenters=(presenter or DefaultActionPlanPresenter(), EventReactionPresenter()),
         ),
         action_safety_gate=action_gate or AllowAllActionGate(),
         output_safety_gate=output_gate or AllowAllOutputGate(),
