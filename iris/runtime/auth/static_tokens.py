@@ -11,6 +11,11 @@ from typing import TypeGuard
 
 from iris.runtime.auth.errors import RuntimeUnauthenticatedError
 from iris.runtime.auth.principals import ClientKind, ClientPrincipal
+from iris.runtime.auth.profiles import (
+    EXTERNAL_CLIENT_FORBIDDEN_SCOPES,
+    TRUSTED_ADAPTER_OBSERVATION_CAPABILITIES,
+    TRUSTED_ADAPTER_SCOPES,
+)
 from iris.runtime.auth.scopes import AuthScope
 from iris.runtime.ingress.observation_ingress import ObservationCapability
 
@@ -126,6 +131,13 @@ def create_static_token(
     Returns:
         raw token と hash-only JSON entry。
     """
+    _validate_static_token_profile(
+        client_kind=client_kind,
+        provider=provider,
+        allowed_providers=allowed_providers,
+        scopes=scopes,
+        observation_capabilities=observation_capabilities,
+    )
     token = "iris_rt_" + secrets.token_urlsafe(_TOKEN_BYTES)
     token_hash = hash_token(token)
     entry = {
@@ -167,11 +179,11 @@ def _entry_from_json(value: _JsonValue) -> StaticTokenEntry:
         raise RuntimeUnauthenticatedError(message)
     client_id = _required_str(value, "client_id")
     token_sha256 = _required_str(value, "token_sha256")
-    return StaticTokenEntry(
+    entry = StaticTokenEntry(
         client_id=client_id,
         token_sha256=token_sha256,
         client_kind=ClientKind(_required_str(value, "client_kind")),
-        provider=_optional_str(value, "provider"),
+        provider=_optional_provider(value, "provider"),
         allowed_providers=frozenset(_required_str_list(value, "allowed_providers")),
         scopes=frozenset(AuthScope(item) for item in _required_str_list(value, "scopes")),
         observation_capabilities=frozenset(
@@ -179,6 +191,89 @@ def _entry_from_json(value: _JsonValue) -> StaticTokenEntry:
             for item in _required_str_list(value, "observation_capabilities")
         ),
     )
+    _validate_static_token_profile(
+        client_kind=entry.client_kind,
+        provider=entry.provider,
+        allowed_providers=entry.allowed_providers,
+        scopes=entry.scopes,
+        observation_capabilities=entry.observation_capabilities,
+    )
+    return entry
+
+
+def _validate_static_token_profile(
+    *,
+    client_kind: ClientKind,
+    provider: str | None,
+    allowed_providers: frozenset[str],
+    scopes: frozenset[AuthScope],
+    observation_capabilities: frozenset[ObservationCapability],
+) -> None:
+    if client_kind is ClientKind.TRUSTED_ADAPTER:
+        _validate_trusted_adapter_profile(
+            provider=provider,
+            allowed_providers=allowed_providers,
+            scopes=scopes,
+            observation_capabilities=observation_capabilities,
+        )
+        return
+    if client_kind is ClientKind.EXTERNAL_CLIENT:
+        _validate_external_client_profile(
+            allowed_providers=allowed_providers,
+            scopes=scopes,
+            observation_capabilities=observation_capabilities,
+        )
+        return
+    if client_kind is not ClientKind.ADMIN and AuthScope.ADMIN_RUNTIME in scopes:
+        message = "admin.runtime scope is only valid for admin principals"
+        raise RuntimeUnauthenticatedError(message)
+
+
+def _validate_trusted_adapter_profile(
+    *,
+    provider: str | None,
+    allowed_providers: frozenset[str],
+    scopes: frozenset[AuthScope],
+    observation_capabilities: frozenset[ObservationCapability],
+) -> None:
+    if provider is None:
+        message = "trusted_adapter requires provider"
+        raise RuntimeUnauthenticatedError(message)
+    if not allowed_providers:
+        message = "trusted_adapter requires allowed_providers"
+        raise RuntimeUnauthenticatedError(message)
+    if "*" in allowed_providers:
+        message = "trusted_adapter must not use wildcard allowed_providers"
+        raise RuntimeUnauthenticatedError(message)
+    if provider not in allowed_providers:
+        message = "trusted_adapter provider must be included in allowed_providers"
+        raise RuntimeUnauthenticatedError(message)
+    unknown_scopes = scopes - TRUSTED_ADAPTER_SCOPES
+    if unknown_scopes:
+        message = "trusted_adapter has scope outside trusted adapter profile"
+        raise RuntimeUnauthenticatedError(message)
+    unknown_capabilities = observation_capabilities - TRUSTED_ADAPTER_OBSERVATION_CAPABILITIES
+    if unknown_capabilities:
+        message = "trusted_adapter has capability outside trusted adapter profile"
+        raise RuntimeUnauthenticatedError(message)
+
+
+def _validate_external_client_profile(
+    *,
+    allowed_providers: frozenset[str],
+    scopes: frozenset[AuthScope],
+    observation_capabilities: frozenset[ObservationCapability],
+) -> None:
+    forbidden_scopes = scopes & EXTERNAL_CLIENT_FORBIDDEN_SCOPES
+    if forbidden_scopes:
+        message = "external_client has forbidden trusted/admin scope"
+        raise RuntimeUnauthenticatedError(message)
+    if observation_capabilities:
+        message = "external_client must not have observation capabilities"
+        raise RuntimeUnauthenticatedError(message)
+    if "*" in allowed_providers:
+        message = "external_client must not use wildcard allowed_providers"
+        raise RuntimeUnauthenticatedError(message)
 
 
 def _required_str(payload: dict[str, _JsonValue], key: str) -> str:
@@ -189,9 +284,11 @@ def _required_str(payload: dict[str, _JsonValue], key: str) -> str:
     raise RuntimeUnauthenticatedError(message)
 
 
-def _optional_str(payload: dict[str, _JsonValue], key: str) -> str | None:
+def _optional_provider(payload: dict[str, _JsonValue], key: str) -> str | None:
     value = payload.get(key)
-    if value is None or isinstance(value, str):
+    if value is None:
+        return None
+    if isinstance(value, str) and value:
         return value
     message = f"static token entry invalid {key}"
     raise RuntimeUnauthenticatedError(message)
@@ -204,7 +301,7 @@ def _required_str_list(payload: dict[str, _JsonValue], key: str) -> tuple[str, .
         raise RuntimeUnauthenticatedError(message)
     result: list[str] = []
     for item in value:
-        if not isinstance(item, str):
+        if not isinstance(item, str) or not item:
             message = f"static token entry invalid {key}"
             raise RuntimeUnauthenticatedError(message)
         result.append(item)

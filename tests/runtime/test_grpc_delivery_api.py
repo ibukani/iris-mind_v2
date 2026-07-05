@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, override
 
 import grpc
 import pytest
@@ -16,6 +16,9 @@ from iris.contracts.actions import ActionResult, ActionStatus
 from iris.contracts.delivery import DeliveryReport, DeliveryStatus
 from iris.core.ids import ExternalRef
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
+from iris.runtime.auth.context import bind_principal, reset_principal
+from iris.runtime.auth.principals import ClientKind, ClientPrincipal
+from iris.runtime.auth.scopes import AuthScope
 from iris.runtime.config import default_runtime_config
 from iris.runtime.delivery.broker import RuntimeAppActionBroker
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
@@ -24,6 +27,7 @@ from tests.helpers.grpc_test import RecordingRuntimeService
 from tests.runtime.delivery.test_in_memory_delivery_outbox import envelope
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
     from types import TracebackType
 
     from iris.adapters.app_gateway.ports import AppActionBroker
@@ -365,6 +369,64 @@ async def test_get_runtime_info_includes_delivery_features_when_broker_present()
     assert "report_action_result" in response.supported_features
 
 
+class _TrustedDeliveryPrincipalInterceptor(grpc.aio.ServerInterceptor):
+    """Bind a trusted_adapter principal for low-level delivery API tests."""
+
+    @override
+    async def intercept_service(
+        self,
+        continuation: Callable[
+            [grpc.HandlerCallDetails],
+            Awaitable[grpc.RpcMethodHandler[Any, Any] | None],
+        ],
+        handler_call_details: grpc.HandlerCallDetails,
+    ) -> grpc.RpcMethodHandler[Any, Any] | None:
+        """Bind trusted_adapter principal around unary RPC handlers.
+
+        Returns:
+            Wrapped RPC handler.
+        """
+        handler = await continuation(handler_call_details)
+        if handler is None or handler.unary_unary is None:
+            return handler
+        bound_unary_unary = handler.unary_unary
+
+        async def _wrapped(
+            request: object,
+            context: grpc.aio.ServicerContext[Any, Any],
+        ) -> object:
+            token = bind_principal(_trusted_delivery_principal())
+            try:
+                fn: Any = bound_unary_unary
+                return await fn(request, context)
+            finally:
+                reset_principal(token)
+
+        return grpc.unary_unary_rpc_method_handler(
+            _wrapped,
+            request_deserializer=handler.request_deserializer,
+            response_serializer=handler.response_serializer,
+        )
+
+
+def _trusted_delivery_principal() -> ClientPrincipal:
+    return ClientPrincipal(
+        client_id="delivery-test-adapter",
+        client_kind=ClientKind.TRUSTED_ADAPTER,
+        provider="discord",
+        allowed_providers=frozenset({"discord"}),
+        scopes=frozenset(
+            {
+                AuthScope.RUNTIME_INFO_READ,
+                AuthScope.DELIVERY_POLL,
+                AuthScope.DELIVERY_REPORT,
+            }
+        ),
+        observation_capabilities=frozenset(),
+        authenticated=True,
+    )
+
+
 def _report_request(
     *,
     delivery_id: str = "delivery-1",
@@ -404,7 +466,7 @@ class _DeliveryGrpcHarness:
         Returns:
             Connected async runtime service stub.
         """
-        server = grpc.aio.server()
+        server = grpc.aio.server(interceptors=(_TrustedDeliveryPrincipalInterceptor(),))
         runtime_pb2_grpc.add_IrisRuntimeServiceServicer_to_server(
             IrisRuntimeGrpcServicer(
                 RecordingRuntimeService("unused"),

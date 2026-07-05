@@ -189,6 +189,24 @@ Voice / TTS / STT の具体処理は `iris-voice-runtime` 側。
 
 ---
 
+
+## Trusted external adapter auth
+
+Discord bot / Slack bot / Web adapter / Avatar adapter など、外部 platform を代理するアダプタは `trusted_adapter` principal として Runtime API に接続する。これは admin ではない。発行 token は provider と scope を最小化する。
+
+境界ルール。
+
+- gRPC metadata は `authorization: Bearer <token>` のみを認証入力にする。旧 `access_token` / `role` / `permissions` metadata は読まない。
+- `trusted_adapter` は `allowed_providers` に含まれる provider だけを submit / poll / report できる。`delivery.poll` / `delivery.report` は `trusted_adapter` または admin 専用で、通常 `external_client` には付与しない。
+- `ObservationContext.source` や user-controlled metadata は trust 判定に使わない。
+- `SubmitObservation` は `observation.submit.trusted` と `ExternalAccountRef` または `ExternalSpaceRef` の provider claim、`PollAppActions` は `delivery.poll`、`ReportActionResult` は `delivery.report` を要求する。
+- 外部アダプタは Iris 内部の `ActorId` / `AccountId` / `SpaceId` を直接保持・送信しない。`ExternalAccountRef` / `ExternalSpaceRef` を送る。
+- Discord 固有 auth は Mind 側へ入れない。Discord は `provider = "discord"`、`allowed_providers = ["discord"]` の profile 例にすぎない。
+
+`trusted_adapter` の標準 observation capability は activity / presence / occupancy integration に限定する。`react_to_activity` は reaction pipeline を有効化し得るため、この profile の標準許可には含めず、必要になった時点で別Issueとして追加する。
+
+この境界により、provider spoofing、internal id spoofing、過剰権限を Runtime API 入口で fail closed する。
+
 ## 関連ドキュメント
 
 - architecture.md: adapters 層の責務、依存方向

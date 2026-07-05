@@ -285,13 +285,16 @@ def _verifier(
 ) -> StaticBearerTokenVerifier:
     if allowed_providers is None:
         allowed_providers = ["cli"]
+    delivery_scopes = {"delivery.poll", "delivery.report"}
+    client_kind = "trusted_adapter" if delivery_scopes.intersection(scopes) else "external_client"
+    provider = allowed_providers[0]
     payload = json.dumps(
         [
             {
                 "client_id": "cli-1",
                 "token_sha256": hash_token("token-1"),
-                "client_kind": "external_client",
-                "provider": "cli",
+                "client_kind": client_kind,
+                "provider": provider,
                 "allowed_providers": allowed_providers,
                 "scopes": list(scopes),
                 "observation_capabilities": [],
