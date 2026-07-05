@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig
     from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
     from iris.runtime.observability.ports import RuntimeLatencyBudget, RuntimeLogger
+    from iris.runtime.prompting.system_prompt import SystemPromptBuilder
 
 
 _KNOWN_LLM_PROVIDERS: frozenset[LLMProvider] = frozenset(LLMProvider)
@@ -73,6 +74,7 @@ class ResponseGeneratorWiringOptions:
     temperature: float = 0.0
     max_tokens: int | None = None
     prompt_budget_config: RuntimePromptBudgetConfig | None = None
+    system_prompt_builder: SystemPromptBuilder | None = None
     runtime_logger: RuntimeLogger | None = None
     inference_scheduler: LocalInferenceResourceScheduler | None = None
 
@@ -382,7 +384,10 @@ def wire_response_generator(
         options=LLMResponseGeneratorOptions(
             temperature=resolved_options.temperature,
             max_tokens=resolved_options.max_tokens,
-            prompt_assembler=RuntimePromptAssembler(resolved_options.prompt_budget_config),
+            prompt_assembler=RuntimePromptAssembler(
+                resolved_options.prompt_budget_config,
+                system_prompt_builder=resolved_options.system_prompt_builder,
+            ),
             runtime_logger=resolved_options.runtime_logger,
             inference_scheduler=resolved_options.inference_scheduler,
         ),

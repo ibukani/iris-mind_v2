@@ -9,6 +9,9 @@ from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
+from iris.runtime.persona.loader import PersonaProfileLoader
+from iris.runtime.persona.observability import record_persona_load_diagnostics
+from iris.runtime.prompting.system_prompt import SystemPromptBuilder
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
     CognitiveSemanticsOptions,
@@ -55,6 +58,7 @@ class ChatFeatureWiringOptions:
     max_tokens: int | None
     model_call_budget: RuntimeModelCallBudgetConfig | None = None
     prompt_budget: RuntimePromptBudgetConfig | None = None
+    system_prompt_builder: SystemPromptBuilder | None = None
     inference_scheduler: LocalInferenceResourceScheduler | None = None
 
 
@@ -140,6 +144,7 @@ def build_app_from_config(
             max_tokens=model_config.max_output_tokens,
             model_call_budget=config.model_call_budget,
             prompt_budget=config.prompt_budget,
+            system_prompt_builder=_system_prompt_builder_from_config(config),
             inference_scheduler=inference_scheduler,
         ),
     )
@@ -176,6 +181,7 @@ def _wire_chat_feature(
             temperature=options.temperature,
             max_tokens=options.max_tokens,
             prompt_budget_config=options.prompt_budget,
+            system_prompt_builder=options.system_prompt_builder,
             inference_scheduler=options.inference_scheduler,
         ),
     )
@@ -189,3 +195,16 @@ def _wire_chat_feature(
             )
         )
     return define_chat_feature(generator)
+
+
+def _system_prompt_builder_from_config(config: IrisRuntimeConfig) -> SystemPromptBuilder | None:
+    """Runtime config gate に従って global persona prompt builder を構築する。
+
+    Returns:
+        SystemPromptBuilder | None: 無効時は None、有効時は読み込み済み persona builder。
+    """
+    if not config.companion_semantics.global_persona_enabled:
+        return None
+    load_result = PersonaProfileLoader(config.companion_semantics.global_persona_path).load()
+    record_persona_load_diagnostics(load_result.diagnostics)
+    return SystemPromptBuilder(load_result.profile)

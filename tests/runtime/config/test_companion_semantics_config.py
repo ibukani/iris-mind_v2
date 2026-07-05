@@ -56,3 +56,43 @@ def _write(tmp_path: Path, content: str) -> Path:
     path = tmp_path / "runtime.toml"
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def test_global_persona_config_is_disabled_by_default(tmp_path: Path) -> None:
+    """Global persona hot-path integration は明示有効化まで off。"""
+    config = load_runtime_config(None, env={}, cwd=tmp_path)
+
+    assert config.companion_semantics.global_persona_enabled is False
+    assert config.companion_semantics.global_persona_path == "persona.toml"
+
+
+def test_global_persona_config_can_be_enabled(tmp_path: Path) -> None:
+    """TOML で global persona path と enable flag を指定できる。"""
+    config = load_runtime_config(
+        _write(
+            tmp_path,
+            """
+            [companion_semantics]
+            global_persona_enabled = true
+            global_persona_path = "config/persona.toml"
+            """,
+        ),
+        env={},
+    )
+
+    assert config.companion_semantics.global_persona_enabled is True
+    assert config.companion_semantics.global_persona_path == "config/persona.toml"
+
+
+def test_global_persona_path_must_be_non_empty(tmp_path: Path) -> None:
+    """空の persona path は設定ミスとして拒否する。"""
+    path = _write(
+        tmp_path,
+        """
+        [companion_semantics]
+        global_persona_path = ""
+        """,
+    )
+
+    with pytest.raises(ConfigError, match="global_persona_path must be non-empty"):
+        load_runtime_config(path, env={})

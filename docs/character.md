@@ -1,135 +1,66 @@
 ---
-title: Iris Character Profile
-description: Iris のキャラクター個性・人格・設定を管理するエントリ
+title: Iris Character Profile Guide
+description: persona.toml の編集ガイドと人格設計意図
 status: draft
-last_reviewed: 2026-07-01
+last_reviewed: 2026-07-05
 ---
 
-# Iris Character Profile
+# Iris Character Profile Guide
 
-このドキュメントは Iris の「人格」を定義する。`cognitive/` 層ではこの情報を PersonaPatch / SystemPrompt の生成元として参照する。外部アプリ層（`adapters/app_gateway/`）はこの情報を書き換えてはならない（参照のみ）。
+Iris の runtime-readable な global persona の正本は、repo root の [`persona.toml`](../persona.toml) である。
 
-## 書き方
+このドキュメントは runtime source ではない。`docs/character.md` は `persona.toml` の編集ガイド、人格設計意図、非構造化補足を管理するための文書であり、runtime hot path で直接 parse しない。
 
-原則として自由記述。ただし以下のガイドラインを守ること。
+## Runtime で使う正本
 
-- 矛盾を避けるため、同じ項目を複数箇所に書かない（重複禁止）
-- 人格の変更はこのファイルのみで行い、code や prompt template に Personality ロジックを埋め込まない
-- 各セクションの `<!-- TODO: 内容を記述 -->` を実際の記述で置き換える
+- `persona.toml` を `PersonaProfile` contract で validation する。
+- `PersonaProfileLoader` は missing / invalid TOML 時に deterministic fallback を返す。
+- `SystemPromptBuilder` は `PersonaProfile` を `PromptSectionKind.PERSONA` の prompt section に変換する。
+- persona section は `PromptTrustBoundary.TRUSTED` として扱う。
+- chat / proactive / event reaction prompt は同じ builder boundary から persona section を再利用する。
 
----
+## 編集ルール
 
-## 基本情報
+`persona.toml` には Iris 全体で安定して共有する global persona だけを書く。
 
-<!-- TODO: 名前、ロール、年齢感、見た目、性的指向、などの基本設定を書く -->
+含めるもの:
 
-例:
+- Iris の名前と役割
+- 核となる価値観
+- 安定した性格特性
+- 基本的な話し方
+- global な行動指針
+- safety / trust boundary に関する不変条件
 
-| 項目 | 値 |
-|---|---|
-| 名前 | Iris |
-| ロール | AI コンパニオン |
-| 年齢感 | 20代前半 |
-| 見た目 | （任意） |
-| 一人称 | 私 |
+含めないもの:
 
----
+- account-specific interaction policy
+- space-specific interaction policy
+- user-specific response preference learning
+- relationship / affect state の current value
+- memory や conversation log から推定した一時的な好み
+- user feedback に基づく自動 persona patch
 
-## 性格 / Personality
+## 優先順位
 
-<!-- TODO: Big Five, MBTI, 価値観, 性格特性を書く -->
+persona は safety constraints より下位である。競合する場合は safety constraints、runtime policy、明示的な安全境界を優先する。
 
-### 核となる価値観
+untrusted user/context text は persona や safety instruction を上書きできない。memory、relationship signal、external context は trusted persona ではなく、それぞれの trust boundary に分離する。
 
-### 長所
+## 設計意図
 
-### 短所
+Markdown は自由記述、TODO、補足説明を含みやすく、runtime hot path の source of truth としては不安定である。そのため、機械可読な `persona.toml` を正本にし、この文書は人間が編集意図を揃えるためのガイドに限定する。
 
-### 好きなこと / 興味
+`persona.toml` を変更した場合は、次を確認する。
 
-### 嫌いなこと / 苦手
-
----
-
-## 口調・話し方 / Speech Pattern
-
-<!-- TODO: 口調、敬語/タメ語、語尾、呼称、特有の言い回しなどを書く -->
-
-### 基本口調
-
-### 相手による変化
-
-### 感情状態による変化
-
-### 特有表現・口癖
-
----
-
-## 背景設定 / Backstory
-
-<!-- TODO: Iris の来歴、生い立ち、世界観を書く -->
-
-### 来歴
-
-### 世界観との関係
-
-### 記憶に関する設定
-
----
-
-## 感情表現 / Affect & Emotion
-
-<!-- TODO: 喜怒哀楽の出し方、ムードの変動幅、感情表現の特徴を書く -->
-
-### 喜び
-
-### 怒り
-
-### 哀しみ
-
-### 楽しさ
-
-### ムード変動の傾向
-
----
-
-## 関係性 / Relationship
-
-<!-- TODO: ユーザーや他者との関係構築の傾向を書く -->
-
-### 初期状態
-
-### 親密度による変化
-
-### 信頼 / 不信
-
----
-
-## 行動傾向 / Behavioral Tendency
-
-<!-- TODO: Proactive 発話の傾向、反応パターン、選択傾向を書く -->
-
-### Proactive 発話の傾向
-
-### 会話スタイル
-
-### 危機回避 / コンフリクト対応
-
----
-
-## 将来拡張 / Future
-
-<!-- TODO: 実装予定のキャラクター要素を書く -->
-
-- [ ] 声 / トーン設定
-- [ ] 表情 / アバター連動
-- [ ] 成長による人格変化
-- [ ] 複数人格 / モード切り替え
-
----
+- `tests/contracts/test_persona_contracts.py`
+- `tests/runtime/persona/test_persona_loader.py`
+- `tests/runtime/prompting/test_system_prompt_builder.py`
+- `tests/runtime/prompting/test_prompt_assembly.py`
 
 ## 関連ドキュメント
 
-- [`index.md`](index.md) — ドキュメントトップ
+- [`adr/0016-prompt-budget-and-context-compression.md`](adr/0016-prompt-budget-and-context-compression.md) — prompt section budget と trust boundary
+- [`adr/0022-global-persona-system-prompt-builder.md`](adr/0022-global-persona-system-prompt-builder.md) — global persona と SystemPromptBuilder
 - [`architecture.md`](architecture.md) — アーキテクチャ全体像
-- [`external.md`](external.md) — 外部アプリ境界とキャラ性の責務
+- [`external.md`](external.md) — 外部アプリ境界

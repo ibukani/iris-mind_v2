@@ -22,6 +22,7 @@ ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
         "learning",
         "local_ai",
         "observability",
+        "persona",
         "prompting",
         "scheduler",
         "state",

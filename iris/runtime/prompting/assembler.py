@@ -21,6 +21,7 @@ from iris.runtime.config.prompt_budget import (
     RuntimePromptSectionBudget,
 )
 from iris.runtime.prompting.budget import BudgetedPromptSection, PromptBudgetPolicy
+from iris.runtime.prompting.system_prompt import SystemPromptBuilder
 
 if TYPE_CHECKING:
     from iris.contracts.conversation import ConversationRecord
@@ -57,10 +58,12 @@ class RuntimePromptAssembler:
         config: RuntimePromptBudgetConfig | None = None,
         *,
         profile: PromptProfileName | None = None,
+        system_prompt_builder: SystemPromptBuilder | None = None,
     ) -> None:
         """Prompt budget config と任意 profile override で初期化する。"""
         self._config = config or RuntimePromptBudgetConfig()
         self._profile = profile or self._config.chat_profile
+        self._system_prompt_builder = system_prompt_builder or SystemPromptBuilder()
 
     def assemble(self, prompt: ResponsePrompt) -> PromptAssemblyResult:
         """ResponsePrompt から LLMMessage 群を構築する。
@@ -71,7 +74,7 @@ class RuntimePromptAssembler:
         Returns:
             LLM request 用 messages と prompt budget assembly report。
         """
-        raw_sections = _sections_from_response_prompt(prompt)
+        raw_sections = _sections_from_response_prompt(prompt, self._system_prompt_builder)
         budget = (
             self._config.profile_budget(self._profile)
             if self._config.enabled
@@ -143,8 +146,13 @@ def _report_with_actual_total(
     )
 
 
-def _sections_from_response_prompt(prompt: ResponsePrompt) -> tuple[PromptSectionInput, ...]:
-    sections: list[PromptSectionInput] = [_system_section(prompt), _safety_section()]
+def _sections_from_response_prompt(
+    prompt: ResponsePrompt,
+    system_prompt_builder: SystemPromptBuilder,
+) -> tuple[PromptSectionInput, ...]:
+    sections: list[PromptSectionInput] = [_system_section(prompt)]
+    sections.extend(system_prompt_builder.sections())
+    sections.append(_safety_section())
     sections.extend(_conversation_sections(prompt))
     sections.extend(_context_sections(prompt))
     sections.append(_latest_user_input_section(prompt))

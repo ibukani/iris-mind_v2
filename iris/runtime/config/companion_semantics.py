@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from iris.runtime.config.parsing import TomlTable, parse_bool
+from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.parsing import TomlTable, parse_bool, parse_string
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,8 @@ class RuntimeCompanionSemanticsConfig:
 
     appraisal_signals_enabled: bool = False
     dependency_risk_hint_enabled: bool = True
+    global_persona_enabled: bool = False
+    global_persona_path: str = "persona.toml"
 
 
 def apply_companion_semantics_toml(
@@ -41,6 +44,22 @@ def apply_companion_semantics_toml(
                 "companion_semantics.dependency_risk_hint_enabled",
             ),
         )
+    if "global_persona_enabled" in table:
+        value = replace(
+            value,
+            global_persona_enabled=parse_bool(
+                table["global_persona_enabled"],
+                "companion_semantics.global_persona_enabled",
+            ),
+        )
+    if "global_persona_path" in table:
+        value = replace(
+            value,
+            global_persona_path=parse_string(
+                table["global_persona_path"],
+                "companion_semantics.global_persona_path",
+            ),
+        )
     return validate_companion_semantics_config(value)
 
 
@@ -51,5 +70,11 @@ def validate_companion_semantics_config(
 
     Returns:
         RuntimeCompanionSemanticsConfig: 検証済みの設定。
+
+    Raises:
+        ConfigError: persona path が空の場合。
     """
+    if not config.global_persona_path.strip():
+        message = "companion_semantics.global_persona_path must be non-empty"
+        raise ConfigError(message)
     return config

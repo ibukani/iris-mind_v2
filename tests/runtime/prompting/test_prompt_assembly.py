@@ -11,7 +11,9 @@ from iris.contracts.prompting import PromptOverflowBehavior, PromptSectionKind
 from iris.core.ids import ObservationId, SessionId
 from iris.features.chat.definition import ResponsePrompt
 from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig, RuntimePromptSectionBudget
+from iris.runtime.persona import DEFAULT_PERSONA_PROFILE
 from iris.runtime.prompting.assembler import RuntimePromptAssembler
+from iris.runtime.prompting.system_prompt import SystemPromptBuilder
 
 
 def test_prompt_assembler_separates_trusted_internal_external_and_user() -> None:
@@ -402,3 +404,80 @@ def test_prompt_assembler_tiny_user_input_budget_keeps_user_text_not_title() -> 
     assert result.messages[-1].role is LLMRole.USER
     assert result.messages[-1].content == "abcd…"
     assert "Latest" not in result.messages[-1].content
+
+
+def test_prompt_assembler_includes_trusted_persona_section_when_builder_is_configured() -> None:
+    """SystemPromptBuilder 経由の persona section を trusted system message に入れる。"""
+    prompt = ResponsePrompt(system_instruction="sys", actor_text="こんにちは")
+
+    result = RuntimePromptAssembler(
+        RuntimePromptBudgetConfig(),
+        system_prompt_builder=SystemPromptBuilder(DEFAULT_PERSONA_PROFILE),
+    ).assemble(prompt)
+
+    persona_report = next(
+        report
+        for report in result.report.section_reports
+        if report.kind is PromptSectionKind.PERSONA
+    )
+    system_content = result.messages[0].content
+    assert persona_report.trust_boundary.value == "trusted"
+    assert persona_report.output_chars > 0
+    assert "Iris global persona" in system_content
+    assert "Profile version: fallback-1" in system_content
+    assert "Runtime response guardrails" in system_content
+    assert system_content.index("Iris global persona") < system_content.index(
+        "Runtime response guardrails"
+    )
+
+
+def test_prompt_assembler_reuses_persona_section_with_proactive_profile() -> None:
+    """Proactive prompt profile でも同じ SystemPromptBuilder persona section を使う。"""
+    config = RuntimePromptBudgetConfig()
+
+    result = RuntimePromptAssembler(
+        config,
+        profile=config.proactive_profile,
+        system_prompt_builder=SystemPromptBuilder(DEFAULT_PERSONA_PROFILE),
+    ).assemble(ResponsePrompt(system_instruction="sys", actor_text="idle tick"))
+
+    persona_report = next(
+        report
+        for report in result.report.section_reports
+        if report.kind is PromptSectionKind.PERSONA
+    )
+    assert result.report.profile is config.proactive_profile
+    assert persona_report.trust_boundary.value == "trusted"
+    assert persona_report.max_chars == config.proactive_short.persona.max_chars
+    assert "Iris global persona" in result.messages[0].content
+
+
+def test_prompt_assembler_applies_persona_budget_metadata() -> None:
+    """Persona section も #91 prompt budget metadata / truncation の対象になる。"""
+    base_config = RuntimePromptBudgetConfig()
+    config = replace(
+        base_config,
+        local_balanced=replace(
+            base_config.local_balanced,
+            persona=RuntimePromptSectionBudget(
+                max_chars=40,
+                max_items=1,
+                priority=95,
+                overflow_behavior=PromptOverflowBehavior.TRUNCATE,
+            ),
+        ),
+    )
+
+    result = RuntimePromptAssembler(
+        config,
+        system_prompt_builder=SystemPromptBuilder(DEFAULT_PERSONA_PROFILE),
+    ).assemble(ResponsePrompt(system_instruction="sys", actor_text="hi"))
+
+    persona_report = next(
+        report
+        for report in result.report.section_reports
+        if report.kind is PromptSectionKind.PERSONA
+    )
+    assert persona_report.max_chars == 40
+    assert persona_report.output_chars <= 40
+    assert persona_report.truncated_chars > 0

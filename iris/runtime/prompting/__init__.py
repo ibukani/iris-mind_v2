@@ -4,5 +4,11 @@ from __future__ import annotations
 
 from iris.runtime.prompting.assembler import PromptAssemblyResult, RuntimePromptAssembler
 from iris.runtime.prompting.budget import PromptBudgetPolicy
+from iris.runtime.prompting.system_prompt import SystemPromptBuilder
 
-__all__ = ["PromptAssemblyResult", "PromptBudgetPolicy", "RuntimePromptAssembler"]
+__all__ = [
+    "PromptAssemblyResult",
+    "PromptBudgetPolicy",
+    "RuntimePromptAssembler",
+    "SystemPromptBuilder",
+]

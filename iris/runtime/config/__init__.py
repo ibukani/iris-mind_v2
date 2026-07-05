@@ -8,6 +8,7 @@ implementation details and should not be imported directly by consumers.
 from __future__ import annotations
 
 from iris.runtime.config.auth import RuntimeAuthConfig, RuntimeAuthMode
+from iris.runtime.config.companion_semantics import RuntimeCompanionSemanticsConfig
 from iris.runtime.config.conversation import RuntimeConversationConfig, RuntimeTranscriptConfig
 from iris.runtime.config.delivery import RuntimeDeliveryConfig, RuntimeQuietHoursConfig
 from iris.runtime.config.diagnostics import (
@@ -76,6 +77,7 @@ __all__ = [
     "ModelSlotName",
     "RuntimeAuthConfig",
     "RuntimeAuthMode",
+    "RuntimeCompanionSemanticsConfig",
     "RuntimeConfigMetadata",
     "RuntimeConfigOverrides",
     "RuntimeConversationConfig",

@@ -36,6 +36,7 @@ Implementation anchors
 | [0019](0019-local-inference-resource-scheduler.md) | Accepted | ローカル推論資源を runtime lease boundary として扱い、user-facing / safety-critical work と background work の競合を deterministic decision で制御する。 |
 | [0020](0020-diagnostic-action-isolation.md) | Accepted | diagnostic echo action を development runtime に隔離し、production-like response path から除外する。 |
 | [0021](0021-relationship-update-policy-v2.md) | Accepted | Relationship update policy v2 は typed appraisal signal から bounded candidate / review-required / suppressed decision を返す。 |
+| [0022](0022-global-persona-system-prompt-builder.md) | Accepted | `persona.toml` を global persona の正本にし、`SystemPromptBuilder` で trusted persona section を生成する。 |
 
 ## 現在の横断方針
 
@@ -49,3 +50,4 @@ Implementation anchors
 - ADR 0019 は #93 の local inference resource scheduler boundary を固定し、#78 / #69 / #70 / #72 が local inference resource policy を参照できる境界を提供する。
 - ADR 0020 は #107 の diagnostic action isolation の source of truth であり、#83 production mode validation では `feature-selection` diagnostics を確認対象にする。
 - ADR 0021 は #102 の relationship update policy v2 を固定し、#72 worker が typed appraisal signal から bounded / review-required / suppressed candidate を参照できる境界を提供する。
+- ADR 0022 は #98 の global persona / SystemPromptBuilder boundary を固定し、#78 / #105 が同じ persona section を再利用できるようにする。

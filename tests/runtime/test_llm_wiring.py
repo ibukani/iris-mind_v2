@@ -19,10 +19,13 @@ from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime
 from iris.runtime.config.llm import LLMProvider
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 from iris.runtime.observability.ports import RuntimeLatencyBudget
+from iris.runtime.persona import DEFAULT_PERSONA_PROFILE
 from iris.runtime.prompting.assembler import RuntimePromptAssembler
+from iris.runtime.prompting.system_prompt import SystemPromptBuilder
 from iris.runtime.wiring.llm import (
     LLMClientFactory,
     LLMResponseGenerator,
+    ResponseGeneratorWiringOptions,
     ollama_adapter_config,
     openai_adapter_config,
     wire_fake_llm_client,
@@ -69,6 +72,25 @@ def test_wire_response_generator_uses_fake_when_client_none() -> None:
     gen = wire_response_generator(client=None)
     assert isinstance(gen, LLMResponseGenerator)
     assert isinstance(get_private_attr_as(gen, "_client", FakeLLMClient), FakeLLMClient)
+
+
+@pytest.mark.anyio
+async def test_wire_response_generator_passes_global_persona_builder_to_prompt_assembler() -> None:
+    """wire_response_generator は SystemPromptBuilder boundary を chat prompt へ接続する。"""
+    client = FakeLLMClient(responses=("reply",), model="test-model")
+    generator = wire_response_generator(
+        client,
+        options=ResponseGeneratorWiringOptions(
+            model="test-model",
+            system_prompt_builder=SystemPromptBuilder(DEFAULT_PERSONA_PROFILE),
+        ),
+    )
+
+    await generator.generate_response(ResponsePrompt(system_instruction="sys", actor_text="hi"))
+
+    request = client.requests[0]
+    assert "Iris global persona" in request.messages[0].content
+    assert "Runtime response guardrails" in request.messages[0].content
 
 
 def _model_config_with_unknown_provider() -> RuntimeModelConfig:

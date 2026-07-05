@@ -472,6 +472,18 @@ def _companion_semantics_specs() -> tuple[ConfigFieldSpec, ...]:
             default=True,
             description="Appraisal signal から safety 接続用 dependency-risk hint を生成する。",
         ),
+        ConfigFieldSpec(
+            "companion_semantics.global_persona_enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="Global persona を chat prompt に組み込む。",
+        ),
+        ConfigFieldSpec(
+            "companion_semantics.global_persona_path",
+            ConfigValueType.STR,
+            default="persona.toml",
+            description="Runtime boot 時に読み込む global persona TOML path。",
+        ),
     )
 
 

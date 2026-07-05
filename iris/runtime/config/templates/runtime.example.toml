@@ -8,6 +8,10 @@ version = 2
 provider = "fake"
 model = "fake-llm"
 
+[companion_semantics]
+global_persona_enabled = false
+global_persona_path = "persona.toml"
+
 [prompt_budget]
 enabled = true
 chat_profile = "local_balanced"
