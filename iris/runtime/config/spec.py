@@ -768,8 +768,12 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ConfigFieldSpec(
             "learning.background_job_policy.kinds.memory_extraction.uses_llm",
             ConfigValueType.BOOL,
-            default=True,
-            description="memory_extraction job が LLM 資源を使う可能性を示す。",
+            default=False,
+            description=(
+                "memory_extraction job が LLM 資源を使う可能性を示す。"
+                "現在の built-in implicit candidate worker は deterministic extractor "
+                "のため false。"
+            ),
         ),
         ConfigFieldSpec(
             "learning.background_job_policy.kinds.memory_extraction.idle_only",

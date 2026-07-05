@@ -33,7 +33,7 @@ class RuntimeBackgroundJobKindsPolicyConfig:
     """BackgroundJobQueue pressure policy の kind 別 runtime config。"""
 
     memory_extraction: RuntimeBackgroundJobKindPolicyConfig = field(
-        default_factory=lambda: RuntimeBackgroundJobKindPolicyConfig(uses_llm=True)
+        default_factory=RuntimeBackgroundJobKindPolicyConfig
     )
     reflection: RuntimeBackgroundJobKindPolicyConfig = field(
         default_factory=lambda: RuntimeBackgroundJobKindPolicyConfig(

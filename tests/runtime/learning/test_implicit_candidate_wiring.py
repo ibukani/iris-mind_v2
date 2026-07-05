@@ -11,12 +11,19 @@ from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.learning import RuntimeLearningEvent, RuntimeLearningEventKind
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
 from iris.core.ids import AccountId, ActorId, ExternalRef, ObservationId, SessionId, SpaceId
+from iris.runtime.inference.policy import LocalInferenceResourcePolicy
+from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
 from iris.runtime.learning.implicit_candidates import (
     AccountAwareImplicitMemoryCandidateWorker,
     FilteringImplicitMemoryCandidateHook,
 )
+from iris.runtime.learning.policy import BackgroundJobKindPolicy, BackgroundJobQueuePolicy
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
-from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunnerRuntimeHooks
+from iris.runtime.learning.runner import (
+    BackgroundJobRunner,
+    BackgroundJobRunnerOptions,
+    BackgroundJobRunnerRuntimeHooks,
+)
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 
 pytestmark = pytest.mark.anyio
@@ -62,6 +69,37 @@ async def test_account_aware_worker_preserves_boundary_ids() -> None:
     assert record.actor_id == ActorId("actor-1")
     assert record.account_id == AccountId("account-1")
     assert record.space_id == SpaceId("space-1")
+
+
+async def test_deterministic_implicit_worker_runs_when_inference_scheduler_is_enabled() -> None:
+    """Deterministic implicit worker は scheduler 有効時も LLM lease なしで進む。"""
+    queue = InMemoryBackgroundJobQueue()
+    store = InMemoryMemoryCandidateReviewStore()
+    await FilteringImplicitMemoryCandidateHook(queue).after_runtime_event(
+        _event("please answer briefly from now on")
+    )
+    scheduler = LocalInferenceResourceScheduler(LocalInferenceResourcePolicy(enabled=True))
+
+    processed = await BackgroundJobRunner(
+        queue,
+        (AccountAwareImplicitMemoryCandidateWorker(store),),
+        options=BackgroundJobRunnerOptions(
+            queue_policy=BackgroundJobQueuePolicy(
+                per_kind={
+                    AccountAwareImplicitMemoryCandidateWorker.kind: BackgroundJobKindPolicy(
+                        uses_llm=False
+                    )
+                }
+            ),
+            runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: _NOW),
+            inference_scheduler=scheduler,
+        ),
+    ).run_once()
+
+    assert processed == 1
+    assert len(await store.list_pending()) == 1
+    snapshot = await scheduler.snapshot()
+    assert snapshot.active_large_slots == 0
 
 
 async def test_review_store_filters_by_account_and_space() -> None:
