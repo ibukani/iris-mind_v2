@@ -1,4 +1,4 @@
-# 0018 ローカル推論資源 scheduler boundary
+# 0019 ローカル推論資源 scheduler boundary
 
 Status: Accepted
 
