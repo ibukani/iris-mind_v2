@@ -223,6 +223,8 @@ def test_trusted_adapter_token_profile_validation_rejects_overbroad_or_invalid_e
     "entry",
     [
         _token_entry(TokenEntryOverrides(scopes=("observation.submit.trusted",))),
+        _token_entry(TokenEntryOverrides(scopes=("delivery.poll",))),
+        _token_entry(TokenEntryOverrides(scopes=("delivery.report",))),
         _token_entry(TokenEntryOverrides(scopes=("admin.runtime",))),
         _token_entry(TokenEntryOverrides(allowed_providers=("*",))),
         _token_entry(TokenEntryOverrides(observation_capabilities=("integrate_activity",))),
@@ -231,7 +233,7 @@ def test_trusted_adapter_token_profile_validation_rejects_overbroad_or_invalid_e
 def test_external_client_token_profile_validation_rejects_trusted_or_admin_capability(
     entry: TokenEntryPayload,
 ) -> None:
-    """external_client token は trusted-only 権限や wildcard provider を持てない。"""
+    """external_client token は trusted/admin/delivery 権限や wildcard provider を持てない。"""
     with pytest.raises(RuntimeUnauthenticatedError):
         StaticBearerTokenVerifier.from_env({"TOKENS": json.dumps([entry])}, "TOKENS")
 

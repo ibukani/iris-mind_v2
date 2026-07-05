@@ -50,9 +50,10 @@ _TRUSTED_ADAPTER_CAPABILITIES = (ObservationCapability.INTEGRATE_ACTIVITY.value,
 
 
 @dataclass(frozen=True, kw_only=True)
-class _TrustedAdapterAuthProfile:
-    """Trusted adapter static token profile for wire-level tests."""
+class _AdapterAuthProfile:
+    """Static token profile for wire-level auth contract tests."""
 
+    client_kind: str = "trusted_adapter"
     provider: str
     allowed_providers: tuple[str, ...]
     scopes: tuple[str, ...] = _TRUSTED_ADAPTER_SCOPES
@@ -65,17 +66,34 @@ def _trusted_adapter_auth_profile(
     provider: str | None = None,
     allowed_providers: tuple[str, ...] | None = None,
     scopes: tuple[str, ...] = _TRUSTED_ADAPTER_SCOPES,
-) -> _TrustedAdapterAuthProfile:
+) -> _AdapterAuthProfile:
     """Build a valid trusted_adapter auth profile for the fixture.
 
     Returns:
         Auth profile scoped to the selected provider.
     """
     selected_provider = provider or fixture.provider
-    return _TrustedAdapterAuthProfile(
+    return _AdapterAuthProfile(
         provider=selected_provider,
         allowed_providers=allowed_providers or (selected_provider,),
         scopes=scopes,
+    )
+
+
+def _external_client_auth_profile(
+    fixture: ExternalAdapterContractFixture,
+) -> _AdapterAuthProfile:
+    """Build a normal external_client auth profile for negative delivery tests.
+
+    Returns:
+        Auth profile that can submit normal observations but cannot use delivery APIs.
+    """
+    return _AdapterAuthProfile(
+        client_kind="external_client",
+        provider=fixture.provider,
+        allowed_providers=(fixture.provider,),
+        scopes=("observation.submit",),
+        observation_capabilities=(),
     )
 
 
@@ -377,6 +395,25 @@ async def test_poll_app_actions_rejects_disallowed_provider() -> None:
     assert exc_info.value.code() is grpc.StatusCode.PERMISSION_DENIED
 
 
+async def test_poll_app_actions_rejects_external_client_bearer_token() -> None:
+    """Normal external_client bearer token cannot poll delivery actions."""
+    fixture = generic_text_adapter_fixture()
+    broker = RuntimeAppActionBroker(outbox=InMemoryDeliveryOutbox(), lease_seconds=60.0)
+
+    async with _GrpcExternalAdapterHarness(
+        fixture,
+        app_action_broker=broker,
+        auth_profile=_external_client_auth_profile(fixture),
+    ) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.PollAppActions(
+                runtime_pb2.PollAppActionsRequest(provider=fixture.provider, max_items=1),
+                metadata=_AUTH_METADATA,
+            )
+
+    assert exc_info.value.code() is grpc.StatusCode.PERMISSION_DENIED
+
+
 async def test_report_action_result_wire_contract_accepts_succeeded() -> None:
     """ReportActionResult accepts a succeeded report for a leased action."""
     fixture = generic_text_adapter_fixture()
@@ -424,6 +461,33 @@ async def test_report_action_result_rejects_missing_scope() -> None:
             fixture,
             scopes=("runtime.info.read", "observation.submit.trusted", "delivery.poll"),
         ),
+    ) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.ReportActionResult(
+                runtime_pb2.ReportActionResultRequest(
+                    delivery_id="contract-delivery-1",
+                    lease_id="lease-1",
+                    action_id="contract-action-1",
+                    correlation_id="contract-corr-1",
+                    status="succeeded",
+                ),
+                metadata=_AUTH_METADATA,
+            )
+
+    assert exc_info.value.code() is grpc.StatusCode.PERMISSION_DENIED
+
+
+async def test_report_action_result_rejects_external_client_bearer_token() -> None:
+    """Normal external_client bearer token cannot report delivery results."""
+    fixture = generic_text_adapter_fixture()
+    outbox = InMemoryDeliveryOutbox()
+    await outbox.enqueue(build_send_message_delivery(fixture))
+    broker = RuntimeAppActionBroker(outbox=outbox, lease_seconds=60.0)
+
+    async with _GrpcExternalAdapterHarness(
+        fixture,
+        app_action_broker=broker,
+        auth_profile=_external_client_auth_profile(fixture),
     ) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await stub.ReportActionResult(
@@ -509,7 +573,7 @@ class _GrpcExternalAdapterHarness:
         *,
         runtime_service: RecordingRuntimeService | None = None,
         app_action_broker: AppActionBroker | None = None,
-        auth_profile: _TrustedAdapterAuthProfile | None = None,
+        auth_profile: _AdapterAuthProfile | None = None,
     ) -> None:
         self._fixture = fixture
         self._runtime_service = runtime_service or RecordingRuntimeService("unused")
@@ -563,13 +627,13 @@ class _GrpcExternalAdapterHarness:
 def _token_verifier(
     *,
     fixture: ExternalAdapterContractFixture,
-    auth_profile: _TrustedAdapterAuthProfile,
+    auth_profile: _AdapterAuthProfile,
 ) -> StaticBearerTokenVerifier:
     token_entries = [
         {
             "client_id": f"{fixture.provider}-adapter",
             "token_sha256": hash_token(_CREDENTIAL),
-            "client_kind": "trusted_adapter",
+            "client_kind": auth_profile.client_kind,
             "provider": auth_profile.provider,
             "allowed_providers": list(auth_profile.allowed_providers),
             "scopes": list(auth_profile.scopes),

@@ -149,3 +149,32 @@ def test_auth_create_token_rejects_trusted_adapter_internal_capability(
 
     with pytest.raises(RuntimeUnauthenticatedError):
         main()
+
+
+@pytest.mark.parametrize("scope", ["delivery.poll", "delivery.report"])
+def test_auth_create_token_rejects_external_client_delivery_scopes(
+    scope: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """external_client token は delivery API 用 scope を発行できない。"""
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "iris.runtime.server",
+            "auth",
+            "create-token",
+            "--client-id",
+            "cli-1",
+            "--client-kind",
+            "external_client",
+            "--provider",
+            "cli",
+            "--allowed-provider",
+            "cli",
+            "--scope",
+            scope,
+        ],
+    )
+
+    with pytest.raises(RuntimeUnauthenticatedError):
+        main()

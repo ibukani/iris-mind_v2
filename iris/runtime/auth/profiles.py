@@ -17,6 +17,8 @@ TRUSTED_ADAPTER_SCOPES = frozenset(
 EXTERNAL_CLIENT_FORBIDDEN_SCOPES = frozenset(
     {
         AuthScope.OBSERVATION_SUBMIT_TRUSTED,
+        AuthScope.DELIVERY_POLL,
+        AuthScope.DELIVERY_REPORT,
         AuthScope.ADMIN_RUNTIME,
     }
 )
@@ -26,6 +28,5 @@ TRUSTED_ADAPTER_OBSERVATION_CAPABILITIES = frozenset(
         ObservationCapability.INTEGRATE_ACTIVITY,
         ObservationCapability.INTEGRATE_PRESENCE,
         ObservationCapability.UPDATE_SPACE_OCCUPANCY,
-        ObservationCapability.REACT_TO_ACTIVITY,
     }
 )

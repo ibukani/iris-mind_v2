@@ -142,6 +142,20 @@ def test_external_client_cannot_use_trusted_submit_scope() -> None:
         )
 
 
+def test_external_client_cannot_poll_or_report_even_with_delivery_scopes() -> None:
+    """external_client は delivery scopes でも delivery API を使えない。"""
+    policy = RuntimeAuthorizationPolicy()
+    principal = _principal(
+        kind=ClientKind.EXTERNAL_CLIENT,
+        scopes=frozenset({AuthScope.DELIVERY_POLL, AuthScope.DELIVERY_REPORT}),
+    )
+
+    with pytest.raises(RuntimePermissionDeniedError):
+        policy.require_poll_app_actions(principal, "cli")
+    with pytest.raises(RuntimePermissionDeniedError):
+        policy.require_report_action_result(principal, "cli")
+
+
 def test_trusted_adapter_admin_scope_does_not_escalate() -> None:
     """trusted_adapter に admin.runtime が混入しても admin 扱いしない。"""
     policy = RuntimeAuthorizationPolicy()

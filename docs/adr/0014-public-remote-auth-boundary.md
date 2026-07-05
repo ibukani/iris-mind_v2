@@ -26,7 +26,7 @@ ingress の分離は維持する。
 - bearer token は typed `ClientPrincipal` に対応する。
 - `trusted_adapter` は external adapter 専用 profile とする。admin ではなく、`allowed_providers` と最小 scope で制限する。
 - `trusted_adapter` は wildcard provider、`admin.runtime`、通常 client 用 `observation.submit` を持てない。
-- `external_client` は `observation.submit.trusted`、`admin.runtime`、`ObservationCapability` を持てない。
+- `external_client` は `observation.submit.trusted`、`delivery.poll`、`delivery.report`、`admin.runtime`、`ObservationCapability` を持てない。
 - `AuthScope` が RPC access を認可する。
 - `ObservationCapability` は runtime observation effects を認可する。
 - provider scope は provider impersonation を防ぐ。`request.provider`、
@@ -36,7 +36,7 @@ ingress の分離は維持する。
 - external ingress は Iris 内部の `ActorId` / `AccountId` / `SpaceId` を直接 claim できない。
 - `ObservationContext.source` と user-controlled metadata は auth/trust 判定に使わない。
 - delivery polling/reporting API は remote/public mode で unauthenticated にしない。
-- trusted adapter ingress capability は token 由来の `ClientPrincipal` から渡す。
+- trusted adapter ingress capability は token 由来の `ClientPrincipal` から渡す。標準 profile は `integrate_activity` / `integrate_presence` / `update_space_occupancy` までに限定し、`react_to_activity` は後続Issueで明示追加する。
 - 旧 `access_token` / `role` / `permissions` metadata 互換は追加しない。
 
 ## Out Of Scope

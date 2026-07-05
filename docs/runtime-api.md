@@ -120,8 +120,8 @@ TLS を使わない remote bind は開発用途だけ `auth.allow_insecure_remot
 - `SubmitObservation`: `trusted_adapter` は `observation.submit.trusted` と `ExternalAccountRef` または `ExternalSpaceRef` の provider claim が必要。通常 `external_client` は `observation.submit` が必要。
 - `PollAppActions`: `delivery.poll` と `PollAppActionsRequest.provider` が `allowed_providers` に含まれることが必要。
 - `ReportActionResult`: `delivery.report` と delivery item の provider が `allowed_providers` に含まれることが必要。さらに delivery lease / action identity は delivery broker が検証する。
-- `trusted_adapter` token は wildcard provider や `admin.runtime` を持てない。
-- `external_client` token は `observation.submit.trusted`、`admin.runtime`、`ObservationCapability` を持てない。
+- `trusted_adapter` token は wildcard provider や `admin.runtime` を持てない。標準許可 capability は `integrate_activity`、`integrate_presence`、`update_space_occupancy` に限定し、reaction pipeline を有効化する `react_to_activity` は別Issueで明示追加する。
+- `external_client` token は `observation.submit.trusted`、`delivery.poll`、`delivery.report`、`admin.runtime`、`ObservationCapability` を持てない。
 - 外部 ingress は `actor_id` / `account_id` / `space_id` を直接主張せず、`ExternalAccountRef` / `ExternalSpaceRef` を使う。
 
 ## CLI クライアントが要求・推奨されるフィールド

@@ -57,12 +57,14 @@ class RuntimeAuthorizationPolicy:
     ) -> None:
         """PollAppActions の権限と provider claim を検査する。"""
         self._validate_external_ingress_principal_profile(principal)
+        self._require_delivery_principal(principal)
         self._require_scope(principal, AuthScope.DELIVERY_POLL)
         self._require_provider(principal, provider)
 
     def require_delivery_report_scope(self, principal: ClientPrincipal) -> None:
         """ReportActionResult のスコープ権限を検査する。"""
         self._validate_external_ingress_principal_profile(principal)
+        self._require_delivery_principal(principal)
         self._require_scope(principal, AuthScope.DELIVERY_REPORT)
 
     def require_delivery_report_provider(
@@ -81,6 +83,12 @@ class RuntimeAuthorizationPolicy:
         """ReportActionResult の権限と delivery provider 所有権を検査する。"""
         self.require_delivery_report_scope(principal)
         self.require_delivery_report_provider(principal, delivery_provider)
+
+    @staticmethod
+    def _require_delivery_principal(principal: ClientPrincipal) -> None:
+        if principal.client_kind in {ClientKind.TRUSTED_ADAPTER, ClientKind.ADMIN}:
+            return
+        _deny("delivery API requires trusted_adapter or admin principal")
 
     @staticmethod
     def _require_trusted_adapter_external_provider_claim(
