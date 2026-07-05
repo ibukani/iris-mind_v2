@@ -43,7 +43,7 @@ def define_basic_action_feature() -> FeatureDefinition:
     """Diagnostic echo action feature の定義を組み立てる。
 
     Returns:
-        明示有効化された development/debug runtime 専用の diagnostic feature 定義。
+        development/debug runtime 専用の diagnostic feature 定義。
     """
     return FeatureDefinition(
         name="basic_action",

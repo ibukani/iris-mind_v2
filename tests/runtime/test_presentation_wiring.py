@@ -38,3 +38,16 @@ def test_wire_output_safety_gate_returns_allow_all() -> None:
     """wire_output_safety_gate returns the default allow-all gate."""
     gate = wire_output_safety_gate()
     assert isinstance(gate, AllowAllOutputGate)
+
+
+def test_wire_presentation_suite_keeps_extension_presenters_before_default() -> None:
+    """feature-specific presenter が default presenter より優先されることを固定する。"""
+
+    class ExtensionPresenter(DefaultActionPlanPresenter):
+        pass
+
+    extension = ExtensionPresenter()
+    suite = wire_presentation_suite([extension])
+
+    assert suite.presenters[0] is extension
+    assert isinstance(suite.presenters[-1], DefaultActionPlanPresenter)

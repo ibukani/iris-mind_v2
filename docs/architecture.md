@@ -398,7 +398,7 @@ adapters/       = どこへ送るかを担当する
 
 各 feature は `features/<name>/` に縦切りで配置し、`FeatureDefinition` を返す `define_feature()` 関数を公開する。
 
-`FeatureDefinition.kind` は通常 companion behavior と diagnostic/dev behavior を分けるために使う。`basic_action` は production companion response ではなく diagnostic echo action であるため `FeatureKind.DIAGNOSTIC` とする。標準 runtime catalog では `features.diagnostic_actions_enabled = true` かつ `safety.mode = "development"` のときだけ登録し、`basic` / `strict` / future production-like mode では通常 response candidate に混ぜない。無効化理由は runtime wiring diagnostics / doctor の `feature-selection` check で確認できる。
+`FeatureDefinition.kind` は通常 companion behavior と diagnostic/dev behavior を分けるために使う。`basic_action` は production companion response ではなく diagnostic echo action であるため `FeatureKind.DIAGNOSTIC` とする。標準 runtime catalog では既存の `safety.mode = "development"` のときだけ登録し、`basic` / `strict` / future production-like mode では通常 response candidate に混ぜない。新規 diagnostic flag / schema / Control Plane manifest 更新は Runtime Config v2 まで defer する。無効化理由は runtime wiring diagnostics / doctor の `feature-selection` check で確認できる。
 
 ```python
 @dataclass(frozen=True)

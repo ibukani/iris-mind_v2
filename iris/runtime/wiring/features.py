@@ -43,7 +43,6 @@ class RuntimeFeatureMode(StrEnum):
 class RuntimeFeatureDisabledReason(StrEnum):
     """Feature が標準 catalog から除外された理由。"""
 
-    DIAGNOSTIC_ACTIONS_DISABLED = "diagnostic_actions_disabled"
     PRODUCTION_LIKE_MODE = "production_like_mode"
 
 
@@ -67,10 +66,9 @@ class RuntimeFeatureCatalog:
 
 @dataclass(frozen=True)
 class RuntimeFeatureSelectionOptions:
-    """feature selection に必要な設定の最小 snapshot。"""
+    """feature selection に必要な既存 runtime mode の snapshot。"""
 
     safety_mode: str = "development"
-    diagnostic_actions_enabled: bool = False
 
     @classmethod
     def from_config(cls, config: IrisRuntimeConfig) -> RuntimeFeatureSelectionOptions:
@@ -79,10 +77,7 @@ class RuntimeFeatureSelectionOptions:
         Returns:
             feature selection 用の最小設定。
         """
-        return cls(
-            safety_mode=config.safety.mode,
-            diagnostic_actions_enabled=config.features.diagnostic_actions_enabled,
-        )
+        return cls(safety_mode=config.safety.mode)
 
 
 def wire_runtime_features(
@@ -90,8 +85,12 @@ def wire_runtime_features(
 ) -> RuntimeFeatureCatalog:
     """標準ランタイムのフィーチャー集合を組み立てる。
 
-    diagnostic feature は development かつ明示 flag の場合だけ登録する。
+    diagnostic feature は既存の safety.mode が development の場合だけ登録する。
     production-like mode では通常応答候補に混ぜない。
+
+    配送結果だけでは明示的ユーザー入力を復元できないため、標準 catalog は
+    memory enqueue hook を登録しない。十分な typed context を持つ integration が
+    `LearningHook` として明示注入する。
 
     Returns:
         選択済みフィーチャー定義と無効化理由。
@@ -100,23 +99,18 @@ def wire_runtime_features(
     mode = _runtime_feature_mode(selection_options.safety_mode)
     companion_features = (define_event_reaction_feature(),)
     diagnostic_feature = define_basic_action_feature()
-    if mode is RuntimeFeatureMode.DEVELOPMENT and selection_options.diagnostic_actions_enabled:
+    if mode is RuntimeFeatureMode.DEVELOPMENT:
         return RuntimeFeatureCatalog(
             features=(diagnostic_feature, *companion_features),
             mode=mode,
         )
-    reason = (
-        RuntimeFeatureDisabledReason.PRODUCTION_LIKE_MODE
-        if mode is RuntimeFeatureMode.PRODUCTION_LIKE
-        else RuntimeFeatureDisabledReason.DIAGNOSTIC_ACTIONS_DISABLED
-    )
     return RuntimeFeatureCatalog(
         features=companion_features,
         disabled_features=(
             DisabledRuntimeFeature(
                 name=diagnostic_feature.name,
                 kind=diagnostic_feature.kind,
-                reason=reason,
+                reason=RuntimeFeatureDisabledReason.PRODUCTION_LIKE_MODE,
             ),
         ),
         mode=mode,
@@ -186,7 +180,7 @@ def collect_runtime_learning_hooks(
     """runtime学習フックをフィーチャー登録順に収集する。
 
     Returns:
-        登録順のruntime学習フック。
+        登録順のruntimeフック。
     """
     return collect_feature_items(tuple(feature.runtime_learning_hooks for feature in features))
 

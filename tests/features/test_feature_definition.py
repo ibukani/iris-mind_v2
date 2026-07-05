@@ -62,8 +62,7 @@ def test_runtime_features_register_event_reaction_through_feature_definition() -
     """標準 composition root は event reaction を FeatureDefinition として登録する。"""
     catalog = wire_runtime_features()
 
-    assert tuple(feature.name for feature in catalog.features) == ("event_reaction",)
-    assert tuple(feature.name for feature in catalog.disabled_features) == ("basic_action",)
+    assert tuple(feature.name for feature in catalog.features) == ("basic_action", "event_reaction")
     event_reaction_feature = next(f for f in catalog.features if f.name == "event_reaction")
     assert len(event_reaction_feature.activity_reaction_planners) == 1
     assert collect_learning_hooks(catalog.features) == ()

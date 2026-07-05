@@ -1231,13 +1231,6 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "出力可能な最大文字数。",
             env="IRIS_SAFETY_MAX_OUTPUT_CHARS",
         ),
-        ConfigFieldSpec(
-            "features.diagnostic_actions_enabled",
-            ConfigValueType.BOOL,
-            default=False,
-            description=("development/debug runtime で diagnostic echo action を明示有効化する。"),
-            env="IRIS_DIAGNOSTIC_ACTIONS_ENABLED",
-        ),
         *_latency_budget_specs(),
         ConfigFieldSpec(
             "diagnostics.mode",

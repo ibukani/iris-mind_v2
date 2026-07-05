@@ -46,11 +46,6 @@ from iris.runtime.config.diagnostics import (
     apply_diagnostics_toml,
 )
 from iris.runtime.config.errors import ConfigError
-from iris.runtime.config.features import (
-    RuntimeFeaturesConfig,
-    apply_features_env,
-    apply_features_toml,
-)
 from iris.runtime.config.inference_scheduler import (
     RuntimeInferenceSchedulerConfig,
     apply_inference_scheduler_toml,
@@ -161,7 +156,6 @@ class IrisRuntimeConfig:
     observability: RuntimeObservabilityConfig
     prompt_budget: RuntimePromptBudgetConfig
     companion_semantics: RuntimeCompanionSemanticsConfig
-    features: RuntimeFeaturesConfig
 
 
 @dataclass(frozen=True)
@@ -217,7 +211,6 @@ def default_runtime_config() -> IrisRuntimeConfig:
         observability=RuntimeObservabilityConfig(),
         prompt_budget=default_prompt_budget_config(),
         companion_semantics=RuntimeCompanionSemanticsConfig(),
-        features=RuntimeFeaturesConfig(),
     )
 
 
@@ -509,7 +502,6 @@ def _apply_toml_sections(
             config.companion_semantics,
             table_or_empty(table, "companion_semantics"),
         ),
-        features=apply_features_toml(config.features, table_or_empty(table, "features")),
         models=models,
         ollama=ollama,
         openai=openai,
@@ -562,7 +554,6 @@ class _RuntimeConfigSections:
     observability: RuntimeObservabilityConfig
     prompt_budget: RuntimePromptBudgetConfig
     companion_semantics: RuntimeCompanionSemanticsConfig
-    features: RuntimeFeaturesConfig
     config_metadata: RuntimeConfigMetadata | None = None
 
 
@@ -595,7 +586,6 @@ def _apply_env_sections(
         observability=config.observability,
         prompt_budget=config.prompt_budget,
         companion_semantics=config.companion_semantics,
-        features=apply_features_env(config.features, env),
         models=models,
         ollama=ollama,
         openai=openai,
@@ -635,7 +625,6 @@ def _compose_runtime_config(
         observability=sections.observability,
         prompt_budget=sections.prompt_budget,
         companion_semantics=sections.companion_semantics,
-        features=sections.features,
         models=sections.models,
         ollama=sections.ollama,
         openai=sections.openai,

@@ -85,8 +85,8 @@ async def test_runtime_doctor_default_memory_backend_reports_operational_status(
     feature_check = next(item for item in report.checks if item.name == "feature-selection")
     assert feature_check.status == "ok"
     assert "mode=development" in feature_check.summary
-    assert "enabled=event_reaction" in feature_check.summary
-    assert "disabled=basic_action:diagnostic:diagnostic_actions_disabled" in feature_check.summary
+    assert "enabled=basic_action,event_reaction" in feature_check.summary
+    assert "disabled=none" in feature_check.summary
 
     proactive_check = next(item for item in report.checks if item.name == "proactive-safety")
     assert proactive_check.status == "ok"
