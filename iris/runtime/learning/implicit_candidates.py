@@ -19,7 +19,6 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
-from iris.contracts.model_policy import ModelCallDescriptor, ModelCallKind, ModelCallSite
 from iris.contracts.observations import ObservationKind, UserFeedbackKind
 from iris.core.metadata import immutable_metadata
 from iris.runtime.learning.jobs import (
@@ -514,13 +513,7 @@ def _new_job(
         payload=payload,
         max_attempts=max_attempts,
         not_before=now,
-        resource_profile=BackgroundJobResourceProfile(
-            uses_llm=True,
-            model_call_descriptor=ModelCallDescriptor(
-                call_kind=ModelCallKind.BACKGROUND_LLM,
-                call_site=ModelCallSite.MEMORY_EXTRACTION,
-            ),
-        ),
+        resource_profile=BackgroundJobResourceProfile(uses_llm=False),
         idempotency_key=f"implicit-memory:{key}",
         created_at=now,
         updated_at=now,

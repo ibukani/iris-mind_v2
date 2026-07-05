@@ -17,6 +17,7 @@ from iris.runtime.config.diagnostics import (
     apply_diagnostics_toml,
 )
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.inference_scheduler import RuntimeInferenceSchedulerConfig
 from iris.runtime.config.learning import RuntimeLearningConfig
 from iris.runtime.config.llm import (
     LLMProvider,
@@ -80,6 +81,7 @@ __all__ = [
     "RuntimeConversationConfig",
     "RuntimeDeliveryConfig",
     "RuntimeDiagnosticsConfig",
+    "RuntimeInferenceSchedulerConfig",
     "RuntimeLearningConfig",
     "RuntimeLoggingConfig",
     "RuntimeMemoryConfig",

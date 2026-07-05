@@ -46,6 +46,11 @@ from iris.runtime.config.diagnostics import (
     apply_diagnostics_toml,
 )
 from iris.runtime.config.errors import ConfigError
+from iris.runtime.config.inference_scheduler import (
+    RuntimeInferenceSchedulerConfig,
+    apply_inference_scheduler_toml,
+    validate_inference_scheduler_config,
+)
 from iris.runtime.config.learning import (
     RuntimeLearningConfig,
     apply_learning_toml,
@@ -144,6 +149,7 @@ class IrisRuntimeConfig:
     scheduler: RuntimeSchedulerConfig
     delivery: RuntimeDeliveryConfig
     learning: RuntimeLearningConfig
+    inference_scheduler: RuntimeInferenceSchedulerConfig
     model_call_budget: RuntimeModelCallBudgetConfig
     memory: RuntimeMemoryConfig
     conversation: RuntimeConversationConfig
@@ -198,6 +204,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         scheduler=RuntimeSchedulerConfig(),
         delivery=RuntimeDeliveryConfig(),
         learning=RuntimeLearningConfig(),
+        inference_scheduler=RuntimeInferenceSchedulerConfig(),
         model_call_budget=default_model_call_budget_config(),
         memory=RuntimeMemoryConfig(),
         conversation=RuntimeConversationConfig(),
@@ -410,7 +417,7 @@ def _materialize_user_config(table: TomlTable) -> TomlTable:
     """
     effective = {key: value for key, value in table.items() if key != "advanced"}
     advanced = table_or_empty(table, "advanced")
-    for section in ("prompt_budget", "model_call_budget"):
+    for section in ("prompt_budget", "model_call_budget", "inference_scheduler"):
         overrides = table_or_empty(advanced, section, path=f"advanced.{section}")
         if not overrides:
             continue
@@ -470,6 +477,10 @@ def _apply_toml_sections(
         scheduler=apply_scheduler_toml(config.scheduler, scheduler_table),
         delivery=apply_delivery_toml(config.delivery, delivery_table),
         learning=apply_learning_toml(config.learning, table_or_empty(table, "learning")),
+        inference_scheduler=apply_inference_scheduler_toml(
+            config.inference_scheduler,
+            table_or_empty(table, "inference_scheduler"),
+        ),
         model_call_budget=apply_model_call_budget_toml(
             config.model_call_budget,
             table_or_empty(table, "model_call_budget"),
@@ -529,6 +540,7 @@ class _RuntimeConfigSections:
     scheduler: RuntimeSchedulerConfig
     delivery: RuntimeDeliveryConfig
     learning: RuntimeLearningConfig
+    inference_scheduler: RuntimeInferenceSchedulerConfig
     model_call_budget: RuntimeModelCallBudgetConfig
     memory: RuntimeMemoryConfig
     conversation: RuntimeConversationConfig
@@ -567,6 +579,7 @@ def _apply_env_sections(
         scheduler=apply_scheduler_env(config.scheduler, env),
         delivery=config.delivery,
         learning=config.learning,
+        inference_scheduler=config.inference_scheduler,
         model_call_budget=config.model_call_budget,
         memory=config.memory,
         conversation=config.conversation,
@@ -605,6 +618,7 @@ def _compose_runtime_config(
         scheduler=sections.scheduler,
         delivery=sections.delivery,
         learning=sections.learning,
+        inference_scheduler=sections.inference_scheduler,
         model_call_budget=sections.model_call_budget,
         memory=sections.memory,
         conversation=sections.conversation,
@@ -640,6 +654,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
     validated_scheduler = validate_scheduler_config(config.scheduler)
     validated_delivery = validate_delivery_config(config.delivery)
     validated_learning = validate_learning_config(config.learning)
+    validated_inference_scheduler = validate_inference_scheduler_config(config.inference_scheduler)
     validated_model_call_budget = validate_model_call_budget_config(config.model_call_budget)
     validated_conversation = validate_conversation_config(config.conversation)
     validated_observability = validate_observability_config(config.observability)
@@ -657,6 +672,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         scheduler=validated_scheduler,
         delivery=validated_delivery,
         learning=validated_learning,
+        inference_scheduler=validated_inference_scheduler,
         model_call_budget=validated_model_call_budget,
         conversation=validated_conversation,
         observability=validated_observability,

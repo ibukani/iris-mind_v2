@@ -258,3 +258,20 @@ async def test_enqueue_with_policy_accept_mode_ignores_pressure_reason() -> None
     assert second.decision is BackgroundJobEnqueueDecision.ACCEPTED
     assert second.reason is None
     assert second.record is not None
+
+
+async def test_mark_cancelled_reports_cancelled_metrics() -> None:
+    """Policy cancellation は failed ではなく cancelled metrics に反映する。"""
+    queue = InMemoryBackgroundJobQueue()
+    job = await queue.enqueue(_job("cancelled"))
+    await queue.lease_due(_NOW, 1, 10.0)
+
+    await queue.mark_cancelled(job.job_id, _NOW, "scheduler no-send")
+
+    stored = await queue.get(job.job_id)
+    metrics = await queue.collect_metrics(_NOW)
+    assert stored.status.value == "cancelled"
+    assert stored.last_error == "scheduler no-send"
+    assert metrics.cancelled == 1
+    assert metrics.failed_permanent == 0
+    assert metrics.queue_depth == 0
