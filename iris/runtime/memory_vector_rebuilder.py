@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
+from iris.contracts.embeddings import EmbeddingBatchRequest
 from iris.contracts.memory import (
     MemoryQuery,
     MemoryRecord,
@@ -18,7 +19,7 @@ from iris.contracts.memory import (
 )
 
 if TYPE_CHECKING:
-    from iris.contracts.embeddings import EmbeddingModel
+    from iris.contracts.embeddings import EmbeddingClient
 
 
 class MemoryVectorRebuildStats(BaseModel):
@@ -50,7 +51,7 @@ class MemoryVectorIndexRebuilder:
         *,
         store: MutableMemoryStore,
         index: VectorMemoryIndex,
-        embedding: EmbeddingModel,
+        embedding: EmbeddingClient,
         batch_size: int = 32,
     ) -> None:
         """正本、index、embedding、batch size を注入する。
@@ -84,15 +85,20 @@ class MemoryVectorIndexRebuilder:
         upserted = 0
         for start in range(0, len(stale), self._batch_size):
             batch = stale[start : start + self._batch_size]
-            vectors = self._embedding.embed_batch(tuple(record.text for record in batch))
-            for record, vector in zip(batch, vectors, strict=True):
+            batch_result = self._embedding.embed_text_batch(
+                EmbeddingBatchRequest(
+                    texts=tuple(record.text for record in batch),
+                    model_slot="memory_rebuild",
+                )
+            )
+            for record, embedding_result in zip(batch, batch_result.embeddings, strict=True):
                 self._index.upsert(
                     vector_memory_entry_from_record(
                         record,
-                        vector=vector,
-                        embedding_provider=self._embedding.provider,
-                        embedding_model=self._embedding.model_id,
-                        embedding_dimension=self._embedding.dimension,
+                        vector=embedding_result.vector,
+                        embedding_provider=embedding_result.model_metadata.provider,
+                        embedding_model=embedding_result.model_metadata.model_name,
+                        embedding_dimension=embedding_result.dimension,
                     )
                 )
                 upserted += 1

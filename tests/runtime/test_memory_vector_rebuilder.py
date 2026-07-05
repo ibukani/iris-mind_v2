@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from iris.adapters.embeddings.fake import DeterministicFakeEmbedding
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
 from iris.cognitive.memory.hybrid import HybridMemoryRetriever
+from iris.contracts.embeddings import (
+    EmbeddingBatchRequest,
+    EmbeddingBatchResult,
+    EmbeddingRequest,
+    EmbeddingResult,
+)
 from iris.contracts.memory import (
     MemoryId,
     MemoryQuery,
@@ -17,6 +23,8 @@ from iris.contracts.memory import (
     VectorMemoryEntry,
     memory_record_digest,
 )
+from iris.contracts.model_invocation import ModelInvocationMetadata
+from iris.contracts.model_policy import ModelCallKind
 from iris.runtime.memory_vector_rebuilder import MemoryVectorIndexRebuilder
 from iris.runtime.wiring.memory import SQLiteFTS5MemoryRetriever
 
@@ -45,6 +53,71 @@ class _TeaEmbedding:
             入力順の2次元 vector。
         """
         return tuple(self.embed(text) for text in texts)
+
+    def embed_text(self, request: EmbeddingRequest) -> EmbeddingResult:
+        """EmbeddingClient contract の単一 result を返す。
+
+        Returns:
+            EmbeddingResult: test vector。
+        """
+        return EmbeddingResult(
+            vector=self.embed(request.text),
+            dimension=self.dimension,
+            reason="tea alias test embedding",
+            model_metadata=_tea_embedding_metadata(request.model_slot),
+            metadata=request.metadata,
+        )
+
+    def embed_text_batch(self, request: EmbeddingBatchRequest) -> EmbeddingBatchResult:
+        """EmbeddingClient contract の batch result を返す。
+
+        Returns:
+            EmbeddingBatchResult: 入力順の test vectors。
+        """
+        metadata = _tea_embedding_metadata(request.model_slot)
+        return EmbeddingBatchResult(
+            embeddings=tuple(
+                EmbeddingResult(
+                    vector=self.embed(text),
+                    dimension=self.dimension,
+                    reason="tea alias test embedding",
+                    model_metadata=metadata,
+                )
+                for text in request.texts
+            ),
+            reason="tea alias test embedding batch",
+            model_metadata=metadata,
+            metadata=request.metadata,
+        )
+
+
+def _tea_embedding_metadata(model_slot: str | None = None) -> ModelInvocationMetadata:
+    return ModelInvocationMetadata(
+        call_kind=ModelCallKind.EMBEDDING,
+        provider="test",
+        model_name="tea-alias-v1",
+        adapter_name="tea_alias_test_embedding",
+        model_slot=model_slot,
+    )
+
+
+class _CountingEmbedding(DeterministicFakeEmbedding):
+    """Batch embedding 呼び出し回数を記録する fake。"""
+
+    def __init__(self) -> None:
+        """既定 fake embedding と call counter を初期化する。"""
+        super().__init__(dimension=4)
+        self.batch_calls = 0
+
+    @override
+    def embed_text_batch(self, request: EmbeddingBatchRequest) -> EmbeddingBatchResult:
+        """Batch embedding の呼び出し回数を増やしてから委譲する。
+
+        Returns:
+            EmbeddingBatchResult: DeterministicFakeEmbedding の batch result。
+        """
+        self.batch_calls += 1
+        return super().embed_text_batch(request)
 
 
 @dataclass(frozen=True)
@@ -76,6 +149,25 @@ def test_rebuild_is_idempotent_and_repairs_stale_entries() -> None:
     assert (first.scanned, first.upserted, first.unchanged) == (1, 1, 0)
     assert (second.scanned, second.upserted, second.unchanged) == (1, 0, 1)
     assert (third.scanned, third.upserted, third.unchanged) == (1, 1, 0)
+
+
+def test_rebuild_skips_cached_unchanged_records_without_reembedding() -> None:
+    """Vector metadata が有効なら同じ memory record を再 embedding しない。"""
+    store = InMemoryMemoryStore()
+    store.put(MemoryRecord(id=MemoryId("m1"), text="green tea"))
+    index = InMemoryVectorMemoryIndex()
+    embedding = _CountingEmbedding()
+    rebuilder = MemoryVectorIndexRebuilder(store=store, index=index, embedding=embedding)
+
+    first = rebuilder.rebuild()
+    second = rebuilder.rebuild()
+    store.update(MemoryRecord(id=MemoryId("m1"), text="green tea updated"))
+    third = rebuilder.rebuild()
+
+    assert first.upserted == 1
+    assert second.unchanged == 1
+    assert third.stale == 1
+    assert embedding.batch_calls == 2
 
 
 def test_rebuild_removes_orphans_when_requested() -> None:

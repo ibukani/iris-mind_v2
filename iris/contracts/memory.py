@@ -219,6 +219,14 @@ class VectorMemoryIndex(Protocol):
         """Entry metadata を返す。存在しない場合は None。"""
         ...
 
+    def entry(self, memory_id: MemoryId) -> VectorMemoryEntry | None:
+        """Entry 本体を返す。存在しない場合は None。
+
+        retrieval pipeline はこの再構築可能な派生 entry から既存 embedding vector を
+        再利用し、候補本文の毎回再 embedding を避ける。
+        """
+        ...
+
     def ids(self) -> Sequence[MemoryId]:
         """Index に存在する全 memory id を返す。"""
         ...

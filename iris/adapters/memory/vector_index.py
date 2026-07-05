@@ -128,6 +128,15 @@ class InMemoryVectorMemoryIndex(VectorMemoryIndex):
         )
 
     @override
+    def entry(self, memory_id: MemoryId) -> VectorMemoryEntry | None:
+        """Entry 本体を返す。
+
+        Returns:
+            VectorMemoryEntry。未登録時は None。
+        """
+        return self._entries.get(memory_id)
+
+    @override
     def ids(self) -> Sequence[MemoryId]:
         """登録順の memory id を返す。
 

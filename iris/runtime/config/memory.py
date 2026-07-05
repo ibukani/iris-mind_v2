@@ -12,6 +12,7 @@ from iris.runtime.config.parsing import (
     TomlTable,
     TomlValue,
     parse_bool,
+    parse_float,
     parse_int,
     parse_optional_string,
     parse_string,
@@ -67,11 +68,25 @@ class RuntimeMemoryEmbeddingConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeMemoryRetrievalConfig:
+    """memory retrieval pipeline の hot-path 制御設定。"""
+
+    semantic_enabled: bool = False
+    fts_limit: int = 10
+    vector_limit: int = 20
+    candidate_limit: int = 20
+    reranker_limit: int = 5
+    min_score: float = 0.0
+    duplicate_similarity_threshold: float = 0.98
+
+
+@dataclass(frozen=True)
 class RuntimeMemoryConfig:
     """memory retrieval 全体の設定。"""
 
     vector: RuntimeMemoryVectorConfig = RuntimeMemoryVectorConfig()
     embedding: RuntimeMemoryEmbeddingConfig = RuntimeMemoryEmbeddingConfig()
+    retrieval: RuntimeMemoryRetrievalConfig = RuntimeMemoryRetrievalConfig()
 
 
 def resolve_qdrant_api_key(
@@ -93,13 +108,11 @@ def apply_memory_toml(config: RuntimeMemoryConfig, table: TomlTable) -> RuntimeM
 
     Returns:
         更新済み memory 設定。
-
-    Raises:
-        ConfigError: 値または型が不正な場合。
     """
     vector_table = table_or_empty(table, "vector", path="memory.vector")
     embedding_table = table_or_empty(table, "embedding", path="memory.embedding")
     qdrant_table = table_or_empty(vector_table, "qdrant", path="memory.vector.qdrant")
+    retrieval_table = table_or_empty(table, "retrieval", path="memory.retrieval")
     qdrant = replace(
         config.vector.qdrant,
         url=parse_string(qdrant_table.get("url"), "memory.vector.qdrant.url")
@@ -136,14 +149,39 @@ def apply_memory_toml(config: RuntimeMemoryConfig, table: TomlTable) -> RuntimeM
         dimension=_int_value(embedding_table, "dimension", config.embedding.dimension),
         batch_size=_int_value(embedding_table, "batch_size", config.embedding.batch_size),
     )
-    if embedding.dimension <= 0 or embedding.batch_size <= 0:
-        msg = "memory.embedding.dimension and batch_size must be greater than zero"
-        raise ConfigError(msg)
-    return RuntimeMemoryConfig(vector=vector, embedding=embedding)
+    retrieval = replace(
+        config.retrieval,
+        semantic_enabled=_retrieval_bool_value(
+            retrieval_table, "semantic_enabled", default=config.retrieval.semantic_enabled
+        ),
+        fts_limit=_retrieval_int_value(retrieval_table, "fts_limit", config.retrieval.fts_limit),
+        vector_limit=_retrieval_int_value(
+            retrieval_table, "vector_limit", config.retrieval.vector_limit
+        ),
+        candidate_limit=_retrieval_int_value(
+            retrieval_table, "candidate_limit", config.retrieval.candidate_limit
+        ),
+        reranker_limit=_retrieval_int_value(
+            retrieval_table, "reranker_limit", config.retrieval.reranker_limit
+        ),
+        min_score=_retrieval_float_value(retrieval_table, "min_score", config.retrieval.min_score),
+        duplicate_similarity_threshold=_retrieval_float_value(
+            retrieval_table,
+            "duplicate_similarity_threshold",
+            config.retrieval.duplicate_similarity_threshold,
+        ),
+    )
+    _validate_embedding_config(embedding)
+    _validate_retrieval_config(retrieval)
+    return RuntimeMemoryConfig(vector=vector, embedding=embedding, retrieval=retrieval)
 
 
 def _bool_value(table: TomlTable, key: str, *, default: bool) -> bool:
     return parse_bool(table[key], f"memory.vector.{key}") if key in table else default
+
+
+def _retrieval_bool_value(table: TomlTable, key: str, *, default: bool) -> bool:
+    return parse_bool(table[key], f"memory.retrieval.{key}") if key in table else default
 
 
 def _string_value(table: TomlTable, key: str, default: str) -> str:
@@ -152,6 +190,14 @@ def _string_value(table: TomlTable, key: str, default: str) -> str:
 
 def _int_value(table: TomlTable, key: str, default: int) -> int:
     return parse_int(table[key], f"memory.embedding.{key}") if key in table else default
+
+
+def _retrieval_int_value(table: TomlTable, key: str, default: int) -> int:
+    return parse_int(table[key], f"memory.retrieval.{key}") if key in table else default
+
+
+def _retrieval_float_value(table: TomlTable, key: str, default: float) -> float:
+    return parse_float(table[key], f"memory.retrieval.{key}") if key in table else default
 
 
 def _vector_backend(value: TomlValue) -> MemoryVectorBackend:
@@ -168,3 +214,24 @@ def _embedding_provider(value: TomlValue) -> MemoryEmbeddingProvider:
     except ValueError as exc:
         message = "memory.embedding.provider must be 'fake'"
         raise ConfigError(message) from exc
+
+
+def _validate_embedding_config(config: RuntimeMemoryEmbeddingConfig) -> None:
+    if config.dimension <= 0 or config.batch_size <= 0:
+        msg = "memory.embedding.dimension and batch_size must be greater than zero"
+        raise ConfigError(msg)
+
+
+def _validate_retrieval_config(config: RuntimeMemoryRetrievalConfig) -> None:
+    positive_values = (
+        config.fts_limit,
+        config.vector_limit,
+        config.candidate_limit,
+        config.reranker_limit,
+    )
+    if any(value < 0 for value in positive_values):
+        msg = "memory.retrieval limits must be greater than or equal to zero"
+        raise ConfigError(msg)
+    if not 0.0 <= config.duplicate_similarity_threshold <= 1.0:
+        msg = "memory.retrieval.duplicate_similarity_threshold must be between 0.0 and 1.0"
+        raise ConfigError(msg)

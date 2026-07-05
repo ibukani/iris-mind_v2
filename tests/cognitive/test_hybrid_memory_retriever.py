@@ -5,6 +5,12 @@ from __future__ import annotations
 from iris.adapters.memory.fake import FakeMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.cognitive.memory.hybrid import HybridMemoryRetriever, MemoryReranker
+from iris.contracts.embeddings import (
+    EmbeddingBatchRequest,
+    EmbeddingBatchResult,
+    EmbeddingRequest,
+    EmbeddingResult,
+)
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,
@@ -13,6 +19,8 @@ from iris.contracts.memory import (
     MemorySearchResult,
     VectorMemoryEntry,
 )
+from iris.contracts.model_invocation import ModelInvocationMetadata
+from iris.contracts.model_policy import ModelCallKind
 from iris.core.ids import ActorId, SpaceId
 
 
@@ -41,6 +49,42 @@ class _Embedding:
 
     def embed_batch(self, texts: tuple[str, ...]) -> tuple[tuple[float, float], ...]:
         return tuple(self.embed(text) for text in texts)
+
+    def embed_text(self, request: EmbeddingRequest) -> EmbeddingResult:
+        return EmbeddingResult(
+            vector=self.embed(request.text),
+            dimension=self.dimension,
+            reason="keyword test embedding",
+            model_metadata=_embedding_metadata(request.model_slot),
+            metadata=request.metadata,
+        )
+
+    def embed_text_batch(self, request: EmbeddingBatchRequest) -> EmbeddingBatchResult:
+        metadata = _embedding_metadata(request.model_slot)
+        return EmbeddingBatchResult(
+            embeddings=tuple(
+                EmbeddingResult(
+                    vector=self.embed(text),
+                    dimension=self.dimension,
+                    reason="keyword test embedding",
+                    model_metadata=metadata,
+                )
+                for text in request.texts
+            ),
+            reason="keyword test embedding batch",
+            model_metadata=metadata,
+            metadata=request.metadata,
+        )
+
+
+def _embedding_metadata(model_slot: str | None = None) -> ModelInvocationMetadata:
+    return ModelInvocationMetadata(
+        call_kind=ModelCallKind.EMBEDDING,
+        provider="test",
+        model_name="test",
+        adapter_name="keyword_test_embedding",
+        model_slot=model_slot,
+    )
 
 
 def _index_for_store(store: FakeMemoryStore) -> InMemoryVectorMemoryIndex:

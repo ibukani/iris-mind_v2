@@ -13,7 +13,15 @@ from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.models import PerceptionResult, StepStatus
 from iris.cognitive.memory.write import MemoryWriteStep
+from iris.contracts.embeddings import (
+    EmbeddingBatchRequest,
+    EmbeddingBatchResult,
+    EmbeddingRequest,
+    EmbeddingResult,
+)
 from iris.contracts.memory import MemoryId, VectorMemoryEntry, VectorMemoryIndexError
+from iris.contracts.model_invocation import ModelInvocationMetadata
+from iris.contracts.model_policy import ModelCallKind
 from iris.contracts.observations import (
     ActorMessageObservation,
     ObservationContext,
@@ -152,6 +160,52 @@ class _MismatchedDimensionEmbedding:
             入力数と同じ件数の mismatch vector。
         """
         return tuple(self.embed(text) for text in texts)
+
+    def embed_text(self, request: EmbeddingRequest) -> EmbeddingResult:
+        """EmbeddingClient contract の mismatch result を返す。
+
+        Returns:
+            Declared dimension と異なる 2 次元 vector result。
+        """
+        return EmbeddingResult(
+            vector=self.embed(request.text),
+            dimension=self.dimension,
+            reason="mismatched dimension",
+            model_metadata=_mismatch_metadata(request.model_slot),
+            metadata=request.metadata,
+        )
+
+    def embed_text_batch(self, request: EmbeddingBatchRequest) -> EmbeddingBatchResult:
+        """EmbeddingClient contract の mismatch batch result を返す。
+
+        Returns:
+            入力数と同じ件数の mismatch result。
+        """
+        metadata = _mismatch_metadata(request.model_slot)
+        return EmbeddingBatchResult(
+            embeddings=tuple(
+                EmbeddingResult(
+                    vector=self.embed(text),
+                    dimension=self.dimension,
+                    reason="mismatched dimension",
+                    model_metadata=metadata,
+                )
+                for text in request.texts
+            ),
+            reason="mismatched dimension batch",
+            model_metadata=metadata,
+            metadata=request.metadata,
+        )
+
+
+def _mismatch_metadata(model_slot: str | None) -> ModelInvocationMetadata:
+    return ModelInvocationMetadata(
+        call_kind=ModelCallKind.EMBEDDING,
+        provider="test",
+        model_name="mismatch",
+        adapter_name="mismatched_dimension_test_embedding",
+        model_slot=model_slot,
+    )
 
 
 @pytest.mark.anyio

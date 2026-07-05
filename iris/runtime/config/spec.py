@@ -957,6 +957,48 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "rebuild 時の embedding batch size。",
         ),
         ConfigFieldSpec(
+            "memory.retrieval.semantic_enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="Embedding / reranking memory retrieval pipeline を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "memory.retrieval.fts_limit",
+            ConfigValueType.INT,
+            10,
+            "Semantic retrieval に併用する FTS 候補数。",
+        ),
+        ConfigFieldSpec(
+            "memory.retrieval.vector_limit",
+            ConfigValueType.INT,
+            20,
+            "Semantic retrieval の vector 候補数。",
+        ),
+        ConfigFieldSpec(
+            "memory.retrieval.candidate_limit",
+            ConfigValueType.INT,
+            20,
+            "Reranker に渡す候補数の上限。",
+        ),
+        ConfigFieldSpec(
+            "memory.retrieval.reranker_limit",
+            ConfigValueType.INT,
+            5,
+            "Reranker 後に prompt へ渡す候補数の上限。",
+        ),
+        ConfigFieldSpec(
+            "memory.retrieval.min_score",
+            ConfigValueType.FLOAT,
+            0.0,
+            "Reranker 後に採用する最小 score。",
+        ),
+        ConfigFieldSpec(
+            "memory.retrieval.duplicate_similarity_threshold",
+            ConfigValueType.FLOAT,
+            0.98,
+            "Embedding similarity による重複 memory 除去閾値。",
+        ),
+        ConfigFieldSpec(
             "memory.vector.qdrant.url",
             ConfigValueType.STR,
             "http://localhost:6333",

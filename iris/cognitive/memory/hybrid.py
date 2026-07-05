@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from iris.cognitive.memory.retrieval import MemoryRetriever
+from iris.contracts.embeddings import EmbeddingRequest
 from iris.contracts.memory import (
     MemoryQuery,
     MemorySearchResult,
@@ -15,7 +16,7 @@ from iris.contracts.memory import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from iris.contracts.embeddings import EmbeddingModel
+    from iris.contracts.embeddings import EmbeddingClient
     from iris.contracts.memory import (
         MemoryId,
         MemoryStore,
@@ -178,7 +179,7 @@ class HybridMemoryRetriever(MemoryRetriever):
         *,
         fts_retriever: MemoryRetriever,
         vector_index: VectorMemoryIndex,
-        embedding: EmbeddingModel,
+        embedding: EmbeddingClient,
         store: MemoryStore,
         fts_limit: int = 10,
         vector_limit: int = 10,
@@ -188,7 +189,7 @@ class HybridMemoryRetriever(MemoryRetriever):
         Args:
             fts_retriever: FTS5 全文検索バックエンド。
             vector_index: ベクトル類似度検索インデックス。
-            embedding: query embedding model。
+            embedding: query embedding client。
             store: ベクトル検索結果の memory_id → MemoryRecord 解決用ストア。
             fts_limit: FTS5 検索の取得上限。
             vector_limit: ベクトル検索の取得上限。
@@ -225,7 +226,9 @@ class HybridMemoryRetriever(MemoryRetriever):
         fts_results = tuple(self._fts.search(fts_query))
 
         vector_raw = self._vector.search(
-            self._embedding.embed(query.text),
+            self._embedding.embed_text(
+                EmbeddingRequest(text=query.text, model_slot="memory_retrieval")
+            ).vector,
             limit=self._vector_limit,
             filters=VectorMemorySearchFilter(
                 actor_id=query.actor_id,

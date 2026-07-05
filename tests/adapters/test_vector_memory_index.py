@@ -175,7 +175,9 @@ def test_vector_entry_factory_and_metadata_preserve_embedding_identity() -> None
     index.upsert(entry)
 
     metadata = index.metadata(record.id)
+    cached_entry = index.entry(record.id)
 
+    assert cached_entry == entry
     assert entry.embedding_provider == "fake"
     assert entry.embedding_model == "fake-v2"
     assert entry.embedding_dimension == 2

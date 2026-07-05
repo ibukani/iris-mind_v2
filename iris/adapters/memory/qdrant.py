@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, TypeVar, override
 import uuid
 
 import httpx
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from iris.contracts.memory import (
     MemoryId,
@@ -20,6 +20,7 @@ from iris.contracts.memory import (
     VectorMemorySearchResult,
 )
 from iris.core.ids import ActorId, ObservationId, SpaceId
+from iris.core.metadata import immutable_metadata
 
 _HTTP_NOT_FOUND = 404
 _ResponseModel = TypeVar("_ResponseModel", bound=BaseModel)
@@ -43,6 +44,7 @@ class _PointPayload(BaseModel):
     source_observation_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class _ScoredPoint(BaseModel):
@@ -68,6 +70,7 @@ class _Point(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     payload: _PointPayload
+    vector: tuple[float, ...] | None = None
 
 
 class _PointResponse(BaseModel):
@@ -152,6 +155,59 @@ def _point_payload(entry: VectorMemoryEntry) -> dict[str, object]:
         "updated_at": _timestamp_payload(entry.updated_at),
         "metadata": dict(entry.metadata),
     }
+
+
+def _metadata_from_payload(payload: _PointPayload) -> VectorMemoryEntryMetadata:
+    """Qdrant payload から VectorMemoryEntryMetadata を復元する。
+
+    Returns:
+        VectorMemoryEntryMetadata。
+    """
+    return VectorMemoryEntryMetadata(
+        memory_id=MemoryId(payload.memory_id),
+        source_digest=payload.source_digest,
+        embedding_provider=payload.embedding_provider,
+        embedding_model=payload.embedding_model,
+        embedding_dimension=payload.embedding_dimension,
+        actor_id=ActorId(payload.actor_id) if payload.actor_id is not None else None,
+        space_id=SpaceId(payload.space_id) if payload.space_id is not None else None,
+        kind=payload.kind,
+        archived=payload.archived,
+        source_observation_id=(
+            ObservationId(payload.source_observation_id)
+            if payload.source_observation_id is not None
+            else None
+        ),
+        created_at=payload.created_at,
+        updated_at=payload.updated_at,
+    )
+
+
+def _entry_from_point(point: _Point) -> VectorMemoryEntry | None:
+    """Qdrant point から vector 付き index entry を復元する。
+
+    Returns:
+        VectorMemoryEntry。vector が返されない場合は None。
+    """
+    if point.vector is None:
+        return None
+    metadata = _metadata_from_payload(point.payload)
+    return VectorMemoryEntry(
+        memory_id=metadata.memory_id,
+        vector=point.vector,
+        source_digest=metadata.source_digest,
+        embedding_provider=metadata.embedding_provider,
+        embedding_model=metadata.embedding_model,
+        embedding_dimension=metadata.embedding_dimension,
+        actor_id=metadata.actor_id,
+        space_id=metadata.space_id,
+        kind=metadata.kind,
+        archived=metadata.archived,
+        source_observation_id=metadata.source_observation_id,
+        created_at=metadata.created_at,
+        updated_at=metadata.updated_at,
+        metadata=immutable_metadata(point.payload.metadata),
+    )
 
 
 def _qdrant_filter(filters: VectorMemorySearchFilter | None) -> dict[str, object] | None:
@@ -377,25 +433,29 @@ class QdrantVectorMemoryIndex(VectorMemoryIndex):
         point = self._parse_response(response, _PointResponse, "get point").result
         if point is None:
             return None
-        payload = point.payload
-        return VectorMemoryEntryMetadata(
-            memory_id=MemoryId(payload.memory_id),
-            source_digest=payload.source_digest,
-            embedding_provider=payload.embedding_provider,
-            embedding_model=payload.embedding_model,
-            embedding_dimension=payload.embedding_dimension,
-            actor_id=ActorId(payload.actor_id) if payload.actor_id is not None else None,
-            space_id=SpaceId(payload.space_id) if payload.space_id is not None else None,
-            kind=payload.kind,
-            archived=payload.archived,
-            source_observation_id=(
-                ObservationId(payload.source_observation_id)
-                if payload.source_observation_id is not None
-                else None
+        return _metadata_from_payload(point.payload)
+
+    @override
+    def entry(self, memory_id: MemoryId) -> VectorMemoryEntry | None:
+        """Point payload と vector から index entry を復元する。
+
+        Returns:
+            VectorMemoryEntry。未登録または provider が vector を返さない場合は None。
+        """
+        response = self._send(
+            lambda: self._client.get(
+                f"/collections/{self._collection}/points/{self._point_id(memory_id)}",
+                params={"with_payload": "true", "with_vector": "true"},
             ),
-            created_at=payload.created_at,
-            updated_at=payload.updated_at,
+            "get point",
         )
+        if response.status_code == _HTTP_NOT_FOUND:
+            return None
+        self._raise_for_status(response, "get point")
+        point = self._parse_response(response, _PointResponse, "get point").result
+        if point is None:
+            return None
+        return _entry_from_point(point)
 
     @override
     def ids(self) -> Sequence[MemoryId]:

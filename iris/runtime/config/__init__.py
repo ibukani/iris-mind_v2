@@ -33,6 +33,7 @@ from iris.runtime.config.memory import (
     MemoryVectorBackend,
     RuntimeMemoryConfig,
     RuntimeMemoryEmbeddingConfig,
+    RuntimeMemoryRetrievalConfig,
     RuntimeMemoryVectorConfig,
     RuntimeMemoryVectorQdrantConfig,
 )
@@ -86,6 +87,7 @@ __all__ = [
     "RuntimeLoggingConfig",
     "RuntimeMemoryConfig",
     "RuntimeMemoryEmbeddingConfig",
+    "RuntimeMemoryRetrievalConfig",
     "RuntimeMemoryVectorConfig",
     "RuntimeMemoryVectorQdrantConfig",
     "RuntimeModelConfig",

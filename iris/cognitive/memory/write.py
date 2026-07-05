@@ -11,6 +11,7 @@ from iris.cognitive.cycle.models import MemoryWriteResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.memory.extraction import RuleBasedMemoryCandidateExtractor
 from iris.cognitive.memory.policy import MemoryWritePolicy
+from iris.contracts.embeddings import EmbeddingRequest
 from iris.contracts.memory import (
     MemoryId,
     MemoryRecord,
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
 
     from iris.cognitive.memory.candidates import MemoryCandidate, MemoryCandidateExtractor
     from iris.cognitive.workspace.frame import WorkspaceFrame
-    from iris.contracts.embeddings import EmbeddingModel
+    from iris.contracts.embeddings import EmbeddingClient
     from iris.contracts.memory import MutableMemoryStore, VectorMemoryIndex
     from iris.contracts.metadata import ImmutableMetadata
 
@@ -82,7 +83,7 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
         extractor: MemoryCandidateExtractor | None = None,
         policy: MemoryWritePolicy | None = None,
         vector_index: VectorMemoryIndex | None = None,
-        embedding: EmbeddingModel | None = None,
+        embedding: EmbeddingClient | None = None,
         fail_open_on_index_error: bool = True,
     ) -> None:
         """保存先ストアと抽出器・ポリシーで初期化する。
@@ -92,7 +93,7 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
             extractor: 候補抽出器。省略時は RuleBasedMemoryCandidateExtractor。
             policy: 保存ポリシー。省略時は MemoryWritePolicy。
             vector_index: ベクトル検索インデックス。指定時は write 成功後に upsert する。
-            embedding: index entry を生成する埋め込みモデル。
+            embedding: index entry を生成する EmbeddingClient。
             fail_open_on_index_error: index failure を正本 write 成功後に許容するか。
 
         Raises:
@@ -164,13 +165,16 @@ class MemoryWriteStep(PipelineStep[MemoryWriteResult]):
         """
         if self._vector_index is None or self._embedding is None:
             return
-        vector = await asyncio.to_thread(self._embedding.embed, record.text)
+        embedding_result = await asyncio.to_thread(
+            self._embedding.embed_text,
+            EmbeddingRequest(text=record.text, model_slot="memory_write"),
+        )
         entry = vector_memory_entry_from_record(
             record,
-            vector=vector,
-            embedding_provider=self._embedding.provider,
-            embedding_model=self._embedding.model_id,
-            embedding_dimension=self._embedding.dimension,
+            vector=embedding_result.vector,
+            embedding_provider=embedding_result.model_metadata.provider,
+            embedding_model=embedding_result.model_metadata.model_name,
+            embedding_dimension=embedding_result.dimension,
         )
         try:
             await asyncio.to_thread(self._vector_index.upsert, entry)

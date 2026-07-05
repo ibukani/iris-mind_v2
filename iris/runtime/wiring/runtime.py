@@ -79,7 +79,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.adapters.app_gateway.ports import AppActionBroker
-    from iris.contracts.embeddings import EmbeddingModel
+    from iris.contracts.embeddings import EmbeddingClient
     from iris.contracts.memory import VectorMemoryIndex
     from iris.features.definition import LearningHook
     from iris.runtime.app import IrisApp
@@ -464,7 +464,7 @@ def _background_job_kind_policy(
 def _wire_memory_vector(
     config: IrisRuntimeConfig,
     stores: RuntimeStateStores,
-) -> tuple[VectorMemoryIndex | None, EmbeddingModel | None]:
+) -> tuple[VectorMemoryIndex | None, EmbeddingClient | None]:
     """Vector-enabled SQLite memory の派生 index を構築する。
 
     Returns:
@@ -514,7 +514,7 @@ def _rebuild_memory_vector(
     config: IrisRuntimeConfig,
     stores: RuntimeStateStores,
     index: VectorMemoryIndex,
-    embedding: EmbeddingModel,
+    embedding: EmbeddingClient,
 ) -> None:
     """正本から index を同期し、text を含まない統計を記録する。"""
     stats = MemoryVectorIndexRebuilder(

@@ -221,7 +221,9 @@ def test_qdrant_metadata_round_trip_preserves_embedding_provider() -> None:
                         "embedding_provider": "fake",
                         "embedding_model": "fake-v1",
                         "embedding_dimension": 2,
-                    }
+                        "metadata": {"topic": "tea"},
+                    },
+                    "vector": [1.0, 0.0],
                 }
             },
         )
@@ -232,8 +234,12 @@ def test_qdrant_metadata_round_trip_preserves_embedding_provider() -> None:
     )
 
     metadata = index.metadata(MemoryId("m1"))
+    entry = index.entry(MemoryId("m1"))
 
     assert metadata is not None
+    assert entry is not None
+    assert entry.vector == (1.0, 0.0)
+    assert entry.metadata == {"topic": "tea"}
     assert metadata.embedding_provider == "fake"
     assert metadata.embedding_model == "fake-v1"
     assert metadata.embedding_dimension == 2
