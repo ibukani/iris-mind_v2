@@ -86,6 +86,6 @@ Runtime integration は将来、Runtime Config v2 で materialize された type
 
 - `iris/contracts/relationship_update.py`
 - `iris/cognitive/affect/relationship_update_policy.py`
-- `tests/contracts/test_relationship_update_contracts.py`
-- `tests/cognitive/test_relationship_update_policy.py`
-- `tests/cognitive/test_relationship_step.py`
+- `tests/contracts/test_relationship_update_contracts.py`: 新規 contract tests。
+- `tests/cognitive/test_relationship_update_policy.py`: 新規 policy behavior tests。
+- `tests/cognitive/test_relationship_step.py`: この PR では変更しない既存 regression anchor。semantic mode が raw VAD から `affinity` / `trust` を直接更新しないことを確認する。
