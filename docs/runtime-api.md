@@ -33,6 +33,97 @@ message SubmitObservationRequest {
 }
 ```
 
+
+## Runtime Auth / trusted external adapter profile
+
+remote / public bind で Runtime API を使う場合、旧 Discord bot の `access_token` / `role` / `permissions` metadata 互換は使わない。gRPC metadata は standard `authorization: Bearer <token>` のみを認証入力にする。`ObservationContext.source`、`ObservationContext.metadata`、payload metadata は user-controlled field なので trust 判定に使わない。
+
+外部アダプタは通常 client ではなく、ユーザー発話、presence / activity、pull-based delivery、`ActionResult` reporting を代行する `trusted_adapter` principal として発行する。`trusted_adapter` は admin ではない。provider と scope は token profile で最小化する。
+
+### Discord trusted adapter token 例
+
+```bash
+python -m iris.runtime.server auth create-token \
+  --client-id discord-adapter \
+  --client-kind trusted_adapter \
+  --provider discord \
+  --allowed-provider discord \
+  --scope runtime.info.read \
+  --scope observation.submit.trusted \
+  --scope delivery.poll \
+  --scope delivery.report \
+  --observation-capability integrate_activity
+```
+
+この command は raw token、SHA-256 hash、`IRIS_RUNTIME_TOKENS` に入れる hash-only JSON entry を表示する。raw token は一度だけ表示されるため、config file、docs、log へ保存しない。server 側は hash-only JSON entry だけを読む。
+
+`IRIS_RUNTIME_TOKENS` entry の形。実値は上の command 出力を使う。
+
+```json
+[
+  {
+    "client_id": "discord-adapter",
+    "client_kind": "trusted_adapter",
+    "provider": "discord",
+    "allowed_providers": ["discord"],
+    "scopes": [
+      "runtime.info.read",
+      "observation.submit.trusted",
+      "delivery.poll",
+      "delivery.report"
+    ],
+    "observation_capabilities": ["integrate_activity"],
+    "token_sha256": "<sha256-of-raw-token>"
+  }
+]
+```
+
+### local development 設定例
+
+loopback の開発用途では既定の `local_dev` を使える。これは unauthenticated loopback を許すため、public bind には使わない。
+
+```toml
+[server]
+host = "127.0.0.1"
+local_only = true
+
+[auth]
+mode = "local_dev"
+allow_unauthenticated_loopback = true
+```
+
+外部アダプタ移行テストを local で production-like に寄せる場合は、loopback でも `auth.mode = "required"` と static bearer token を使う。
+
+### production-like 設定例
+
+remote bind では `auth.mode = "required"` と TLS を有効にする。token secret は TOML に書かず、`IRIS_RUNTIME_TOKENS` 環境変数へ hash-only entry を入れる。
+
+```toml
+[server]
+host = "0.0.0.0"
+local_only = false
+
+[server.tls]
+enabled = true
+cert_chain_path = "/etc/iris/runtime.crt"
+private_key_path = "/etc/iris/runtime.key"
+
+[auth]
+mode = "required"
+allow_unauthenticated_loopback = false
+```
+
+TLS を使わない remote bind は開発用途だけ `auth.allow_insecure_remote = true` で明示する。production-like 接続では使わない。
+
+### scope / provider 境界
+
+- `SubmitObservation`: `trusted_adapter` は `observation.submit.trusted` と `ExternalAccountRef` または `ExternalSpaceRef` の provider claim が必要。通常 `external_client` は `observation.submit` が必要。
+- `PollAppActions`: `delivery.poll` と `PollAppActionsRequest.provider` が `allowed_providers` に含まれることが必要。
+- `ReportActionResult`: `delivery.report` と delivery item の provider が `allowed_providers` に含まれることが必要。さらに delivery lease / action identity は delivery broker が検証する。
+- `trusted_adapter` token は wildcard provider や `admin.runtime` を持てない。
+- `external_client` token は `observation.submit.trusted`、`admin.runtime`、`ObservationCapability` を持てない。
+- 外部 ingress は `actor_id` / `account_id` / `space_id` を直接主張せず、`ExternalAccountRef` / `ExternalSpaceRef` を使う。
+
 ## CLI クライアントが要求・推奨されるフィールド
 
 ### `SubmitObservationRequest`

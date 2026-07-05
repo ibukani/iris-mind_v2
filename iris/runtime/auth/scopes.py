@@ -10,7 +10,7 @@ class AuthScope(StrEnum):
 
     RUNTIME_INFO_READ = "runtime.info.read"
     OBSERVATION_SUBMIT = "observation.submit"
-    OBSERVATION_SUBMIT_TRUSTED = "observation.submit_trusted"
+    OBSERVATION_SUBMIT_TRUSTED = "observation.submit.trusted"
     DELIVERY_POLL = "delivery.poll"
     DELIVERY_REPORT = "delivery.report"
     ADMIN_RUNTIME = "admin.runtime"

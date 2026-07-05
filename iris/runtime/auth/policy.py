@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from iris.runtime.auth.errors import RuntimePermissionDeniedError
 from iris.runtime.auth.principals import ClientKind, ClientPrincipal
+from iris.runtime.auth.profiles import TRUSTED_ADAPTER_OBSERVATION_CAPABILITIES
 from iris.runtime.auth.scopes import AuthScope
 
 
@@ -40,12 +41,14 @@ class RuntimeAuthorizationPolicy:
         request: ObservationRequestClaims,
     ) -> None:
         """SubmitObservation の権限と provider claim を検査する。"""
+        self._validate_external_ingress_principal_profile(principal)
         if principal.client_kind is ClientKind.TRUSTED_ADAPTER:
             self._require_scope(principal, AuthScope.OBSERVATION_SUBMIT_TRUSTED)
+            self._require_trusted_adapter_external_provider_claim(request)
         else:
             self._require_scope(principal, AuthScope.OBSERVATION_SUBMIT)
         self.validate_observation_provider_claims(principal, request)
-        self.validate_external_client_identity_claims(principal, request)
+        self.validate_external_ingress_identity_claims(principal, request)
 
     def require_poll_app_actions(
         self,
@@ -53,11 +56,13 @@ class RuntimeAuthorizationPolicy:
         provider: str,
     ) -> None:
         """PollAppActions の権限と provider claim を検査する。"""
+        self._validate_external_ingress_principal_profile(principal)
         self._require_scope(principal, AuthScope.DELIVERY_POLL)
         self._require_provider(principal, provider)
 
     def require_delivery_report_scope(self, principal: ClientPrincipal) -> None:
         """ReportActionResult のスコープ権限を検査する。"""
+        self._validate_external_ingress_principal_profile(principal)
         self._require_scope(principal, AuthScope.DELIVERY_REPORT)
 
     def require_delivery_report_provider(
@@ -77,6 +82,13 @@ class RuntimeAuthorizationPolicy:
         self.require_delivery_report_scope(principal)
         self.require_delivery_report_provider(principal, delivery_provider)
 
+    @staticmethod
+    def _require_trusted_adapter_external_provider_claim(
+        request: ObservationRequestClaims,
+    ) -> None:
+        if request.account_ref_provider is None and request.space_ref_provider is None:
+            _deny("trusted adapter observation requires account_ref or space_ref provider")
+
     def validate_observation_provider_claims(
         self,
         principal: ClientPrincipal,
@@ -95,19 +107,50 @@ class RuntimeAuthorizationPolicy:
             self._require_provider(principal, request.space_ref_provider)
 
     @staticmethod
-    def validate_external_client_identity_claims(
+    def _validate_external_ingress_principal_profile(principal: ClientPrincipal) -> None:
+        if principal.client_kind not in {
+            ClientKind.EXTERNAL_CLIENT,
+            ClientKind.TRUSTED_ADAPTER,
+        }:
+            return
+        if "*" in principal.allowed_providers:
+            _deny("external ingress principal must not use wildcard provider")
+        if principal.client_kind is ClientKind.EXTERNAL_CLIENT:
+            if principal.observation_capabilities:
+                _deny("external client must not have observation capabilities")
+            return
+        if principal.client_kind is ClientKind.TRUSTED_ADAPTER and (
+            principal.provider is None or principal.provider not in principal.allowed_providers
+        ):
+            _deny("trusted adapter provider must be included in allowed providers")
+        if (
+            principal.client_kind is ClientKind.TRUSTED_ADAPTER
+            and principal.observation_capabilities - TRUSTED_ADAPTER_OBSERVATION_CAPABILITIES
+        ):
+            _deny("trusted adapter capability is not allowed")
+
+    @staticmethod
+    def validate_external_ingress_identity_claims(
         principal: ClientPrincipal,
         request: ObservationRequestClaims,
     ) -> None:
-        """external_client が内部 identity claim を直接送らないことを検査する。"""
-        if principal.client_kind is not ClientKind.EXTERNAL_CLIENT:
+        """外部 ingress principal が内部 identity claim を直接送らないことを検査する。"""
+        if principal.client_kind not in {
+            ClientKind.EXTERNAL_CLIENT,
+            ClientKind.TRUSTED_ADAPTER,
+        }:
             return
         if request.has_actor or request.has_account_id or request.has_space_id:
-            _deny("external_client must not submit internal identity claims")
+            _deny("external ingress must not submit internal identity claims")
 
     @staticmethod
     def _has_scope(principal: ClientPrincipal, scope: AuthScope) -> bool:
-        return scope in principal.scopes or AuthScope.ADMIN_RUNTIME in principal.scopes
+        if scope in principal.scopes:
+            return True
+        return (
+            principal.client_kind is ClientKind.ADMIN
+            and AuthScope.ADMIN_RUNTIME in principal.scopes
+        )
 
     def _require_scope(self, principal: ClientPrincipal, scope: AuthScope) -> None:
         if not self._has_scope(principal, scope):
@@ -115,7 +158,14 @@ class RuntimeAuthorizationPolicy:
 
     @staticmethod
     def _require_provider(principal: ClientPrincipal, provider: str) -> None:
-        if "*" in principal.allowed_providers or provider in principal.allowed_providers:
+        if "*" in principal.allowed_providers:
+            if principal.client_kind in {
+                ClientKind.EXTERNAL_CLIENT,
+                ClientKind.TRUSTED_ADAPTER,
+            }:
+                _deny("external ingress principal must not use wildcard provider")
+            return
+        if provider in principal.allowed_providers:
             return
         _deny("provider is not allowed for principal")
 

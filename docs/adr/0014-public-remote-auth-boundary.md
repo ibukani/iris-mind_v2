@@ -24,13 +24,20 @@ ingress の分離は維持する。
 - raw bearer token は config、example、log、error に保存・表示しない。
 - server は token hash だけを env から読み込む。TOML には token secret を置かない。
 - bearer token は typed `ClientPrincipal` に対応する。
+- `trusted_adapter` は external adapter 専用 profile とする。admin ではなく、`allowed_providers` と最小 scope で制限する。
+- `trusted_adapter` は wildcard provider、`admin.runtime`、通常 client 用 `observation.submit` を持てない。
+- `external_client` は `observation.submit.trusted`、`admin.runtime`、`ObservationCapability` を持てない。
 - `AuthScope` が RPC access を認可する。
 - `ObservationCapability` は runtime observation effects を認可する。
 - provider scope は provider impersonation を防ぐ。`request.provider`、
   `account_ref.provider`、`space_ref.provider` は `ClientPrincipal.allowed_providers`
-  の範囲内でなければならない。
+  の範囲内でなければならない。`trusted_adapter` の `SubmitObservation` は
+  `account_ref.provider` または `space_ref.provider` を持つ外部参照を要求する。
+- external ingress は Iris 内部の `ActorId` / `AccountId` / `SpaceId` を直接 claim できない。
+- `ObservationContext.source` と user-controlled metadata は auth/trust 判定に使わない。
 - delivery polling/reporting API は remote/public mode で unauthenticated にしない。
 - trusted adapter ingress capability は token 由来の `ClientPrincipal` から渡す。
+- 旧 `access_token` / `role` / `permissions` metadata 互換は追加しない。
 
 ## Out Of Scope
 
