@@ -31,6 +31,7 @@ def record_prompt_assembly_report(
             "truncated_item_count": report.truncated_item_count,
             "persona_profile_version": report.persona_profile_version,
             "persona_fallback_used": report.persona_fallback_used,
+            "persona_failure_reason": report.persona_failure_reason,
         }
     )
     logger.info("runtime.prompt_budget.assembly", **summary_fields)

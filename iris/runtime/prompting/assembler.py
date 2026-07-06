@@ -94,6 +94,7 @@ class RuntimePromptAssembler:
                 section_reports=result.report.section_reports,
                 persona_profile_version=builder.profile_version,
                 persona_fallback_used=builder.used_fallback,
+                persona_failure_reason=builder.failure_reason,
             ),
         )
 

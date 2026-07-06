@@ -207,4 +207,5 @@ def _wire_system_prompt_builder(config: IrisRuntimeConfig) -> SystemPromptBuilde
     return SystemPromptBuilder(
         loaded.profile(),
         used_fallback=loaded.used_fallback,
+        failure_reason=loaded.failure_reason,
     )

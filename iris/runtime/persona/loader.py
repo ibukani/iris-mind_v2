@@ -88,20 +88,10 @@ class PersonaProfileLoader:
             検証済み profile または完全な fallback。
         """
         try:
-            with path.open("rb") as file:
-                raw = load_toml(file)
-            profile = PersonaProfile.model_validate(raw)
+            content = path.read_bytes()
         except FileNotFoundError:
             return self._fallback("persona file not found")
-        except tomllib.TOMLDecodeError as exc:
-            return self._fallback(f"invalid TOML: {exc}")
-        except ValidationError as exc:
-            return self._fallback(f"profile validation failed: {exc}")
-        return PersonaLoadResult.from_profile(
-            profile,
-            used_fallback=False,
-            failure_reason=None,
-        )
+        return self._load_bytes(content, failure_prefix="persona load failed")
 
     def load_default(self) -> PersonaLoadResult:
         """Package に同梱した global persona 正本を読み込む。
@@ -111,10 +101,22 @@ class PersonaProfileLoader:
         """
         resource = files("iris.runtime.persona").joinpath("persona.toml")
         try:
-            raw = load_toml(BytesIO(resource.read_bytes()))
-            profile = PersonaProfile.model_validate(raw)
-        except (FileNotFoundError, tomllib.TOMLDecodeError, ValidationError) as exc:
+            content = resource.read_bytes()
+        except FileNotFoundError as exc:
             return self._fallback(f"packaged persona load failed: {exc}")
+        return self._load_bytes(content, failure_prefix="packaged persona load failed")
+
+    def _load_bytes(self, content: bytes, *, failure_prefix: str) -> PersonaLoadResult:
+        """同一のdecode/validation境界をfileとpackage resourceで共有する。
+
+        Returns:
+            検証済みprofileまたは完全なfallback。
+        """
+        try:
+            raw = load_toml(BytesIO(content))
+            profile = PersonaProfile.model_validate(raw)
+        except (UnicodeDecodeError, tomllib.TOMLDecodeError, ValidationError) as exc:
+            return self._fallback(f"{failure_prefix}: {exc}")
         return PersonaLoadResult.from_profile(
             profile,
             used_fallback=False,

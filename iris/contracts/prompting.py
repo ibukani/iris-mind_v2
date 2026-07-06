@@ -141,6 +141,7 @@ class PromptAssemblyReport(BaseModel):
     section_reports: tuple[PromptSectionAssemblyReport, ...]
     persona_profile_version: str | None = None
     persona_fallback_used: bool = False
+    persona_failure_reason: str | None = None
 
     @property
     def omitted_section_count(self) -> int:

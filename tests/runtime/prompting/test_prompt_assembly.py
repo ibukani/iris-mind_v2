@@ -106,6 +106,7 @@ def test_prompt_assembler_reports_persona_fallback_and_truncation(tmp_path: Path
         system_prompt_builder=SystemPromptBuilder(
             loaded.profile(),
             used_fallback=loaded.used_fallback,
+            failure_reason=loaded.failure_reason,
         ),
     )
 
@@ -118,6 +119,7 @@ def test_prompt_assembler_reports_persona_fallback_and_truncation(tmp_path: Path
     )
     assert result.report.persona_profile_version == "fallback-v1"
     assert result.report.persona_fallback_used is True
+    assert result.report.persona_failure_reason == "persona file not found"
     assert persona_report.output_chars <= 80
     assert persona_report.truncated_chars > 0
 

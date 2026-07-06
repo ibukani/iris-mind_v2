@@ -18,10 +18,12 @@ class SystemPromptBuilder:
         profile: PersonaProfile,
         *,
         used_fallback: bool = False,
+        failure_reason: str | None = None,
     ) -> None:
         """起動時に検証済み profile を固定する。"""
         self._profile = profile
         self._used_fallback = used_fallback
+        self._failure_reason = failure_reason
 
     @property
     def profile_version(self) -> str:
@@ -32,6 +34,11 @@ class SystemPromptBuilder:
     def used_fallback(self) -> bool:
         """Loader fallback が使われたかを返す。"""
         return self._used_fallback
+
+    @property
+    def failure_reason(self) -> str | None:
+        """Loader fallback の診断理由を返す。"""
+        return self._failure_reason
 
     def build_persona_section(self) -> PromptSectionInput:
         """安定した項目順で trusted persona section を生成する。
