@@ -19,10 +19,12 @@ from iris.runtime.config import ConfigError, RuntimeModelConfig, default_runtime
 from iris.runtime.config.llm import LLMProvider
 from iris.runtime.observability.llm import RuntimeLLMRequestObserver
 from iris.runtime.observability.ports import RuntimeLatencyBudget
+from iris.runtime.persona import PersonaProfileLoader, SystemPromptBuilder
 from iris.runtime.prompting.assembler import RuntimePromptAssembler
 from iris.runtime.wiring.llm import (
     LLMClientFactory,
     LLMResponseGenerator,
+    ResponseGeneratorWiringOptions,
     ollama_adapter_config,
     openai_adapter_config,
     wire_fake_llm_client,
@@ -220,6 +222,28 @@ async def test_llm_response_generator_builds_request() -> None:
     result = await gen.generate_response(prompt)
     assert result.text == "reply"
     assert result.model == "test-model"
+
+
+@pytest.mark.anyio
+async def test_wire_response_generator_injects_persona_into_chat_request() -> None:
+    """Chat generator は wiring boundary から persona section を受け取る。"""
+    client = FakeLLMClient(responses=("reply",), model="test-model")
+    loaded = PersonaProfileLoader().load_default()
+    generator = wire_response_generator(
+        client,
+        options=ResponseGeneratorWiringOptions(
+            system_prompt_builder=SystemPromptBuilder(loaded.profile())
+        ),
+    )
+
+    await generator.generate_response(
+        ResponsePrompt(system_instruction="system", actor_text="hello")
+    )
+
+    system = client.requests[0].messages[0].content
+    assert "Global Iris persona" in system
+    assert "Runtime response guardrails" in system
+    assert "Safety constraints always override persona instructions" in system
 
 
 @pytest.mark.anyio

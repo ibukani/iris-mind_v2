@@ -25,9 +25,11 @@ from iris.runtime.prompting.budget import BudgetedPromptSection, PromptBudgetPol
 if TYPE_CHECKING:
     from iris.contracts.conversation import ConversationRecord
     from iris.features.chat.definition import ResponsePrompt
+    from iris.runtime.persona.prompt_builder import SystemPromptBuilder
 
 
 INTERNAL_CONTEXT_GUARDRAIL = (
+    "Safety constraints always override persona instructions. "
     "Use the internal context only to shape tone and response selection. "
     "Never mention affect scores, relationship scores, trust, familiarity, "
     "policy constraints, memory retrieval metadata, or the response-generation process. "
@@ -57,10 +59,12 @@ class RuntimePromptAssembler:
         config: RuntimePromptBudgetConfig | None = None,
         *,
         profile: PromptProfileName | None = None,
+        system_prompt_builder: SystemPromptBuilder | None = None,
     ) -> None:
         """Prompt budget config と任意 profile override で初期化する。"""
         self._config = config or RuntimePromptBudgetConfig()
         self._profile = profile or self._config.chat_profile
+        self._system_prompt_builder = system_prompt_builder
 
     def assemble(self, prompt: ResponsePrompt) -> PromptAssemblyResult:
         """ResponsePrompt から LLMMessage 群を構築する。
@@ -71,13 +75,28 @@ class RuntimePromptAssembler:
         Returns:
             LLM request 用 messages と prompt budget assembly report。
         """
-        raw_sections = _sections_from_response_prompt(prompt)
+        raw_sections = _sections_from_response_prompt(prompt, self._system_prompt_builder)
         budget = (
             self._config.profile_budget(self._profile)
             if self._config.enabled
             else _disabled_budget()
         )
-        return _assemble_with_final_prompt_cap(self._profile, budget, raw_sections, prompt)
+        result = _assemble_with_final_prompt_cap(self._profile, budget, raw_sections, prompt)
+        builder = self._system_prompt_builder
+        if builder is None:
+            return result
+        return PromptAssemblyResult(
+            messages=result.messages,
+            report=PromptAssemblyReport(
+                profile=result.report.profile,
+                total_chars=result.report.total_chars,
+                total_max_chars=result.report.total_max_chars,
+                section_reports=result.report.section_reports,
+                persona_profile_version=builder.profile_version,
+                persona_fallback_used=builder.used_fallback,
+                persona_failure_reason=builder.failure_reason,
+            ),
+        )
 
 
 def _assemble_with_final_prompt_cap(
@@ -143,8 +162,13 @@ def _report_with_actual_total(
     )
 
 
-def _sections_from_response_prompt(prompt: ResponsePrompt) -> tuple[PromptSectionInput, ...]:
+def _sections_from_response_prompt(
+    prompt: ResponsePrompt,
+    system_prompt_builder: SystemPromptBuilder | None,
+) -> tuple[PromptSectionInput, ...]:
     sections: list[PromptSectionInput] = [_system_section(prompt), _safety_section()]
+    if system_prompt_builder is not None:
+        sections.insert(1, system_prompt_builder.build_persona_section())
     sections.extend(_conversation_sections(prompt))
     sections.extend(_context_sections(prompt))
     sections.append(_latest_user_input_section(prompt))

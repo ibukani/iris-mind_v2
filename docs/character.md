@@ -1,21 +1,23 @@
 ---
 title: Iris Character Profile
-description: Iris のキャラクター個性・人格・設定を管理するエントリ
-status: draft
-last_reviewed: 2026-07-01
+description: persona.toml の編集ガイドと人格設計意図
+status: active
+last_reviewed: 2026-07-06
 ---
 
 # Iris Character Profile
 
-このドキュメントは Iris の「人格」を定義する。`cognitive/` 層ではこの情報を PersonaPatch / SystemPrompt の生成元として参照する。外部アプリ層（`adapters/app_gateway/`）はこの情報を書き換えてはならない（参照のみ）。
+Iris の global persona の runtime-readable な正本は `iris/runtime/persona/persona.toml` である。この文書は編集ガイド、設計意図、非構造化の補足だけを扱う。Runtime はこの Markdown を読み込まない。
 
 ## 書き方
 
-原則として自由記述。ただし以下のガイドラインを守ること。
+人格を変更するときは `persona.toml` を編集し、loader validation と prompt assembly tests を実行する。この文書の自由記述は runtime behavior を変更しない。
 
-- 矛盾を避けるため、同じ項目を複数箇所に書かない（重複禁止）
-- 人格の変更はこのファイルのみで行い、code や prompt template に Personality ロジックを埋め込まない
-- 各セクションの `<!-- TODO: 内容を記述 -->` を実際の記述で置き換える
+- global persona と account / space 固有の interaction policy を混ぜない
+- memory、relationship、affect、user input を persona にコピーしない
+- safety 制約と競合する人格指示を書かない。競合時は safety が優先される
+- `version` は人格内容の変更時に更新する
+- 各配列は短い安定した指示にし、会話ログや取得コンテキストを含めない
 
 ---
 

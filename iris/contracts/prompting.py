@@ -139,6 +139,9 @@ class PromptAssemblyReport(BaseModel):
     total_chars: int = Field(ge=0)
     total_max_chars: int = Field(ge=0)
     section_reports: tuple[PromptSectionAssemblyReport, ...]
+    persona_profile_version: str | None = None
+    persona_fallback_used: bool = False
+    persona_failure_reason: str | None = None
 
     @property
     def omitted_section_count(self) -> int:

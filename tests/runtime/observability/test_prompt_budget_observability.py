@@ -40,6 +40,9 @@ def test_prompt_budget_observability_excludes_prompt_text() -> None:
         profile=PromptProfileName.LOCAL_BALANCED,
         total_chars=10,
         total_max_chars=100,
+        persona_profile_version="fallback-v1",
+        persona_fallback_used=True,
+        persona_failure_reason="persona file not found",
         section_reports=(
             PromptSectionAssemblyReport(
                 kind=PromptSectionKind.USER_MEMORY,
@@ -63,6 +66,7 @@ def test_prompt_budget_observability_excludes_prompt_text() -> None:
     assert logger.events[0][0] == "runtime.prompt_budget.assembly"
     assert logger.events[0][1]["profile"] == "local_balanced"
     assert logger.events[0][1]["prompt_total_chars"] == 10
+    assert logger.events[0][1]["persona_failure_reason"] == "persona file not found"
     assert logger.events[1][0] == "runtime.prompt_budget.section"
     assert logger.events[1][1]["section_kind"] == "user_memory"
     forbidden_keys = {"prompt", "prompt_text", "text", "user_text", "system_instruction"}

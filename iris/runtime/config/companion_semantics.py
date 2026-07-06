@@ -13,6 +13,7 @@ class RuntimeCompanionSemanticsConfig:
 
     appraisal_signals_enabled: bool = False
     dependency_risk_hint_enabled: bool = True
+    persona_prompt_enabled: bool = False
 
 
 def apply_companion_semantics_toml(
@@ -39,6 +40,14 @@ def apply_companion_semantics_toml(
             dependency_risk_hint_enabled=parse_bool(
                 table["dependency_risk_hint_enabled"],
                 "companion_semantics.dependency_risk_hint_enabled",
+            ),
+        )
+    if "persona_prompt_enabled" in table:
+        value = replace(
+            value,
+            persona_prompt_enabled=parse_bool(
+                table["persona_prompt_enabled"],
+                "companion_semantics.persona_prompt_enabled",
             ),
         )
     return validate_companion_semantics_config(value)

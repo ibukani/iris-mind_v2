@@ -472,6 +472,12 @@ def _companion_semantics_specs() -> tuple[ConfigFieldSpec, ...]:
             default=True,
             description="Appraisal signal から safety 接続用 dependency-risk hint を生成する。",
         ),
+        ConfigFieldSpec(
+            "companion_semantics.persona_prompt_enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="検証済み global persona section を prompt に組み込む。",
+        ),
     )
 
 

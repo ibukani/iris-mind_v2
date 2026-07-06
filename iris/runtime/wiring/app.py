@@ -9,6 +9,7 @@ from iris.adapters.persistence.sqlite.stores.memory import SQLiteMemoryStore
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL
 from iris.features.chat.definition import define_chat_feature
 from iris.runtime.app import IrisApp
+from iris.runtime.persona import PersonaProfileLoader, SystemPromptBuilder
 from iris.runtime.wiring.cognitive import (
     CognitiveCycleStores,
     CognitiveSemanticsOptions,
@@ -56,6 +57,7 @@ class ChatFeatureWiringOptions:
     model_call_budget: RuntimeModelCallBudgetConfig | None = None
     prompt_budget: RuntimePromptBudgetConfig | None = None
     inference_scheduler: LocalInferenceResourceScheduler | None = None
+    system_prompt_builder: SystemPromptBuilder | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +143,7 @@ def build_app_from_config(
             model_call_budget=config.model_call_budget,
             prompt_budget=config.prompt_budget,
             inference_scheduler=inference_scheduler,
+            system_prompt_builder=_wire_system_prompt_builder(config),
         ),
     )
     all_features = collect_feature_items((features, (chat_feature,)))
@@ -177,6 +180,7 @@ def _wire_chat_feature(
             max_tokens=options.max_tokens,
             prompt_budget_config=options.prompt_budget,
             inference_scheduler=options.inference_scheduler,
+            system_prompt_builder=options.system_prompt_builder,
         ),
     )
     if options.model_call_budget is not None:
@@ -189,3 +193,19 @@ def _wire_chat_feature(
             )
         )
     return define_chat_feature(generator)
+
+
+def _wire_system_prompt_builder(config: IrisRuntimeConfig) -> SystemPromptBuilder | None:
+    """Config gate が有効な場合だけ起動時に global persona を読み込む。
+
+    Returns:
+        有効時は検証済み builder、無効時は None。
+    """
+    if not config.companion_semantics.persona_prompt_enabled:
+        return None
+    loaded = PersonaProfileLoader().load_default()
+    return SystemPromptBuilder(
+        loaded.profile(),
+        used_fallback=loaded.used_fallback,
+        failure_reason=loaded.failure_reason,
+    )

@@ -7,6 +7,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 RUNTIME_ROOT = PROJECT_ROOT / "iris" / "runtime"
+PERSONA_RUNTIME_ROOT = RUNTIME_ROOT / "persona"
 EVENT_REACTION_FEATURE_ROOT = PROJECT_ROOT / "iris" / "features" / "event_reaction"
 EVENT_REACTION_PRESENTATION = PROJECT_ROOT / "iris" / "features" / "event_reaction" / "presenter.py"
 EVENT_REACTION_RUNNER = PROJECT_ROOT / "iris" / "runtime" / "ingress" / "activity_event_reaction.py"
@@ -22,10 +23,21 @@ ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
         "learning",
         "local_ai",
         "observability",
+        "persona",
         "prompting",
         "scheduler",
         "state",
         "wiring",
+    },
+)
+
+PERSONA_RUNTIME_FORBIDDEN_IMPORTS: frozenset[str] = frozenset(
+    {
+        "iris.adapters",
+        "iris.cognitive",
+        "iris.features",
+        "iris.presentation",
+        "iris.safety",
     },
 )
 
@@ -163,6 +175,16 @@ def test_runtime_top_level_package_dirs_are_allowlisted() -> None:
     assert not unexpected, "runtime top-level packages need architecture approval: " + ", ".join(
         unexpected,
     )
+
+
+def test_persona_runtime_does_not_import_behavior_or_output_layers() -> None:
+    """Persona load/build boundary を runtime orchestration と shared contracts に限定する。"""
+    violations = _forbidden_import_violations(
+        PERSONA_RUNTIME_ROOT,
+        PERSONA_RUNTIME_FORBIDDEN_IMPORTS,
+    )
+
+    assert not violations, "persona runtime imports forbidden layers:\n" + "\n".join(violations)
 
 
 def test_event_reaction_feature_does_not_import_outer_layers() -> None:
