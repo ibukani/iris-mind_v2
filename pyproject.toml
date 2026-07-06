@@ -27,6 +27,7 @@ include = ["iris*"]
 
 [tool.setuptools.package-data]
 "iris.runtime.config.templates" = ["*.toml"]
+"iris.runtime.persona" = ["persona.toml"]
 
 [tool.ruff]
 target-version = "py313"

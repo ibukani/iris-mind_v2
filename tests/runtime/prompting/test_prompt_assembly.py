@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from iris.adapters.llm.ports import LLMRole
 from iris.contracts.conversation import ConversationRecord, ConversationRole
@@ -11,7 +12,11 @@ from iris.contracts.prompting import PromptOverflowBehavior, PromptSectionKind
 from iris.core.ids import ObservationId, SessionId
 from iris.features.chat.definition import ResponsePrompt
 from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig, RuntimePromptSectionBudget
+from iris.runtime.persona import PersonaProfileLoader, SystemPromptBuilder
 from iris.runtime.prompting.assembler import RuntimePromptAssembler
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_prompt_assembler_separates_trusted_internal_external_and_user() -> None:
@@ -51,6 +56,70 @@ def test_prompt_assembler_separates_trusted_internal_external_and_user() -> None
     assert "Untrusted external context" in external_context.content
     assert "Relevant memories" in external_context.content
     assert result.report.profile.value == "local_balanced"
+
+
+def test_prompt_assembler_budgets_persona_separately_before_safety() -> None:
+    """Persona は trusted section として budget/report に入り、safety と混ざらない。"""
+    loaded = PersonaProfileLoader().load_default()
+    assembler = RuntimePromptAssembler(
+        RuntimePromptBudgetConfig(),
+        system_prompt_builder=SystemPromptBuilder(loaded.profile()),
+    )
+
+    result = assembler.assemble(
+        ResponsePrompt(
+            system_instruction="system",
+            actor_text="user text",
+            memory_snippets=("untrusted memory",),
+            constraints=("account-specific policy",),
+        )
+    )
+
+    reports = {report.kind: report for report in result.report.section_reports}
+    assert reports[PromptSectionKind.PERSONA].output_chars > 0
+    assert result.report.persona_profile_version == "1"
+    assert result.report.persona_fallback_used is False
+    system = result.messages[0].content
+    assert system.index("Global Iris persona") < system.index("Runtime response guardrails")
+    assert "untrusted memory" not in system
+    assert "account-specific policy" not in system
+
+
+def test_prompt_assembler_reports_persona_fallback_and_truncation(tmp_path: Path) -> None:
+    """Persona fallback と section truncation を assembly report に残す。"""
+    loaded = PersonaProfileLoader().load(tmp_path / "missing.toml")
+    base = RuntimePromptBudgetConfig()
+    config = replace(
+        base,
+        local_balanced=replace(
+            base.local_balanced,
+            persona=RuntimePromptSectionBudget(
+                max_chars=80,
+                max_items=1,
+                priority=95,
+                overflow_behavior=PromptOverflowBehavior.TRUNCATE,
+            ),
+        ),
+    )
+    assembler = RuntimePromptAssembler(
+        config,
+        system_prompt_builder=SystemPromptBuilder(
+            loaded.profile(),
+            used_fallback=loaded.used_fallback,
+        ),
+    )
+
+    result = assembler.assemble(ResponsePrompt(system_instruction="system", actor_text="hello"))
+
+    persona_report = next(
+        report
+        for report in result.report.section_reports
+        if report.kind is PromptSectionKind.PERSONA
+    )
+    assert result.report.persona_profile_version == "fallback-v1"
+    assert result.report.persona_fallback_used is True
+    assert persona_report.output_chars <= 80
+    assert persona_report.truncated_chars > 0
 
 
 def test_prompt_assembler_uses_proactive_short_profile_when_selected() -> None:
