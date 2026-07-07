@@ -34,6 +34,7 @@ class RetrievalFallbackReason(StrEnum):
     QUERY_LIMIT_ZERO = "query_limit_zero"
     EMBEDDING_UNAVAILABLE = "embedding_unavailable"
     EMBEDDING_TIMEOUT = "embedding_timeout"
+    RECORD_REFRESH_UNAVAILABLE = "record_refresh_unavailable"
     VECTOR_INDEX_UNAVAILABLE = "vector_index_unavailable"
     RERANKER_UNAVAILABLE = "reranker_unavailable"
     RERANKER_TIMEOUT = "reranker_timeout"
@@ -81,6 +82,12 @@ class RetrievalObservability(BaseModel):
     embedding_latency_ms: float = Field(default=0.0, ge=0.0)
     reranking_latency_ms: float = Field(default=0.0, ge=0.0)
     embedding_cache_hit: bool = False
+    record_embedding_scanned: int = Field(default=0, ge=0)
+    record_embedding_upserted: int = Field(default=0, ge=0)
+    record_embedding_unchanged: int = Field(default=0, ge=0)
+    record_embedding_missing: int = Field(default=0, ge=0)
+    record_embedding_stale: int = Field(default=0, ge=0)
+    record_embedding_incompatible: int = Field(default=0, ge=0)
     fallback_reason: RetrievalFallbackReason | None = None
 
 

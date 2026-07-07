@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import threading
+import time
 from typing import TYPE_CHECKING
 
 from iris.adapters.embeddings.fake import DeterministicFakeEmbedding
@@ -43,6 +44,7 @@ from iris.runtime.prompting.budget import PromptBudgetPolicy
 from iris.runtime.retrieval.memory import (
     MemoryRetrievalPipeline,
     MemoryRetrievalPolicy,
+    VectorMemoryRecordEmbeddingRefresher,
     memory_retrieval_policy_for_profile,
 )
 from iris.runtime.retrieval.overlap import MemoryOverlapDetectionPolicy, detect_memory_overlaps
@@ -56,6 +58,11 @@ if TYPE_CHECKING:
         EmbeddingRequest,
         EmbeddingResult,
     )
+
+
+_BLOCKING_RELEASE_SECONDS = 0.2
+_TIMEOUT_ASSERT_SECONDS = 0.15
+_TIMEOUT_MS = 10.0
 
 
 def test_memory_pipeline_uses_embedding_search_reranker_and_prompt_section() -> None:
@@ -131,6 +138,62 @@ def test_memory_pipeline_caches_query_embedding_between_same_queries() -> None:
     assert embedding.embed_text_calls == 1
     assert first.observability.embedding_cache_hit is False
     assert second.observability.embedding_cache_hit is True
+
+
+def test_memory_pipeline_refreshes_missing_and_stale_record_embeddings_only() -> None:
+    """Record embedding refresh は fresh entry を再 embedding しない。"""
+    embedding = _CountingEmbedding(DeterministicFakeEmbedding(dimension=8))
+    records = (
+        MemoryRecord(id=MemoryId("fresh"), text="fresh green tea"),
+        MemoryRecord(id=MemoryId("stale"), text="stale green tea"),
+        MemoryRecord(id=MemoryId("missing"), text="missing green tea"),
+    )
+    store = _store(*records)
+    index = InMemoryVectorMemoryIndex()
+    index.upsert(
+        vector_memory_entry_from_record(
+            records[0],
+            vector=embedding.delegate.embed(records[0].text),
+            embedding_provider=embedding.provider,
+            embedding_model=embedding.model_id,
+            embedding_dimension=embedding.dimension,
+        )
+    )
+    index.upsert(
+        VectorMemoryEntry(
+            memory_id=records[1].id,
+            vector=embedding.delegate.embed(records[1].text),
+            source_digest="old-digest",
+            embedding_provider=embedding.provider,
+            embedding_model=embedding.model_id,
+            embedding_dimension=embedding.dimension,
+        )
+    )
+    pipeline = MemoryRetrievalPipeline(
+        store=store,
+        vector_index=index,
+        embedding_client=embedding,
+        reranker=None,
+        record_refresher=VectorMemoryRecordEmbeddingRefresher(
+            index=index,
+            embedding_client=embedding,
+        ),
+        policy=MemoryRetrievalPolicy(
+            max_retrieved_candidates=3,
+            max_reranked_candidates=3,
+            max_prompt_selected_items=3,
+        ),
+    )
+
+    result = pipeline.retrieve(MemoryQuery(text="green tea", limit=3))
+
+    assert embedding.embed_text_batch_calls == 1
+    assert embedding.last_batch_texts == ("stale green tea", "missing green tea")
+    assert result.observability.record_embedding_scanned == 3
+    assert result.observability.record_embedding_upserted == 2
+    assert result.observability.record_embedding_unchanged == 1
+    assert result.observability.record_embedding_stale == 1
+    assert result.observability.record_embedding_missing == 1
 
 
 def test_memory_pipeline_honors_query_limit_before_provider_calls() -> None:
@@ -233,48 +296,94 @@ def test_memory_pipeline_falls_back_to_vector_results_when_reranker_unavailable(
     assert result.observability.fallback_reason is RetrievalFallbackReason.RERANKER_UNAVAILABLE
 
 
-def test_memory_pipeline_timeout_returns_no_memory_without_breaking_response_path() -> None:
-    """Embedding / reranker timeout は例外を漏らさず no memory fallback にする。"""
+def test_memory_pipeline_filters_low_scores_when_reranker_unavailable() -> None:
+    """Reranker unavailable 経路でも min_score 未満は prompt に載せない。"""
     embedding = DeterministicFakeEmbedding(dimension=8)
     records = (MemoryRecord(id=MemoryId("m1"), text="green tea"),)
     store = _store(*records)
     index = _index_for_records(records, embedding)
-    embedding_timeout = MemoryRetrievalPipeline(
+    pipeline = MemoryRetrievalPipeline(
         store=store,
         vector_index=index,
+        embedding_client=embedding,
+        reranker=_FailingReranker(),
+        policy=MemoryRetrievalPolicy(
+            max_retrieved_candidates=1,
+            max_reranked_candidates=1,
+            max_prompt_selected_items=1,
+            min_score=2.0,
+        ),
+    )
+
+    result = pipeline.retrieve(MemoryQuery(text="tea", limit=5))
+
+    assert result.items == ()
+    assert result.prompt_section is None
+    assert result.observability.fallback_reason is RetrievalFallbackReason.LOW_SCORE
+
+
+def test_memory_pipeline_embedding_timeout_does_not_wait_for_provider_return() -> None:
+    """Embedding timeout は provider return 前に no-memory fallback する。"""
+    release = threading.Event()
+    timer = threading.Timer(_BLOCKING_RELEASE_SECONDS, release.set)
+    embedding = _BlockingEmbedding(DeterministicFakeEmbedding(dimension=8), release)
+    records = (MemoryRecord(id=MemoryId("m1"), text="green tea"),)
+    pipeline = MemoryRetrievalPipeline(
+        store=_store(*records),
+        vector_index=_index_for_records(records, embedding.delegate),
         embedding_client=embedding,
         reranker=None,
         policy=MemoryRetrievalPolicy(
             max_retrieved_candidates=1,
             max_reranked_candidates=1,
             max_prompt_selected_items=1,
-            embedding_timeout_ms=1.0,
+            embedding_timeout_ms=_TIMEOUT_MS,
         ),
-        clock=_StepClock((0.0, 0.01)),
     )
-    reranker_timeout = MemoryRetrievalPipeline(
+
+    timer.start()
+    started = time.monotonic()
+    result = pipeline.retrieve(MemoryQuery(text="tea", limit=5))
+    elapsed = time.monotonic() - started
+    release.set()
+    timer.cancel()
+
+    assert result.items == ()
+    assert result.observability.fallback_reason is RetrievalFallbackReason.EMBEDDING_TIMEOUT
+    assert elapsed < _TIMEOUT_ASSERT_SECONDS
+
+
+def test_memory_pipeline_reranker_timeout_does_not_wait_for_provider_return() -> None:
+    """Reranker timeout は provider return 前に no-memory fallback する。"""
+    release = threading.Event()
+    timer = threading.Timer(_BLOCKING_RELEASE_SECONDS, release.set)
+    embedding = DeterministicFakeEmbedding(dimension=8)
+    records = (MemoryRecord(id=MemoryId("m1"), text="green tea"),)
+    store = _store(*records)
+    index = _index_for_records(records, embedding)
+    pipeline = MemoryRetrievalPipeline(
         store=store,
         vector_index=index,
         embedding_client=embedding,
-        reranker=FakeReranker({"m1": 1.0}),
+        reranker=_BlockingReranker(release),
         policy=MemoryRetrievalPolicy(
             max_retrieved_candidates=1,
             max_reranked_candidates=1,
             max_prompt_selected_items=1,
-            reranker_timeout_ms=1.0,
+            reranker_timeout_ms=_TIMEOUT_MS,
         ),
-        clock=_StepClock((0.0, 0.0, 0.0, 0.01)),
     )
 
-    embedding_result = embedding_timeout.retrieve(MemoryQuery(text="tea", limit=5))
-    reranker_result = reranker_timeout.retrieve(MemoryQuery(text="tea", limit=5))
+    timer.start()
+    started = time.monotonic()
+    result = pipeline.retrieve(MemoryQuery(text="tea", limit=5))
+    elapsed = time.monotonic() - started
+    release.set()
+    timer.cancel()
 
-    assert embedding_result.items == ()
-    assert (
-        embedding_result.observability.fallback_reason is RetrievalFallbackReason.EMBEDDING_TIMEOUT
-    )
-    assert reranker_result.items == ()
-    assert reranker_result.observability.fallback_reason is RetrievalFallbackReason.RERANKER_TIMEOUT
+    assert result.items == ()
+    assert result.observability.fallback_reason is RetrievalFallbackReason.RERANKER_TIMEOUT
+    assert elapsed < _TIMEOUT_ASSERT_SECONDS
 
 
 def test_memory_pipeline_keeps_scope_and_source_boundaries() -> None:
@@ -381,6 +490,7 @@ class _CountingEmbedding:
     def __init__(self, delegate: DeterministicFakeEmbedding) -> None:
         self.delegate = delegate
         self.embed_text_calls = 0
+        self.embed_text_batch_calls = 0
         self.last_batch_texts: tuple[str, ...] = ()
 
     @property
@@ -400,7 +510,33 @@ class _CountingEmbedding:
         return self.delegate.embed_text(request)
 
     def embed_text_batch(self, request: EmbeddingBatchRequest) -> EmbeddingBatchResult:
+        self.embed_text_batch_calls += 1
         self.last_batch_texts = request.texts
+        return self.delegate.embed_text_batch(request)
+
+
+class _BlockingEmbedding:
+    def __init__(self, delegate: DeterministicFakeEmbedding, release: threading.Event) -> None:
+        self.delegate = delegate
+        self._release = release
+
+    @property
+    def provider(self) -> str:
+        return self.delegate.provider
+
+    @property
+    def model_id(self) -> str:
+        return self.delegate.model_id
+
+    @property
+    def dimension(self) -> int:
+        return self.delegate.dimension
+
+    def embed_text(self, request: EmbeddingRequest) -> EmbeddingResult:
+        self._release.wait()
+        return self.delegate.embed_text(request)
+
+    def embed_text_batch(self, request: EmbeddingBatchRequest) -> EmbeddingBatchResult:
         return self.delegate.embed_text_batch(request)
 
 
@@ -417,6 +553,16 @@ class _SpyReranker:
 class _FailingReranker:
     def rerank(self, request: RerankRequest) -> RerankResult:
         raise RuntimeError(request.query)
+
+
+class _BlockingReranker:
+    def __init__(self, release: threading.Event) -> None:
+        self._release = release
+        self._delegate = FakeReranker({"m1": 1.0})
+
+    def rerank(self, request: RerankRequest) -> RerankResult:
+        self._release.wait()
+        return self._delegate.rerank(request)
 
 
 class _FailingVectorIndex:
@@ -440,21 +586,6 @@ class _FailingVectorIndex:
 
     def ids(self) -> tuple[MemoryId, ...]:
         return ()
-
-
-@dataclass
-class _StepClock:
-    values: tuple[float, ...]
-
-    def __post_init__(self) -> None:
-        self._index = 0
-
-    def __call__(self) -> float:
-        if self._index >= len(self.values):
-            return self.values[-1]
-        value = self.values[self._index]
-        self._index += 1
-        return value
 
 
 def _store(*records: MemoryRecord) -> InMemoryMemoryStore:
