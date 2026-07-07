@@ -8,7 +8,12 @@ import time
 from typing import TYPE_CHECKING
 
 from iris.contracts.embeddings import EmbeddingRequest, EmbeddingResult
-from iris.contracts.memory import MemoryQuery, MemorySearchResult, VectorMemorySearchFilter
+from iris.contracts.memory import (
+    MemoryQuery,
+    MemorySearchResult,
+    VectorMemoryIndexError,
+    VectorMemorySearchFilter,
+)
 from iris.contracts.prompting import PromptSectionInput, PromptSectionKind, PromptTrustBoundary
 from iris.contracts.retrieval import (
     RerankCandidate,
@@ -107,6 +112,8 @@ class MemoryRetrievalPipeline:
         result: RetrievalPipelineResult
         if not query.text.strip():
             result = _empty_result(RetrievalFallbackReason.EMPTY_QUERY)
+        elif query.limit <= 0:
+            result = _empty_result(RetrievalFallbackReason.QUERY_LIMIT_ZERO)
         elif self._policy.max_prompt_selected_items == 0:
             result = _empty_result(RetrievalFallbackReason.PROMPT_BUDGET_ZERO)
         else:
@@ -114,6 +121,7 @@ class MemoryRetrievalPipeline:
         return result
 
     def _retrieve_with_prompt_budget(self, query: MemoryQuery) -> RetrievalPipelineResult:
+        limits = _limits_for_query(self._policy, query)
         embedding = self._embed_query(query.text)
         if embedding.result is None:
             return _empty_result(
@@ -121,8 +129,23 @@ class MemoryRetrievalPipeline:
                 embedding_latency_ms=embedding.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
             )
+        return self._retrieve_with_embedding(query, limits, embedding, embedding.result)
 
-        retrieved = self._retrieve_vector_candidates(query, embedding.result)
+    def _retrieve_with_embedding(
+        self,
+        query: MemoryQuery,
+        limits: _RetrievalLimits,
+        embedding: _EmbeddingOutcome,
+        embedding_result: EmbeddingResult,
+    ) -> RetrievalPipelineResult:
+        try:
+            retrieved = self._retrieve_vector_candidates(query, embedding_result, limits)
+        except VectorMemoryIndexError:
+            return _empty_result(
+                RetrievalFallbackReason.VECTOR_INDEX_UNAVAILABLE,
+                embedding_latency_ms=embedding.latency_ms,
+                embedding_cache_hit=embedding.cache_hit,
+            )
         if not retrieved:
             return _empty_result(
                 RetrievalFallbackReason.EMPTY_INDEX,
@@ -130,7 +153,7 @@ class MemoryRetrievalPipeline:
                 embedding_cache_hit=embedding.cache_hit,
             )
 
-        reranked = self._rerank(query.text, retrieved)
+        reranked = self._rerank(query.text, retrieved, limits)
         if reranked.fallback_reason is RetrievalFallbackReason.RERANKER_TIMEOUT:
             return _empty_result(
                 RetrievalFallbackReason.RERANKER_TIMEOUT,
@@ -139,7 +162,7 @@ class MemoryRetrievalPipeline:
                 reranking_latency_ms=reranked.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
             )
-        selected = self._select_items(retrieved, reranked.result, embedding.result)
+        selected = self._select_items(retrieved, reranked.result, embedding_result, limits)
         fallback = RetrievalFallbackReason.LOW_SCORE if not selected else None
         return RetrievalPipelineResult(
             items=selected,
@@ -199,12 +222,13 @@ class MemoryRetrievalPipeline:
         self,
         query: MemoryQuery,
         embedding: EmbeddingResult,
+        limits: _RetrievalLimits,
     ) -> tuple[MemorySearchResult, ...]:
-        if self._policy.max_retrieved_candidates == 0:
+        if limits.max_retrieved_candidates == 0:
             return ()
         raw = self._vector_index.search(
             embedding.vector,
-            limit=self._policy.max_retrieved_candidates,
+            limit=limits.max_retrieved_candidates,
             filters=VectorMemorySearchFilter(
                 actor_id=query.actor_id,
                 space_id=query.space_id,
@@ -224,6 +248,7 @@ class MemoryRetrievalPipeline:
         self,
         query_text: str,
         candidates: tuple[MemorySearchResult, ...],
+        limits: _RetrievalLimits,
     ) -> _RerankOutcome:
         if self._reranker is None:
             return _RerankOutcome(
@@ -243,9 +268,9 @@ class MemoryRetrievalPipeline:
                             base_score=candidate.score,
                             metadata=candidate.record.metadata,
                         )
-                        for candidate in candidates[: self._policy.max_reranked_candidates]
+                        for candidate in candidates[: limits.max_reranked_candidates]
                     ),
-                    limit=self._policy.max_prompt_selected_items,
+                    limit=limits.max_prompt_selected_items,
                     model_slot=self._policy.model_slot,
                     metadata={"stage": "memory_retrieval_rerank"},
                 )
@@ -271,9 +296,10 @@ class MemoryRetrievalPipeline:
         retrieved: tuple[MemorySearchResult, ...],
         reranked: RerankResult | None,
         embedding: EmbeddingResult,
+        limits: _RetrievalLimits,
     ) -> tuple[RetrievedContextItem, ...]:
         if reranked is None:
-            ranked = retrieved[: self._policy.max_prompt_selected_items]
+            ranked = retrieved[: limits.max_prompt_selected_items]
             return tuple(_item_from_vector_result(self._policy, item, embedding) for item in ranked)
         by_id = {str(item.record.id): item for item in retrieved}
         selected: list[RetrievedContextItem] = []
@@ -293,7 +319,7 @@ class MemoryRetrievalPipeline:
                     metadata=memory.record.metadata,
                 )
             )
-        return tuple(selected[: self._policy.max_prompt_selected_items])
+        return tuple(selected[: limits.max_prompt_selected_items])
 
 
 def memory_retrieval_policy_for_profile(
@@ -343,6 +369,22 @@ class _RerankOutcome:
     latency_ms: float
     fallback_reason: RetrievalFallbackReason | None = None
     error_message: str | None = None
+
+
+@dataclass(frozen=True)
+class _RetrievalLimits:
+    max_retrieved_candidates: int
+    max_reranked_candidates: int
+    max_prompt_selected_items: int
+
+
+def _limits_for_query(policy: MemoryRetrievalPolicy, query: MemoryQuery) -> _RetrievalLimits:
+    query_limit = max(query.limit, 0)
+    return _RetrievalLimits(
+        max_retrieved_candidates=min(policy.max_retrieved_candidates, query_limit),
+        max_reranked_candidates=min(policy.max_reranked_candidates, query_limit),
+        max_prompt_selected_items=min(policy.max_prompt_selected_items, query_limit),
+    )
 
 
 def _selected_item_limit(

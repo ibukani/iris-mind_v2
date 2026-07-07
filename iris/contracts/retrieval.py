@@ -31,8 +31,10 @@ class RetrievalFallbackReason(StrEnum):
 
     EMPTY_QUERY = "empty_query"
     EMPTY_INDEX = "empty_index"
+    QUERY_LIMIT_ZERO = "query_limit_zero"
     EMBEDDING_UNAVAILABLE = "embedding_unavailable"
     EMBEDDING_TIMEOUT = "embedding_timeout"
+    VECTOR_INDEX_UNAVAILABLE = "vector_index_unavailable"
     RERANKER_UNAVAILABLE = "reranker_unavailable"
     RERANKER_TIMEOUT = "reranker_timeout"
     PROMPT_BUDGET_ZERO = "prompt_budget_zero"

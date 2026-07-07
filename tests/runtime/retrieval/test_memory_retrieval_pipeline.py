@@ -14,6 +14,11 @@ from iris.contracts.memory import (
     MemoryKind,
     MemoryQuery,
     MemoryRecord,
+    VectorMemoryEntry,
+    VectorMemoryEntryMetadata,
+    VectorMemoryIndexError,
+    VectorMemorySearchFilter,
+    VectorMemorySearchResult,
     vector_memory_entry_from_record,
 )
 from iris.contracts.prompting import (
@@ -43,6 +48,8 @@ from iris.runtime.retrieval.memory import (
 from iris.runtime.retrieval.overlap import MemoryOverlapDetectionPolicy, detect_memory_overlaps
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from iris.contracts.embeddings import (
         EmbeddingBatchRequest,
         EmbeddingBatchResult,
@@ -124,6 +131,82 @@ def test_memory_pipeline_caches_query_embedding_between_same_queries() -> None:
     assert embedding.embed_text_calls == 1
     assert first.observability.embedding_cache_hit is False
     assert second.observability.embedding_cache_hit is True
+
+
+def test_memory_pipeline_honors_query_limit_before_provider_calls() -> None:
+    """MemoryQuery.limit=0 は provider call なしで no-memory fallback にする。"""
+    embedding = _CountingEmbedding(DeterministicFakeEmbedding(dimension=8))
+    records = (MemoryRecord(id=MemoryId("m1"), text="green tea"),)
+    pipeline = MemoryRetrievalPipeline(
+        store=_store(*records),
+        vector_index=_index_for_records(records, embedding.delegate),
+        embedding_client=embedding,
+        reranker=_SpyReranker({"m1": 1.0}),
+        policy=MemoryRetrievalPolicy(
+            max_retrieved_candidates=5,
+            max_reranked_candidates=5,
+            max_prompt_selected_items=5,
+        ),
+    )
+
+    result = pipeline.retrieve(MemoryQuery(text="tea", limit=0))
+
+    assert result.items == ()
+    assert result.observability.fallback_reason is RetrievalFallbackReason.QUERY_LIMIT_ZERO
+    assert embedding.embed_text_calls == 0
+
+
+def test_memory_pipeline_clamps_retrieval_rerank_and_selection_to_query_limit() -> None:
+    """MemoryQuery.limit は retrieved/reranked/selected の上限として働く。"""
+    embedding = DeterministicFakeEmbedding(dimension=8)
+    records = (
+        MemoryRecord(id=MemoryId("m1"), text="green tea"),
+        MemoryRecord(id=MemoryId("m2"), text="sencha tea"),
+        MemoryRecord(id=MemoryId("m3"), text="black tea"),
+    )
+    reranker = _SpyReranker({"m1": 0.7, "m2": 0.9, "m3": 0.8})
+    pipeline = MemoryRetrievalPipeline(
+        store=_store(*records),
+        vector_index=_index_for_records(records, embedding),
+        embedding_client=embedding,
+        reranker=reranker,
+        policy=MemoryRetrievalPolicy(
+            max_retrieved_candidates=5,
+            max_reranked_candidates=5,
+            max_prompt_selected_items=5,
+        ),
+    )
+
+    result = pipeline.retrieve(MemoryQuery(text="tea", limit=1))
+
+    assert len(result.items) == 1
+    assert result.observability.retrieved_count == 1
+    assert result.observability.reranked_count == 1
+    assert reranker.last_request is not None
+    assert len(reranker.last_request.candidates) == 1
+    assert reranker.last_request.limit == 1
+
+
+def test_memory_pipeline_converts_vector_index_failure_to_no_memory_fallback() -> None:
+    """Vector index failure は hot path から例外を漏らさない。"""
+    embedding = DeterministicFakeEmbedding(dimension=8)
+    records = (MemoryRecord(id=MemoryId("m1"), text="green tea"),)
+    pipeline = MemoryRetrievalPipeline(
+        store=_store(*records),
+        vector_index=_FailingVectorIndex(),
+        embedding_client=embedding,
+        reranker=None,
+        policy=MemoryRetrievalPolicy(
+            max_retrieved_candidates=5,
+            max_reranked_candidates=5,
+            max_prompt_selected_items=5,
+        ),
+    )
+
+    result = pipeline.retrieve(MemoryQuery(text="tea", limit=5))
+
+    assert result.items == ()
+    assert result.observability.fallback_reason is RetrievalFallbackReason.VECTOR_INDEX_UNAVAILABLE
 
 
 def test_memory_pipeline_falls_back_to_vector_results_when_reranker_unavailable() -> None:
@@ -334,6 +417,29 @@ class _SpyReranker:
 class _FailingReranker:
     def rerank(self, request: RerankRequest) -> RerankResult:
         raise RuntimeError(request.query)
+
+
+class _FailingVectorIndex:
+    def upsert(self, entry: VectorMemoryEntry) -> None:
+        raise VectorMemoryIndexError(str(entry.memory_id))
+
+    def delete(self, memory_id: MemoryId) -> None:
+        raise VectorMemoryIndexError(str(memory_id))
+
+    def search(
+        self,
+        query_vector: Sequence[float],
+        *,
+        limit: int,
+        filters: VectorMemorySearchFilter | None = None,
+    ) -> tuple[VectorMemorySearchResult, ...]:
+        raise VectorMemoryIndexError(str((len(query_vector), limit, filters)))
+
+    def metadata(self, memory_id: MemoryId) -> VectorMemoryEntryMetadata | None:
+        raise VectorMemoryIndexError(str(memory_id))
+
+    def ids(self) -> tuple[MemoryId, ...]:
+        return ()
 
 
 @dataclass
