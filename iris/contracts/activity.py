@@ -67,7 +67,9 @@ class InteractionActivitySnapshot(BaseModel):
     active: bool
     modality: InteractionModality
     reason: str | None
+    provider_sequence: int | None
     observed_at: datetime
+    received_at: datetime
     expires_at: datetime
 
 

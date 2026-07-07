@@ -54,6 +54,8 @@ def test_interaction_event_maps_to_generic_transition(
     assert snapshot.active is (expected_state == "active")
     assert snapshot.modality is InteractionModality.VOICE
     assert snapshot.reason == "recording"
+    assert snapshot.provider_sequence == 1
+    assert snapshot.received_at == _NOW
     assert snapshot.provider == "discord"
 
 
@@ -159,6 +161,72 @@ async def test_older_started_event_does_not_resurrect_stopped_state() -> None:
 
 
 @pytest.mark.anyio
+async def test_provider_sequence_takes_priority_over_observed_at_order() -> None:
+    """provider_sequenceがある場合はobserved_atよりprovider順序を優先する。"""
+    store = InMemoryInteractionActivityProjectionStore()
+    stopped = interaction_snapshot_from_event(
+        _event(
+            ActivityKind.ACTOR_INPUT_STOPPED,
+            occurred_at=_NOW + timedelta(seconds=10),
+            provider_sequence=2,
+        ),
+        _ingress(),
+        now=_NOW + timedelta(seconds=10),
+        max_ttl_seconds=60,
+    )
+    stale_started = interaction_snapshot_from_event(
+        _event(
+            ActivityKind.ACTOR_INPUT_STARTED,
+            occurred_at=_NOW + timedelta(seconds=20),
+            provider_sequence=1,
+        ),
+        _ingress(),
+        now=_NOW + timedelta(seconds=20),
+        max_ttl_seconds=60,
+    )
+    assert stopped is not None
+    assert stale_started is not None
+
+    await store.apply(stopped)
+    await store.apply(stale_started)
+
+    assert await _active(store, now=_NOW + timedelta(seconds=20)) == ()
+
+
+@pytest.mark.anyio
+async def test_received_at_breaks_ties_when_observed_at_matches() -> None:
+    """provider_sequenceがない場合はobserved_at/received_at順で古いsnapshotを捨てる。"""
+    store = InMemoryInteractionActivityProjectionStore()
+    stopped = interaction_snapshot_from_event(
+        _event(
+            ActivityKind.ACTOR_INPUT_STOPPED,
+            provider_sequence=None,
+            received_at=_NOW + timedelta(seconds=10),
+        ),
+        _ingress(),
+        now=_NOW + timedelta(seconds=10),
+        max_ttl_seconds=60,
+    )
+    stale_started = interaction_snapshot_from_event(
+        _event(
+            ActivityKind.ACTOR_INPUT_STARTED,
+            provider_sequence=None,
+            received_at=_NOW + timedelta(seconds=1),
+        ),
+        _ingress(),
+        now=_NOW + timedelta(seconds=11),
+        max_ttl_seconds=60,
+    )
+    assert stopped is not None
+    assert stale_started is not None
+
+    await store.apply(stopped)
+    await store.apply(stale_started)
+
+    assert await _active(store, now=_NOW + timedelta(seconds=11)) == ()
+
+
+@pytest.mark.anyio
 async def test_expired_state_and_other_space_are_not_returned() -> None:
     """Stale stateを無効化し、provider/space scopeを分離する。"""
     store = InMemoryInteractionActivityProjectionStore()
@@ -232,12 +300,14 @@ def _event(
     *,
     metadata: dict[str, str] | None = None,
     occurred_at: datetime = _NOW,
+    received_at: datetime = _NOW,
+    provider_sequence: int | None = 1,
 ) -> ActivityEventRecord:
     return ActivityEventRecord(
         activity_id=ActivityId("activity-1"),
         observation_id=ObservationId("observation-1"),
         provider_event_id="provider-event-1",
-        provider_sequence=1,
+        provider_sequence=provider_sequence,
         actor_id=ActorId("actor-1"),
         account_id=AccountId("account-1"),
         device_id=None,
@@ -245,7 +315,7 @@ def _event(
         source="user-controlled-source",
         kind=kind,
         occurred_at=occurred_at,
-        received_at=_NOW,
+        received_at=received_at,
         metadata=metadata
         or {
             "modality": "voice",

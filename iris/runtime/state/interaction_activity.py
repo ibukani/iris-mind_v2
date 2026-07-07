@@ -53,16 +53,16 @@ class InMemoryInteractionActivityProjectionStore(InteractionActivityProjectionSt
     def __init__(self) -> None:
         """空のprojectionを初期化する。"""
         self._snapshots: dict[_InteractionActivityKey, InteractionActivitySnapshot] = {}
-        self._latest_observed_at: dict[_InteractionActivityKey, datetime] = {}
+        self._latest_snapshots: dict[_InteractionActivityKey, InteractionActivitySnapshot] = {}
 
     @override
     async def apply(self, snapshot: InteractionActivitySnapshot) -> None:
         """同一scope/channelの状態を新しい観測時刻のsnapshotで置き換える。"""
         key = _key_from_snapshot(snapshot)
-        latest_observed_at = self._latest_observed_at.get(key)
-        if latest_observed_at is not None and snapshot.observed_at < latest_observed_at:
+        latest_snapshot = self._latest_snapshots.get(key)
+        if latest_snapshot is not None and _is_older_snapshot(snapshot, latest_snapshot):
             return
-        self._latest_observed_at[key] = snapshot.observed_at
+        self._latest_snapshots[key] = snapshot
         self._snapshots[key] = snapshot
 
     @override
@@ -137,7 +137,9 @@ def interaction_snapshot_from_event(
         active=active,
         modality=_modality(event),
         reason=event.metadata.get(_REASON_KEY),
+        provider_sequence=event.provider_sequence,
         observed_at=event.occurred_at,
+        received_at=event.received_at,
         expires_at=expires_at if active else now,
     )
 
@@ -195,4 +197,24 @@ def _key_from_snapshot(snapshot: InteractionActivitySnapshot) -> _InteractionAct
         account_id=snapshot.account_id,
         space_id=snapshot.space_id,
         channel=snapshot.channel,
+    )
+
+
+def _is_older_snapshot(
+    candidate: InteractionActivitySnapshot,
+    latest: InteractionActivitySnapshot,
+) -> bool:
+    if candidate.provider_sequence is not None and latest.provider_sequence is not None:
+        return (
+            candidate.provider_sequence,
+            candidate.observed_at,
+            candidate.received_at,
+        ) < (
+            latest.provider_sequence,
+            latest.observed_at,
+            latest.received_at,
+        )
+    return (candidate.observed_at, candidate.received_at) < (
+        latest.observed_at,
+        latest.received_at,
     )
