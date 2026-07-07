@@ -128,6 +128,37 @@ async def test_started_stopped_and_repeated_started_are_idempotent() -> None:
 
 
 @pytest.mark.anyio
+async def test_older_started_event_does_not_resurrect_stopped_state() -> None:
+    """Out-of-orderの古いstartedで新しいstopped stateを上書きしない。"""
+    store = InMemoryInteractionActivityProjectionStore()
+    stopped = interaction_snapshot_from_event(
+        _event(
+            ActivityKind.ACTOR_INPUT_STOPPED,
+            occurred_at=_NOW + timedelta(seconds=10),
+        ),
+        _ingress(),
+        now=_NOW + timedelta(seconds=10),
+        max_ttl_seconds=60,
+    )
+    older_started = interaction_snapshot_from_event(
+        _event(
+            ActivityKind.ACTOR_INPUT_STARTED,
+            occurred_at=_NOW + timedelta(seconds=1),
+        ),
+        _ingress(),
+        now=_NOW + timedelta(seconds=11),
+        max_ttl_seconds=60,
+    )
+    assert stopped is not None
+    assert older_started is not None
+
+    await store.apply(stopped)
+    await store.apply(older_started)
+
+    assert await _active(store, now=_NOW + timedelta(seconds=11)) == ()
+
+
+@pytest.mark.anyio
 async def test_expired_state_and_other_space_are_not_returned() -> None:
     """Stale stateを無効化し、provider/space scopeを分離する。"""
     store = InMemoryInteractionActivityProjectionStore()
@@ -200,6 +231,7 @@ def _event(
     kind: ActivityKind,
     *,
     metadata: dict[str, str] | None = None,
+    occurred_at: datetime = _NOW,
 ) -> ActivityEventRecord:
     return ActivityEventRecord(
         activity_id=ActivityId("activity-1"),
@@ -212,7 +244,7 @@ def _event(
         space_id=SpaceId("space-1"),
         source="user-controlled-source",
         kind=kind,
-        occurred_at=_NOW,
+        occurred_at=occurred_at,
         received_at=_NOW,
         metadata=metadata
         or {

@@ -53,11 +53,17 @@ class InMemoryInteractionActivityProjectionStore(InteractionActivityProjectionSt
     def __init__(self) -> None:
         """空のprojectionを初期化する。"""
         self._snapshots: dict[_InteractionActivityKey, InteractionActivitySnapshot] = {}
+        self._latest_observed_at: dict[_InteractionActivityKey, datetime] = {}
 
     @override
     async def apply(self, snapshot: InteractionActivitySnapshot) -> None:
-        """同一scope/channelの状態を冪等に置き換える。"""
-        self._snapshots[_key_from_snapshot(snapshot)] = snapshot
+        """同一scope/channelの状態を新しい観測時刻のsnapshotで置き換える。"""
+        key = _key_from_snapshot(snapshot)
+        latest_observed_at = self._latest_observed_at.get(key)
+        if latest_observed_at is not None and snapshot.observed_at < latest_observed_at:
+            return
+        self._latest_observed_at[key] = snapshot.observed_at
+        self._snapshots[key] = snapshot
 
     @override
     async def active_for_target(
