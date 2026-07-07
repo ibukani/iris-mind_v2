@@ -13,12 +13,5 @@ enabled = true
 chat_profile = "local_balanced"
 proactive_profile = "proactive_short"
 
-[companion_semantics]
-persona_prompt_enabled = false
-
-[interaction_activity]
-enabled = false
-max_ttl_seconds = 300.0
-
 [model_call_budget]
 enabled = true
