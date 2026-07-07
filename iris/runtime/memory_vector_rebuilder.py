@@ -84,18 +84,7 @@ class MemoryVectorIndexRebuilder:
         upserted = 0
         for start in range(0, len(stale), self._batch_size):
             batch = stale[start : start + self._batch_size]
-            vectors = self._embedding.embed_batch(tuple(record.text for record in batch))
-            for record, vector in zip(batch, vectors, strict=True):
-                self._index.upsert(
-                    vector_memory_entry_from_record(
-                        record,
-                        vector=vector,
-                        embedding_provider=self._embedding.provider,
-                        embedding_model=self._embedding.model_id,
-                        embedding_dimension=self._embedding.dimension,
-                    )
-                )
-                upserted += 1
+            upserted += self._upsert_batch(tuple(batch))
 
         removed = 0
         if remove_orphans:
@@ -112,6 +101,31 @@ class MemoryVectorIndexRebuilder:
             incompatible=incompatible,
             removed_orphans=removed,
         )
+
+    def _upsert_batch(self, batch: tuple[MemoryRecord, ...]) -> int:
+        """1 batch を検証後に upsert する。
+
+        Returns:
+            upsert 件数。
+
+        Raises:
+            ValueError: embedding batch の出力数が入力 record 数と一致しない場合。
+        """
+        vectors = self._embedding.embed_batch(tuple(record.text for record in batch))
+        if len(vectors) != len(batch):
+            msg = "Embedding batch result length must match input records"
+            raise ValueError(msg)
+        for record, vector in zip(batch, vectors, strict=False):
+            self._index.upsert(
+                vector_memory_entry_from_record(
+                    record,
+                    vector=vector,
+                    embedding_provider=self._embedding.provider,
+                    embedding_model=self._embedding.model_id,
+                    embedding_dimension=self._embedding.dimension,
+                )
+            )
+        return len(batch)
 
     def _classify(self, record: MemoryRecord) -> _EntryState:
         metadata = self._index.metadata(record.id)

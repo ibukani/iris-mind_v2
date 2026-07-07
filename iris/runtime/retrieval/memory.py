@@ -2,26 +2,17 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
-from enum import StrEnum
 import time
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict
-
-from iris.contracts.embeddings import EmbeddingBatchRequest, EmbeddingRequest, EmbeddingResult
+from iris.contracts.embeddings import EmbeddingRequest, EmbeddingResult
 from iris.contracts.memory import (
     MemoryQuery,
     MemoryRecord,
     MemorySearchResult,
-    VectorMemoryEntryMetadata,
     VectorMemoryIndexError,
     VectorMemorySearchFilter,
-    memory_record_digest,
-    vector_memory_entry_from_record,
 )
 from iris.contracts.prompting import PromptSectionInput, PromptSectionKind, PromptTrustBoundary
 from iris.contracts.retrieval import (
@@ -45,118 +36,6 @@ if TYPE_CHECKING:
     from iris.contracts.memory import MemoryStore, VectorMemoryIndex
     from iris.contracts.prompting import PromptProfileName
     from iris.contracts.retrieval import Reranker
-
-
-Clock = Callable[[], float]
-
-
-class MemoryRecordEmbeddingRefreshStats(BaseModel):
-    """Memory record embedding refresh の結果。"""
-
-    model_config = ConfigDict(frozen=True)
-
-    scanned: int = 0
-    upserted: int = 0
-    unchanged: int = 0
-    missing: int = 0
-    stale: int = 0
-    incompatible: int = 0
-
-
-class MemoryRecordEmbeddingRefresher(Protocol):
-    """Retrieval 前に bounded memory records の vector entry を更新する port。"""
-
-    def refresh(
-        self,
-        records: tuple[MemoryRecord, ...],
-    ) -> MemoryRecordEmbeddingRefreshStats:
-        """Missing/stale/incompatible record embeddings を同期する。"""
-        ...
-
-
-class _EntryState(StrEnum):
-    MISSING = "missing"
-    STALE = "stale"
-    INCOMPATIBLE = "incompatible"
-    UNCHANGED = "unchanged"
-
-
-class VectorMemoryRecordEmbeddingRefresher:
-    """正本 MemoryRecord と派生 vector entry の freshness を同期する。"""
-
-    def __init__(
-        self,
-        *,
-        index: VectorMemoryIndex,
-        embedding_client: EmbeddingClient,
-        model_slot: str | None = "memory_record_embedding",
-    ) -> None:
-        """Vector index、embedding client、model slot を注入する。"""
-        self._index = index
-        self._embedding_client = embedding_client
-        self._model_slot = model_slot
-
-    def refresh(
-        self,
-        records: tuple[MemoryRecord, ...],
-    ) -> MemoryRecordEmbeddingRefreshStats:
-        """Fresh entry は再 embedding せず、stale entry だけ upsert する。
-
-        Returns:
-            refresh 件数の統計。
-        """
-        classified = tuple((record, self._classify(record)) for record in records)
-        refresh_records = tuple(
-            record for record, state in classified if state is not _EntryState.UNCHANGED
-        )
-        upserted = self._refresh_records(refresh_records)
-        return MemoryRecordEmbeddingRefreshStats(
-            scanned=len(records),
-            upserted=upserted,
-            unchanged=sum(state is _EntryState.UNCHANGED for _, state in classified),
-            missing=sum(state is _EntryState.MISSING for _, state in classified),
-            stale=sum(state is _EntryState.STALE for _, state in classified),
-            incompatible=sum(state is _EntryState.INCOMPATIBLE for _, state in classified),
-        )
-
-    def _classify(self, record: MemoryRecord) -> _EntryState:
-        metadata = self._index.metadata(record.id)
-        if metadata is None:
-            return _EntryState.MISSING
-        if self._is_incompatible(metadata):
-            return _EntryState.INCOMPATIBLE
-        if metadata.source_digest != memory_record_digest(record):
-            return _EntryState.STALE
-        return _EntryState.UNCHANGED
-
-    def _is_incompatible(self, metadata: VectorMemoryEntryMetadata) -> bool:
-        return (
-            metadata.embedding_provider != self._embedding_client.provider
-            or metadata.embedding_model != self._embedding_client.model_id
-            or metadata.embedding_dimension != self._embedding_client.dimension
-        )
-
-    def _refresh_records(self, records: tuple[MemoryRecord, ...]) -> int:
-        if not records:
-            return 0
-        batch = self._embedding_client.embed_text_batch(
-            EmbeddingBatchRequest(
-                texts=tuple(record.text for record in records),
-                model_slot=self._model_slot,
-                metadata={"stage": "memory_record_embedding_refresh"},
-            )
-        )
-        for record, embedding in zip(records, batch.embeddings, strict=True):
-            self._index.upsert(
-                vector_memory_entry_from_record(
-                    record,
-                    vector=embedding.vector,
-                    embedding_provider=self._embedding_client.provider,
-                    embedding_model=self._embedding_client.model_id,
-                    embedding_dimension=self._embedding_client.dimension,
-                )
-            )
-        return len(records)
 
 
 @dataclass(frozen=True)
@@ -207,7 +86,6 @@ class MemoryRetrievalPipeline:
         embedding_client: EmbeddingClient,
         reranker: Reranker | None,
         policy: MemoryRetrievalPolicy,
-        record_refresher: MemoryRecordEmbeddingRefresher | None = None,
     ) -> None:
         """依存 port と retrieval policy を注入する。"""
         self._store = store
@@ -215,7 +93,6 @@ class MemoryRetrievalPipeline:
         self._embedding_client = embedding_client
         self._reranker = reranker
         self._policy = policy
-        self._record_refresher = record_refresher
         self._query_embedding_cache: dict[_EmbeddingCacheKey, EmbeddingResult] = {}
 
     def retrieve(self, query: MemoryQuery) -> RetrievalPipelineResult:
@@ -240,21 +117,14 @@ class MemoryRetrievalPipeline:
 
     def _retrieve_with_prompt_budget(self, query: MemoryQuery) -> RetrievalPipelineResult:
         limits = _limits_for_query(self._policy, query)
-        refresh = self._refresh_record_embeddings(query, limits)
-        if refresh.failed:
-            return _empty_result(
-                RetrievalFallbackReason.RECORD_REFRESH_UNAVAILABLE,
-                record_refresh=refresh.stats,
-            )
         embedding = self._embed_query(query.text)
         if embedding.result is None:
             return _empty_result(
                 embedding.fallback_reason,
                 embedding_latency_ms=embedding.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
-                record_refresh=refresh.stats,
             )
-        return self._retrieve_with_embedding(query, limits, embedding, embedding.result, refresh)
+        return self._retrieve_with_embedding(query, limits, embedding, embedding.result)
 
     def _retrieve_with_embedding(
         self,
@@ -262,7 +132,6 @@ class MemoryRetrievalPipeline:
         limits: _RetrievalLimits,
         embedding: _EmbeddingOutcome,
         embedding_result: EmbeddingResult,
-        refresh: _RefreshOutcome,
     ) -> RetrievalPipelineResult:
         try:
             retrieved = self._retrieve_vector_candidates(query, embedding_result, limits)
@@ -271,14 +140,12 @@ class MemoryRetrievalPipeline:
                 RetrievalFallbackReason.VECTOR_INDEX_UNAVAILABLE,
                 embedding_latency_ms=embedding.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
-                record_refresh=refresh.stats,
             )
         if not retrieved:
             return _empty_result(
                 RetrievalFallbackReason.EMPTY_INDEX,
                 embedding_latency_ms=embedding.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
-                record_refresh=refresh.stats,
             )
 
         reranked = self._rerank(query.text, retrieved, limits)
@@ -289,7 +156,6 @@ class MemoryRetrievalPipeline:
                 embedding_latency_ms=embedding.latency_ms,
                 reranking_latency_ms=reranked.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
-                record_refresh=refresh.stats,
             )
         selected = self._select_items(retrieved, reranked.result, embedding_result, limits)
         fallback = RetrievalFallbackReason.LOW_SCORE if not selected else None
@@ -303,42 +169,9 @@ class MemoryRetrievalPipeline:
                 embedding_latency_ms=embedding.latency_ms,
                 reranking_latency_ms=reranked.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
-                record_embedding_scanned=refresh.stats.scanned,
-                record_embedding_upserted=refresh.stats.upserted,
-                record_embedding_unchanged=refresh.stats.unchanged,
-                record_embedding_missing=refresh.stats.missing,
-                record_embedding_stale=refresh.stats.stale,
-                record_embedding_incompatible=refresh.stats.incompatible,
                 fallback_reason=fallback or reranked.fallback_reason,
             ),
         )
-
-    def _refresh_record_embeddings(
-        self,
-        query: MemoryQuery,
-        limits: _RetrievalLimits,
-    ) -> _RefreshOutcome:
-        if self._record_refresher is None or limits.max_retrieved_candidates == 0:
-            return _RefreshOutcome(stats=MemoryRecordEmbeddingRefreshStats())
-        candidates = self._store.search(
-            MemoryQuery(
-                text=query.text,
-                actor_id=query.actor_id,
-                space_id=query.space_id,
-                limit=limits.max_retrieved_candidates,
-                kind=query.kind,
-                include_archived=query.include_archived,
-            )
-        )
-        records = tuple(result.record for result in candidates)
-        try:
-            stats = self._record_refresher.refresh(records)
-        except (RuntimeError, ValueError, VectorMemoryIndexError):
-            return _RefreshOutcome(
-                stats=MemoryRecordEmbeddingRefreshStats(scanned=len(records)),
-                failed=True,
-            )
-        return _RefreshOutcome(stats=stats)
 
     def _embed_query(self, text: str) -> _EmbeddingOutcome:
         key = _EmbeddingCacheKey(
@@ -360,41 +193,31 @@ class MemoryRetrievalPipeline:
     ) -> _EmbeddingOutcome:
         started = time.monotonic()
         try:
-            result = _run_with_timeout(
-                lambda: self._embedding_client.embed_text(
-                    EmbeddingRequest(
-                        text=text,
-                        model_slot=self._policy.model_slot,
-                        metadata={"stage": "memory_retrieval_query"},
-                    )
-                ),
-                timeout_ms=self._policy.embedding_timeout_ms,
-            )
-            if result.timed_out:
-                return _EmbeddingOutcome(
-                    result=None,
-                    latency_ms=result.latency_ms,
-                    cache_hit=False,
-                    fallback_reason=RetrievalFallbackReason.EMBEDDING_TIMEOUT,
+            result = self._embedding_client.embed_text(
+                EmbeddingRequest(
+                    text=text,
+                    model_slot=self._policy.model_slot,
+                    metadata={"stage": "memory_retrieval_query"},
                 )
+            )
         except (RuntimeError, ValueError) as exc:
             return _EmbeddingOutcome(
                 result=None,
-                latency_ms=_elapsed_ms(time.monotonic, started),
+                latency_ms=_elapsed_ms(started),
                 cache_hit=False,
                 fallback_reason=RetrievalFallbackReason.EMBEDDING_UNAVAILABLE,
                 error_message=str(exc),
             )
-        latency_ms = result.latency_ms or _elapsed_ms(time.monotonic, started)
-        if result.value is None:
+        latency_ms = result.latency_ms or _elapsed_ms(started)
+        if latency_ms > self._policy.embedding_timeout_ms:
             return _EmbeddingOutcome(
                 result=None,
                 latency_ms=latency_ms,
                 cache_hit=False,
-                fallback_reason=RetrievalFallbackReason.EMBEDDING_UNAVAILABLE,
+                fallback_reason=RetrievalFallbackReason.EMBEDDING_TIMEOUT,
             )
-        self._query_embedding_cache[key] = result.value
-        return _EmbeddingOutcome(result=result.value, latency_ms=latency_ms, cache_hit=False)
+        self._query_embedding_cache[key] = result
+        return _EmbeddingOutcome(result=result, latency_ms=latency_ms, cache_hit=False)
 
     def _retrieve_vector_candidates(
         self,
@@ -437,41 +260,38 @@ class MemoryRetrievalPipeline:
         reranker = self._reranker
         started = time.monotonic()
         try:
-            result = _run_with_timeout(
-                lambda: reranker.rerank(
-                    RerankRequest(
-                        query=query_text,
-                        candidates=tuple(
-                            RerankCandidate(
-                                candidate_id=str(candidate.record.id),
-                                text=candidate.record.text,
-                                base_score=candidate.score,
-                                metadata=candidate.record.metadata,
-                            )
-                            for candidate in candidates[: limits.max_reranked_candidates]
-                        ),
-                        limit=limits.max_prompt_selected_items,
-                        model_slot=self._policy.model_slot,
-                        metadata={"stage": "memory_retrieval_rerank"},
+            result = reranker.rerank(
+                RerankRequest(
+                    query=query_text,
+                    candidates=tuple(
+                        RerankCandidate(
+                            candidate_id=str(candidate.record.id),
+                            text=candidate.record.text,
+                            base_score=candidate.score,
+                            metadata=candidate.record.metadata,
+                        )
+                        for candidate in candidates[: limits.max_reranked_candidates]
                     ),
+                    limit=limits.max_prompt_selected_items,
+                    model_slot=self._policy.model_slot,
+                    metadata={"stage": "memory_retrieval_rerank"},
                 ),
-                timeout_ms=self._policy.reranker_timeout_ms,
             )
-            if result.timed_out:
-                return _RerankOutcome(
-                    result=None,
-                    latency_ms=result.latency_ms,
-                    fallback_reason=RetrievalFallbackReason.RERANKER_TIMEOUT,
-                )
         except (RuntimeError, ValueError) as exc:
             return _RerankOutcome(
                 result=None,
-                latency_ms=_elapsed_ms(time.monotonic, started),
+                latency_ms=_elapsed_ms(started),
                 fallback_reason=RetrievalFallbackReason.RERANKER_UNAVAILABLE,
                 error_message=str(exc),
             )
-        latency_ms = result.latency_ms or _elapsed_ms(time.monotonic, started)
-        return _RerankOutcome(result=result.value, latency_ms=latency_ms)
+        latency_ms = result.latency_ms or _elapsed_ms(started)
+        if latency_ms > self._policy.reranker_timeout_ms:
+            return _RerankOutcome(
+                result=None,
+                latency_ms=latency_ms,
+                fallback_reason=RetrievalFallbackReason.RERANKER_TIMEOUT,
+            )
+        return _RerankOutcome(result=result, latency_ms=latency_ms)
 
     def _select_items(
         self,
@@ -556,48 +376,10 @@ class _RerankOutcome:
 
 
 @dataclass(frozen=True)
-class _RefreshOutcome:
-    stats: MemoryRecordEmbeddingRefreshStats
-    failed: bool = False
-
-
-@dataclass(frozen=True)
 class _RetrievalLimits:
     max_retrieved_candidates: int
     max_reranked_candidates: int
     max_prompt_selected_items: int
-
-
-@dataclass(frozen=True)
-class _TimedCallResult[T]:
-    value: T | None
-    latency_ms: float
-    timed_out: bool = False
-
-
-def _run_with_timeout[T](
-    call: Callable[[], T],
-    *,
-    timeout_ms: float,
-) -> _TimedCallResult[T]:
-    started = time.monotonic()
-    timeout_seconds = timeout_ms / 1000.0
-    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="iris-retrieval")
-    future = executor.submit(call)
-    timed_out = False
-    try:
-        value = future.result(timeout=timeout_seconds)
-    except FutureTimeoutError:
-        timed_out = True
-        future.cancel()
-        return _TimedCallResult(
-            value=None,
-            latency_ms=_elapsed_ms(time.monotonic, started),
-            timed_out=True,
-        )
-    finally:
-        executor.shutdown(wait=not timed_out, cancel_futures=True)
-    return _TimedCallResult(value=value, latency_ms=_elapsed_ms(time.monotonic, started))
 
 
 def _limits_for_query(policy: MemoryRetrievalPolicy, query: MemoryQuery) -> _RetrievalLimits:
@@ -680,9 +462,7 @@ def _empty_result(
     embedding_latency_ms: float = 0.0,
     reranking_latency_ms: float = 0.0,
     embedding_cache_hit: bool = False,
-    record_refresh: MemoryRecordEmbeddingRefreshStats | None = None,
 ) -> RetrievalPipelineResult:
-    refresh = record_refresh or MemoryRecordEmbeddingRefreshStats()
     return RetrievalPipelineResult(
         items=(),
         prompt_section=None,
@@ -693,16 +473,10 @@ def _empty_result(
             embedding_latency_ms=embedding_latency_ms,
             reranking_latency_ms=reranking_latency_ms,
             embedding_cache_hit=embedding_cache_hit,
-            record_embedding_scanned=refresh.scanned,
-            record_embedding_upserted=refresh.upserted,
-            record_embedding_unchanged=refresh.unchanged,
-            record_embedding_missing=refresh.missing,
-            record_embedding_stale=refresh.stale,
-            record_embedding_incompatible=refresh.incompatible,
             fallback_reason=reason,
         ),
     )
 
 
-def _elapsed_ms(clock: Clock, started: float) -> float:
-    return max((clock() - started) * 1000.0, 0.0)
+def _elapsed_ms(started: float) -> float:
+    return max((time.monotonic() - started) * 1000.0, 0.0)

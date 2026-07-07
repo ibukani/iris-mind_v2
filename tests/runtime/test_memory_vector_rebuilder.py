@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import pytest
+
 from iris.adapters.embeddings.fake import DeterministicFakeEmbedding
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
@@ -45,6 +47,30 @@ class _TeaEmbedding:
             入力順の2次元 vector。
         """
         return tuple(self.embed(text) for text in texts)
+
+
+class _ShortBatchEmbedding:
+    provider = "test"
+    model_id = "short-batch"
+    dimension = 2
+
+    def embed(self, text: str) -> tuple[float, float]:
+        """単一 test vector を返す。
+
+        Returns:
+            2次元 test vector。
+        """
+        return (1.0, 0.0) if text else (0.0, 1.0)
+
+    def embed_batch(self, texts: tuple[str, ...]) -> tuple[tuple[float, float], ...]:
+        """入力より短い batch result を返す。
+
+        Returns:
+            入力より短い test vector 群。
+        """
+        if not texts:
+            return ()
+        return ((1.0, 0.0),)
 
 
 @dataclass(frozen=True)
@@ -138,6 +164,27 @@ def test_rebuild_classifies_missing_stale_and_incompatible_entries() -> None:
     provider_metadata = index.metadata(MemoryId("provider"))
     assert provider_metadata is not None
     assert provider_metadata.embedding_provider == "fake"
+
+
+def test_rebuild_rejects_batch_length_mismatch_before_partial_upsert() -> None:
+    """Embedding batch length mismatch は partial upsert 前に失敗する。"""
+    store = InMemoryMemoryStore()
+    store.put(MemoryRecord(id=MemoryId("m1"), text="green tea"))
+    store.put(MemoryRecord(id=MemoryId("m2"), text="black tea"))
+    index = InMemoryVectorMemoryIndex()
+    rebuilder = MemoryVectorIndexRebuilder(
+        store=store,
+        index=index,
+        embedding=_ShortBatchEmbedding(),
+        batch_size=2,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Embedding batch result length must match input records",
+    ):
+        rebuilder.rebuild()
+    assert index.ids() == ()
 
 
 def _upsert_test_entry(
