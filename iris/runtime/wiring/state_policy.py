@@ -28,6 +28,7 @@ class RuntimeStatePersistencePolicy:
     memory_store: PersistenceKind
     activity_journal: PersistenceKind
     activity_projection_store: PersistenceKind
+    interaction_activity_projection_store: PersistenceKind
     presence_store: PersistenceKind
     space_occupancy_store: PersistenceKind
     relationship_store: PersistenceKind
@@ -57,6 +58,7 @@ def runtime_state_persistence_policy(
             memory_store=PersistenceKind.DURABLE,
             activity_journal=PersistenceKind.DURABLE,
             activity_projection_store=PersistenceKind.EPHEMERAL,
+            interaction_activity_projection_store=PersistenceKind.EPHEMERAL,
             presence_store=PersistenceKind.EPHEMERAL,
             space_occupancy_store=PersistenceKind.EPHEMERAL,
             relationship_store=PersistenceKind.DURABLE,
@@ -74,6 +76,7 @@ def runtime_state_persistence_policy(
         memory_store=PersistenceKind.EPHEMERAL,
         activity_journal=PersistenceKind.EPHEMERAL,
         activity_projection_store=PersistenceKind.EPHEMERAL,
+        interaction_activity_projection_store=PersistenceKind.EPHEMERAL,
         presence_store=PersistenceKind.EPHEMERAL,
         space_occupancy_store=PersistenceKind.EPHEMERAL,
         relationship_store=PersistenceKind.EPHEMERAL,

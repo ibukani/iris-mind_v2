@@ -31,6 +31,7 @@ from iris.runtime.state.conversation import InMemoryConversationHistoryStore
 from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
+from iris.runtime.state.interaction_activity import InMemoryInteractionActivityProjectionStore
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.state.activity_journal import ActivityJournal
     from iris.runtime.state.activity_projection import ActivityProjectionStore
+    from iris.runtime.state.interaction_activity import InteractionActivityProjectionStore
     from iris.runtime.state.memory_candidates import MemoryCandidateReviewStore
     from iris.runtime.state.presence import PresenceStore
     from iris.runtime.state.safety_audit import SafetyAuditJournal
@@ -73,6 +75,7 @@ class RuntimeStateStores:
     affect_store: AffectStore
     activity_journal: ActivityJournal
     activity_projection_store: ActivityProjectionStore
+    interaction_activity_projection_store: InteractionActivityProjectionStore
     presence_store: PresenceStore
     space_occupancy_store: SpaceOccupancyStore
     delivery_outbox: DeliveryOutbox
@@ -141,6 +144,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         affect_store=SQLiteAffectStore(ctx),
         activity_journal=SQLiteActivityJournal(ctx),
         activity_projection_store=InMemoryActivityProjectionStore(),
+        interaction_activity_projection_store=InMemoryInteractionActivityProjectionStore(),
         presence_store=InMemoryPresenceStore(),
         space_occupancy_store=InMemorySpaceOccupancyStore(),
         delivery_outbox=SQLiteDeliveryOutbox(
@@ -187,6 +191,7 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
         affect_store=InMemoryAffectStore(),
         activity_journal=InMemoryActivityJournal(),
         activity_projection_store=InMemoryActivityProjectionStore(),
+        interaction_activity_projection_store=InMemoryInteractionActivityProjectionStore(),
         presence_store=InMemoryPresenceStore(),
         space_occupancy_store=InMemorySpaceOccupancyStore(),
         delivery_outbox=InMemoryDeliveryOutbox(

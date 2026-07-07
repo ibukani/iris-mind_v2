@@ -18,6 +18,7 @@ from iris.contracts.observations import (
     PresenceSignalObservation,
 )
 from iris.core.ids import ExternalRef
+from iris.generated.iris.api.v1 import observations_pb2
 from iris.runtime.app import IrisApp
 from iris.runtime.delivery.broker import RuntimeAppActionBroker
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
@@ -168,6 +169,39 @@ async def test_activity_event_observation_is_accepted_without_llm_or_app_call(
     assert not response.output.is_sendable
     assert response.output.text is None
     assert app.observations == []
+
+
+@pytest.mark.parametrize(
+    ("activity_kind", "reason"),
+    [
+        (observations_pb2.ACTIVITY_KIND_ACTOR_INPUT_STARTED, "recording"),
+        (observations_pb2.ACTIVITY_KIND_ACTOR_INPUT_STARTED, "speaking"),
+        (observations_pb2.ACTIVITY_KIND_APP_OUTPUT_STARTED, "tts_playback"),
+    ],
+)
+async def test_discord_voice_activity_uses_generic_interaction_contract(
+    activity_kind: observations_pb2.ActivityKind.ValueType,
+    reason: str,
+) -> None:
+    """Discord recording/speaking/playbackをprovider-neutral activityで表す。"""
+    fixture = discord_voice_adapter_fixture()
+    envelope = await _mapper().observation_envelope_from_proto(
+        build_activity_event_request(
+            fixture,
+            activity_kind=activity_kind,
+            metadata={
+                "modality": "voice",
+                "reason": reason,
+                "expires_at": "2026-07-04T12:01:00Z",
+            },
+        )
+    )
+
+    assert isinstance(envelope.observation, ActivityEventObservation)
+    assert envelope.observation.context.actor_id is not None
+    assert envelope.observation.context.space_id is not None
+    assert envelope.observation.metadata["modality"] == "voice"
+    assert envelope.observation.metadata["reason"] == reason
 
 
 @pytest.mark.parametrize(

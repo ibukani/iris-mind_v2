@@ -11,6 +11,7 @@ PERSONA_RUNTIME_ROOT = RUNTIME_ROOT / "persona"
 EVENT_REACTION_FEATURE_ROOT = PROJECT_ROOT / "iris" / "features" / "event_reaction"
 EVENT_REACTION_PRESENTATION = PROJECT_ROOT / "iris" / "features" / "event_reaction" / "presenter.py"
 EVENT_REACTION_RUNNER = PROJECT_ROOT / "iris" / "runtime" / "ingress" / "activity_event_reaction.py"
+INTERACTION_ACTIVITY_PROJECTION = RUNTIME_ROOT / "state" / "interaction_activity.py"
 
 ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
     {
@@ -37,6 +38,18 @@ PERSONA_RUNTIME_FORBIDDEN_IMPORTS: frozenset[str] = frozenset(
         "iris.cognitive",
         "iris.features",
         "iris.presentation",
+        "iris.safety",
+    },
+)
+
+INTERACTION_ACTIVITY_FORBIDDEN_IMPORTS: frozenset[str] = frozenset(
+    {
+        "iris.adapters",
+        "iris.cognitive",
+        "iris.features",
+        "iris.presentation",
+        "iris.runtime.delivery",
+        "iris.runtime.scheduler",
         "iris.safety",
     },
 )
@@ -185,6 +198,20 @@ def test_persona_runtime_does_not_import_behavior_or_output_layers() -> None:
     )
 
     assert not violations, "persona runtime imports forbidden layers:\n" + "\n".join(violations)
+
+
+def test_interaction_projection_is_read_state_not_delivery_policy() -> None:
+    """Interaction projectionをdelivery/proactive decisionから分離する。"""
+    violations = [
+        imported
+        for imported in _imports(INTERACTION_ACTIVITY_PROJECTION)
+        for forbidden in INTERACTION_ACTIVITY_FORBIDDEN_IMPORTS
+        if imported.startswith(forbidden)
+    ]
+
+    assert not violations, "interaction projection imports policy/output layers: " + ", ".join(
+        violations
+    )
 
 
 def test_event_reaction_feature_does_not_import_outer_layers() -> None:

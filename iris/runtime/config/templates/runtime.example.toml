@@ -13,8 +13,5 @@ enabled = true
 chat_profile = "local_balanced"
 proactive_profile = "proactive_short"
 
-[companion_semantics]
-persona_prompt_enabled = false
-
 [model_call_budget]
 enabled = true

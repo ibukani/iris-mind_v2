@@ -59,6 +59,10 @@ class _ActivityKindEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Activity
     ACTIVITY_KIND_VOICE_JOINED: _ActivityKind.ValueType  # 5
     ACTIVITY_KIND_VOICE_LEFT: _ActivityKind.ValueType  # 6
     ACTIVITY_KIND_SYSTEM_INTERACTION: _ActivityKind.ValueType  # 8
+    ACTIVITY_KIND_ACTOR_INPUT_STARTED: _ActivityKind.ValueType  # 9
+    ACTIVITY_KIND_ACTOR_INPUT_STOPPED: _ActivityKind.ValueType  # 10
+    ACTIVITY_KIND_APP_OUTPUT_STARTED: _ActivityKind.ValueType  # 11
+    ACTIVITY_KIND_APP_OUTPUT_STOPPED: _ActivityKind.ValueType  # 12
 
 class ActivityKind(_ActivityKind, metaclass=_ActivityKindEnumTypeWrapper): ...
 
@@ -70,6 +74,10 @@ ACTIVITY_KIND_APP_CLOSED: ActivityKind.ValueType  # 4
 ACTIVITY_KIND_VOICE_JOINED: ActivityKind.ValueType  # 5
 ACTIVITY_KIND_VOICE_LEFT: ActivityKind.ValueType  # 6
 ACTIVITY_KIND_SYSTEM_INTERACTION: ActivityKind.ValueType  # 8
+ACTIVITY_KIND_ACTOR_INPUT_STARTED: ActivityKind.ValueType  # 9
+ACTIVITY_KIND_ACTOR_INPUT_STOPPED: ActivityKind.ValueType  # 10
+ACTIVITY_KIND_APP_OUTPUT_STARTED: ActivityKind.ValueType  # 11
+ACTIVITY_KIND_APP_OUTPUT_STOPPED: ActivityKind.ValueType  # 12
 Global___ActivityKind: _TypeAlias = ActivityKind  # noqa: Y015
 
 class _PresenceStatus:
@@ -199,7 +207,9 @@ class ActivityEventPayload(_message.Message):
     provider_sequence: _builtins.int
     @_builtins.property
     def metadata(self) -> _containers.ScalarMap[_builtins.str, _builtins.str]:
-        """Provider-specific auxiliary details only."""
+        """Advisory metadata only. Interaction activity uses modality, reason, and
+        expires_at (RFC3339). Runtime authentication and server TTL remain authoritative.
+        """
 
     def __init__(
         self,

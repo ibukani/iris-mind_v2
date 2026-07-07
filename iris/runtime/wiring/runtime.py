@@ -171,6 +171,8 @@ class RuntimeServiceBuildOptions:
     runtime_learning_hook_runner: RuntimeLearningHookRunner | None = None
     latency_budget: RuntimeLatencyBudget = field(default_factory=RuntimeLatencyBudget)
     now: Callable[[], datetime] | None = None
+    interaction_activity_enabled: bool = False
+    interaction_activity_max_ttl_seconds: float = 300.0
 
 
 @dataclass(frozen=True)
@@ -213,6 +215,8 @@ def build_runtime_service(
         trust_policy=trust_policy,
         now=current_now,
         target_stale_after_seconds=options.target_stale_after_seconds,
+        interaction_activity_enabled=options.interaction_activity_enabled,
+        interaction_activity_max_ttl_seconds=options.interaction_activity_max_ttl_seconds,
     )
     availability_resolver = wire_availability_resolver()
     workspace_context_assembler = wire_workspace_context_assembler(
@@ -330,6 +334,8 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
                 stores,
                 feature_catalog,
             ),
+            interaction_activity_enabled=config.interaction_activity.enabled,
+            interaction_activity_max_ttl_seconds=(config.interaction_activity.max_ttl_seconds),
         ),
     )
     gateway_components = _wire_runtime_gateway_components(config, stores, feature_catalog)
@@ -546,6 +552,8 @@ def _wire_observation_pipeline(
     trust_policy: ObservationTrustPolicy,
     now: Callable[[], datetime],
     target_stale_after_seconds: float,
+    interaction_activity_enabled: bool,
+    interaction_activity_max_ttl_seconds: float,
 ) -> IntegratingObservationPipeline:
     """観測統合 pipeline を組み立てる。
 
@@ -557,6 +565,10 @@ def _wire_observation_pipeline(
         projections=stores.activity_projection_store,
         trust_policy=trust_policy,
         now=now,
+        interaction_projections=(
+            stores.interaction_activity_projection_store if interaction_activity_enabled else None
+        ),
+        interaction_max_ttl_seconds=interaction_activity_max_ttl_seconds,
     )
     presence_integrator = PresenceIntegrator(
         store=stores.presence_store,

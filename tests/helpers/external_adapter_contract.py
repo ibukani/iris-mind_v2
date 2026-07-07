@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from iris.adapters.grpc.mappers import timestamp_from_datetime
 from iris.contracts.actions import SendMessageAction
@@ -15,6 +16,9 @@ from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTa
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, SessionId
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 CONTRACT_OCCURRED_AT = datetime(2026, 7, 4, 12, 0, tzinfo=UTC)
 
@@ -123,6 +127,8 @@ def build_activity_event_request(
     *,
     correlation_id: str = "activity-corr-1",
     observation_id: str = "activity-obs-1",
+    activity_kind: observations_pb2.ActivityKind.ValueType | None = None,
+    metadata: Mapping[str, str] | None = None,
 ) -> runtime_pb2.SubmitObservationRequest:
     """Build an activity_event SubmitObservation request using external refs.
 
@@ -135,10 +141,10 @@ def build_activity_event_request(
         observation_id=observation_id,
         kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
         payload=observations_pb2.ActivityEventPayload(
-            activity_kind=fixture.activity_kind,
+            activity_kind=activity_kind or fixture.activity_kind,
             provider_event_id=f"event-{observation_id}",
             provider_sequence=1,
-            metadata={"fixture": fixture.name},
+            metadata=metadata or {"fixture": fixture.name},
         ),
     )
 

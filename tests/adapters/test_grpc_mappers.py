@@ -119,6 +119,58 @@ async def test_activity_event_proto_maps_to_observation() -> None:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("proto_kind", "domain_kind"),
+    [
+        (
+            observations_pb2.ACTIVITY_KIND_ACTOR_INPUT_STARTED,
+            ActivityKind.ACTOR_INPUT_STARTED,
+        ),
+        (
+            observations_pb2.ACTIVITY_KIND_ACTOR_INPUT_STOPPED,
+            ActivityKind.ACTOR_INPUT_STOPPED,
+        ),
+        (
+            observations_pb2.ACTIVITY_KIND_APP_OUTPUT_STARTED,
+            ActivityKind.APP_OUTPUT_STARTED,
+        ),
+        (
+            observations_pb2.ACTIVITY_KIND_APP_OUTPUT_STOPPED,
+            ActivityKind.APP_OUTPUT_STOPPED,
+        ),
+    ],
+)
+async def test_interaction_activity_proto_maps_to_generic_domain_kind(
+    proto_kind: observations_pb2.ActivityKind.ValueType,
+    domain_kind: ActivityKind,
+) -> None:
+    """Generic interaction activity kindとmetadata規約をdomainへ保持する。"""
+    observation = await _mapper().observation_from_proto(
+        observations_pb2.Observation(
+            observation_id="obs-interaction",
+            session_id="session-1",
+            kind=observations_pb2.OBSERVATION_KIND_ACTIVITY_EVENT,
+            occurred_at=timestamp_from_datetime(_OCCURRED_AT),
+            context=observations_pb2.ObservationContext(account_id="account-1"),
+            activity_event=observations_pb2.ActivityEventPayload(
+                activity_kind=proto_kind,
+                metadata={
+                    "modality": "voice",
+                    "reason": "tts_playback",
+                    "expires_at": "2026-06-05T12:31:00Z",
+                },
+            ),
+        )
+    )
+
+    assert isinstance(observation, ActivityEventObservation)
+    assert observation.activity_kind is domain_kind
+    assert observation.metadata["modality"] == "voice"
+    assert observation.metadata["reason"] == "tts_playback"
+    assert observation.metadata["expires_at"] == "2026-06-05T12:31:00Z"
+
+
+@pytest.mark.anyio
 async def test_activity_event_zero_sequence_maps_to_none() -> None:
     """provider_sequence=0が未指定を表すNoneへmapされることを確認する。"""
     observation = await _mapper().observation_from_proto(

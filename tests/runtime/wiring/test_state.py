@@ -28,6 +28,7 @@ from iris.runtime.state.activity_projection import InMemoryActivityProjectionSto
 from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
+from iris.runtime.state.interaction_activity import InMemoryInteractionActivityProjectionStore
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
@@ -48,6 +49,10 @@ def test_wire_runtime_state_uses_in_memory_runtime_context_stores_by_default() -
     assert isinstance(stores.affect_store, InMemoryAffectStore)
     assert isinstance(stores.activity_journal, InMemoryActivityJournal)
     assert isinstance(stores.activity_projection_store, InMemoryActivityProjectionStore)
+    assert isinstance(
+        stores.interaction_activity_projection_store,
+        InMemoryInteractionActivityProjectionStore,
+    )
     assert isinstance(stores.presence_store, InMemoryPresenceStore)
     assert isinstance(stores.space_occupancy_store, InMemorySpaceOccupancyStore)
     assert isinstance(stores.safety_audit_journal, InMemorySafetyAuditJournal)
@@ -81,6 +86,10 @@ async def test_wire_runtime_state_promotes_activity_journal_to_sqlite_under_sqli
     assert isinstance(stores.activity_journal, SQLiteActivityJournal)
     # projection、presence、space occupancyは依然として process-local。
     assert isinstance(stores.activity_projection_store, InMemoryActivityProjectionStore)
+    assert isinstance(
+        stores.interaction_activity_projection_store,
+        InMemoryInteractionActivityProjectionStore,
+    )
     assert isinstance(stores.presence_store, InMemoryPresenceStore)
     assert isinstance(stores.space_occupancy_store, InMemorySpaceOccupancyStore)
     assert isinstance(stores.account_store, SQLiteAccountStore)
