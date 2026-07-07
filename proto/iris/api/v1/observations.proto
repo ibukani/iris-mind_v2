@@ -29,6 +29,10 @@ enum ActivityKind {
   reserved 7;
   reserved "ACTIVITY_KIND_SPACE_MESSAGE";
   ACTIVITY_KIND_SYSTEM_INTERACTION = 8;
+  ACTIVITY_KIND_ACTOR_INPUT_STARTED = 9;
+  ACTIVITY_KIND_ACTOR_INPUT_STOPPED = 10;
+  ACTIVITY_KIND_APP_OUTPUT_STARTED = 11;
+  ACTIVITY_KIND_APP_OUTPUT_STOPPED = 12;
 }
 
 enum PresenceStatus {
@@ -65,7 +69,8 @@ message ActivityEventPayload {
   ActivityKind activity_kind = 1;
   string provider_event_id = 2;
   int64 provider_sequence = 3;
-  // Provider-specific auxiliary details only.
+  // Advisory metadata only. Interaction activity uses modality, reason, and
+  // expires_at (RFC3339). Runtime authentication and server TTL remain authoritative.
   map<string, string> metadata = 10;
 }
 

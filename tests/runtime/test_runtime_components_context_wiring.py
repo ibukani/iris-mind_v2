@@ -116,6 +116,46 @@ async def test_build_runtime_service_wires_context_availability_for_text_observa
     assert frame.situation_context.availability.status is AvailabilityStatus.AVAILABLE
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize(("mode", "expected_count"), [("disabled", 0), ("enabled", 1)])
+async def test_build_runtime_service_config_gates_interaction_projection(
+    mode: str,
+    expected_count: int,
+) -> None:
+    """Interaction projectionはRuntimeServiceBuildOptionsで明示有効化する。"""
+    stores = wire_runtime_state(default_runtime_config())
+    feature_catalog = wire_runtime_features()
+    output_pipeline = wire_output_pipeline()
+    service = build_runtime_service(
+        IrisApp(steps=(), output_pipeline=output_pipeline),
+        stores,
+        feature_catalog=feature_catalog,
+        output_pipeline=output_pipeline,
+        options=RuntimeServiceBuildOptions(
+            target_stale_after_seconds=604800.0,
+            now=lambda: _RECEIVED_AT,
+            interaction_activity_enabled=mode == "enabled",
+            interaction_activity_max_ttl_seconds=60,
+        ),
+    )
+
+    await service.handle_observation(
+        ObservationEnvelope(
+            observation=_activity_observation(ActivityKind.ACTOR_INPUT_STARTED),
+            ingress=_ingress(ObservationCapability.INTEGRATE_ACTIVITY),
+        )
+    )
+
+    active = await stores.interaction_activity_projection_store.active_for_target(
+        provider="test",
+        actor_id=_ACTOR_ID,
+        account_id=None,
+        space_id=_SPACE_ID,
+        now=_RECEIVED_AT,
+    )
+    assert len(active) == expected_count
+
+
 def _activity_observation(kind: ActivityKind) -> ActivityEventObservation:
     return ActivityEventObservation(
         observation_id=ObservationId(f"obs-{kind.value}"),

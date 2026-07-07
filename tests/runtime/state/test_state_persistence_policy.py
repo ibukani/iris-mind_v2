@@ -53,6 +53,7 @@ def test_memory_backend_policy_marks_runtime_state_ephemeral() -> None:
     assert policy.memory_store == PersistenceKind.EPHEMERAL
     assert policy.activity_journal == PersistenceKind.EPHEMERAL
     assert policy.activity_projection_store == PersistenceKind.EPHEMERAL
+    assert policy.interaction_activity_projection_store == PersistenceKind.EPHEMERAL
     assert policy.presence_store == PersistenceKind.EPHEMERAL
     assert policy.space_occupancy_store == PersistenceKind.EPHEMERAL
     assert policy.relationship_store == PersistenceKind.EPHEMERAL
@@ -87,6 +88,7 @@ def test_sqlite_backend_keeps_runtime_projections_ephemeral() -> None:
     policy = runtime_state_persistence_policy(RuntimeStateBackend.SQLITE)
 
     assert policy.activity_projection_store == PersistenceKind.EPHEMERAL
+    assert policy.interaction_activity_projection_store == PersistenceKind.EPHEMERAL
     assert policy.presence_store == PersistenceKind.EPHEMERAL
     assert policy.space_occupancy_store == PersistenceKind.EPHEMERAL
 

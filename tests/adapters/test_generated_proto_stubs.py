@@ -19,6 +19,10 @@ def test_observation_proto_generated_constants_match_contract() -> None:
     assert observations_pb2.ACTIVITY_KIND_VOICE_JOINED == 5
     assert observations_pb2.ACTIVITY_KIND_VOICE_LEFT == 6
     assert observations_pb2.ACTIVITY_KIND_SYSTEM_INTERACTION == 8
+    assert observations_pb2.ACTIVITY_KIND_ACTOR_INPUT_STARTED == 9
+    assert observations_pb2.ACTIVITY_KIND_ACTOR_INPUT_STOPPED == 10
+    assert observations_pb2.ACTIVITY_KIND_APP_OUTPUT_STARTED == 11
+    assert observations_pb2.ACTIVITY_KIND_APP_OUTPUT_STOPPED == 12
 
     assert observations_pb2.PRESENCE_STATUS_UNKNOWN == 1
     assert observations_pb2.PRESENCE_STATUS_ONLINE == 2

@@ -19,6 +19,10 @@ def test_activity_kind_exposes_non_message_external_events() -> None:
         "voice_joined",
         "voice_left",
         "system_interaction",
+        "actor_input_started",
+        "actor_input_stopped",
+        "app_output_started",
+        "app_output_stopped",
     }
 
 

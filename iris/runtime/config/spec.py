@@ -481,6 +481,28 @@ def _companion_semantics_specs() -> tuple[ConfigFieldSpec, ...]:
     )
 
 
+def _interaction_activity_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Interaction activity projection config specsを返す。
+
+    Returns:
+        Config specのtuple。
+    """
+    return (
+        ConfigFieldSpec(
+            "interaction_activity.enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="認証済みinteraction activityのephemeral projectionを有効化する。",
+        ),
+        ConfigFieldSpec(
+            "interaction_activity.max_ttl_seconds",
+            ConfigValueType.FLOAT,
+            default=300.0,
+            description="Adapter提供expires_atへ適用するserver-side TTL上限秒数。",
+        ),
+    )
+
+
 def _model_call_budget_specs() -> tuple[ConfigFieldSpec, ...]:
     """Feature 別 model call budget の ConfigSpec 群を返す。
 
@@ -819,6 +841,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         ),
         *_inference_scheduler_specs(),
         *_companion_semantics_specs(),
+        *_interaction_activity_specs(),
         *_model_call_budget_specs(),
         *_prompt_budget_specs(),
         ConfigFieldSpec(

@@ -29,6 +29,46 @@ class ActivityKind(StrEnum):
     VOICE_JOINED = "voice_joined"
     VOICE_LEFT = "voice_left"
     SYSTEM_INTERACTION = "system_interaction"
+    ACTOR_INPUT_STARTED = "actor_input_started"
+    ACTOR_INPUT_STOPPED = "actor_input_stopped"
+    APP_OUTPUT_STARTED = "app_output_started"
+    APP_OUTPUT_STOPPED = "app_output_stopped"
+
+
+class InteractionActivityChannel(StrEnum):
+    """Interaction activity projection が追跡する汎用channel。"""
+
+    ACTOR_INPUT = "actor_input"
+    APP_OUTPUT = "app_output"
+
+
+class InteractionModality(StrEnum):
+    """External adapter が補助情報として報告できるmodality。"""
+
+    VOICE = "voice"
+    TEXT = "text"
+    VIDEO = "video"
+    GESTURE = "gesture"
+    NOTIFICATION = "notification"
+    UNKNOWN = "unknown"
+
+
+class InteractionActivitySnapshot(BaseModel):
+    """認証済みingressから導出したprocess-local interaction state。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    adapter_id: str
+    provider: str | None
+    actor_id: ActorId | None
+    account_id: AccountId | None
+    space_id: SpaceId | None
+    channel: InteractionActivityChannel
+    active: bool
+    modality: InteractionModality
+    reason: str | None
+    observed_at: datetime
+    expires_at: datetime
 
 
 class ActivityEventRecord(BaseModel):

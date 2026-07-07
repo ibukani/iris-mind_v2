@@ -129,8 +129,20 @@ typing開始/終了、voice join/leaveなどactor-scoped activityは、解決済
 解決済みactorまたはaccount subjectがないsignalはgRPC mapperが拒否する。
 
 Activity/Presence observationはIris内部stateを直接変更するcommandではない。
-runtime trust判定、recording、Activity/Presence/SpaceOccupancy state更新は後続PRへ委譲する。
 user-controlled metadataや `ObservationContext.source` をtrust判定に使わない。runtime boundaryが付与する `ObservationIngressContext` のauthenticated capabilityだけをtrust判定に使う。
+
+汎用interaction activityには次の`ActivityKind`を使う。Discordやvoice専用のfieldは追加しない。
+
+- `ACTOR_INPUT_STARTED` / `ACTOR_INPUT_STOPPED`
+- `APP_OUTPUT_STARTED` / `APP_OUTPUT_STOPPED`
+
+`ActivityEventPayload.metadata`のinteraction規約:
+
+- `modality`: `voice` / `text` / `video` / `gesture` / `notification` / `unknown`
+- `reason`: `speaking` / `typing` / `recording` / `tts_playback` / `composing`など
+- `expires_at`: RFC3339 timestamp
+
+これらはadapter提供のadvisory metadataであり、trustや権限の根拠ではない。`expires_at`がmissing、invalid、または過大な場合、Runtimeは`interaction_activity.max_ttl_seconds`を適用する。projectionは`interaction_activity.enabled=true`の場合だけ更新し、process-localに保持する。
 
 ### ExternalSpaceRef
 

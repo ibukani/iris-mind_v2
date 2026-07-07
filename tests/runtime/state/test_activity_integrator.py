@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from iris.contracts.activity import ActivityKind
+from iris.contracts.activity import ActivityKind, InteractionActivitySnapshot
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.observations import (
     ActivityEventObservation,
@@ -25,6 +25,7 @@ from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.state.activity_integrator import ActivityIntegrator
 from iris.runtime.state.activity_journal import InMemoryActivityJournal
 from iris.runtime.state.activity_projection import InMemoryActivityProjectionStore
+from iris.runtime.state.interaction_activity import InMemoryInteractionActivityProjectionStore
 
 _OCCURRED_AT = datetime(2026, 6, 13, tzinfo=UTC)
 _RECEIVED_AT = _OCCURRED_AT + timedelta(seconds=1)
@@ -148,6 +149,45 @@ async def test_activity_integrator_ignores_other_observation_kinds() -> None:
     )
 
     assert await projections.latest_for_actor(ActorId("actor-1")) is None
+
+
+@pytest.mark.anyio
+async def test_activity_integrator_updates_interaction_projection_only_when_trusted() -> None:
+    """認証済みINTEGRATE_ACTIVITY ingressだけがinteraction stateを更新する。"""
+    interaction = InMemoryInteractionActivityProjectionStore()
+    integrator = ActivityIntegrator(
+        journal=InMemoryActivityJournal(),
+        projections=InMemoryActivityProjectionStore(),
+        trust_policy=ObservationTrustPolicy(),
+        now=_now,
+        interaction_projections=interaction,
+        interaction_max_ttl_seconds=60,
+    )
+    observation = _activity_observation(
+        activity_kind=ActivityKind.ACTOR_INPUT_STARTED,
+        metadata={"modality": "voice", "reason": "recording"},
+    )
+
+    await integrator.integrate_observation(observation, _ingress(authenticated=False))
+    assert await _active_interactions(interaction) == ()
+
+    await integrator.integrate_observation(observation, _ingress())
+    active = await _active_interactions(interaction)
+    assert len(active) == 1
+    assert active[0].provider == "discord"
+    assert active[0].adapter_id == "trusted-adapter"
+
+
+async def _active_interactions(
+    store: InMemoryInteractionActivityProjectionStore,
+) -> tuple[InteractionActivitySnapshot, ...]:
+    return await store.active_for_target(
+        provider="discord",
+        actor_id=ActorId("actor-1"),
+        account_id=None,
+        space_id=SpaceId("space-1"),
+        now=_RECEIVED_AT,
+    )
 
 
 def _integrator(

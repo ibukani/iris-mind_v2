@@ -49,6 +49,8 @@ _ACTOR_SCOPED_ACTIVITY_KINDS = frozenset(
         ActivityKind.ACTOR_TYPING_STOPPED,
         ActivityKind.VOICE_JOINED,
         ActivityKind.VOICE_LEFT,
+        ActivityKind.ACTOR_INPUT_STARTED,
+        ActivityKind.ACTOR_INPUT_STOPPED,
     }
 )
 
@@ -495,6 +497,10 @@ def _activity_kind_from_proto(
         observations_pb2.ACTIVITY_KIND_VOICE_JOINED: ActivityKind.VOICE_JOINED,
         observations_pb2.ACTIVITY_KIND_VOICE_LEFT: ActivityKind.VOICE_LEFT,
         observations_pb2.ACTIVITY_KIND_SYSTEM_INTERACTION: ActivityKind.SYSTEM_INTERACTION,
+        observations_pb2.ACTIVITY_KIND_ACTOR_INPUT_STARTED: ActivityKind.ACTOR_INPUT_STARTED,
+        observations_pb2.ACTIVITY_KIND_ACTOR_INPUT_STOPPED: ActivityKind.ACTOR_INPUT_STOPPED,
+        observations_pb2.ACTIVITY_KIND_APP_OUTPUT_STARTED: ActivityKind.APP_OUTPUT_STARTED,
+        observations_pb2.ACTIVITY_KIND_APP_OUTPUT_STOPPED: ActivityKind.APP_OUTPUT_STOPPED,
     }
     try:
         return mapping[kind]

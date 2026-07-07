@@ -51,6 +51,11 @@ from iris.runtime.config.inference_scheduler import (
     apply_inference_scheduler_toml,
     validate_inference_scheduler_config,
 )
+from iris.runtime.config.interaction_activity import (
+    RuntimeInteractionActivityConfig,
+    apply_interaction_activity_toml,
+    validate_interaction_activity_config,
+)
 from iris.runtime.config.learning import (
     RuntimeLearningConfig,
     apply_learning_toml,
@@ -156,6 +161,7 @@ class IrisRuntimeConfig:
     observability: RuntimeObservabilityConfig
     prompt_budget: RuntimePromptBudgetConfig
     companion_semantics: RuntimeCompanionSemanticsConfig
+    interaction_activity: RuntimeInteractionActivityConfig
 
 
 @dataclass(frozen=True)
@@ -211,6 +217,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         observability=RuntimeObservabilityConfig(),
         prompt_budget=default_prompt_budget_config(),
         companion_semantics=RuntimeCompanionSemanticsConfig(),
+        interaction_activity=RuntimeInteractionActivityConfig(),
     )
 
 
@@ -502,6 +509,10 @@ def _apply_toml_sections(
             config.companion_semantics,
             table_or_empty(table, "companion_semantics"),
         ),
+        interaction_activity=apply_interaction_activity_toml(
+            config.interaction_activity,
+            table_or_empty(table, "interaction_activity"),
+        ),
         models=models,
         ollama=ollama,
         openai=openai,
@@ -554,6 +565,7 @@ class _RuntimeConfigSections:
     observability: RuntimeObservabilityConfig
     prompt_budget: RuntimePromptBudgetConfig
     companion_semantics: RuntimeCompanionSemanticsConfig
+    interaction_activity: RuntimeInteractionActivityConfig
     config_metadata: RuntimeConfigMetadata | None = None
 
 
@@ -586,6 +598,7 @@ def _apply_env_sections(
         observability=config.observability,
         prompt_budget=config.prompt_budget,
         companion_semantics=config.companion_semantics,
+        interaction_activity=config.interaction_activity,
         models=models,
         ollama=ollama,
         openai=openai,
@@ -625,6 +638,7 @@ def _compose_runtime_config(
         observability=sections.observability,
         prompt_budget=sections.prompt_budget,
         companion_semantics=sections.companion_semantics,
+        interaction_activity=sections.interaction_activity,
         models=sections.models,
         ollama=sections.ollama,
         openai=sections.openai,
@@ -678,6 +692,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         observability=validated_observability,
         prompt_budget=validated_prompt_budget,
         companion_semantics=validated_companion_semantics,
+        interaction_activity=validate_interaction_activity_config(config.interaction_activity),
     )
 
 
