@@ -6,6 +6,16 @@ import io
 from typing import Any
 from unittest.mock import ANY, MagicMock, patch
 
+import pytest
+from scripts.check_test_budget import (
+    MAX_DEFAULT_TEST_FILES,
+    MAX_DEFAULT_TEST_ITEMS,
+    collect_default_tests,
+    enforce_budget,
+    parse_collection_summary,
+)
+from scripts.check_test_budget import TestBudgetError as BudgetError
+from scripts.check_test_budget import TestCollectionStats as CollectionStats
 from scripts.verify import (
     CHECKS,
     RECOMMENDATIONS,
@@ -25,30 +35,21 @@ _first_failing_location: Any = import_private_matching(
 class TestFirstFailingLocation:
     """_first_failing_location の正規表現抽出テスト。"""
 
-    def test_pytest_failed(self) -> None:
-        stdout = "FAILED tests/runtime/test_config.py::test_parse - assert 0 == 1"
-        result = _first_failing_location(stdout)
-        assert result == "tests/runtime/test_config.py::test_parse"
-
-    def test_ruff_lint(self) -> None:
-        stdout = "iris/core/utils.py:42:5: E501 Line too long"
-        result = _first_failing_location(stdout)
-        assert result == "iris/core/utils.py:42"
-
-    def test_mypy_error(self) -> None:
-        stdout = "iris/core/utils.py:42: error: Incompatible types"
-        result = _first_failing_location(stdout)
-        assert result == "iris/core/utils.py:42"
-
-    def test_pyright_error(self) -> None:
-        stdout = "/workspace/iris/core/utils.py:42:5 - error: Type mismatch"
-        result = _first_failing_location(stdout)
-        assert result == "/workspace/iris/core/utils.py:42"
-
-    def test_ruff_format(self) -> None:
-        stdout = "iris/core/utils.py\niris/core/other.py\n"
-        result = _first_failing_location(stdout)
-        assert result == "iris/core/utils.py"
+    def test_extracts_supported_failure_shapes(self) -> None:
+        """主要 checker の first failure を抽出する。"""
+        cases = {
+            "FAILED tests/runtime/test_config.py::test_parse - assert 0 == 1": (
+                "tests/runtime/test_config.py::test_parse"
+            ),
+            "iris/core/utils.py:42:5: E501 Line too long": "iris/core/utils.py:42",
+            "iris/core/utils.py:42: error: Incompatible types": "iris/core/utils.py:42",
+            "/workspace/iris/core/utils.py:42:5 - error: Type mismatch": (
+                "/workspace/iris/core/utils.py:42"
+            ),
+            "iris/core/utils.py\niris/core/other.py\n": "iris/core/utils.py",
+        }
+        for stdout, expected in cases.items():
+            assert _first_failing_location(stdout) == expected
 
     def test_pytest_priority_over_file_line(self) -> None:
         """FAILED パターンが file:line パターンより優先されることを確認する。"""
@@ -68,11 +69,8 @@ class TestFirstFailingLocation:
 class TestCheckDefinitions:
     """Check dataclass と CHECKS 設定のテスト。"""
 
-    def test_all_checks_have_failure_class(self) -> None:
-        for check in CHECKS:
-            assert check.failure_class in RECOMMENDATIONS
-
-    def test_expected_check_names(self) -> None:
+    def test_check_contracts(self) -> None:
+        """定義済み checks は名前と recommendation を揃える。"""
         names = {check.name for check in CHECKS}
         expected = {
             "lint",
@@ -86,10 +84,7 @@ class TestCheckDefinitions:
             "e2e",
         }
         assert names == expected
-
-    def test_recommendation_coverage(self) -> None:
-        classes = {check.failure_class for check in CHECKS}
-        assert classes.issubset(set(RECOMMENDATIONS))
+        assert {check.failure_class for check in CHECKS}.issubset(set(RECOMMENDATIONS))
 
 
 class TestRunCheckOutput:
@@ -222,28 +217,11 @@ def test_main_passed_summary() -> None:
 class TestSelectedChecks:
     """selected_checks のフィルタリングテスト。"""
 
-    def test_quick_includes_architecture_check(self) -> None:
-        """--quick でも architecture チェック（make static-arch）が含まれる。"""
-        checks = selected_checks(quick=True)
-        names = {check.name for check in checks}
-        assert "architecture" in names
-
-    def test_architecture_check_uses_static_arch(self) -> None:
-        """Architecture チェックは make static-arch を実行する。"""
-        arch_check = next(c for c in CHECKS if c.name == "architecture")
-        assert arch_check.command == ("make", "static-arch")
-
-    def test_quick_excludes_tests_coverage(self) -> None:
-        """--quick では tests+coverage が除外される。"""
-        checks = selected_checks(quick=True)
-        names = {check.name for check in checks}
-        assert "tests+coverage" not in names
-
-    def test_full_includes_all_checks(self) -> None:
-        """Full モードでは全チェックが含まれる。"""
-        checks = selected_checks(quick=False)
-        names = {check.name for check in checks}
-        assert names == {
+    def test_selected_check_sets(self) -> None:
+        """Quick/full の check selection をまとめて検証する。"""
+        quick_names = {check.name for check in selected_checks(quick=True)}
+        full_names = {check.name for check in selected_checks(quick=False)}
+        expected_full = {
             "lint",
             "format",
             "type",
@@ -254,18 +232,12 @@ class TestSelectedChecks:
             "tests+coverage",
             "e2e",
         }
-
-    def test_full_includes_e2e(self) -> None:
-        """Full モードでは e2e チェックが含まれる。"""
-        checks = selected_checks(quick=False)
-        names = {check.name for check in checks}
-        assert "e2e" in names
-
-    def test_quick_excludes_e2e(self) -> None:
-        """--quick では e2e が除外される。"""
-        checks = selected_checks(quick=True)
-        names = {check.name for check in checks}
-        assert "e2e" not in names
+        assert "architecture" in quick_names
+        assert "tests+coverage" not in quick_names
+        assert "e2e" not in quick_names
+        assert full_names == expected_full
+        arch_check = next(c for c in CHECKS if c.name == "architecture")
+        assert arch_check.command == ("make", "static-arch")
 
     def test_e2e_command_uses_tests_e2e_and_excludes_llm_live(self) -> None:
         """e2e チェックのコマンドは tests/e2e を使い llm_live を除外する。"""
@@ -273,3 +245,37 @@ class TestSelectedChecks:
         command_str = " ".join(e2e_check.command)
         assert "tests/e2e" in command_str
         assert "not llm_live" in command_str
+
+
+class TestTestBudget:
+    """scripts/check_test_budget.py のテスト。"""
+
+    def test_parse_and_enforce_budget(self) -> None:
+        """Collection 集計と上限判定をまとめて検証する。"""
+        output = "tests/runtime/test_config.py: 45\ntests/scripts/test_verify.py: 24\n"
+
+        stats = parse_collection_summary(output)
+
+        assert stats == CollectionStats(files=2, items=69)
+        enforce_budget(
+            CollectionStats(
+                files=MAX_DEFAULT_TEST_FILES,
+                items=MAX_DEFAULT_TEST_ITEMS,
+            )
+        )
+        with pytest.raises(BudgetError, match="exceeds budget"):
+            enforce_budget(
+                CollectionStats(
+                    files=MAX_DEFAULT_TEST_FILES + 1,
+                    items=MAX_DEFAULT_TEST_ITEMS,
+                )
+            )
+
+    def test_collect_default_tests_raises_on_collection_failure(self) -> None:
+        """Pytest collect 自体が失敗した場合は明示エラーにする。"""
+        completed = MagicMock(stdout="bad collect\n", stderr="boom\n", returncode=2)
+        with (
+            patch("scripts.check_test_budget._run_command", return_value=completed),
+            pytest.raises(RuntimeError, match="pytest collection failed"),
+        ):
+            collect_default_tests(("tests/broken",))

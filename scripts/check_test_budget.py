@@ -28,8 +28,8 @@ DEFAULT_TEST_TARGETS: tuple[str, ...] = (
     "tests/scripts",
     "tests/test_oneturn_flow.py",
 )
-MAX_DEFAULT_TEST_FILES = 310
-MAX_DEFAULT_TEST_ITEMS = 2200
+MAX_DEFAULT_TEST_FILES = 305
+MAX_DEFAULT_TEST_ITEMS = 2150
 
 _COLLECT_LINE = re.compile(r"^.+?: (?P<count>\d+)$")
 
