@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
 
@@ -18,7 +18,22 @@ from iris.contracts.memory import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from iris.contracts.embeddings import EmbeddingModel
+
+
+@runtime_checkable
+class MemoryRecordScanner(Protocol):
+    """Rebuild 用に query text / limit 非依存で memory records を走査する port。"""
+
+    def scan_records(self, *, include_archived: bool = False) -> Sequence[MemoryRecord]:
+        """Rebuild 対象 records を返す。
+
+        Returns:
+            query text / limit 非依存の record sequence。
+        """
+        ...
 
 
 class MemoryVectorRebuildStats(BaseModel):
@@ -48,7 +63,7 @@ class MemoryVectorIndexRebuilder:
     def __init__(
         self,
         *,
-        store: MutableMemoryStore,
+        store: MutableMemoryStore | MemoryRecordScanner,
         index: VectorMemoryIndex,
         embedding: EmbeddingModel,
         batch_size: int = 32,
@@ -72,7 +87,7 @@ class MemoryVectorIndexRebuilder:
         Returns:
             同期件数の統計。
         """
-        records = tuple(self._store.filter(MemoryQuery(text="", limit=1, include_archived=True)))
+        records = self._scan_records()
         canonical_ids = {record.id for record in records}
         classified = tuple((record, self._classify(record)) for record in records)
         stale = [record for record, state in classified if state is not _EntryState.UNCHANGED]
@@ -84,18 +99,7 @@ class MemoryVectorIndexRebuilder:
         upserted = 0
         for start in range(0, len(stale), self._batch_size):
             batch = stale[start : start + self._batch_size]
-            vectors = self._embedding.embed_batch(tuple(record.text for record in batch))
-            for record, vector in zip(batch, vectors, strict=True):
-                self._index.upsert(
-                    vector_memory_entry_from_record(
-                        record,
-                        vector=vector,
-                        embedding_provider=self._embedding.provider,
-                        embedding_model=self._embedding.model_id,
-                        embedding_dimension=self._embedding.dimension,
-                    )
-                )
-                upserted += 1
+            upserted += self._upsert_batch(tuple(batch))
 
         removed = 0
         if remove_orphans:
@@ -112,6 +116,37 @@ class MemoryVectorIndexRebuilder:
             incompatible=incompatible,
             removed_orphans=removed,
         )
+
+    def _scan_records(self) -> tuple[MemoryRecord, ...]:
+        store = self._store
+        if isinstance(store, MemoryRecordScanner):
+            return tuple(store.scan_records(include_archived=True))
+        return tuple(store.filter(MemoryQuery(text="", include_archived=True)))
+
+    def _upsert_batch(self, batch: tuple[MemoryRecord, ...]) -> int:
+        """1 batch を検証後に upsert する。
+
+        Returns:
+            upsert 件数。
+
+        Raises:
+            ValueError: embedding batch の出力数が入力 record 数と一致しない場合。
+        """
+        vectors = self._embedding.embed_batch(tuple(record.text for record in batch))
+        if len(vectors) != len(batch):
+            msg = "Embedding batch result length must match input records"
+            raise ValueError(msg)
+        for record, vector in zip(batch, vectors, strict=False):
+            self._index.upsert(
+                vector_memory_entry_from_record(
+                    record,
+                    vector=vector,
+                    embedding_provider=self._embedding.provider,
+                    embedding_model=self._embedding.model_id,
+                    embedding_dimension=self._embedding.dimension,
+                )
+            )
+        return len(batch)
 
     def _classify(self, record: MemoryRecord) -> _EntryState:
         metadata = self._index.metadata(record.id)

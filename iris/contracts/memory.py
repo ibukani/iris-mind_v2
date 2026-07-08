@@ -266,5 +266,8 @@ class MutableMemoryStore(MemoryStore, Protocol):
         ...
 
     def filter(self, query: MemoryQuery) -> Sequence[MemoryRecord]:
-        """スコープ/種別/アーカイブ状態などでフィルタしたレコードを返す。"""
+        """スコープ/種別/アーカイブ状態でフィルタしたレコードを返す。
+
+        ``text`` と ``limit`` は text search 用であり、filter 実装は無視する。
+        """
         ...

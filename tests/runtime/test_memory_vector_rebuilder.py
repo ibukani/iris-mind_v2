@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import pytest
+
 from iris.adapters.embeddings.fake import DeterministicFakeEmbedding
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
@@ -45,6 +47,53 @@ class _TeaEmbedding:
             入力順の2次元 vector。
         """
         return tuple(self.embed(text) for text in texts)
+
+
+class _ShortBatchEmbedding:
+    provider = "test"
+    model_id = "short-batch"
+    dimension = 2
+
+    def embed(self, text: str) -> tuple[float, float]:
+        """単一 test vector を返す。
+
+        Returns:
+            2次元 test vector。
+        """
+        return (1.0, 0.0) if text else (0.0, 1.0)
+
+    def embed_batch(self, texts: tuple[str, ...]) -> tuple[tuple[float, float], ...]:
+        """入力より短い batch result を返す。
+
+        Returns:
+            入力より短い test vector 群。
+        """
+        if not texts:
+            return ()
+        return ((1.0, 0.0),)
+
+
+class _LimitRespectingScanStore:
+    def __init__(self, records: tuple[MemoryRecord, ...]) -> None:
+        self._records = records
+
+    def filter(self, query: MemoryQuery) -> tuple[MemoryRecord, ...]:
+        """Limit を尊重する filter 実装を模倣する。
+
+        Returns:
+            limit で切り詰めた record 群。
+        """
+        return self._records[: query.limit]
+
+    def scan_records(self, *, include_archived: bool = False) -> tuple[MemoryRecord, ...]:
+        """Limit 非依存の rebuild scan を返す。
+
+        Returns:
+            rebuild 対象 record 群。
+        """
+        if include_archived:
+            return self._records
+        return tuple(record for record in self._records if not record.archived)
 
 
 @dataclass(frozen=True)
@@ -138,6 +187,47 @@ def test_rebuild_classifies_missing_stale_and_incompatible_entries() -> None:
     provider_metadata = index.metadata(MemoryId("provider"))
     assert provider_metadata is not None
     assert provider_metadata.embedding_provider == "fake"
+
+
+def test_rebuild_rejects_batch_length_mismatch_before_partial_upsert() -> None:
+    """Embedding batch length mismatch は partial upsert 前に失敗する。"""
+    store = InMemoryMemoryStore()
+    store.put(MemoryRecord(id=MemoryId("m1"), text="green tea"))
+    store.put(MemoryRecord(id=MemoryId("m2"), text="black tea"))
+    index = InMemoryVectorMemoryIndex()
+    rebuilder = MemoryVectorIndexRebuilder(
+        store=store,
+        index=index,
+        embedding=_ShortBatchEmbedding(),
+        batch_size=2,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Embedding batch result length must match input records",
+    ):
+        rebuilder.rebuild()
+    assert index.ids() == ()
+
+
+def test_rebuild_uses_scan_records_instead_of_limit_sensitive_filter() -> None:
+    """Filter が limit を尊重しても scan_records で全件同期する。"""
+    records = (
+        MemoryRecord(id=MemoryId("m1"), text="green tea"),
+        MemoryRecord(id=MemoryId("m2"), text="black tea"),
+    )
+    store = _LimitRespectingScanStore(records)
+    index = InMemoryVectorMemoryIndex()
+    stats = MemoryVectorIndexRebuilder(
+        store=store,
+        index=index,
+        embedding=DeterministicFakeEmbedding(dimension=4),
+        batch_size=2,
+    ).rebuild()
+
+    assert stats.scanned == 2
+    assert stats.upserted == 2
+    assert set(index.ids()) == {MemoryId("m1"), MemoryId("m2")}
 
 
 def _upsert_test_entry(
