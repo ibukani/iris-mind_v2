@@ -58,10 +58,7 @@ EXCLUDED_ROOTS: frozenset[str] = frozenset(
 # fixture data.  They are excluded from detection.
 SCANNER_FIXTURE_FILES: frozenset[str] = frozenset(
     {
-        "tests/architecture/test_no_unapproved_suppressions.py",
-        "tests/architecture/test_no_unreasoned_suppressions.py",
-        "tests/architecture/test_no_file_level_suppressions.py",
-        "tests/architecture/test_no_cast_in_protected_layers.py",
+        "tests/architecture/test_quality_escape_hatch_guards.py",
         "tests/architecture/test_suppression_debt_registry.py",
         "tests/architecture/test_suppression_debt_registry_is_frozen.py",
         "tests/architecture/test_workspace_frame_mutation_extended.py",
