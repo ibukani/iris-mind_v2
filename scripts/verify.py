@@ -53,6 +53,9 @@ RECOMMENDATIONS: dict[str, str] = {
     "type": "make type  OR  uv run mypy iris tests scripts main.py",
     "pyright": "make pyright  OR  uv run pyright .",
     "architecture": "make static-arch OR make arch OR uv run pytest tests/architecture -q",
+    "test-budget": (
+        "Merge duplicate tests or intentionally update scripts/check_test_budget.py budget"
+    ),
     "tests+coverage": ("make ai-test-target TARGET=<failing_test>  OR  make coverage"),
     "e2e": "make e2e  OR  uv run pytest tests/e2e -m 'e2e and not llm_live'",
     "environment": "Check uv environment and tool versions with make doctor",
@@ -106,6 +109,12 @@ CHECKS: tuple[Check, ...] = (
         "architecture",
         ("make", "static-arch"),
         failure_class="architecture",
+    ),
+    Check(
+        "test-budget",
+        ("uv", "run", "python", "scripts/check_test_budget.py"),
+        full_only=True,
+        failure_class="test-budget",
     ),
     Check(
         "tests+coverage",

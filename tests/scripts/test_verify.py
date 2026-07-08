@@ -81,6 +81,7 @@ class TestCheckDefinitions:
             "pyright",
             "debt-registry",
             "architecture",
+            "test-budget",
             "tests+coverage",
             "e2e",
         }
@@ -249,6 +250,7 @@ class TestSelectedChecks:
             "pyright",
             "debt-registry",
             "architecture",
+            "test-budget",
             "tests+coverage",
             "e2e",
         }

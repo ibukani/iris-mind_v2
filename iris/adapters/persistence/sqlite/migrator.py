@@ -314,27 +314,22 @@ class SQLiteSchemaMigrator:
         current_version: int,
     ) -> tuple[int, ...]:
         pending = tuple(m for m in self._migrations if m.version > current_version)
-        for migration in pending:
-            self._apply_one(path, conn, migration)
-        return tuple(m.version for m in pending)
-
-    @staticmethod
-    def _apply_one(
-        path: Path,
-        conn: sqlite3.Connection,
-        migration: SQLiteMigration,
-    ) -> None:
+        if not pending:
+            return ()
+        active_migration = pending[0]
         try:
             conn.execute("BEGIN IMMEDIATE")
-            for statement in migration.statements:
-                conn.execute(statement)
-            _record_migration(conn, migration)
-            conn.execute(f"PRAGMA user_version = {migration.version}")
+            for migration in pending:
+                active_migration = migration
+                _apply_pending_migration(conn, migration)
             conn.commit()
         except sqlite3.DatabaseError as exc:
             _rollback(conn)
-            message = f"failed to apply SQLite migration v{migration.version} to {path}: {exc}"
+            message = (
+                f"failed to apply SQLite migration v{active_migration.version} to {path}: {exc}"
+            )
             raise SQLiteMigrationError(message) from exc
+        return tuple(m.version for m in pending)
 
     def _inspect_connection(self, path: Path, conn: sqlite3.Connection) -> SQLiteSchemaStatus:
         quick = _quick_check(conn)
@@ -465,6 +460,13 @@ def _record_migration(conn: sqlite3.Connection, migration: SQLiteMigration) -> N
         """,
         (migration.version, migration.name, migration.checksum, now_utc().isoformat()),
     )
+
+
+def _apply_pending_migration(conn: sqlite3.Connection, migration: SQLiteMigration) -> None:
+    for statement in migration.statements:
+        conn.execute(statement)
+    _record_migration(conn, migration)
+    conn.execute(f"PRAGMA user_version = {migration.version}")
 
 
 def _validate_unversioned_adoption(path: Path, conn: sqlite3.Connection) -> None:
