@@ -25,20 +25,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts._subprocess_runner import run as _run_command
+from scripts.test_targets import DEFAULT_TEST_TARGETS
 
 MYPY_TARGETS: tuple[str, ...] = ("iris", "tests", "scripts", "main.py")
-DEFAULT_TEST_TARGETS: tuple[str, ...] = (
-    "tests/adapters",
-    "tests/architecture",
-    "tests/cognitive",
-    "tests/contracts",
-    "tests/core",
-    "tests/features",
-    "tests/presentation",
-    "tests/runtime",
-    "tests/scripts",
-    "tests/test_oneturn_flow.py",
-)
 COVERAGE_ARGS: tuple[str, ...] = (
     "--cov=iris",
     "--cov-branch",

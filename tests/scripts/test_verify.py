@@ -252,11 +252,15 @@ class TestTestBudget:
 
     def test_parse_and_enforce_budget(self) -> None:
         """Collection 集計と上限判定をまとめて検証する。"""
-        output = "tests/runtime/test_config.py: 45\ntests/scripts/test_verify.py: 24\n"
+        summary_output = "tests/runtime/test_config.py: 45\ntests/scripts/test_verify.py: 24\n"
+        nodeid_output = (
+            "tests/runtime/test_config.py::test_a\n"
+            "tests/runtime/test_config.py::test_b[param]\n"
+            "tests/scripts/test_verify.py::TestThing::test_c\n"
+        )
 
-        stats = parse_collection_summary(output)
-
-        assert stats == CollectionStats(files=2, items=69)
+        assert parse_collection_summary(summary_output) == CollectionStats(files=2, items=69)
+        assert parse_collection_summary(nodeid_output) == CollectionStats(files=2, items=3)
         enforce_budget(
             CollectionStats(
                 files=MAX_DEFAULT_TEST_FILES,

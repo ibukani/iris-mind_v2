@@ -12,26 +12,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts._subprocess_runner import run as _run_command
+from scripts.test_targets import DEFAULT_TEST_TARGETS
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-DEFAULT_TEST_TARGETS: tuple[str, ...] = (
-    "tests/adapters",
-    "tests/architecture",
-    "tests/cognitive",
-    "tests/contracts",
-    "tests/core",
-    "tests/features",
-    "tests/presentation",
-    "tests/runtime",
-    "tests/scripts",
-    "tests/test_oneturn_flow.py",
-)
 MAX_DEFAULT_TEST_FILES = 305
 MAX_DEFAULT_TEST_ITEMS = 2150
 
-_COLLECT_LINE = re.compile(r"^.+?: (?P<count>\d+)$")
+_SUMMARY_LINE = re.compile(r"^.+?: (?P<count>\d+)$")
 
 
 @dataclass(frozen=True)
@@ -47,7 +36,7 @@ class TestBudgetError(RuntimeError):
 
 
 def parse_collection_summary(output: str) -> TestCollectionStats:
-    """Parse ``pytest --collect-only -q`` per-file summary output.
+    """Parse ``pytest --collect-only -q`` output.
 
     Args:
         output: Captured pytest collection output.
@@ -55,15 +44,35 @@ def parse_collection_summary(output: str) -> TestCollectionStats:
     Returns:
         TestCollectionStats: Number of test files and collected items.
     """
-    files = 0
-    items = 0
+    node_files: set[str] = set()
+    node_items = 0
+    summary_files = 0
+    summary_items = 0
     for line in output.splitlines():
-        match = _COLLECT_LINE.match(line.strip())
-        if match is None:
+        text = line.strip()
+        if not text:
             continue
-        files += 1
-        items += int(match.group("count"))
-    return TestCollectionStats(files=files, items=items)
+        node_path = _nodeid_path(text)
+        if node_path is not None:
+            node_files.add(node_path)
+            node_items += 1
+            continue
+        match = _SUMMARY_LINE.match(text)
+        if match is not None:
+            summary_files += 1
+            summary_items += int(match.group("count"))
+    if node_items > 0:
+        return TestCollectionStats(files=len(node_files), items=node_items)
+    return TestCollectionStats(files=summary_files, items=summary_items)
+
+
+def _nodeid_path(text: str) -> str | None:
+    if "::" not in text:
+        return None
+    path = text.split("::", maxsplit=1)[0]
+    if not path.endswith(".py"):
+        return None
+    return path
 
 
 def enforce_budget(stats: TestCollectionStats) -> None:
