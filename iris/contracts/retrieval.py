@@ -27,7 +27,11 @@ class RetrievalSourceKind(StrEnum):
 
 
 class RetrievalFallbackReason(StrEnum):
-    """Retrieval pipeline が fallback した理由。"""
+    """Retrieval pipeline が fallback した理由。
+
+    ``*_TIMEOUT`` は provider call の cancellation ではなく、返却済み result の
+    観測 latency が retrieval policy の閾値を超えたことを表す。
+    """
 
     EMPTY_QUERY = "empty_query"
     EMPTY_INDEX = "empty_index"

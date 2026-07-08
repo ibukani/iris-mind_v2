@@ -8,6 +8,7 @@ from iris.adapters.embeddings.fake import DeterministicFakeEmbedding
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.adapters.rerankers.fake import FakeReranker
+from iris.contracts.embeddings import embedding_result_with_latency
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,
@@ -31,6 +32,7 @@ from iris.contracts.retrieval import (
     RerankResult,
     RetrievalFallbackReason,
     RetrievalSourceKind,
+    rerank_result_with_latency,
 )
 from iris.core.ids import ActorId, SpaceId
 from iris.runtime.config.prompt_budget import (
@@ -183,6 +185,33 @@ def test_memory_pipeline_honors_query_limit_before_provider_calls() -> None:
     assert embedding.embed_text_calls == 0
 
 
+def test_memory_pipeline_falls_back_when_observed_embedding_latency_exceeds_policy() -> None:
+    """返却済み embedding result の観測 latency 超過は prompt context に入れない。"""
+    embedding = _ObservedLatencyEmbedding(
+        DeterministicFakeEmbedding(dimension=8),
+        latency_ms=20.0,
+    )
+    records = (MemoryRecord(id=MemoryId("m1"), text="green tea"),)
+    pipeline = MemoryRetrievalPipeline(
+        store=_store(*records),
+        vector_index=_index_for_records(records, embedding.delegate),
+        embedding_client=embedding,
+        reranker=None,
+        policy=MemoryRetrievalPolicy(
+            max_retrieved_candidates=1,
+            max_reranked_candidates=1,
+            max_prompt_selected_items=1,
+            max_observed_embedding_latency_ms=10.0,
+        ),
+    )
+
+    result = pipeline.retrieve(MemoryQuery(text="tea", limit=5))
+
+    assert result.items == ()
+    assert result.observability.fallback_reason is RetrievalFallbackReason.EMBEDDING_TIMEOUT
+    assert 19.9 < result.observability.embedding_latency_ms < 20.1
+
+
 def test_memory_pipeline_clamps_retrieval_rerank_and_selection_to_query_limit() -> None:
     """MemoryQuery.limit は retrieved/reranked/selected の上限として働く。"""
     embedding = DeterministicFakeEmbedding(dimension=8)
@@ -234,6 +263,32 @@ def test_memory_pipeline_converts_vector_index_failure_to_no_memory_fallback() -
 
     assert result.items == ()
     assert result.observability.fallback_reason is RetrievalFallbackReason.VECTOR_INDEX_UNAVAILABLE
+
+
+def test_memory_pipeline_falls_back_when_observed_reranker_latency_exceeds_policy() -> None:
+    """返却済み rerank result の観測 latency 超過は prompt context に入れない。"""
+    embedding = DeterministicFakeEmbedding(dimension=8)
+    records = (MemoryRecord(id=MemoryId("m1"), text="green tea"),)
+    pipeline = MemoryRetrievalPipeline(
+        store=_store(*records),
+        vector_index=_index_for_records(records, embedding),
+        embedding_client=embedding,
+        reranker=_ObservedLatencyReranker(_SpyReranker({"m1": 1.0}), latency_ms=20.0),
+        policy=MemoryRetrievalPolicy(
+            max_retrieved_candidates=1,
+            max_reranked_candidates=1,
+            max_prompt_selected_items=1,
+            max_observed_reranker_latency_ms=10.0,
+        ),
+    )
+
+    result = pipeline.retrieve(MemoryQuery(text="tea", limit=5))
+
+    assert result.items == ()
+    assert result.prompt_section is None
+    assert result.observability.retrieved_count == 1
+    assert 19.9 < result.observability.reranking_latency_ms < 20.1
+    assert result.observability.fallback_reason is RetrievalFallbackReason.RERANKER_TIMEOUT
 
 
 def test_memory_pipeline_falls_back_to_vector_results_when_reranker_unavailable() -> None:
@@ -415,6 +470,33 @@ class _CountingEmbedding:
         return self.delegate.embed_text_batch(request)
 
 
+class _ObservedLatencyEmbedding:
+    def __init__(self, delegate: DeterministicFakeEmbedding, *, latency_ms: float) -> None:
+        self.delegate = delegate
+        self._latency_ms = latency_ms
+
+    @property
+    def provider(self) -> str:
+        return self.delegate.provider
+
+    @property
+    def model_id(self) -> str:
+        return self.delegate.model_id
+
+    @property
+    def dimension(self) -> int:
+        return self.delegate.dimension
+
+    def embed_text(self, request: EmbeddingRequest) -> EmbeddingResult:
+        return embedding_result_with_latency(
+            self.delegate.embed_text(request),
+            latency_ms=self._latency_ms,
+        )
+
+    def embed_text_batch(self, request: EmbeddingBatchRequest) -> EmbeddingBatchResult:
+        return self.delegate.embed_text_batch(request)
+
+
 class _SpyReranker:
     def __init__(self, scores: dict[str, float]) -> None:
         self._delegate = FakeReranker(scores)
@@ -423,6 +505,18 @@ class _SpyReranker:
     def rerank(self, request: RerankRequest) -> RerankResult:
         self.last_request = request
         return self._delegate.rerank(request)
+
+
+class _ObservedLatencyReranker:
+    def __init__(self, delegate: _SpyReranker, *, latency_ms: float) -> None:
+        self._delegate = delegate
+        self._latency_ms = latency_ms
+
+    def rerank(self, request: RerankRequest) -> RerankResult:
+        return rerank_result_with_latency(
+            self._delegate.rerank(request),
+            latency_ms=self._latency_ms,
+        )
 
 
 class _FailingReranker:

@@ -40,13 +40,13 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class MemoryRetrievalPolicy:
-    """Hot path retrieval の上限と fallback policy。"""
+    """Hot path retrieval の上限と観測済み latency fallback policy。"""
 
     max_retrieved_candidates: int
     max_reranked_candidates: int
     max_prompt_selected_items: int
-    embedding_timeout_ms: float = 250.0
-    reranker_timeout_ms: float = 250.0
+    max_observed_embedding_latency_ms: float = 250.0
+    max_observed_reranker_latency_ms: float = 250.0
     min_score: float = 0.0
     prompt_section_kind: PromptSectionKind = PromptSectionKind.USER_MEMORY
     prompt_title: str = "Relevant memories"
@@ -56,7 +56,7 @@ class MemoryRetrievalPolicy:
         """Policy の hot path 上限を検証する。
 
         Raises:
-            ValueError: 上限または timeout が負の値の場合。
+            ValueError: 上限または観測済み latency 閾値が負の値の場合。
         """
         if self.max_retrieved_candidates < 0:
             msg = "max_retrieved_candidates must be >= 0"
@@ -67,11 +67,11 @@ class MemoryRetrievalPolicy:
         if self.max_prompt_selected_items < 0:
             msg = "max_prompt_selected_items must be >= 0"
             raise ValueError(msg)
-        if self.embedding_timeout_ms < 0:
-            msg = "embedding_timeout_ms must be >= 0"
+        if self.max_observed_embedding_latency_ms < 0:
+            msg = "max_observed_embedding_latency_ms must be >= 0"
             raise ValueError(msg)
-        if self.reranker_timeout_ms < 0:
-            msg = "reranker_timeout_ms must be >= 0"
+        if self.max_observed_reranker_latency_ms < 0:
+            msg = "max_observed_reranker_latency_ms must be >= 0"
             raise ValueError(msg)
 
 
@@ -209,7 +209,7 @@ class MemoryRetrievalPipeline:
                 error_message=str(exc),
             )
         latency_ms = result.latency_ms or _elapsed_ms(started)
-        if latency_ms > self._policy.embedding_timeout_ms:
+        if latency_ms > self._policy.max_observed_embedding_latency_ms:
             return _EmbeddingOutcome(
                 result=None,
                 latency_ms=latency_ms,
@@ -285,7 +285,7 @@ class MemoryRetrievalPipeline:
                 error_message=str(exc),
             )
         latency_ms = result.latency_ms or _elapsed_ms(started)
-        if latency_ms > self._policy.reranker_timeout_ms:
+        if latency_ms > self._policy.max_observed_reranker_latency_ms:
             return _RerankOutcome(
                 result=None,
                 latency_ms=latency_ms,

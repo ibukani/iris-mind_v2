@@ -73,6 +73,29 @@ class _ShortBatchEmbedding:
         return ((1.0, 0.0),)
 
 
+class _LimitRespectingScanStore:
+    def __init__(self, records: tuple[MemoryRecord, ...]) -> None:
+        self._records = records
+
+    def filter(self, query: MemoryQuery) -> tuple[MemoryRecord, ...]:
+        """Limit を尊重する filter 実装を模倣する。
+
+        Returns:
+            limit で切り詰めた record 群。
+        """
+        return self._records[: query.limit]
+
+    def scan_records(self, *, include_archived: bool = False) -> tuple[MemoryRecord, ...]:
+        """Limit 非依存の rebuild scan を返す。
+
+        Returns:
+            rebuild 対象 record 群。
+        """
+        if include_archived:
+            return self._records
+        return tuple(record for record in self._records if not record.archived)
+
+
 @dataclass(frozen=True)
 class _EntryOverrides:
     digest: str | None = None
@@ -185,6 +208,26 @@ def test_rebuild_rejects_batch_length_mismatch_before_partial_upsert() -> None:
     ):
         rebuilder.rebuild()
     assert index.ids() == ()
+
+
+def test_rebuild_uses_scan_records_instead_of_limit_sensitive_filter() -> None:
+    """Filter が limit を尊重しても scan_records で全件同期する。"""
+    records = (
+        MemoryRecord(id=MemoryId("m1"), text="green tea"),
+        MemoryRecord(id=MemoryId("m2"), text="black tea"),
+    )
+    store = _LimitRespectingScanStore(records)
+    index = InMemoryVectorMemoryIndex()
+    stats = MemoryVectorIndexRebuilder(
+        store=store,
+        index=index,
+        embedding=DeterministicFakeEmbedding(dimension=4),
+        batch_size=2,
+    ).rebuild()
+
+    assert stats.scanned == 2
+    assert stats.upserted == 2
+    assert set(index.ids()) == {MemoryId("m1"), MemoryId("m2")}
 
 
 def _upsert_test_entry(
