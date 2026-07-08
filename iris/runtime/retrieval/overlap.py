@@ -55,6 +55,9 @@ def detect_memory_overlaps(
 
     Returns:
         similarity threshold 以上の memory pair。
+
+    Raises:
+        ValueError: embedding batch result 数が候補数と一致しない場合。
     """
     active_policy = policy or MemoryOverlapDetectionPolicy()
     candidates = tuple(records[: active_policy.max_candidates])
@@ -67,6 +70,9 @@ def detect_memory_overlaps(
             metadata={"stage": "memory_overlap_detection"},
         )
     )
+    if len(batch.embeddings) != len(candidates):
+        msg = "Embedding batch result length must match overlap candidates"
+        raise ValueError(msg)
     overlaps: list[RetrievalOverlapItem] = []
     for left_index, left in enumerate(candidates):
         for right_index in range(left_index + 1, len(candidates)):

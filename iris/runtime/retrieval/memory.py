@@ -133,18 +133,22 @@ class MemoryRetrievalPipeline:
         embedding: _EmbeddingOutcome,
         embedding_result: EmbeddingResult,
     ) -> RetrievalPipelineResult:
+        vector_started = time.monotonic()
         try:
-            retrieved = self._retrieve_vector_candidates(query, embedding_result, limits)
+            vector_search = self._retrieve_vector_candidates(query, embedding_result, limits)
         except VectorMemoryIndexError:
             return _empty_result(
                 RetrievalFallbackReason.VECTOR_INDEX_UNAVAILABLE,
                 embedding_latency_ms=embedding.latency_ms,
+                vector_search_latency_ms=_elapsed_ms(vector_started),
                 embedding_cache_hit=embedding.cache_hit,
             )
+        retrieved = vector_search.results
         if not retrieved:
             return _empty_result(
                 RetrievalFallbackReason.EMPTY_INDEX,
                 embedding_latency_ms=embedding.latency_ms,
+                vector_search_latency_ms=vector_search.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
             )
 
@@ -154,6 +158,7 @@ class MemoryRetrievalPipeline:
                 RetrievalFallbackReason.RERANKER_TIMEOUT,
                 retrieved_count=len(retrieved),
                 embedding_latency_ms=embedding.latency_ms,
+                vector_search_latency_ms=vector_search.latency_ms,
                 reranking_latency_ms=reranked.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
             )
@@ -167,6 +172,7 @@ class MemoryRetrievalPipeline:
                 reranked_count=_reranked_count(reranked.result),
                 selected_count=len(selected),
                 embedding_latency_ms=embedding.latency_ms,
+                vector_search_latency_ms=vector_search.latency_ms,
                 reranking_latency_ms=reranked.latency_ms,
                 embedding_cache_hit=embedding.cache_hit,
                 fallback_reason=fallback or reranked.fallback_reason,
@@ -224,9 +230,10 @@ class MemoryRetrievalPipeline:
         query: MemoryQuery,
         embedding: EmbeddingResult,
         limits: _RetrievalLimits,
-    ) -> tuple[MemorySearchResult, ...]:
+    ) -> _VectorSearchOutcome:
         if limits.max_retrieved_candidates == 0:
-            return ()
+            return _VectorSearchOutcome(results=(), latency_ms=0.0)
+        started = time.monotonic()
         raw = self._vector_index.search(
             embedding.vector,
             limit=limits.max_retrieved_candidates,
@@ -237,13 +244,14 @@ class MemoryRetrievalPipeline:
                 include_archived=query.include_archived,
             ),
         )
+        latency_ms = _elapsed_ms(started)
         results: list[MemorySearchResult] = []
         for item in raw:
             record = self._store.get(item.memory_id)
             if record is None or _record_is_out_of_scope(record, query):
                 continue
             results.append(MemorySearchResult(record=record, score=item.score))
-        return tuple(results)
+        return _VectorSearchOutcome(results=tuple(results), latency_ms=latency_ms)
 
     def _rerank(
         self,
@@ -376,6 +384,12 @@ class _RerankOutcome:
 
 
 @dataclass(frozen=True)
+class _VectorSearchOutcome:
+    results: tuple[MemorySearchResult, ...]
+    latency_ms: float
+
+
+@dataclass(frozen=True)
 class _RetrievalLimits:
     max_retrieved_candidates: int
     max_reranked_candidates: int
@@ -460,6 +474,7 @@ def _empty_result(
     *,
     retrieved_count: int = 0,
     embedding_latency_ms: float = 0.0,
+    vector_search_latency_ms: float = 0.0,
     reranking_latency_ms: float = 0.0,
     embedding_cache_hit: bool = False,
 ) -> RetrievalPipelineResult:
@@ -471,6 +486,7 @@ def _empty_result(
             reranked_count=0,
             selected_count=0,
             embedding_latency_ms=embedding_latency_ms,
+            vector_search_latency_ms=vector_search_latency_ms,
             reranking_latency_ms=reranking_latency_ms,
             embedding_cache_hit=embedding_cache_hit,
             fallback_reason=reason,

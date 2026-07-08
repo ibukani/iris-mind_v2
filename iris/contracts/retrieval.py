@@ -83,6 +83,7 @@ class RetrievalObservability(BaseModel):
     reranked_count: int = Field(ge=0)
     selected_count: int = Field(ge=0)
     embedding_latency_ms: float = Field(default=0.0, ge=0.0)
+    vector_search_latency_ms: float = Field(default=0.0, ge=0.0)
     reranking_latency_ms: float = Field(default=0.0, ge=0.0)
     embedding_cache_hit: bool = False
     fallback_reason: RetrievalFallbackReason | None = None

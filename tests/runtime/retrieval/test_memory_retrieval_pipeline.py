@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from iris.adapters.embeddings.fake import DeterministicFakeEmbedding
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.adapters.memory.vector_index import InMemoryVectorMemoryIndex
 from iris.adapters.rerankers.fake import FakeReranker
-from iris.contracts.embeddings import embedding_result_with_latency
+from iris.contracts.embeddings import EmbeddingBatchResult, embedding_result_with_latency
 from iris.contracts.memory import (
     MemoryId,
     MemoryKind,
@@ -53,7 +55,6 @@ if TYPE_CHECKING:
 
     from iris.contracts.embeddings import (
         EmbeddingBatchRequest,
-        EmbeddingBatchResult,
         EmbeddingRequest,
         EmbeddingResult,
     )
@@ -92,6 +93,7 @@ def test_memory_pipeline_uses_embedding_search_reranker_and_prompt_section() -> 
     assert result.prompt_section.trust_boundary is PromptTrustBoundary.EXTERNAL_CONTEXT
     assert result.prompt_section.items == ("sencha tea preference",)
     assert result.observability.retrieved_count == 3
+    assert result.observability.vector_search_latency_ms >= 0.0
     assert result.observability.reranked_count == 1
     assert result.observability.selected_count == 1
     assert reranker.last_request is not None
@@ -441,6 +443,21 @@ def test_memory_overlap_detection_uses_embedding_similarity_and_bounds_candidate
     assert embedding.last_batch_texts == ("green tea", "green tea")
 
 
+def test_memory_overlap_detection_rejects_batch_length_mismatch() -> None:
+    """Embedding batch result length mismatch は明示的に失敗する。"""
+    embedding = _ShortBatchEmbedding(DeterministicFakeEmbedding(dimension=8))
+    records = (
+        MemoryRecord(id=MemoryId("m1"), text="green tea"),
+        MemoryRecord(id=MemoryId("m2"), text="green tea"),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Embedding batch result length must match overlap candidates",
+    ):
+        detect_memory_overlaps(records, embedding, MemoryOverlapDetectionPolicy())
+
+
 class _CountingEmbedding:
     def __init__(self, delegate: DeterministicFakeEmbedding) -> None:
         self.delegate = delegate
@@ -468,6 +485,36 @@ class _CountingEmbedding:
         self.embed_text_batch_calls += 1
         self.last_batch_texts = request.texts
         return self.delegate.embed_text_batch(request)
+
+
+class _ShortBatchEmbedding:
+    def __init__(self, delegate: DeterministicFakeEmbedding) -> None:
+        self.delegate = delegate
+
+    @property
+    def provider(self) -> str:
+        return self.delegate.provider
+
+    @property
+    def model_id(self) -> str:
+        return self.delegate.model_id
+
+    @property
+    def dimension(self) -> int:
+        return self.delegate.dimension
+
+    def embed_text(self, request: EmbeddingRequest) -> EmbeddingResult:
+        return self.delegate.embed_text(request)
+
+    def embed_text_batch(self, request: EmbeddingBatchRequest) -> EmbeddingBatchResult:
+        full = self.delegate.embed_text_batch(request)
+        return EmbeddingBatchResult(
+            embeddings=full.embeddings[:1],
+            reason=full.reason,
+            model_metadata=full.model_metadata,
+            latency_ms=full.latency_ms,
+            metadata=full.metadata,
+        )
 
 
 class _ObservedLatencyEmbedding:
