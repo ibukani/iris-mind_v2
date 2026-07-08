@@ -203,6 +203,34 @@ def test_failed_migration_does_not_advance_user_version(tmp_path: Path) -> None:
         assert not _table_exists(conn, "created_before_failure")
 
 
+def test_failed_pending_migration_rolls_back_previous_pending_migrations(
+    tmp_path: Path,
+) -> None:
+    """同一 pending batch 内の途中失敗は先行 migration も rollback する。"""
+    db_path = tmp_path / "broken-batch.sqlite3"
+    migrator = SQLiteSchemaMigrator(
+        migrations=(
+            SQLiteMigration(
+                version=1,
+                name="first",
+                statements=("CREATE TABLE first_pending (id TEXT PRIMARY KEY)",),
+            ),
+            SQLiteMigration(
+                version=2,
+                name="broken-second",
+                statements=("INSERT INTO missing_table(id) VALUES ('x')",),
+            ),
+        )
+    )
+
+    with pytest.raises(SQLiteMigrationError):
+        migrator.ensure_current(db_path)
+
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        assert _user_version(conn) == 0
+        assert not _table_exists(conn, "first_pending")
+
+
 def test_unsupported_future_schema_version_fails_closed(tmp_path: Path) -> None:
     """Future schema version は silent open しない。"""
     db_path = tmp_path / "future.sqlite3"
