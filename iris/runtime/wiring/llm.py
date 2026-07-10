@@ -666,16 +666,10 @@ def ollama_adapter_config(
     Returns:
         ``OllamaLLMClient`` / ``OllamaDiagnostics`` が受け取る ``OllamaConfig``。
     """
-    model = _resolve_ollama_model(model_config.model)
-    return OllamaConfig(
-        model=model,
-        base_url=runtime_config.ollama.base_url,
+    return _ollama_config(
+        model_config,
+        runtime_config,
         timeout_seconds=runtime_config.ollama.timeout_seconds,
-        temperature=model_config.temperature,
-        max_output_tokens=model_config.max_output_tokens,
-        keep_alive=runtime_config.ollama.keep_alive,
-        warmup_prompt=runtime_config.ollama.warmup_prompt,
-        think=runtime_config.ollama.think,
     )
 
 
@@ -688,11 +682,23 @@ def ollama_lifecycle_probe_config(
     Returns:
         短い readiness timeout を持つ ``OllamaModelLifecycleProbe`` 用 config。
     """
-    model = _resolve_ollama_model(model_config.model)
-    return OllamaConfig(
-        model=model,
-        base_url=runtime_config.ollama.base_url,
+    return _ollama_config(
+        model_config,
+        runtime_config,
         timeout_seconds=runtime_config.diagnostics.readiness_timeout_seconds,
+    )
+
+
+def _ollama_config(
+    model_config: RuntimeModelConfig,
+    runtime_config: IrisRuntimeConfig,
+    *,
+    timeout_seconds: float,
+) -> OllamaConfig:
+    return OllamaConfig(
+        model=_resolve_ollama_model(model_config.model),
+        base_url=runtime_config.ollama.base_url,
+        timeout_seconds=timeout_seconds,
         temperature=model_config.temperature,
         max_output_tokens=model_config.max_output_tokens,
         keep_alive=runtime_config.ollama.keep_alive,

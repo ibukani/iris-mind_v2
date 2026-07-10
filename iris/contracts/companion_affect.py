@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from iris.contracts.validation import require_non_empty_id
 from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 
 
@@ -181,9 +182,9 @@ class ActorRelationshipState(BaseModel):
         Returns:
             検証済み relationship state。
         """
-        _require_non_empty_id(str(self.actor_id), "actor_id")
+        require_non_empty_id(str(self.actor_id), "actor_id")
         if self.account_id is not None:
-            _require_non_empty_id(str(self.account_id), "account_id")
+            require_non_empty_id(str(self.account_id), "account_id")
         return self
 
 
@@ -213,7 +214,7 @@ class ActorAffectTrace(BaseModel):
         Returns:
             検証済み actor affect trace。
         """
-        _require_non_empty_id(str(self.actor_id), "actor_id")
+        require_non_empty_id(str(self.actor_id), "actor_id")
         return self
 
 
@@ -243,7 +244,7 @@ class SpaceAtmosphereState(BaseModel):
         Returns:
             検証済み space atmosphere state。
         """
-        _require_non_empty_id(str(self.space_id), "space_id")
+        require_non_empty_id(str(self.space_id), "space_id")
         return self
 
 
@@ -417,14 +418,3 @@ def companion_affect_state_boundary(
             return boundary
     message = f"unknown companion affect state kind: {kind}"
     raise ValueError(message)
-
-
-def _require_non_empty_id(value: str, field_name: str) -> None:
-    """NewType ID の空文字を拒否する。
-
-    Raises:
-        ValueError: ID が空文字の場合。
-    """
-    if not value:
-        message = f"{field_name} must not be blank"
-        raise ValueError(message)

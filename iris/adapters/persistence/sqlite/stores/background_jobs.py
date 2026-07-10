@@ -7,14 +7,13 @@ from datetime import timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from iris.adapters.persistence.sqlite.database import SQLiteDatabase
-from iris.adapters.persistence.sqlite.migrator import SQLiteSchemaMigrator
 from iris.adapters.persistence.sqlite.serialization import (
     datetime_to_text,
     optional_datetime,
     required_datetime_to_text,
     text_to_datetime,
 )
+from iris.adapters.persistence.sqlite.stores._managed_database import ManagedSQLiteStore
 from iris.runtime.learning.jobs import (
     BackgroundJobId,
     BackgroundJobKind,
@@ -43,7 +42,6 @@ from iris.runtime.learning.queue import (
 
 if TYPE_CHECKING:
     from datetime import datetime
-    from pathlib import Path
     import sqlite3
 
 
@@ -60,28 +58,12 @@ class _PayloadType(StrEnum):
     DEFERRED_LEARNING = "deferred_learning"
 
 
-class SQLiteBackgroundJobQueue:
+class SQLiteBackgroundJobQueue(ManagedSQLiteStore):
     """SQLite-backed durable background job queue。
 
     通常の async 呼び出しでは同期 sqlite3 I/O を ``asyncio.to_thread`` へ逃がす。
     Lease 取得は ``BEGIN IMMEDIATE`` で read-modify-write を保護する。
     """
-
-    def __init__(
-        self,
-        db_path: str | Path,
-        *,
-        ensure_schema: bool = True,
-        migrator: SQLiteSchemaMigrator | None = None,
-    ) -> None:
-        """Migration 済み SQLite DB に接続する。"""
-        if ensure_schema:
-            (migrator or SQLiteSchemaMigrator()).ensure_current(db_path)
-        self._db = SQLiteDatabase(db_path, synchronous="NORMAL")
-
-    def close(self) -> None:
-        """永続 connection を閉じる。"""
-        self._db.close()
 
     async def enqueue(self, job: BackgroundJobRecord) -> BackgroundJobRecord:
         """ジョブを冪等に登録する。

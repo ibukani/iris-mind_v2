@@ -21,6 +21,10 @@ from iris.contracts.memory_candidates import (
 )
 from iris.contracts.observations import ObservationKind, UserFeedbackKind
 from iris.core.metadata import immutable_metadata
+from iris.runtime.learning.candidate_validation import (
+    candidate_content_is_valid,
+    implicit_review_provenance_is_valid,
+)
 from iris.runtime.learning.jobs import (
     BackgroundJobId,
     BackgroundJobKind,
@@ -175,24 +179,14 @@ class ImplicitCandidateAdmissionPolicy:
         """
         text = candidate.text.strip()
         return (
-            self._content_is_valid(text, candidate)
-            and self._provenance_is_valid(candidate)
+            candidate_content_is_valid(
+                candidate,
+                text=text,
+                min_confidence=self.min_confidence,
+                max_text_length=self.max_text_length,
+            )
+            and implicit_review_provenance_is_valid(candidate)
             and self._safety_is_valid(text, candidate)
-        )
-
-    def _content_is_valid(self, text: str, candidate: MemoryCandidate) -> bool:
-        return (
-            bool(text)
-            and len(text) <= self.max_text_length
-            and candidate.confidence >= self.min_confidence
-        )
-
-    @staticmethod
-    def _provenance_is_valid(candidate: MemoryCandidate) -> bool:
-        return (
-            candidate.source is MemoryCandidateSource.IMPLICIT_CONVERSATION
-            and candidate.retention_policy is MemoryRetentionPolicy.REVIEW_REQUIRED
-            and candidate.review_required
         )
 
     def _safety_is_valid(self, text: str, candidate: MemoryCandidate) -> bool:

@@ -599,13 +599,13 @@ def _feature_model_call_budget_specs(
     )
 
 
-def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
-    """全ユーザー向けランタイム設定フィールドの正規仕様を返す。
+def _model_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Model slot ごとの provider 設定仕様を返す。
 
     Returns:
-        安定順序の設定フィールド仕様。
+        安定順序の model slot 設定仕様。
     """
-    model_specs = tuple(
+    return tuple(
         spec
         for slot in model_slot_specs()
         for spec in (
@@ -640,6 +640,14 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             ),
         )
     )
+
+
+def _base_server_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Config version と基本 server 設定仕様を返す。
+
+    Returns:
+        安定順序の設定仕様。
+    """
     return (
         ConfigFieldSpec(
             "config.version",
@@ -676,6 +684,16 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             5.0,
             "gRPCサーバー停止時の猶予秒数。",
         ),
+    )
+
+
+def _learning_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Learning と background job policy の設定仕様を返す。
+
+    Returns:
+        安定順序の設定仕様。
+    """
+    return (
         ConfigFieldSpec(
             "learning.enabled",
             ConfigValueType.BOOL,
@@ -701,10 +719,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "1回のバックグラウンド処理上限件数。",
         ),
         ConfigFieldSpec(
-            "learning.max_attempts",
-            ConfigValueType.INT,
-            3,
-            "学習ジョブの既定最大試行回数。",
+            "learning.max_attempts", ConfigValueType.INT, 3, "学習ジョブの既定最大試行回数。"
         ),
         ConfigFieldSpec(
             path="learning.implicit_candidates_enabled",
@@ -799,8 +814,8 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             default=False,
             description=(
                 "memory_extraction job が LLM 資源を使う可能性を示す。"
-                "現在の built-in implicit candidate worker は deterministic extractor "
-                "のため false。"
+                "現在の built-in implicit candidate worker は "
+                "deterministic extractor のため false。"
             ),
         ),
         ConfigFieldSpec(
@@ -839,11 +854,16 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             default=True,
             description="reflection job を idle 時だけ enqueue する。",
         ),
-        *_inference_scheduler_specs(),
-        *_companion_semantics_specs(),
-        *_interaction_activity_specs(),
-        *_model_call_budget_specs(),
-        *_prompt_budget_specs(),
+    )
+
+
+def _tls_auth_specs() -> tuple[ConfigFieldSpec, ...]:
+    """TLS と runtime authentication の設定仕様を返す。
+
+    Returns:
+        安定順序の設定仕様。
+    """
+    return (
         ConfigFieldSpec(
             "server.tls.enabled",
             ConfigValueType.BOOL,
@@ -914,6 +934,16 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             control_plane_editable=False,
             example=False,
         ),
+    )
+
+
+def _state_memory_specs() -> tuple[ConfigFieldSpec, ...]:
+    """State backend と memory vector の設定仕様を返す。
+
+    Returns:
+        安定順序の設定仕様。
+    """
+    return (
         ConfigFieldSpec(
             "state.backend",
             ConfigValueType.ENUM,
@@ -968,16 +998,10 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             allowed_values=("fake",),
         ),
         ConfigFieldSpec(
-            "memory.embedding.model",
-            ConfigValueType.STR,
-            "fake-v1",
-            "embedding model 識別子。",
+            "memory.embedding.model", ConfigValueType.STR, "fake-v1", "embedding model 識別子。"
         ),
         ConfigFieldSpec(
-            "memory.embedding.dimension",
-            ConfigValueType.INT,
-            32,
-            "embedding vector 次元数。",
+            "memory.embedding.dimension", ConfigValueType.INT, 32, "embedding vector 次元数。"
         ),
         ConfigFieldSpec(
             "memory.embedding.batch_size",
@@ -1004,6 +1028,16 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             default=False,
             description="Qdrant gRPC transport 選択予約。現在は REST のみ。",
         ),
+    )
+
+
+def _scheduler_conversation_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Scheduler と conversation persistence の設定仕様を返す。
+
+    Returns:
+        安定順序の設定仕様。
+    """
+    return (
         ConfigFieldSpec(
             "scheduler.enabled",
             ConfigValueType.BOOL,
@@ -1092,6 +1126,16 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             1000,
             "conversation keyごとのtranscript保持上限。",
         ),
+    )
+
+
+def _delivery_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Delivery outbox と quiet hours の設定仕様を返す。
+
+    Returns:
+        安定順序の設定仕様。
+    """
+    return (
         ConfigFieldSpec(
             "delivery.enabled",
             ConfigValueType.BOOL,
@@ -1111,10 +1155,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "PollAppActions が取得する lease 秒数。",
         ),
         ConfigFieldSpec(
-            "delivery.max_attempts",
-            ConfigValueType.INT,
-            3,
-            "配送 item ごとの最大試行回数。",
+            "delivery.max_attempts", ConfigValueType.INT, 3, "配送 item ごとの最大試行回数。"
         ),
         ConfigFieldSpec(
             "delivery.retry_backoff_seconds",
@@ -1135,16 +1176,10 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             description="quiet hours による配送 block を有効化する。",
         ),
         ConfigFieldSpec(
-            "delivery.quiet_hours.start",
-            ConfigValueType.STR,
-            "22:00",
-            "quiet hours 開始 HH:MM。",
+            "delivery.quiet_hours.start", ConfigValueType.STR, "22:00", "quiet hours 開始 HH:MM。"
         ),
         ConfigFieldSpec(
-            "delivery.quiet_hours.end",
-            ConfigValueType.STR,
-            "08:00",
-            "quiet hours 終了 HH:MM。",
+            "delivery.quiet_hours.end", ConfigValueType.STR, "08:00", "quiet hours 終了 HH:MM。"
         ),
         ConfigFieldSpec(
             "delivery.quiet_hours.timezone",
@@ -1152,7 +1187,16 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "Asia/Tokyo",
             "quiet hours 判定 timezone。",
         ),
-        *model_specs,
+    )
+
+
+def _provider_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Ollama と OpenAI provider の設定仕様を返す。
+
+    Returns:
+        安定順序の設定仕様。
+    """
+    return (
         ConfigFieldSpec(
             "ollama.base_url",
             ConfigValueType.STR,
@@ -1209,6 +1253,16 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             "OpenAI providerの最大出力トークン数。",
             env="IRIS_OPENAI_MAX_OUTPUT_TOKENS",
         ),
+    )
+
+
+def _logging_safety_diagnostics_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Logging、safety、diagnostics の設定仕様を返す。
+
+    Returns:
+        安定順序の設定仕様。
+    """
+    return (
         ConfigFieldSpec(
             "logging.level",
             ConfigValueType.ENUM,
@@ -1234,16 +1288,10 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             example=False,
         ),
         ConfigFieldSpec(
-            "logging.rotation",
-            ConfigValueType.STR,
-            "10 MB",
-            "ログファイルrotation指定。",
+            "logging.rotation", ConfigValueType.STR, "10 MB", "ログファイルrotation指定。"
         ),
         ConfigFieldSpec(
-            "logging.retention",
-            ConfigValueType.STR,
-            "7 days",
-            "ログファイルretention指定。",
+            "logging.retention", ConfigValueType.STR, "7 days", "ログファイルretention指定。"
         ),
         ConfigFieldSpec(
             "safety.mode",
@@ -1297,6 +1345,30 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
             description="診断後に provider 固有の warmup を実行する。",
             env="IRIS_DIAGNOSTICS_WARMUP_MODELS",
         ),
+    )
+
+
+def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
+    """全ユーザー向けランタイム設定フィールドの正規仕様を返す。
+
+    Returns:
+        安定順序の設定フィールド仕様。
+    """
+    return (
+        *_base_server_specs(),
+        *_learning_specs(),
+        *_inference_scheduler_specs(),
+        *_companion_semantics_specs(),
+        *_interaction_activity_specs(),
+        *_model_call_budget_specs(),
+        *_prompt_budget_specs(),
+        *_tls_auth_specs(),
+        *_state_memory_specs(),
+        *_scheduler_conversation_specs(),
+        *_delivery_specs(),
+        *_model_specs(),
+        *_provider_specs(),
+        *_logging_safety_diagnostics_specs(),
     )
 
 

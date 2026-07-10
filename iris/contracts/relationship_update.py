@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from iris.contracts.appraisal import AppraisalSignalKind
 from iris.contracts.companion_affect import CompanionAffectStateKind, CompanionInteractionScope
@@ -14,6 +14,24 @@ from iris.core.ids import ObservationId
 from iris.core.metadata import immutable_metadata
 
 _ZERO_DELTA_EPSILON = 1e-12
+
+
+def _validate_source_event_ids(value: tuple[str, ...]) -> tuple[str, ...]:
+    """空白だけの source event id を拒否する。
+
+    Returns:
+        検証済み source event IDs。
+
+    Raises:
+        ValueError: source event id が空白だけの場合。
+    """
+    if any(not source_event_id.strip() for source_event_id in value):
+        message = "source_event_ids must not contain blank values"
+        raise ValueError(message)
+    return value
+
+
+type _SourceEventIds = Annotated[tuple[str, ...], AfterValidator(_validate_source_event_ids)]
 
 
 class RelationshipUpdateDecisionKind(StrEnum):
@@ -174,26 +192,9 @@ class RelationshipUpdateSourceRef(BaseModel):
     )
     signal_kind: AppraisalSignalKind
     source_observation_id: ObservationId | None = None
-    source_event_ids: tuple[str, ...] = ()
+    source_event_ids: _SourceEventIds = ()
     source_reason: str = Field(min_length=1)
     source_confidence: float = Field(ge=0.0, le=1.0)
-
-    @field_validator("source_event_ids")
-    @classmethod
-    def _source_event_ids_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        """空白だけの source event id を拒否する。
-
-        Returns:
-            検証済み source event IDs。
-
-        Raises:
-            ValueError: source event id が空白だけの場合。
-        """
-        for source_event_id in value:
-            if not source_event_id.strip():
-                message = "source_event_ids must not contain blank values"
-                raise ValueError(message)
-        return value
 
 
 class RelationshipUpdateCandidate(BaseModel):
@@ -212,26 +213,9 @@ class RelationshipUpdateCandidate(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     source_refs: tuple[RelationshipUpdateSourceRef, ...] = Field(min_length=1)
     source_observation_ids: tuple[ObservationId, ...] = ()
-    source_event_ids: tuple[str, ...] = ()
+    source_event_ids: _SourceEventIds = ()
     review_required: bool = False
     metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
-
-    @field_validator("source_event_ids")
-    @classmethod
-    def _source_event_ids_must_not_be_blank(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        """空白だけの source event id を拒否する。
-
-        Returns:
-            検証済み source event IDs。
-
-        Raises:
-            ValueError: source event id が空白だけの場合。
-        """
-        for source_event_id in value:
-            if not source_event_id.strip():
-                message = "source_event_ids must not contain blank values"
-                raise ValueError(message)
-        return value
 
     @model_validator(mode="after")
     def _validate_decision(self) -> RelationshipUpdateCandidate:

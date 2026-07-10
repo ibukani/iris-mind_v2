@@ -27,11 +27,12 @@ from iris.adapters.llm.diagnostics import (
     build_provider_readiness_result,
 )
 from iris.adapters.llm.lifecycle import ModelLoadState
-from iris.adapters.llm.ollama import OllamaConfig
-
-type _JsonScalar = str | int | float | bool | None
-type _JsonValue = _JsonScalar | _JsonObject | list[_JsonValue]
-type _JsonObject = dict[str, _JsonValue]
+from iris.adapters.llm.ollama import (
+    OllamaConfig,
+    OllamaHttpComponent,
+    OllamaJsonObject,
+    OllamaJsonValue,
+)
 
 _OLLAMA_DIAGNOSTICS_PROVIDER = "ollama"
 
@@ -46,32 +47,11 @@ _HTTP_OK_THRESHOLD = 400
 _HTTP_NOT_FOUND = 404
 
 
-class OllamaDiagnostics(LLMProviderDiagnostics):
+class OllamaDiagnostics(OllamaHttpComponent, LLMProviderDiagnostics):
     """Ollama-specific :class:`LLMProviderDiagnostics` implementation."""
 
     provider: str = _OLLAMA_DIAGNOSTICS_PROVIDER
     capabilities: ProviderCapability = _OLLAMA_DIAGNOSTICS_CAPABILITIES
-
-    def __init__(
-        self,
-        config: OllamaConfig | None = None,
-        *,
-        client: httpx.AsyncClient | None = None,
-        transport: httpx.AsyncBaseTransport | None = None,
-    ) -> None:
-        """Create an Ollama diagnostics instance.
-
-        Args:
-            config: Adapter-local Ollama configuration.
-            client: Optional injected HTTP client.
-            transport: Optional HTTP transport used when creating the default client.
-        """
-        self._config = config or OllamaConfig()
-        self._client = client or httpx.AsyncClient(
-            base_url=self._config.base_url,
-            timeout=self._config.timeout_seconds,
-            transport=transport,
-        )
 
     @override
     async def check_readiness(self, model: str) -> ProviderReadinessResult:
@@ -308,19 +288,14 @@ class OllamaDiagnostics(LLMProviderDiagnostics):
         return response.status_code < _HTTP_OK_THRESHOLD
 
     async def _list_models(self) -> frozenset[str] | None:
-        try:
-            response = await self._client.get("/api/tags")
-            response.raise_for_status()
-        except httpx.HTTPError:
-            return None
-        try:
-            return _extract_model_names(_safe_json(response))
-        except LLMProviderInvalidResponseError:
-            return None
+        return await self._list_model_names("/api/tags")
 
     async def _list_loaded_models(self) -> frozenset[str] | None:
+        return await self._list_model_names("/api/ps")
+
+    async def _list_model_names(self, endpoint: str) -> frozenset[str] | None:
         try:
-            response = await self._client.get("/api/ps")
+            response = await self._client.get(endpoint)
             response.raise_for_status()
         except httpx.HTTPError:
             return None
@@ -346,7 +321,7 @@ def _now() -> float:
     return time.perf_counter()
 
 
-def _build_warmup_payload(*, model: str, config: OllamaConfig) -> _JsonObject:
+def _build_warmup_payload(*, model: str, config: OllamaConfig) -> OllamaJsonObject:
     """Build a load-oriented ``/api/chat`` payload for warmup.
 
     Uses ``messages=[]`` so Ollama treats the request as a load
@@ -362,10 +337,10 @@ def _build_warmup_payload(*, model: str, config: OllamaConfig) -> _JsonObject:
     Returns:
         A JSON object suitable for ``POST /api/chat``.
     """
-    options: _JsonObject = {"temperature": config.temperature}
+    options: OllamaJsonObject = {"temperature": config.temperature}
     if config.max_output_tokens is not None:
         options["num_predict"] = config.max_output_tokens
-    payload: _JsonObject = {
+    payload: OllamaJsonObject = {
         "model": model,
         "messages": _warmup_messages(config),
         "stream": False,
@@ -376,7 +351,7 @@ def _build_warmup_payload(*, model: str, config: OllamaConfig) -> _JsonObject:
     return payload
 
 
-def _warmup_messages(config: OllamaConfig) -> list[_JsonValue]:
+def _warmup_messages(config: OllamaConfig) -> list[OllamaJsonValue]:
     """Build optional warmup messages for an Ollama load request.
 
     Returns:
@@ -550,16 +525,16 @@ _UNAVAILABLE_ISSUE_CODES: frozenset[str] = frozenset(
 )
 
 
-def _safe_json(response: httpx.Response) -> _JsonObject:
+def _safe_json(response: httpx.Response) -> OllamaJsonObject:
     try:
-        body: _JsonObject = response.json()
+        body: OllamaJsonObject = response.json()
     except json.JSONDecodeError as exc:
         message = "Ollama response was not valid JSON"
         raise LLMProviderInvalidResponseError(message) from exc
     return body
 
 
-def _extract_model_names(body: _JsonObject) -> frozenset[str] | None:
+def _extract_model_names(body: OllamaJsonObject) -> frozenset[str] | None:
     models_value = body.get("models")
     if not isinstance(models_value, list):
         return None

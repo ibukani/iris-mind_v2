@@ -20,9 +20,9 @@ from iris.adapters.llm.diagnostics import (
 from iris.adapters.llm.ports import LLMClient, LLMRequest, LLMResponse
 from iris.contracts.llm import DEFAULT_FAKE_LLM_MODEL, DEFAULT_OLLAMA_MODEL
 
-type _JsonPrimitive = str | int | float | bool | None
-type _JsonValue = _JsonPrimitive | _JsonObject | list[_JsonValue]
-type _JsonObject = dict[str, _JsonValue]
+type OllamaJsonScalar = str | int | float | bool | None
+type OllamaJsonValue = OllamaJsonScalar | OllamaJsonObject | list[OllamaJsonValue]
+type OllamaJsonObject = dict[str, OllamaJsonValue]
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,25 @@ class OllamaConfig:
     think: bool | str | None = False
 
 
+class OllamaHttpComponent:
+    """Ollama adapter 群で共有する設定済み HTTP connection state。"""
+
+    def __init__(
+        self,
+        config: OllamaConfig | None = None,
+        *,
+        client: httpx.AsyncClient | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        """共有設定と optional injected client から connection state を作る。"""
+        self._config = config or OllamaConfig()
+        self._client = client or httpx.AsyncClient(
+            base_url=self._config.base_url,
+            timeout=self._config.timeout_seconds,
+            transport=transport,
+        )
+
+
 class OllamaAdapterError(LLMProviderError):
     """Raised when the Ollama adapter cannot produce a valid LLM response.
 
@@ -50,29 +69,8 @@ class OllamaAdapterError(LLMProviderError):
     """
 
 
-class OllamaLLMClient(LLMClient):
+class OllamaLLMClient(OllamaHttpComponent, LLMClient):
     """LLMClient implementation backed by Ollama's local REST API."""
-
-    def __init__(
-        self,
-        config: OllamaConfig | None = None,
-        *,
-        client: httpx.AsyncClient | None = None,
-        transport: httpx.AsyncBaseTransport | None = None,
-    ) -> None:
-        """Create an Ollama LLM client.
-
-        Args:
-            config: Adapter-local Ollama configuration.
-            client: Optional injected HTTP client for tests or custom transport.
-            transport: Optional HTTP transport used when creating the default client.
-        """
-        self._config = config or OllamaConfig()
-        self._client = client or httpx.AsyncClient(
-            base_url=self._config.base_url,
-            timeout=self._config.timeout_seconds,
-            transport=transport,
-        )
 
     @override
     async def generate(self, request: LLMRequest) -> LLMResponse:
@@ -99,16 +97,16 @@ class OllamaLLMClient(LLMClient):
             return self._config.model
         return request.model or self._config.model
 
-    def _build_payload(self, request: LLMRequest, model: str) -> _JsonObject:
+    def _build_payload(self, request: LLMRequest, model: str) -> OllamaJsonObject:
         temperature = (
             request.temperature if request.temperature is not None else self._config.temperature
         )
-        options: _JsonObject = {"temperature": temperature}
+        options: OllamaJsonObject = {"temperature": temperature}
         max_tokens = request.max_tokens or self._config.max_output_tokens
         if max_tokens is not None:
             options["num_predict"] = max_tokens
 
-        payload: _JsonObject = {
+        payload: OllamaJsonObject = {
             "model": model,
             "messages": [
                 {"role": message.role, "content": message.content} for message in request.messages
@@ -127,9 +125,9 @@ async def perform_ollama_request(
     *,
     client: httpx.AsyncClient,
     base_url: str,
-    payload: _JsonObject,
+    payload: OllamaJsonObject,
     model: str,
-) -> _JsonObject:
+) -> OllamaJsonObject:
     """POST the chat payload to Ollama and return the decoded JSON body.
 
     Args:
@@ -160,7 +158,7 @@ async def perform_ollama_request(
     return _decode_ollama_response(response, model=model)
 
 
-def _decode_ollama_response(response: httpx.Response, *, model: str) -> _JsonObject:
+def _decode_ollama_response(response: httpx.Response, *, model: str) -> OllamaJsonObject:
     """Validate the response status and decode the JSON body.
 
     Args:
@@ -200,16 +198,16 @@ def _decode_ollama_response(response: httpx.Response, *, model: str) -> _JsonObj
         raise LLMProviderInvalidResponseError(message) from exc
 
 
-def _decode_json_body(response: httpx.Response) -> _JsonObject:
+def _decode_json_body(response: httpx.Response) -> OllamaJsonObject:
     try:
-        body: _JsonObject = response.json()
+        body: OllamaJsonObject = response.json()
     except json.JSONDecodeError as exc:
         message = "Ollama returned invalid JSON"
         raise LLMProviderInvalidResponseError(message) from exc
     return body
 
 
-def _to_llm_response(body: _JsonObject, *, fallback_model: str) -> LLMResponse:
+def _to_llm_response(body: OllamaJsonObject, *, fallback_model: str) -> LLMResponse:
     message = body.get("message")
     if not isinstance(message, dict):
         error_message = "Ollama response is missing message"
@@ -232,14 +230,14 @@ def _to_llm_response(body: _JsonObject, *, fallback_model: str) -> LLMResponse:
     )
 
 
-def _finish_reason(body: _JsonObject) -> str:
+def _finish_reason(body: OllamaJsonObject) -> str:
     done_reason = body.get("done_reason")
     if isinstance(done_reason, str):
         return done_reason
     return "stop"
 
 
-def _duration_ms(body: _JsonObject, key: str) -> float | None:
+def _duration_ms(body: OllamaJsonObject, key: str) -> float | None:
     """Convert an Ollama nanosecond duration field into milliseconds.
 
     Returns:

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from iris.adapters.classifiers.results import ClassificationResultFactory, label_allowed
 from iris.contracts.classification import (
     ClassificationFallbackPolicy,
     ClassificationLabel,
@@ -13,8 +14,6 @@ from iris.contracts.classification import (
     ClassificationResult,
     apply_classification_fallback,
 )
-from iris.contracts.model_invocation import ModelInvocationMetadata
-from iris.contracts.model_policy import ModelCallKind
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -43,8 +42,12 @@ class FakeTextClassifier:
     ) -> None:
         """固定分類 fixture と fallback policy を注入する。"""
         self._cases = {case.text: case for case in cases}
-        self._fallback_policy = fallback_policy or ClassificationFallbackPolicy()
-        self._model = model
+        self._results = ClassificationResultFactory(
+            fallback_policy=fallback_policy or ClassificationFallbackPolicy(),
+            provider="fake",
+            model_name=model,
+            adapter_name="fake_text_classifier",
+        )
 
     def classify(self, request: ClassificationRequest) -> ClassificationResult:
         """完全一致 fixture を返し、未定義入力は unknown にする。
@@ -54,10 +57,13 @@ class FakeTextClassifier:
         """
         case = self._cases.get(request.text)
         if case is None:
-            result = self._unknown_result(request, reason="no fake classification fixture matched")
-        elif not _label_allowed(case.label, request.candidate_labels):
-            result = self._unknown_result(
-                request,
+            result = self._results.unknown(
+                request.model_slot,
+                reason="no fake classification fixture matched",
+            )
+        elif not label_allowed(case.label, request.candidate_labels):
+            result = self._results.unknown(
+                request.model_slot,
                 reason="classification label outside candidate labels",
             )
         else:
@@ -65,31 +71,7 @@ class FakeTextClassifier:
                 label=case.label,
                 confidence=case.confidence,
                 reason=case.reason,
-                model_metadata=self._metadata_for_slot(request.model_slot),
+                model_metadata=self._results.metadata_for_slot(request.model_slot),
                 latency_ms=0.0,
             )
-        return apply_classification_fallback(result, self._fallback_policy)
-
-    def _unknown_result(
-        self, request: ClassificationRequest, *, reason: str
-    ) -> ClassificationResult:
-        return ClassificationResult(
-            label=self._fallback_policy.unknown_label,
-            confidence=0.0,
-            reason=reason,
-            model_metadata=self._metadata_for_slot(request.model_slot),
-            latency_ms=0.0,
-        )
-
-    def _metadata_for_slot(self, model_slot: str | None) -> ModelInvocationMetadata:
-        return ModelInvocationMetadata(
-            call_kind=ModelCallKind.SMALL_CLASSIFIER,
-            provider="fake",
-            model_name=self._model,
-            adapter_name="fake_text_classifier",
-            model_slot=model_slot,
-        )
-
-
-def _label_allowed(label: str, candidate_labels: tuple[str, ...]) -> bool:
-    return not candidate_labels or label in candidate_labels
+        return apply_classification_fallback(result, self._results.fallback_policy)
