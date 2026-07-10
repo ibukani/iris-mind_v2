@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, override
 
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
+from iris.cognitive.policy.precedence import safety_severity_precedence
 from iris.contracts.actions import ActionPlan
 from iris.contracts.safety import (
     SafetyContextCategory,
-    SafetyContextSeverity,
     SafetyResponseDirective,
 )
 
@@ -65,7 +65,7 @@ def _strictest_response_context(frame: WorkspaceFrame) -> SafetyContext | None:
 def _safety_response_precedence(context: SafetyContext) -> tuple[int, int, float]:
     return (
         _directive_precedence(context.directive),
-        _severity_precedence(context.severity),
+        safety_severity_precedence(context.severity),
         context.confidence,
     )
 
@@ -85,16 +85,6 @@ def _directive_precedence(directive: SafetyResponseDirective) -> int:
             return 2
         case SafetyResponseDirective.BLOCK | SafetyResponseDirective.ALLOW_SUPPORT:
             return 0
-
-
-def _severity_precedence(severity: SafetyContextSeverity) -> int:
-    match severity:
-        case SafetyContextSeverity.HIGH:
-            return 3
-        case SafetyContextSeverity.MEDIUM:
-            return 2
-        case SafetyContextSeverity.LOW:
-            return 1
 
 
 def _turn_intent(context: SafetyContext) -> str:

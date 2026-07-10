@@ -8,6 +8,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from iris.contracts.metadata import ImmutableMetadata
+from iris.contracts.validation import require_non_empty_id
 from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 from iris.core.metadata import immutable_metadata
 
@@ -142,9 +143,9 @@ class SharedEpisodicMemoryCandidate(BaseModel):
         Raises:
             ValueError: admission policy が安全でない場合。
         """
-        _require_non_empty_id(str(self.actor_id), "actor_id")
-        _require_non_empty_id(str(self.account_id), "account_id")
-        _require_non_empty_id(str(self.space_id), "space_id")
+        require_non_empty_id(str(self.actor_id), "actor_id")
+        require_non_empty_id(str(self.account_id), "account_id")
+        require_non_empty_id(str(self.space_id), "space_id")
         if (
             self.admission_policy is SharedEpisodicAdmissionPolicy.REVIEW_REQUIRED
             and not self.review_required
@@ -161,14 +162,3 @@ class SharedEpisodicMemoryCandidate(BaseModel):
             message = "secret-like shared episodic memories must be rejected"
             raise ValueError(message)
         return self
-
-
-def _require_non_empty_id(value: str, field_name: str) -> None:
-    """NewType ID の空文字を拒否する。
-
-    Raises:
-        ValueError: ID が空文字の場合。
-    """
-    if not value:
-        message = f"{field_name} must not be blank"
-        raise ValueError(message)

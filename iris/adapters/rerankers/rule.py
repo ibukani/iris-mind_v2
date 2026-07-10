@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
+from iris.adapters.rerankers.scoring import (
+    ScoredCandidate,
+    build_reranked_items,
+    rank_scored_candidates,
+)
 from iris.contracts.model_invocation import ModelInvocationMetadata
 from iris.contracts.model_policy import ModelCallKind
-from iris.contracts.retrieval import RerankCandidate, RerankedItem, RerankRequest, RerankResult
-
-
-@dataclass(frozen=True)
-class _ScoredCandidate:
-    candidate: RerankCandidate
-    score: float
-    original_index: int
+from iris.contracts.retrieval import RerankRequest, RerankResult
 
 
 class RuleBasedReranker:
@@ -30,18 +26,12 @@ class RuleBasedReranker:
             RerankResult: token overlap による順位付け結果。
         """
         metadata = self._metadata_for_slot(request.model_slot)
-        ranked = _limit_scored_candidates(
-            tuple(
-                sorted(
-                    _score_candidates(request),
-                    key=lambda item: (-item.score, item.original_index),
-                )
-            ),
-            request.limit,
-        )
+        ranked = rank_scored_candidates(_score_candidates(request), request.limit)
         return RerankResult(
-            items=tuple(
-                _reranked_item(item, rank, metadata) for rank, item in enumerate(ranked, 1)
+            items=build_reranked_items(
+                ranked,
+                metadata=metadata,
+                reason="token overlap plus base score",
             ),
             reason="token overlap rerank",
             model_metadata=metadata,
@@ -58,10 +48,10 @@ class RuleBasedReranker:
         )
 
 
-def _score_candidates(request: RerankRequest) -> tuple[_ScoredCandidate, ...]:
+def _score_candidates(request: RerankRequest) -> tuple[ScoredCandidate, ...]:
     query_tokens = _tokens(request.query)
     return tuple(
-        _ScoredCandidate(
+        ScoredCandidate(
             candidate=candidate,
             score=candidate.base_score + _overlap_score(query_tokens, _tokens(candidate.text)),
             original_index=index,
@@ -78,27 +68,3 @@ def _overlap_score(query_tokens: frozenset[str], candidate_tokens: frozenset[str
     if not query_tokens or not candidate_tokens:
         return 0.0
     return len(query_tokens & candidate_tokens) / len(query_tokens)
-
-
-def _limit_scored_candidates(
-    items: tuple[_ScoredCandidate, ...],
-    limit: int | None,
-) -> tuple[_ScoredCandidate, ...]:
-    if limit is None:
-        return items
-    return items[:limit]
-
-
-def _reranked_item(
-    item: _ScoredCandidate,
-    rank: int,
-    metadata: ModelInvocationMetadata,
-) -> RerankedItem:
-    return RerankedItem(
-        candidate=item.candidate,
-        score=item.score,
-        rank=rank,
-        reason="token overlap plus base score",
-        model_metadata=metadata,
-        metadata=item.candidate.metadata,
-    )

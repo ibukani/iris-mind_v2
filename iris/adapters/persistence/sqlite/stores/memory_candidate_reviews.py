@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING, override
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from iris.adapters.persistence.sqlite.database import SQLiteDatabase
-from iris.adapters.persistence.sqlite.migrator import SQLiteSchemaMigrator
 from iris.adapters.persistence.sqlite.serialization import (
     datetime_to_text,
     optional_datetime,
@@ -18,6 +16,7 @@ from iris.adapters.persistence.sqlite.serialization import (
     required_datetime_to_text,
     text_to_datetime,
 )
+from iris.adapters.persistence.sqlite.stores._managed_database import ManagedSQLiteStore
 from iris.contracts.memory import MemoryKind
 from iris.contracts.memory_candidates import (
     MemoryCandidate,
@@ -42,7 +41,6 @@ from iris.runtime.state.memory_candidates import (
 
 if TYPE_CHECKING:
     from datetime import datetime
-    from pathlib import Path
     import sqlite3
 
 
@@ -80,28 +78,12 @@ class _MemoryCandidatePayload(BaseModel):
 _METADATA_ADAPTER = TypeAdapter(dict[str, str])
 
 
-class SQLiteMemoryCandidateReviewStore(MemoryCandidateReviewStore):
+class SQLiteMemoryCandidateReviewStore(ManagedSQLiteStore, MemoryCandidateReviewStore):
     """SQLite-backed durable review store for implicit memory candidates。
 
     ``add_nowait`` は同期 worker から呼ばれるため同期 transaction のまま実装する。
     async API は同じ同期処理を ``asyncio.to_thread`` へ逃がす。
     """
-
-    def __init__(
-        self,
-        db_path: str | Path,
-        *,
-        ensure_schema: bool = True,
-        migrator: SQLiteSchemaMigrator | None = None,
-    ) -> None:
-        """Migration 済み SQLite DB に接続する。"""
-        if ensure_schema:
-            (migrator or SQLiteSchemaMigrator()).ensure_current(db_path)
-        self._db = SQLiteDatabase(db_path, synchronous="NORMAL")
-
-    def close(self) -> None:
-        """永続 connection を閉じる。"""
-        self._db.close()
 
     @override
     async def add(self, record: MemoryCandidateReviewRecord) -> MemoryCandidateReviewRecord:

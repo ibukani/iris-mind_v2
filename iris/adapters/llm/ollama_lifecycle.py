@@ -16,11 +16,10 @@ from iris.adapters.llm.lifecycle import (
     ModelLifecycleSnapshot,
     ModelLoadState,
 )
-from iris.adapters.llm.ollama import OllamaConfig
-
-type _JsonScalar = str | int | float | bool | None
-type _JsonValue = _JsonScalar | _JsonObject | list[_JsonValue]
-type _JsonObject = dict[str, _JsonValue]
+from iris.adapters.llm.ollama import (
+    OllamaHttpComponent,
+    OllamaJsonObject,
+)
 
 _OLLAMA_PROVIDER = "ollama"
 _HTTP_OK_THRESHOLD = 400
@@ -51,30 +50,8 @@ class _SnapshotDecision:
     reason: str | None
 
 
-class OllamaModelLifecycleProbe(ModelLifecycleProbe):
+class OllamaModelLifecycleProbe(OllamaHttpComponent, ModelLifecycleProbe):
     """Probe Ollama loaded/installed model state before user-facing generation."""
-
-    def __init__(
-        self,
-        config: OllamaConfig | None = None,
-        *,
-        client: httpx.AsyncClient | None = None,
-        transport: httpx.AsyncBaseTransport | None = None,
-    ) -> None:
-        """Create an Ollama lifecycle probe.
-
-        Args:
-            config: Adapter-local Ollama configuration. ``timeout_seconds`` should
-                be the short readiness timeout, not the full generation timeout.
-            client: Optional injected HTTP client for tests.
-            transport: Optional HTTP transport used by the default client.
-        """
-        self._config = config or OllamaConfig()
-        self._client = client or httpx.AsyncClient(
-            base_url=self._config.base_url,
-            timeout=self._config.timeout_seconds,
-            transport=transport,
-        )
 
     @override
     async def snapshot(self, model: str) -> ModelLifecycleSnapshot:
@@ -199,7 +176,7 @@ def _snapshot(
 
 def _extract_model_names(response: httpx.Response) -> frozenset[str] | None:
     try:
-        body: _JsonObject = response.json()
+        body: OllamaJsonObject = response.json()
     except json.JSONDecodeError:
         return None
     models_value = body.get("models")
