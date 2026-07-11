@@ -13,7 +13,7 @@ Purpose:
 Root entry files:
 
 - `AGENTS.md`: shared entry point for agents that read AGENTS files.
-- `CLAUDE.md`: Claude Code entry point; delegates common rules here.
+- `CLAUDE.md`: thin Claude Code entry point; delegates all common rules to `AGENTS.md`.
 
 ## Directory Map
 
@@ -34,6 +34,7 @@ Start with `AGENTS.md`, then read only task-relevant harness files.
 - Documentation, comments, docstrings, prompts, or reports: `.agents/rules/documentation-language.md`.
 - Behavior, runtime wiring, architecture, or tests: architecture, boundaries, cognitive-cycle, anti-patterns, typing, and testing rules.
 - AI harness, Makefile, agent rules, prompts, or verification scripts: `.agents/rules/ai-harness.md` and `.agents/rules/verification.md`.
+- Instruction structure, ownership, or prompt design: `.agents/rules/instruction-design.md`.
 - Output compression examples: `.agents/rules/output-compression.md`.
 - Deep review/repair: matching `.agents/skills/*/SKILL.md`.
 
@@ -59,8 +60,6 @@ Human-facing documentation, docstrings, explanatory comments, reports, and PR te
 
 Agent-facing prompts, harness rules, and machine-oriented contracts may use English when it improves precision.
 
-## Legacy Files
+## Maintenance
 
-Older flat files may exist directly under `.agents/` such as `.agents/architecture.md`, `.agents/cognitive.md`, `.agents/rules.md`, and `.agents/tests.md`.
-
-Prefer structured files under `.agents/rules/`, `.agents/workflows/`, `.agents/checklists/`, and `.agents/skills/`. Keep legacy flat files only as compatibility references unless a migration task removes them.
+Keep one owner for each rule. `AGENTS.md` routes and states invariants; detailed policy belongs in `.agents/rules/`; task sequences belong in workflows; repeatable specialist procedures belong in skills. Validate inventory with `make ai-context`.

@@ -24,6 +24,7 @@ CORE_FILES: tuple[str, ...] = (
     ".agents/rules/typing.md",
     ".agents/rules/testing.md",
     ".agents/rules/ai-harness.md",
+    ".agents/rules/instruction-design.md",
     ".agents/rules/verification.md",
     ".agents/rules/output-compression.md",
 )

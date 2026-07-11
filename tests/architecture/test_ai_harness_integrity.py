@@ -22,6 +22,7 @@ REQUIRED_AGENT_PATHS: frozenset[Path] = frozenset(
         Path(".agents/rules/typing.md"),
         Path(".agents/rules/testing.md"),
         Path(".agents/rules/ai-harness.md"),
+        Path(".agents/rules/instruction-design.md"),
         Path(".agents/rules/verification.md"),
         Path(".agents/workflows/add-feature.md"),
         Path(".agents/workflows/implement.md"),

@@ -7,6 +7,7 @@ Use when changing agent instructions, Makefile verification targets, Codex/OpenC
 - `AGENTS.md`
 - `.agents/README.md`
 - `.agents/rules/ai-harness.md`
+- `.agents/rules/instruction-design.md`
 - `.agents/rules/verification.md`
 - `.agents/checklists/ai-harness.md`
 - `Makefile`
@@ -22,6 +23,7 @@ Use when changing agent instructions, Makefile verification targets, Codex/OpenC
 5. Validate JSON/TOML/YAML syntax for changed config files.
 6. Run `make ai-context` after instruction changes when possible.
 7. Run `make ai-quick` or stronger, or report why it could not run.
+8. Check official OpenAI Codex sources when product-specific behavior or instruction-surface guidance changes.
 
 ## Design Constraints
 

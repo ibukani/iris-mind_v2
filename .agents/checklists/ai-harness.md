@@ -4,6 +4,8 @@ Use before reporting changes to agent instructions, harness rules, Makefile targ
 
 - `AGENTS.md` still names `make check` as the canonical full gate.
 - New instructions do not contradict architecture or boundary rules.
+- Each rule has one authoritative owner; other files link instead of duplicating it.
+- Product-specific Codex claims were checked against current official OpenAI sources.
 - No lint, type, pyright, pytest, or coverage gate was weakened.
 - Command names match `make help`.
 - JSON/TOML/YAML syntax is valid for changed config files.
