@@ -38,6 +38,7 @@ class DeliveryOutboxModel(Base):
     action_session_id: Mapped[str] = mapped_column(String, nullable=False)
     action_correlation_id: Mapped[str] = mapped_column(String, nullable=False)
     action_text: Mapped[str] = mapped_column(String, nullable=False)
+    action_presentation_hints_json: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         Index(

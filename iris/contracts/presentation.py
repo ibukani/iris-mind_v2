@@ -1,8 +1,12 @@
-"""Presentation ports."""
+"""Presentation contracts and ports."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
+
+from iris.contracts.presentation_hints import PresentationHints, PresentationModality
+
+__all__ = ["ActionPlanPresenter", "PresentationHints", "PresentationModality"]
 
 if TYPE_CHECKING:
     from iris.contracts.actions import ActionPlan, PresentedOutput

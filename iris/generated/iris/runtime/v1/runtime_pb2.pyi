@@ -213,15 +213,19 @@ class SendMessageAction(_message.Message):
     DESCRIPTOR: _descriptor.Descriptor
 
     TEXT_FIELD_NUMBER: _builtins.int
+    PRESENTATION_HINTS_FIELD_NUMBER: _builtins.int
     text: _builtins.str
+    @_builtins.property
+    def presentation_hints(self) -> _outputs_pb2.PresentationHints: ...
     def __init__(
         self,
         *,
         text: _builtins.str = ...,
+        presentation_hints: _outputs_pb2.PresentationHints | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["presentation_hints", b"presentation_hints"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["text", b"text"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["presentation_hints", b"presentation_hints", "text", b"text"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 

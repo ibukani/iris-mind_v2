@@ -24,13 +24,17 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19iris/api/v1/outputs.proto\x12\x0biris.api.v1\"\x9d\x01\n\x0fPresentedOutput\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x12\n\nstyle_hint\x18\x02 \x01(\t\x12\x14\n\x0c\x65motion_hint\x18\x03 \x01(\t\x12\x17\n\x0f\x65xpression_hint\x18\x04 \x01(\t\x12\x10\n\x08\x64\x65lay_ms\x18\x05 \x01(\x05\x12\x10\n\x08priority\x18\x06 \x01(\x05\x12\x15\n\rinterruptible\x18\x07 \x01(\x08\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19iris/api/v1/outputs.proto\x12\x0biris.api.v1\"\xc6\x01\n\x11PresentationHints\x12\x12\n\nstyle_hint\x18\x01 \x01(\t\x12\x14\n\x0c\x65motion_hint\x18\x02 \x01(\t\x12\x17\n\x0f\x65xpression_hint\x18\x03 \x01(\t\x12\x10\n\x08\x64\x65lay_ms\x18\x04 \x01(\x05\x12\x10\n\x08priority\x18\x05 \x01(\x05\x12\x15\n\rinterruptible\x18\x06 \x01(\x08\x12\x33\n\x08modality\x18\x07 \x01(\x0e\x32!.iris.api.v1.PresentationModality\"\xd9\x01\n\x0fPresentedOutput\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x12\n\nstyle_hint\x18\x02 \x01(\t\x12\x14\n\x0c\x65motion_hint\x18\x03 \x01(\t\x12\x17\n\x0f\x65xpression_hint\x18\x04 \x01(\t\x12\x10\n\x08\x64\x65lay_ms\x18\x05 \x01(\x05\x12\x10\n\x08priority\x18\x06 \x01(\x05\x12\x15\n\rinterruptible\x18\x07 \x01(\x08\x12:\n\x12presentation_hints\x18\x08 \x01(\x0b\x32\x1e.iris.api.v1.PresentationHints*\xe9\x01\n\x14PresentationModality\x12%\n!PRESENTATION_MODALITY_UNSPECIFIED\x10\x00\x12\x1e\n\x1aPRESENTATION_MODALITY_TEXT\x10\x01\x12\x1f\n\x1bPRESENTATION_MODALITY_VOICE\x10\x02\x12\x1e\n\x1aPRESENTATION_MODALITY_BOTH\x10\x03\x12&\n\"PRESENTATION_MODALITY_NOTIFICATION\x10\x04\x12!\n\x1dPRESENTATION_MODALITY_UNKNOWN\x10\x05\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'iris.api.v1.outputs_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_PRESENTEDOUTPUT']._serialized_start=43
-  _globals['_PRESENTEDOUTPUT']._serialized_end=200
+  _globals['_PRESENTATIONMODALITY']._serialized_start=464
+  _globals['_PRESENTATIONMODALITY']._serialized_end=697
+  _globals['_PRESENTATIONHINTS']._serialized_start=43
+  _globals['_PRESENTATIONHINTS']._serialized_end=241
+  _globals['_PRESENTEDOUTPUT']._serialized_start=244
+  _globals['_PRESENTEDOUTPUT']._serialized_end=461
 # @@protoc_insertion_point(module_scope)

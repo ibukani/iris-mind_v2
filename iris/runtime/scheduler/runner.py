@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from iris.contracts.actions import SendMessageAction
+from iris.contracts.actions import send_message_action_from_output
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTarget
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ObservationId
 from iris.runtime.ingress.observation_ingress import ObservationCapability
@@ -223,11 +223,11 @@ class SchedulerRunner:
             or response.correlation_id
             or CorrelationId(f"scheduler:{observation_id}")
         )
-        action = SendMessageAction(
+        action = send_message_action_from_output(
+            response.output,
             action_id=ActionId(f"action:{observation_id}"),
             session_id=scheduled.observation.session_id,
             correlation_id=correlation_id,
-            text=response.output.text or "",
         )
         envelope = DeliveryEnvelope(
             delivery_id=DeliveryId(f"delivery:{observation_id}"),

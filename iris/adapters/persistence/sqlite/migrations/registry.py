@@ -18,6 +18,9 @@ from iris.adapters.persistence.sqlite.migrations.v0005_review_candidate_type imp
 from iris.adapters.persistence.sqlite.migrations.v0006_background_job_pressure import (
     BACKGROUND_JOB_PRESSURE_V6,
 )
+from iris.adapters.persistence.sqlite.migrations.v0007_presentation_hints import (
+    PRESENTATION_HINTS_V7,
+)
 
 if TYPE_CHECKING:
     from iris.adapters.persistence.sqlite.migrator_types import SQLiteMigration
@@ -36,4 +39,5 @@ def available_migrations() -> tuple[SQLiteMigration, ...]:
         SAFETY_AUDIT_V4,
         REVIEW_CANDIDATE_TYPE_V5,
         BACKGROUND_JOB_PRESSURE_V6,
+        PRESENTATION_HINTS_V7,
     )

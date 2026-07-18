@@ -37,7 +37,7 @@ def test_empty_db_initializes_to_current_schema(tmp_path: Path) -> None:
     assert result.status is SQLiteMigrationStatus.INITIALIZED
     assert result.previous_version == 0
     assert result.current_version == CURRENT_SQLITE_SCHEMA_VERSION
-    assert result.applied_versions == (1, 2, 3, 4, 5, 6)
+    assert result.applied_versions == (1, 2, 3, 4, 5, 6, 7)
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         assert _user_version(conn) == CURRENT_SQLITE_SCHEMA_VERSION
         assert _table_exists(conn, "accounts")
@@ -48,7 +48,7 @@ def test_empty_db_initializes_to_current_schema(tmp_path: Path) -> None:
         assert _table_exists(conn, "memory_candidate_reviews")
         assert _table_exists(conn, "conversation_transcripts")
         assert _table_exists(conn, "safety_audit_records")
-        assert _latest_migration(conn) == "background_job_pressure"
+        assert _latest_migration(conn) == "presentation_hints"
 
 
 def test_existing_unversioned_memory_db_upgrades_and_rebuilds_fts5(tmp_path: Path) -> None:
@@ -135,7 +135,7 @@ def test_existing_v1_db_upgrades_to_current_schema(tmp_path: Path) -> None:
 
     assert result.status is SQLiteMigrationStatus.UPGRADED
     assert result.previous_version == 1
-    assert result.applied_versions == (2, 3, 4, 5, 6)
+    assert result.applied_versions == (2, 3, 4, 5, 6, 7)
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         assert _user_version(conn) == CURRENT_SQLITE_SCHEMA_VERSION
         assert _table_exists(conn, "background_jobs")
@@ -149,6 +149,7 @@ def test_existing_v1_db_upgrades_to_current_schema(tmp_path: Path) -> None:
             "safety_audit_records",
             "review_candidate_type",
             "background_job_pressure",
+            "presentation_hints",
         )
         assert _column_exists(conn, "memory_candidate_reviews", "candidate_type")
         assert _column_exists(conn, "background_jobs", "resource_profile_json")
@@ -168,7 +169,7 @@ def test_already_current_db_does_not_reapply_migrations(tmp_path: Path) -> None:
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         count = conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()
         assert count is not None
-        assert count[0] == 6
+        assert count[0] == 7
 
 
 def test_migration_order_is_stable() -> None:

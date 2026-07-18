@@ -5,8 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from iris.contracts.presentation_hints import PresentationHints
 from iris.contracts.safety import SafetyContext
 from iris.core.ids import ActionId, CorrelationId, ExternalRef, SessionId
 
@@ -21,6 +22,7 @@ class ActionStatus(StrEnum):
 
 
 _ERR_INVALID_NO_ACTION = "no_action plan must not include candidate text or response intent"
+_ERR_SENDABLE_OUTPUT_REQUIRED = "sendable PresentedOutput required"
 
 
 class ActionPlan(BaseModel):
@@ -81,15 +83,40 @@ class PresentedOutput(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     text: str | None
-    style_hint: str | None = None
-    emotion_hint: str | None = None
-    expression_hint: str | None = None
-    delay_ms: int = 0
-    priority: int = 0
-    interruptible: bool = True
+    presentation_hints: PresentationHints = Field(default_factory=PresentationHints)
     safety_block_reason: str | None = None
     policy_constraint_names: tuple[str, ...] = ()
     safety_contexts: tuple[SafetyContext, ...] = ()
+
+    @property
+    def style_hint(self) -> str | None:
+        """旧flat style hintの読み取り経路を返す。"""
+        return self.presentation_hints.style_hint
+
+    @property
+    def emotion_hint(self) -> str | None:
+        """旧flat emotion hintの読み取り経路を返す。"""
+        return self.presentation_hints.emotion_hint
+
+    @property
+    def expression_hint(self) -> str | None:
+        """旧flat expression hintの読み取り経路を返す。"""
+        return self.presentation_hints.expression_hint
+
+    @property
+    def delay_ms(self) -> int:
+        """旧flat delayの読み取り経路を返す。"""
+        return self.presentation_hints.delay_ms
+
+    @property
+    def priority(self) -> int:
+        """旧flat priorityの読み取り経路を返す。"""
+        return self.presentation_hints.priority
+
+    @property
+    def interruptible(self) -> bool:
+        """旧flat interruptibleの読み取り経路を返す。"""
+        return self.presentation_hints.interruptible
 
     @property
     def is_sendable(self) -> bool:
@@ -115,9 +142,12 @@ def presented_output_from_plan(
         return PresentedOutput(text=None)
     return PresentedOutput(
         text=plan.candidate_text,
-        style_hint=style_hint,
-        priority=plan.priority,
-        interruptible=plan.interruptible,
+        presentation_hints=PresentationHints(
+            style_hint=style_hint,
+            priority=plan.priority,
+            interruptible=plan.interruptible,
+            delay_ms=plan.delay_ms,
+        ),
     )
 
 
@@ -150,12 +180,7 @@ def presented_output_with_policy_metadata(
     """
     return PresentedOutput(
         text=output.text,
-        style_hint=output.style_hint,
-        emotion_hint=output.emotion_hint,
-        expression_hint=output.expression_hint,
-        delay_ms=output.delay_ms,
-        priority=output.priority,
-        interruptible=output.interruptible,
+        presentation_hints=output.presentation_hints,
         safety_block_reason=output.safety_block_reason,
         policy_constraint_names=_merge_constraint_names(
             output.policy_constraint_names,
@@ -204,6 +229,7 @@ class SendMessageAction(AppAction):
     """テキストメッセージ送信用のアプリアクション。"""
 
     text: str
+    presentation_hints: PresentationHints = Field(default_factory=PresentationHints)
 
 
 class NoAction(AppAction):
@@ -223,3 +249,29 @@ class ActionResult(BaseModel):
     delivered_at: datetime | None = None
     external_message_id: ExternalRef | None = None
     error_reason: str | None = None
+
+
+def send_message_action_from_output(
+    output: PresentedOutput,
+    *,
+    action_id: ActionId,
+    session_id: SessionId,
+    correlation_id: CorrelationId,
+) -> SendMessageAction:
+    """正本の提示ヒントを保持した配送actionを作る。
+
+    Returns:
+        出力textと提示ヒントを含む配送action。
+
+    Raises:
+        ValueError: outputが送信可能でない場合。
+    """
+    if not output.is_sendable or output.safety_block_reason is not None:
+        raise ValueError(_ERR_SENDABLE_OUTPUT_REQUIRED)
+    return SendMessageAction(
+        action_id=action_id,
+        session_id=session_id,
+        correlation_id=correlation_id,
+        text=output.text or "",
+        presentation_hints=output.presentation_hints,
+    )

@@ -33,6 +33,7 @@ from iris.contracts.observations import (
     UserFeedbackObservation,
 )
 from iris.contracts.presence import PresenceStatus
+from iris.contracts.presentation import PresentationHints, PresentationModality
 from iris.contracts.spaces import InteractionSpace, SpaceKind
 from iris.core.ids import (
     AccountId,
@@ -45,7 +46,7 @@ from iris.core.ids import (
     SessionId,
     SpaceId,
 )
-from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
+from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, outputs_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
 from tests.helpers.approx import approx
 
@@ -506,12 +507,15 @@ def test_presented_output_to_proto() -> None:
     """PresentedOutputがSubmitObservationResponse内のprotoへmapされるか確認。"""
     output = PresentedOutput(
         text="hello",
-        style_hint="plain",
-        emotion_hint="calm",
-        expression_hint="smile",
-        delay_ms=10,
-        priority=3,
-        interruptible=False,
+        presentation_hints=PresentationHints(
+            style_hint="plain",
+            emotion_hint="calm",
+            expression_hint="smile",
+            delay_ms=10,
+            priority=3,
+            interruptible=False,
+            modality=PresentationModality.BOTH,
+        ),
     )
 
     proto_output = presented_output_to_proto(output)
@@ -523,6 +527,8 @@ def test_presented_output_to_proto() -> None:
     assert proto_output.delay_ms == 10
     assert proto_output.priority == 3
     assert proto_output.interruptible is False
+    assert proto_output.presentation_hints.style_hint == "plain"
+    assert proto_output.presentation_hints.modality == outputs_pb2.PRESENTATION_MODALITY_BOTH
 
 
 @pytest.mark.anyio

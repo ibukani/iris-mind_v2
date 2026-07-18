@@ -63,6 +63,7 @@ message AppActionEnvelope {
 
 message SendMessageAction {
   string text = 1;
+  iris.api.v1.PresentationHints presentation_hints = 2;
 }
 
 message ReportActionResultRequest {

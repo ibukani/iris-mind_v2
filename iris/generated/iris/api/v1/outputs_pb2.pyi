@@ -5,6 +5,7 @@ isort:skip_file
 
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 import builtins as _builtins
 import sys
 import typing as _typing
@@ -15,6 +16,73 @@ else:
     from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
 DESCRIPTOR: _descriptor.FileDescriptor
+
+class _PresentationModality:
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
+
+class _PresentationModalityEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_PresentationModality.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
+    PRESENTATION_MODALITY_UNSPECIFIED: _PresentationModality.ValueType  # 0
+    PRESENTATION_MODALITY_TEXT: _PresentationModality.ValueType  # 1
+    PRESENTATION_MODALITY_VOICE: _PresentationModality.ValueType  # 2
+    PRESENTATION_MODALITY_BOTH: _PresentationModality.ValueType  # 3
+    PRESENTATION_MODALITY_NOTIFICATION: _PresentationModality.ValueType  # 4
+    PRESENTATION_MODALITY_UNKNOWN: _PresentationModality.ValueType  # 5
+
+class PresentationModality(_PresentationModality, metaclass=_PresentationModalityEnumTypeWrapper): ...
+
+PRESENTATION_MODALITY_UNSPECIFIED: PresentationModality.ValueType  # 0
+PRESENTATION_MODALITY_TEXT: PresentationModality.ValueType  # 1
+PRESENTATION_MODALITY_VOICE: PresentationModality.ValueType  # 2
+PRESENTATION_MODALITY_BOTH: PresentationModality.ValueType  # 3
+PRESENTATION_MODALITY_NOTIFICATION: PresentationModality.ValueType  # 4
+PRESENTATION_MODALITY_UNKNOWN: PresentationModality.ValueType  # 5
+Global___PresentationModality: _TypeAlias = PresentationModality  # noqa: Y015
+
+@_typing.final
+class PresentationHints(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    STYLE_HINT_FIELD_NUMBER: _builtins.int
+    EMOTION_HINT_FIELD_NUMBER: _builtins.int
+    EXPRESSION_HINT_FIELD_NUMBER: _builtins.int
+    DELAY_MS_FIELD_NUMBER: _builtins.int
+    PRIORITY_FIELD_NUMBER: _builtins.int
+    INTERRUPTIBLE_FIELD_NUMBER: _builtins.int
+    MODALITY_FIELD_NUMBER: _builtins.int
+    style_hint: _builtins.str
+    """Optional provider-neutral style hint."""
+    emotion_hint: _builtins.str
+    """Optional provider-neutral emotion hint."""
+    expression_hint: _builtins.str
+    """Optional provider-neutral expression hint."""
+    delay_ms: _builtins.int
+    """Requested delay. This is not a scheduling or safety permission."""
+    priority: _builtins.int
+    """Presentation priority hint. This does not bypass policy or queue limits."""
+    interruptible: _builtins.bool
+    """Whether an adapter may interrupt this presentation."""
+    modality: Global___PresentationModality.ValueType
+    """Requested modality. UNKNOWN is the safe default."""
+    def __init__(
+        self,
+        *,
+        style_hint: _builtins.str = ...,
+        emotion_hint: _builtins.str = ...,
+        expression_hint: _builtins.str = ...,
+        delay_ms: _builtins.int = ...,
+        priority: _builtins.int = ...,
+        interruptible: _builtins.bool = ...,
+        modality: Global___PresentationModality.ValueType = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["delay_ms", b"delay_ms", "emotion_hint", b"emotion_hint", "expression_hint", b"expression_hint", "interruptible", b"interruptible", "modality", b"modality", "priority", b"priority", "style_hint", b"style_hint"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___PresentationHints: _TypeAlias = PresentationHints  # noqa: Y015
 
 @_typing.final
 class PresentedOutput(_message.Message):
@@ -27,6 +95,7 @@ class PresentedOutput(_message.Message):
     DELAY_MS_FIELD_NUMBER: _builtins.int
     PRIORITY_FIELD_NUMBER: _builtins.int
     INTERRUPTIBLE_FIELD_NUMBER: _builtins.int
+    PRESENTATION_HINTS_FIELD_NUMBER: _builtins.int
     text: _builtins.str
     """The main user-visible response."""
     style_hint: _builtins.str
@@ -37,6 +106,12 @@ class PresentedOutput(_message.Message):
     """Presentation hints; CLI may ignore them initially."""
     priority: _builtins.int
     interruptible: _builtins.bool
+    @_builtins.property
+    def presentation_hints(self) -> Global___PresentationHints:
+        """Canonical typed presentation contract. Legacy flat fields above remain
+        populated for wire compatibility with older clients.
+        """
+
     def __init__(
         self,
         *,
@@ -47,10 +122,11 @@ class PresentedOutput(_message.Message):
         delay_ms: _builtins.int = ...,
         priority: _builtins.int = ...,
         interruptible: _builtins.bool = ...,
+        presentation_hints: Global___PresentationHints | None = ...,
     ) -> None: ...
-    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    _HasFieldArgType: _TypeAlias = _typing.Literal["presentation_hints", b"presentation_hints"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["delay_ms", b"delay_ms", "emotion_hint", b"emotion_hint", "expression_hint", b"expression_hint", "interruptible", b"interruptible", "priority", b"priority", "style_hint", b"style_hint", "text", b"text"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["delay_ms", b"delay_ms", "emotion_hint", b"emotion_hint", "expression_hint", b"expression_hint", "interruptible", b"interruptible", "presentation_hints", b"presentation_hints", "priority", b"priority", "style_hint", b"style_hint", "text", b"text"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
