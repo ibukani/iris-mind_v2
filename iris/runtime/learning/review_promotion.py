@@ -15,8 +15,10 @@ from iris.cognitive.memory.safety import (
 from iris.contracts.memory import MemoryId, MemoryRecord
 from iris.contracts.memory_candidates import (
     MemoryCandidateSensitivity,
+    MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.memory_consolidation import MemoryConsolidationDecisionKind
 from iris.core.datetime_utils import now_utc
 from iris.core.metadata import immutable_metadata
 from iris.runtime.learning.candidate_validation import (
@@ -143,6 +145,13 @@ class ApprovedMemoryCandidatePromoter:
             )
         elif record.promoted_memory_id is not None:
             result = await self._already_promoted_result(record)
+        elif not _consolidation_can_promote(record.candidate):
+            result = MemoryCandidatePromotionResult(
+                record=record,
+                memory=None,
+                promoted=False,
+                reason="consolidation_decision_requires_explicit_resolution",
+            )
         elif not self._policy.accept(record.candidate):
             result = MemoryCandidatePromotionResult(
                 record=record,
@@ -208,6 +217,18 @@ class ApprovedMemoryCandidatePromoter:
             MemoryRecord: 保存後の canonical memory record。
         """
         return await asyncio.to_thread(self._memory_store.update, record)
+
+
+def _consolidation_can_promote(candidate: MemoryCandidate) -> bool:
+    """統合結果の duplicate / stale / conflict を implicit promotion から除外する。
+
+    Returns:
+        retained candidate だけ promotion policy の次段へ進める場合は True。
+    """
+    if candidate.source is not MemoryCandidateSource.CONSOLIDATION:
+        return True
+    decision = candidate.metadata.get("consolidation_decision")
+    return decision == MemoryConsolidationDecisionKind.RETAINED.value
 
 
 def _promoted_memory_id(record: MemoryCandidateReviewRecord) -> MemoryId:

@@ -32,7 +32,11 @@ def implicit_review_provenance_is_valid(candidate: MemoryCandidate) -> bool:
         source、retention policy、review flag がすべて正規値なら True。
     """
     return (
-        candidate.source is MemoryCandidateSource.IMPLICIT_CONVERSATION
+        candidate.source
+        in {
+            MemoryCandidateSource.IMPLICIT_CONVERSATION,
+            MemoryCandidateSource.CONSOLIDATION,
+        }
         and candidate.retention_policy is MemoryRetentionPolicy.REVIEW_REQUIRED
         and candidate.review_required
     )

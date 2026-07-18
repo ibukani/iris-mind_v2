@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from iris.contracts.memory_consolidation import MemoryConsolidationDecisionKind
 from iris.contracts.review_candidates import (
     ReviewCandidateDetail,
     ReviewCandidateFilter,
     ReviewCandidateScope,
     ReviewCandidateStatus,
     ReviewCandidateSummary,
+    ReviewCandidateType,
+    ReviewConsolidationCandidatePayload,
     ReviewDecisionKind,
     ReviewDecisionRequest,
     ReviewDecisionResult,
@@ -201,13 +204,15 @@ def _summary_from_record(record: MemoryCandidateReviewRecord) -> ReviewCandidate
 
 
 def _detail_from_record(record: MemoryCandidateReviewRecord) -> ReviewCandidateDetail:
+    is_consolidation = record.candidate_type is ReviewCandidateType.CONSOLIDATION
     return ReviewCandidateDetail(
         candidate_id=str(record.candidate_id),
         candidate_type=record.candidate_type,
         status=ReviewCandidateStatus(record.status.value),
         scope=_scope_from_record(record),
         source_observation_id=record.source_observation_id,
-        memory_candidate=_memory_payload(record),
+        memory_candidate=None if is_consolidation else _memory_payload(record),
+        consolidation_candidate=(_consolidation_payload(record) if is_consolidation else None),
         created_at=record.created_at,
         updated_at=record.updated_at,
         reviewed_at=record.reviewed_at,
@@ -236,6 +241,46 @@ def _memory_payload(record: MemoryCandidateReviewRecord) -> ReviewMemoryCandidat
         source_observation_id=candidate.source_observation_id,
         metadata=candidate.metadata,
     )
+
+
+def _consolidation_payload(
+    record: MemoryCandidateReviewRecord,
+) -> ReviewConsolidationCandidatePayload:
+    """Consolidation record を typed review payload に変換する。
+
+    Returns:
+        review service boundary 用の typed payload。
+    """
+    candidate = record.candidate
+    metadata = candidate.metadata
+    return ReviewConsolidationCandidatePayload(
+        text=candidate.text,
+        kind=candidate.kind,
+        salience=candidate.salience,
+        confidence=candidate.confidence,
+        source=candidate.source,
+        reason=candidate.reason or metadata.get("consolidation_reason", "consolidation review"),
+        retention_policy=candidate.retention_policy,
+        sensitivity=candidate.sensitivity,
+        review_required=candidate.review_required,
+        decision_kind=MemoryConsolidationDecisionKind(metadata["consolidation_decision"]),
+        source_candidate_ids=_split_candidate_ids(metadata.get("source_candidate_ids", "")),
+        supersedes_candidate_ids=_split_candidate_ids(metadata.get("supersedes_candidate_ids", "")),
+        actor_id=candidate.actor_id,
+        account_id=record.account_id,
+        space_id=candidate.space_id,
+        source_observation_id=candidate.source_observation_id,
+        metadata=metadata,
+    )
+
+
+def _split_candidate_ids(value: str) -> tuple[str, ...]:
+    """保存済みの区切り文字列を candidate ID 列へ戻す。
+
+    Returns:
+        空要素を除いた candidate ID tuple。
+    """
+    return tuple(item for item in value.split("|") if item)
 
 
 def _scope_from_record(record: MemoryCandidateReviewRecord) -> ReviewCandidateScope:

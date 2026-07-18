@@ -14,6 +14,7 @@ from iris.adapters.persistence.sqlite.serialization import (
     text_to_datetime,
 )
 from iris.adapters.persistence.sqlite.stores._managed_database import ManagedSQLiteStore
+from iris.contracts.memory_consolidation import MemoryConsolidationJobPayload
 from iris.runtime.learning.jobs import (
     BackgroundJobId,
     BackgroundJobKind,
@@ -53,6 +54,7 @@ type _PayloadModel = (
     | DeferredLearningJobPayload
     | RelationshipUpdateJobPayload
     | InteractionPolicyJobPayload
+    | MemoryConsolidationJobPayload
 )
 
 
@@ -64,6 +66,7 @@ class _PayloadType(StrEnum):
     DEFERRED_LEARNING = "deferred_learning"
     RELATIONSHIP_UPDATE = "relationship_update"
     INTERACTION_POLICY = "interaction_policy"
+    MEMORY_CONSOLIDATION = "memory_consolidation"
 
 
 class SQLiteBackgroundJobQueue(ManagedSQLiteStore):
@@ -646,6 +649,7 @@ def _payload_type(payload: _PayloadModel) -> _PayloadType:
         RuntimeLearningCandidateJobPayload: _PayloadType.RUNTIME_LEARNING_CANDIDATE,
         RelationshipUpdateJobPayload: _PayloadType.RELATIONSHIP_UPDATE,
         InteractionPolicyJobPayload: _PayloadType.INTERACTION_POLICY,
+        MemoryConsolidationJobPayload: _PayloadType.MEMORY_CONSOLIDATION,
         DeferredLearningJobPayload: _PayloadType.DEFERRED_LEARNING,
     }
     return payload_types[type(payload)]
@@ -666,6 +670,8 @@ def _payload_from_json(payload_type: _PayloadType, payload_json: str) -> _Payloa
             payload = RelationshipUpdateJobPayload.model_validate_json(payload_json)
         case _PayloadType.INTERACTION_POLICY:
             payload = InteractionPolicyJobPayload.model_validate_json(payload_json)
+        case _PayloadType.MEMORY_CONSOLIDATION:
+            payload = MemoryConsolidationJobPayload.model_validate_json(payload_json)
         case _PayloadType.DEFERRED_LEARNING:
             payload = DeferredLearningJobPayload.model_validate_json(payload_json)
     return payload

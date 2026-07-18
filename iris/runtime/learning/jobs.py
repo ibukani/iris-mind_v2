@@ -18,6 +18,7 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.memory_consolidation import MemoryConsolidationJobPayload
 from iris.contracts.model_policy import ModelCallDescriptor
 from iris.contracts.observations import ObservationKind, UserFeedbackKind
 from iris.core.ids import AccountId, ActorId, ObservationId, SessionId, SpaceId
@@ -74,6 +75,7 @@ class MemoryBackgroundJobPayload(BaseModel):
     salience: float
     confidence: float
     actor_id: ActorId | None = None
+    account_id: AccountId | None = None
     space_id: SpaceId | None = None
     source_observation_id: ObservationId | None = None
 
@@ -137,6 +139,7 @@ BackgroundJobPayload = (
     | DeferredLearningJobPayload
     | RelationshipUpdateJobPayload
     | InteractionPolicyJobPayload
+    | MemoryConsolidationJobPayload
 )
 
 
