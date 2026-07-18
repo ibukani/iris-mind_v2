@@ -19,15 +19,17 @@ from iris.contracts.review_candidates import (
     ReviewMemoryCandidatePayload,
 )
 from iris.core.datetime_utils import now_utc
+from iris.core.metadata import immutable_metadata
 from iris.runtime.state.memory_candidates import (
     MemoryCandidateReviewStatus,
     MemoryCandidateReviewUpdate,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
     from datetime import datetime
 
+    from iris.contracts.metadata import ImmutableMetadata
     from iris.runtime.state.memory_candidates import (
         MemoryCandidateReviewId,
         MemoryCandidateReviewRecord,
@@ -239,6 +241,8 @@ def _memory_payload(record: MemoryCandidateReviewRecord) -> ReviewMemoryCandidat
         actor_id=candidate.actor_id,
         space_id=candidate.space_id,
         source_observation_id=candidate.source_observation_id,
+        source_event_ids=_split_candidate_ids(candidate.metadata.get("source_event_ids", "")),
+        model_metadata=_model_metadata(candidate.metadata),
         metadata=candidate.metadata,
     )
 
@@ -281,6 +285,17 @@ def _split_candidate_ids(value: str) -> tuple[str, ...]:
         空要素を除いた candidate ID tuple。
     """
     return tuple(item for item in value.split("|") if item)
+
+
+def _model_metadata(metadata: Mapping[str, str]) -> ImmutableMetadata:
+    """Candidate metadata から model provenance だけを抽出する。
+
+    Returns:
+        model_* key の immutable metadata。
+    """
+    return immutable_metadata(
+        {key: value for key, value in metadata.items() if key.startswith("model_")}
+    )
 
 
 def _scope_from_record(record: MemoryCandidateReviewRecord) -> ReviewCandidateScope:

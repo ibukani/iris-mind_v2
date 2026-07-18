@@ -15,6 +15,12 @@ from iris.contracts.companion_affect import (
     CompanionInteractionScope,
 )
 from iris.contracts.identity import ActorKind, Identity
+from iris.contracts.implicit_memory_extraction import (
+    ImplicitMemoryExtractionCancellation,
+    ImplicitMemoryExtractionCandidate,
+    ImplicitMemoryExtractionRequest,
+    ImplicitMemoryExtractionResult,
+)
 from iris.contracts.interaction_policy import (
     InteractionPolicyDecisionKind,
     InteractionPolicyKind,
@@ -31,6 +37,7 @@ from iris.contracts.memory_consolidation import (
     MemoryConsolidationJobPayload,
     MemoryConsolidationSourceCandidate,
 )
+from iris.contracts.model_policy import ModelCallDescriptor, ModelCallKind, ModelCallSite
 from iris.contracts.observations import (
     ActorMessageObservation,
     ObservationContext,
@@ -44,6 +51,7 @@ from iris.core.ids import AccountId, ActorId, ExternalRef, ObservationId, Sessio
 from iris.runtime.learning.implicit_candidates import (
     ConservativeImplicitMemoryCandidateExtractor,
     EnqueueImplicitMemoryCandidateHook,
+    EnqueueLLMImplicitMemoryCandidateHook,
     ImplicitCandidateAdmissionPolicy,
     ImplicitMemoryCandidateWorker,
     runtime_learning_event_to_payload,
@@ -64,6 +72,7 @@ from iris.runtime.learning.jobs import (
     RelationshipUpdateJobPayload,
     RuntimeLearningCandidateJobPayload,
 )
+from iris.runtime.learning.llm_implicit_candidates import LLMImplicitMemoryCandidateWorker
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.learning.relationship_worker import RelationshipUpdateCandidateWorker
@@ -84,6 +93,38 @@ from iris.runtime.state.relationship_updates import InMemoryRelationshipUpdateCa
 pytestmark = pytest.mark.anyio
 
 _NOW = datetime(2026, 7, 1, tzinfo=UTC)
+
+
+class _StructuredImplicitMemoryExtractor:
+    """Typed extraction port を検証する deterministic test adapter。"""
+
+    def __init__(self) -> None:
+        self.request: ImplicitMemoryExtractionRequest | None = None
+
+    def extract(
+        self,
+        request: ImplicitMemoryExtractionRequest,
+        *,
+        cancellation: ImplicitMemoryExtractionCancellation | None = None,
+    ) -> ImplicitMemoryExtractionResult:
+        self.request = request
+        if cancellation is not None and cancellation.cancellation_requested:
+            cancellation.acknowledge_stopped()
+            return ImplicitMemoryExtractionResult()
+        return ImplicitMemoryExtractionResult(
+            candidates=(
+                ImplicitMemoryExtractionCandidate(
+                    text="ユーザーは短い返答を好む。",
+                    kind=MemoryKind.PREFERENCE,
+                    salience=0.7,
+                    confidence=0.8,
+                    reason="stable style signal",
+                    source_event_ids=("event-llm",),
+                    model_metadata={"provider": "fake"},
+                ),
+            ),
+            model_metadata={"model_name": "fake-memory-model"},
+        )
 
 
 async def test_runtime_hook_enqueues_implicit_candidate_job_idempotently() -> None:
@@ -164,6 +205,8 @@ async def test_worker_stores_review_required_implicit_candidate() -> None:
     assert record.metadata["source"] == MemoryCandidateSource.IMPLICIT_CONVERSATION.value
     assert memory_store.search(MemoryQuery(text="短く", limit=10)) == ()
     await _assert_consolidation_candidate(review_store, pending)
+
+    await _assert_llm_review_flow(review_store, memory_store, event)
     relationship_worker.run(_relationship_job())
     relationship_worker.run(_relationship_job())
     assert len(relationship_store.list_records()) == 1
@@ -248,6 +291,54 @@ async def test_review_store_deduplicates_candidate_records() -> None:
     worker.run(job)
 
     assert len(await review_store.list_pending()) == 1
+
+
+async def _assert_llm_review_flow(
+    review_store: InMemoryMemoryCandidateReviewStore,
+    memory_store: InMemoryMemoryStore,
+    event: RuntimeLearningEvent,
+) -> None:
+    """LLM candidate の bounded request、review provenance、model metadata を検証する。"""
+    llm_queue = InMemoryBackgroundJobQueue()
+    llm_event = replace(event, source_observation_id=ObservationId("obs-llm"))
+    await EnqueueLLMImplicitMemoryCandidateHook(
+        llm_queue,
+        model_descriptor=ModelCallDescriptor(
+            call_kind=ModelCallKind.BACKGROUND_LLM,
+            call_site=ModelCallSite.MEMORY_EXTRACTION,
+            model_name="test-llm",
+        ),
+    ).after_runtime_event(llm_event)
+    extractor = _StructuredImplicitMemoryExtractor()
+    worker = LLMImplicitMemoryCandidateWorker(
+        review_store,
+        extractor,
+        model="test-llm",
+    )
+    runner = BackgroundJobRunner(
+        llm_queue,
+        (worker,),
+        runtime_hooks=BackgroundJobRunnerRuntimeHooks(
+            now=lambda: _NOW,
+            idle_available=lambda: True,
+        ),
+    )
+
+    assert await runner.run_once() == 1
+    llm_pending = await review_store.list_pending()
+    llm_record = next(
+        candidate for candidate in llm_pending if candidate.metadata.get("extraction_mode") == "llm"
+    )
+    llm_detail = await MemoryCandidateReviewService(review_store).read(llm_record.candidate_id)
+    assert llm_detail.memory_candidate is not None
+    assert llm_detail.memory_candidate.source_event_ids == ("obs-llm", "event-llm")
+    assert llm_detail.memory_candidate.model_metadata["model_name"] == "test-llm"
+    assert llm_detail.memory_candidate.model_metadata["model_provider"] == "fake"
+    assert llm_record.candidate.retention_policy is MemoryRetentionPolicy.REVIEW_REQUIRED
+    assert memory_store.search(MemoryQuery(text="短い返答", limit=10)) == ()
+    assert extractor.request is not None
+    assert extractor.request.model_name == "test-llm"
+    assert extractor.request.limits.max_input_chars == 4000
 
 
 async def _assert_consolidation_candidate(

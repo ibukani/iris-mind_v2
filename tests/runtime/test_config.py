@@ -804,6 +804,7 @@ def test_config_package_exposes_stable_public_api() -> None:
         "RuntimeLearningConfig",
         "RuntimeInferenceSchedulerConfig",
         "RuntimeInteractionActivityConfig",
+        "RuntimeImplicitMemoryExtractionConfig",
         "RuntimeMemoryConfig",
         "RuntimeMemoryEmbeddingConfig",
         "RuntimeMemoryVectorConfig",

@@ -21,6 +21,11 @@ def test_toml_sets_implicit_learning_candidate_options(tmp_path: Path) -> None:
         relationship_update_candidates_enabled = true
         implicit_candidate_min_confidence = 0.5
         implicit_candidate_max_text_length = 512
+
+        [learning.implicit_memory_extraction]
+        enabled = true
+        max_input_chars = 2048
+        max_output_tokens = 256
         """,
         encoding="utf-8",
     )
@@ -31,11 +36,16 @@ def test_toml_sets_implicit_learning_candidate_options(tmp_path: Path) -> None:
     assert config.learning.relationship_update_candidates_enabled is True
     assert config.learning.implicit_candidate_min_confidence == approx(0.5)
     assert config.learning.implicit_candidate_max_text_length == 512
+    extraction = config.learning.implicit_memory_extraction
+    assert extraction.enabled is True
+    assert extraction.max_input_chars == 2048
+    assert extraction.max_output_tokens == 256
 
 
 def test_builtin_memory_extraction_policy_is_deterministic_by_default() -> None:
     """Built-in implicit memory extraction は初期値では LLM 資源を要求しない。"""
     kinds = default_runtime_config().learning.background_job_policy.kinds
 
+    assert default_runtime_config().learning.implicit_memory_extraction.enabled is False
     assert kinds.memory_extraction.uses_llm is False
     assert kinds.reflection.uses_llm is True
