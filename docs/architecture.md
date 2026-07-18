@@ -788,6 +788,10 @@ priority
 interruptible
 ```
 
+`PresentationHints` は `PresentedOutput` と delivery `SendMessageAction` の共通 source of truth である。
+これは provider-neutral な提示意図であり、adapter capability、配送許可、safety policy を与えない。
+`modality=unknown` は omitted 値の安全な default である。`priority` と `interruptible` は policy bypass、queue starvation、user mute、provider revoke を意味しない。
+
 ### `AppAction`
 
 外部アプリが実行できる具体命令。

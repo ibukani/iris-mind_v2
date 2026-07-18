@@ -186,6 +186,7 @@ _REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
             "action_session_id",
             "action_correlation_id",
             "action_text",
+            "action_presentation_hints_json",
         }
     ),
     "delivery_report_fingerprints": frozenset(
@@ -220,6 +221,10 @@ _REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "memory_candidate_reviews": MEMORY_CANDIDATE_REVIEW_REQUIRED_COLUMNS,
     "conversation_transcripts": CONVERSATION_TRANSCRIPT_REQUIRED_COLUMNS,
     "safety_audit_records": SAFETY_AUDIT_REQUIRED_COLUMNS,
+}
+
+_UNVERSIONED_ADOPTION_OPTIONAL_COLUMNS: dict[str, frozenset[str]] = {
+    "delivery_outbox": frozenset({"action_presentation_hints_json"}),
 }
 
 
@@ -463,6 +468,10 @@ def _record_migration(conn: sqlite3.Connection, migration: SQLiteMigration) -> N
 
 
 def _apply_pending_migration(conn: sqlite3.Connection, migration: SQLiteMigration) -> None:
+    if migration.skip_if is not None and migration.skip_if(conn):
+        _record_migration(conn, migration)
+        conn.execute(f"PRAGMA user_version = {migration.version}")
+        return
     for statement in migration.statements:
         conn.execute(statement)
     _record_migration(conn, migration)
@@ -474,8 +483,12 @@ def _validate_unversioned_adoption(path: Path, conn: sqlite3.Connection) -> None
     for table_name, required_columns in _REQUIRED_COLUMNS.items():
         if table_name == "schema_migrations" or not _table_exists(conn, table_name):
             continue
+        adoption_columns = required_columns - _UNVERSIONED_ADOPTION_OPTIONAL_COLUMNS.get(
+            table_name,
+            frozenset(),
+        )
         existing = _table_columns(conn, table_name)
-        missing.extend(f"{table_name}.{name}" for name in required_columns - existing)
+        missing.extend(f"{table_name}.{name}" for name in adoption_columns - existing)
     if missing:
         details = ", ".join(sorted(missing))
         message = f"SQLite unversioned schema at {path} is not safely adoptable: {details}"

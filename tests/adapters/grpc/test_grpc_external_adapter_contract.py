@@ -11,7 +11,9 @@ import grpc
 import pytest
 
 from iris.adapters.app_gateway.fake_resolvers import FakeIdentityResolver, FakeSpaceResolver
+from iris.contracts.presentation import PresentationHints, PresentationModality
 from iris.core.ids import DeliveryId
+from iris.generated.iris.api.v1 import outputs_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2, runtime_pb2_grpc
 from iris.runtime.auth.static_tokens import StaticBearerTokenVerifier, hash_token
 from iris.runtime.config.auth import RuntimeAuthConfig, RuntimeAuthMode
@@ -328,10 +330,23 @@ async def test_legacy_metadata_without_authorization_is_not_accepted() -> None:
 
 
 async def test_poll_app_actions_wire_contract_returns_provider_scoped_send_message() -> None:
-    """PollAppActions leases only due actions for the requested provider."""
+    """PollAppActionsが要求providerのdue actionだけをleaseする。"""
     fixture = generic_text_adapter_fixture()
     outbox = InMemoryDeliveryOutbox()
-    await outbox.enqueue(build_send_message_delivery(fixture))
+    await outbox.enqueue(
+        build_send_message_delivery(
+            fixture,
+            presentation_hints=PresentationHints(
+                style_hint="plain",
+                emotion_hint="calm",
+                expression_hint="smile",
+                delay_ms=12,
+                priority=3,
+                interruptible=False,
+                modality=PresentationModality.BOTH,
+            ),
+        )
+    )
     await outbox.enqueue(
         build_send_message_delivery(
             discord_voice_adapter_fixture(),
@@ -354,6 +369,13 @@ async def test_poll_app_actions_wire_contract_returns_provider_scoped_send_messa
     assert action.provider_subject == fixture.provider_subject
     assert action.provider_space_ref == fixture.provider_space_ref
     assert action.send_message.text == "hello from runtime delivery"
+    assert action.send_message.presentation_hints.style_hint == "plain"
+    assert action.send_message.presentation_hints.emotion_hint == "calm"
+    assert action.send_message.presentation_hints.expression_hint == "smile"
+    assert action.send_message.presentation_hints.delay_ms == 12
+    assert action.send_message.presentation_hints.priority == 3
+    assert action.send_message.presentation_hints.interruptible is False
+    assert action.send_message.presentation_hints.modality == outputs_pb2.PRESENTATION_MODALITY_BOTH
     assert action.delivery_id == "contract-delivery-1"
     assert action.lease_id
 

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from iris.adapters.grpc.mappers import timestamp_from_datetime
 from iris.contracts.actions import SendMessageAction
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTarget
+from iris.contracts.presentation import PresentationHints
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, SessionId
 from iris.generated.iris.api.v1 import identity_pb2, observations_pb2, spaces_pb2
 from iris.generated.iris.runtime.v1 import runtime_pb2
@@ -179,6 +180,7 @@ def build_send_message_delivery(
     action_id: str = "contract-action-1",
     correlation_id: str = "contract-corr-1",
     text: str = "hello from runtime delivery",
+    presentation_hints: PresentationHints | None = None,
 ) -> DeliveryEnvelope:
     """Build a due SendMessageAction delivery item for pull-based adapter delivery.
 
@@ -192,6 +194,7 @@ def build_send_message_delivery(
             session_id=SessionId(fixture.session_id),
             correlation_id=CorrelationId(correlation_id),
             text=text,
+            presentation_hints=presentation_hints or PresentationHints(),
         ),
         target=DeliveryTarget(
             provider=fixture.provider,

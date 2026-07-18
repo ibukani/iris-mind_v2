@@ -2,6 +2,38 @@ syntax = "proto3";
 
 package iris.api.v1;
 
+enum PresentationModality {
+  PRESENTATION_MODALITY_UNSPECIFIED = 0;
+  PRESENTATION_MODALITY_TEXT = 1;
+  PRESENTATION_MODALITY_VOICE = 2;
+  PRESENTATION_MODALITY_BOTH = 3;
+  PRESENTATION_MODALITY_NOTIFICATION = 4;
+  PRESENTATION_MODALITY_UNKNOWN = 5;
+}
+
+message PresentationHints {
+  // Optional provider-neutral style hint.
+  string style_hint = 1;
+
+  // Optional provider-neutral emotion hint.
+  string emotion_hint = 2;
+
+  // Optional provider-neutral expression hint.
+  string expression_hint = 3;
+
+  // Requested delay. This is not a scheduling or safety permission.
+  int32 delay_ms = 4;
+
+  // Presentation priority hint. This does not bypass policy or queue limits.
+  int32 priority = 5;
+
+  // Whether an adapter may interrupt this presentation.
+  bool interruptible = 6;
+
+  // Requested modality. UNKNOWN is the safe default.
+  PresentationModality modality = 7;
+}
+
 message PresentedOutput {
   // The main user-visible response.
   string text = 1;
@@ -15,4 +47,8 @@ message PresentedOutput {
   int32 delay_ms = 5;
   int32 priority = 6;
   bool interruptible = 7;
+
+  // Canonical typed presentation contract. Legacy flat fields above remain
+  // populated for wire compatibility with older clients.
+  PresentationHints presentation_hints = 8;
 }

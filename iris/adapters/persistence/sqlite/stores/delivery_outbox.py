@@ -42,6 +42,7 @@ from iris.contracts.delivery_transitions import (
     lease_delivery,
     release_delivery,
 )
+from iris.contracts.presentation import PresentationHints
 from iris.core.ids import (
     AccountId,
     ActionId,
@@ -452,10 +453,16 @@ def _envelope_to_model(envelope: DeliveryEnvelope) -> DeliveryOutboxModel:
         action_session_id=str(action.session_id),
         action_correlation_id=str(action.correlation_id),
         action_text=action.text,
+        action_presentation_hints_json=action.presentation_hints.model_dump_json(),
     )
 
 
 def _model_to_envelope(row: DeliveryOutboxModel) -> DeliveryEnvelope:
+    presentation_hints = (
+        PresentationHints.model_validate_json(row.action_presentation_hints_json)
+        if row.action_presentation_hints_json
+        else PresentationHints()
+    )
     return DeliveryEnvelope(
         delivery_id=DeliveryId(str(row.delivery_id)),
         action=SendMessageAction(
@@ -463,6 +470,7 @@ def _model_to_envelope(row: DeliveryOutboxModel) -> DeliveryEnvelope:
             session_id=SessionId(str(row.action_session_id)),
             correlation_id=CorrelationId(str(row.action_correlation_id)),
             text=str(row.action_text),
+            presentation_hints=presentation_hints,
         ),
         target=DeliveryTarget(
             provider=str(row.target_provider),

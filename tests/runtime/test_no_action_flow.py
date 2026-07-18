@@ -11,6 +11,7 @@ from iris.cognitive.cycle.frame_builder import FrameBuilder
 from iris.cognitive.cycle.service import CognitiveCycle
 from iris.contracts.actions import ActionPlan, PresentedOutput
 from iris.contracts.observations import IdleTickObservation, ObservationContext, ObservationKind
+from iris.contracts.presentation import PresentationHints
 from iris.core.ids import ObservationId, SessionId
 from iris.runtime.app import IrisApp
 from iris.runtime.wiring.features import wire_proactive_talk_cognitive_cycle
@@ -53,7 +54,10 @@ class SpyPresenter:
             PresentedOutput: 記録されたプランに基づく出力。
         """
         self.calls.append(plan)
-        return PresentedOutput(text=plan.candidate_text, priority=plan.priority)
+        return PresentedOutput(
+            text=plan.candidate_text,
+            presentation_hints=PresentationHints(priority=plan.priority),
+        )
 
 
 def _idle_tick(idle_seconds: float) -> IdleTickObservation:

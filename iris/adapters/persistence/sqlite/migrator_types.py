@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    import sqlite3
 
 
 @dataclass(frozen=True)
@@ -13,6 +18,7 @@ class SQLiteMigration:
     version: int
     name: str
     statements: tuple[str, ...]
+    skip_if: Callable[[sqlite3.Connection], bool] | None = None
 
     @property
     def checksum(self) -> str:

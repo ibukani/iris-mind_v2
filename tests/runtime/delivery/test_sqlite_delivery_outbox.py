@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime
+import sqlite3
 from typing import TYPE_CHECKING
 
 import pytest
@@ -11,6 +13,7 @@ import pytest
 from iris.adapters.persistence.sqlite.stores.delivery_outbox import SQLiteDeliveryOutbox
 from iris.contracts.actions import ActionResult, ActionStatus, NoAction, SendMessageAction
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTarget
+from iris.contracts.presentation import PresentationHints, PresentationModality
 from iris.core.ids import (
     ActionId,
     CorrelationId,
@@ -27,12 +30,17 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.anyio
 
 
-def _action(suffix: str = "1") -> SendMessageAction:
+def _action(
+    suffix: str = "1",
+    *,
+    presentation_hints: PresentationHints | None = None,
+) -> SendMessageAction:
     return SendMessageAction(
         action_id=ActionId(f"action-{suffix}"),
         session_id=SessionId("session-1"),
         correlation_id=CorrelationId(f"corr-{suffix}"),
         text=f"hello {suffix}",
+        presentation_hints=presentation_hints or PresentationHints(),
     )
 
 
@@ -60,6 +68,68 @@ def _envelope(suffix: str = "1", *, provider: str = "discord") -> DeliveryEnvelo
         last_error_reason=None,
         source_observation_id=ObservationId(f"obs-{suffix}"),
     )
+
+
+async def test_sqlite_outbox_round_trip_preserves_presentation_hints(tmp_path: Path) -> None:
+    """SQLite配送永続化が共有提示ヒントを全て保持する。"""
+    db_path = tmp_path / "state.sqlite3"
+    hints = PresentationHints(
+        style_hint="plain",
+        emotion_hint="calm",
+        expression_hint="smile",
+        delay_ms=15,
+        priority=3,
+        interruptible=False,
+        modality=PresentationModality.VOICE,
+    )
+    envelope = _envelope().model_copy(
+        update={"action": _action(presentation_hints=hints)},
+    )
+    outbox = SQLiteDeliveryOutbox(str(db_path))
+    await outbox.enqueue(envelope)
+    await outbox.close()
+
+    reopened = SQLiteDeliveryOutbox(str(db_path))
+    leased = await reopened.lease_due(
+        provider="discord",
+        now=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
+        max_items=1,
+        lease_seconds=30.0,
+    )
+
+    action = leased[0].action
+    assert isinstance(action, SendMessageAction)
+    assert action.presentation_hints == hints
+    await reopened.close()
+
+
+async def test_sqlite_outbox_reads_legacy_rows_without_presentation_hints(
+    tmp_path: Path,
+) -> None:
+    """v7以前の行が決定的なdefault hintで読み込まれる。"""
+    db_path = tmp_path / "state.sqlite3"
+    outbox = SQLiteDeliveryOutbox(str(db_path))
+    await outbox.enqueue(_envelope())
+    await outbox.close()
+
+    with contextlib.closing(sqlite3.connect(db_path)) as connection:
+        connection.execute(
+            "UPDATE delivery_outbox SET action_presentation_hints_json = NULL",
+        )
+        connection.commit()
+
+    reopened = SQLiteDeliveryOutbox(str(db_path))
+    leased = await reopened.lease_due(
+        provider="discord",
+        now=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
+        max_items=1,
+        lease_seconds=30.0,
+    )
+
+    action = leased[0].action
+    assert isinstance(action, SendMessageAction)
+    assert action.presentation_hints == PresentationHints()
+    await reopened.close()
 
 
 def _result(

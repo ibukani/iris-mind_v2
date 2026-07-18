@@ -201,8 +201,13 @@ request = runtime_pb2.SubmitObservationRequest(
 
 `SubmitObservation` のレスポンスには `PresentedOutput` が含まれる。
 - **`text`**: 認知ランタイムが生成した、ユーザに見える主要な返答。CLI クライアントが表示すべき内容。
-- **`style_hint`, `emotion_hint`, `expression_hint`**: 任意の UI 提示ヒント。
-- **`delay_ms`, `priority`, `interruptible`**: 提示タイミングと挙動のヒント。単純な CLI クライアントは最初は無視してよい。
+- **`presentation_hints`**: `PresentedOutput` と配送 `SendMessageAction` が共有する、provider-neutral な `PresentationHints` 契約。
+  - `style_hint`, `emotion_hint`, `expression_hint`: 任意の提示ヒント。
+  - `delay_ms`, `priority`, `interruptible`: 提示タイミングと挙動のヒント。単純な CLI クライアントは無視してよい。
+  - `modality`: `text`、`voice`、`both`、`notification`、`unknown` の要求された提示意図。
+- `presentation_hints` は adapter capability、配送許可、output / delivery / production safety を保証または上書きしない。
+- `priority` は policy bypass や queue starvation を意味せず、`interruptible=false` も user mute、provider revoke、emergency block を無効化しない。
+- 旧 client 向けに `PresentedOutput` の flat wire fields は保持する。新 client は `presentation_hints` を正本として読む。
 - **空の出力**: `output.text` が空の場合、CLI はクラッシュを避け、フォールバック表示するか何も出力しないかしてよい。
 
 ## Identity / Space 解決セマンティクス

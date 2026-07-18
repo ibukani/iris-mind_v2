@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.adapters.grpc.mappers.common import raise_mapping_error
+from iris.adapters.grpc.mappers.outputs import presentation_hints_to_proto
 from iris.contracts.actions import ActionResult, ActionStatus, SendMessageAction
 from iris.contracts.delivery import DeliveryReport
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ExternalRef, LeaseId
@@ -35,7 +36,10 @@ def delivery_envelope_to_proto(envelope: DeliveryEnvelope) -> runtime_pb2.AppAct
         provider_subject=str(envelope.target.provider_subject or ""),
         provider_space_ref=str(envelope.target.provider_space_ref or ""),
         attempts=envelope.attempts,
-        send_message=runtime_pb2.SendMessageAction(text=action.text),
+        send_message=runtime_pb2.SendMessageAction(
+            text=action.text,
+            presentation_hints=presentation_hints_to_proto(action.presentation_hints),
+        ),
     )
 
 
