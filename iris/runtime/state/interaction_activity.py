@@ -13,6 +13,14 @@ from iris.contracts.activity import (
     InteractionActivitySnapshot,
     InteractionModality,
 )
+from iris.contracts.ordering import (
+    OrderingConflict,
+    OrderingConflictReason,
+    OrderingDecision,
+    OrderingDecisionKind,
+    RuntimeOrderingKey,
+    RuntimeOrderingKeyKind,
+)
 
 if TYPE_CHECKING:
     from iris.core.ids import AccountId, ActorId, SpaceId
@@ -26,8 +34,8 @@ _EXPIRES_AT_KEY = "expires_at"
 class InteractionActivityProjectionStore(Protocol):
     """Delivery / proactiveがinteraction stateを参照するruntime port。"""
 
-    async def apply(self, snapshot: InteractionActivitySnapshot) -> None:
-        """認証済みsnapshotをprojectionへ反映する。"""
+    async def apply(self, snapshot: InteractionActivitySnapshot) -> OrderingDecision:
+        """認証済みsnapshotをprojectionへ反映し、ordering decisionを返す。"""
         ...
 
     async def active_for_target(
@@ -56,14 +64,43 @@ class InMemoryInteractionActivityProjectionStore(InteractionActivityProjectionSt
         self._latest_snapshots: dict[_InteractionActivityKey, InteractionActivitySnapshot] = {}
 
     @override
-    async def apply(self, snapshot: InteractionActivitySnapshot) -> None:
-        """同一scope/channelの状態を新しい観測時刻のsnapshotで置き換える。"""
+    async def apply(self, snapshot: InteractionActivitySnapshot) -> OrderingDecision:
+        """同一scope/channelを順序比較し、受理またはtyped skipを返す。
+
+        Returns:
+            Projectionの更新結果を表すordering decision。
+        """
         key = _key_from_snapshot(snapshot)
+        ordering_key = _ordering_key(snapshot)
         latest_snapshot = self._latest_snapshots.get(key)
-        if latest_snapshot is not None and _is_older_snapshot(snapshot, latest_snapshot):
-            return
+        if latest_snapshot is not None:
+            if _same_snapshot_content(snapshot, latest_snapshot):
+                return _ignored_decision(
+                    ordering_key,
+                    OrderingDecisionKind.IGNORE_DUPLICATE,
+                    OrderingConflictReason.DUPLICATE,
+                    latest_snapshot,
+                    snapshot,
+                )
+            if _is_older_snapshot(snapshot, latest_snapshot):
+                return _ignored_decision(
+                    ordering_key,
+                    OrderingDecisionKind.IGNORE_STALE,
+                    OrderingConflictReason.STALE,
+                    latest_snapshot,
+                    snapshot,
+                )
+            if _same_snapshot_order(snapshot, latest_snapshot):
+                return _ignored_decision(
+                    ordering_key,
+                    OrderingDecisionKind.REJECT_CONFLICT,
+                    OrderingConflictReason.VERSION_CONFLICT,
+                    latest_snapshot,
+                    snapshot,
+                )
         self._latest_snapshots[key] = snapshot
         self._snapshots[key] = snapshot
+        return OrderingDecision(key=ordering_key, decision=OrderingDecisionKind.ACCEPT)
 
     @override
     async def active_for_target(
@@ -197,6 +234,80 @@ def _key_from_snapshot(snapshot: InteractionActivitySnapshot) -> _InteractionAct
         account_id=snapshot.account_id,
         space_id=snapshot.space_id,
         channel=snapshot.channel,
+    )
+
+
+def _ordering_key(snapshot: InteractionActivitySnapshot) -> RuntimeOrderingKey:
+    return RuntimeOrderingKey(
+        kind=RuntimeOrderingKeyKind.INTERACTION_ACTIVITY,
+        adapter_id=snapshot.adapter_id,
+        provider=snapshot.provider,
+        actor_id=snapshot.actor_id,
+        account_id=snapshot.account_id,
+        space_id=snapshot.space_id,
+        channel=snapshot.channel.value,
+    )
+
+
+def _ignored_decision(
+    key: RuntimeOrderingKey,
+    decision: OrderingDecisionKind,
+    reason: OrderingConflictReason,
+    expected: InteractionActivitySnapshot,
+    observed: InteractionActivitySnapshot,
+) -> OrderingDecision:
+    return OrderingDecision(
+        key=key,
+        decision=decision,
+        conflict=OrderingConflict(
+            reason=reason,
+            expected_version=_snapshot_version(expected),
+            observed_version=_snapshot_version(observed),
+        ),
+    )
+
+
+def _snapshot_version(snapshot: InteractionActivitySnapshot) -> str:
+    if snapshot.provider_sequence is not None:
+        return (
+            f"sequence:{snapshot.provider_sequence}"
+            f"|observed_at:{snapshot.observed_at.isoformat()}"
+            f"|received_at:{snapshot.received_at.isoformat()}"
+        )
+    return f"{snapshot.observed_at.isoformat()}|{snapshot.received_at.isoformat()}"
+
+
+def _same_snapshot_content(
+    candidate: InteractionActivitySnapshot,
+    latest: InteractionActivitySnapshot,
+) -> bool:
+    return (
+        candidate.active == latest.active
+        and candidate.modality is latest.modality
+        and candidate.reason == latest.reason
+        and candidate.provider_sequence == latest.provider_sequence
+        and candidate.observed_at == latest.observed_at
+        and candidate.received_at == latest.received_at
+    )
+
+
+def _same_snapshot_order(
+    candidate: InteractionActivitySnapshot,
+    latest: InteractionActivitySnapshot,
+) -> bool:
+    if candidate.provider_sequence is not None and latest.provider_sequence is not None:
+        return (
+            candidate.provider_sequence,
+            candidate.observed_at,
+            candidate.received_at,
+        ) == (
+            latest.provider_sequence,
+            latest.observed_at,
+            latest.received_at,
+        )
+    return (candidate.observed_at, candidate.received_at) == (
+        latest.observed_at,
+        latest.received_at,
     )
 
 

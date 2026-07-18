@@ -13,6 +13,11 @@ from iris.contracts.activity import (
     InteractionActivitySnapshot,
     InteractionModality,
 )
+from iris.contracts.ordering import (
+    OrderingConflictReason,
+    OrderingDecisionKind,
+    RuntimeOrderingKeyKind,
+)
 from iris.core.ids import AccountId, ActivityId, ActorId, ObservationId, SpaceId
 from iris.runtime.ingress.observation_ingress import (
     ObservationCapability,
@@ -107,13 +112,23 @@ async def test_started_stopped_and_repeated_started_are_idempotent() -> None:
         max_ttl_seconds=60,
     )
     repeated = interaction_snapshot_from_event(
-        _event(ActivityKind.APP_OUTPUT_STARTED),
+        _event(
+            ActivityKind.APP_OUTPUT_STARTED,
+            occurred_at=_NOW + timedelta(seconds=1),
+            received_at=_NOW + timedelta(seconds=1),
+            provider_sequence=2,
+        ),
         _ingress(),
         now=_NOW + timedelta(seconds=1),
         max_ttl_seconds=60,
     )
     stopped = interaction_snapshot_from_event(
-        _event(ActivityKind.APP_OUTPUT_STOPPED),
+        _event(
+            ActivityKind.APP_OUTPUT_STOPPED,
+            occurred_at=_NOW + timedelta(seconds=2),
+            received_at=_NOW + timedelta(seconds=2),
+            provider_sequence=3,
+        ),
         _ingress(),
         now=_NOW + timedelta(seconds=2),
         max_ttl_seconds=60,
@@ -122,7 +137,25 @@ async def test_started_stopped_and_repeated_started_are_idempotent() -> None:
     assert repeated is not None
     assert stopped is not None
 
-    await store.apply(first)
+    first_decision = await store.apply(first)
+    duplicate_decision = await store.apply(first)
+    assert first_decision.decision is OrderingDecisionKind.ACCEPT
+    assert first_decision.accepted
+    assert first_decision.key.kind is RuntimeOrderingKeyKind.INTERACTION_ACTIVITY
+    assert first_decision.key.adapter_id == "discord-voice-adapter"
+    assert first_decision.key.provider == "discord"
+    assert first_decision.key.actor_id == ActorId("actor-1")
+    assert first_decision.key.account_id == AccountId("account-1")
+    assert first_decision.key.space_id == SpaceId("space-1")
+    assert first_decision.key.channel == InteractionActivityChannel.APP_OUTPUT.value
+    assert duplicate_decision.decision is OrderingDecisionKind.IGNORE_DUPLICATE
+    assert not duplicate_decision.accepted
+    assert duplicate_decision.conflict is not None
+    assert duplicate_decision.conflict.reason is OrderingConflictReason.DUPLICATE
+    assert (
+        duplicate_decision.conflict.expected_version == duplicate_decision.conflict.observed_version
+    )
+
     await store.apply(repeated)
     assert len(await _active(store, now=_NOW + timedelta(seconds=1))) == 1
     await store.apply(stopped)
@@ -184,12 +217,36 @@ async def test_provider_sequence_takes_priority_over_observed_at_order() -> None
         now=_NOW + timedelta(seconds=20),
         max_ttl_seconds=60,
     )
+    same_version_started = interaction_snapshot_from_event(
+        _event(
+            ActivityKind.ACTOR_INPUT_STARTED,
+            occurred_at=_NOW + timedelta(seconds=10),
+            provider_sequence=2,
+        ),
+        _ingress(),
+        now=_NOW + timedelta(seconds=10),
+        max_ttl_seconds=60,
+    )
     assert stopped is not None
     assert stale_started is not None
+    assert same_version_started is not None
 
-    await store.apply(stopped)
-    await store.apply(stale_started)
+    accepted = await store.apply(stopped)
+    conflict = await store.apply(same_version_started)
+    stale = await store.apply(stale_started)
 
+    assert accepted.decision is OrderingDecisionKind.ACCEPT
+    assert conflict.decision is OrderingDecisionKind.REJECT_CONFLICT
+    assert conflict.conflict is not None
+    assert conflict.conflict.reason is OrderingConflictReason.VERSION_CONFLICT
+    assert conflict.conflict.expected_version is not None
+    assert conflict.conflict.observed_version is not None
+    assert stale.decision is OrderingDecisionKind.IGNORE_STALE
+    assert stale.conflict is not None
+    assert stale.conflict.reason is OrderingConflictReason.STALE
+    assert stale.conflict.expected_version is not None
+    assert stale.conflict.observed_version is not None
+    assert stale.conflict.expected_version != stale.conflict.observed_version
     assert await _active(store, now=_NOW + timedelta(seconds=20)) == ()
 
 
