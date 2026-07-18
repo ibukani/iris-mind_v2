@@ -32,6 +32,9 @@ from iris.runtime.state.ephemeral.accounts import InMemoryAccountStore
 from iris.runtime.state.ephemeral.affect import InMemoryAffectStore
 from iris.runtime.state.ephemeral.relationship import InMemoryRelationshipStore
 from iris.runtime.state.interaction_activity import InMemoryInteractionActivityProjectionStore
+from iris.runtime.state.interaction_policy_candidates import (
+    InMemoryInteractionPolicyCandidateReviewStore,
+)
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.project_context import InMemoryProjectContextStore
@@ -52,6 +55,9 @@ if TYPE_CHECKING:
     from iris.runtime.state.activity_journal import ActivityJournal
     from iris.runtime.state.activity_projection import ActivityProjectionStore
     from iris.runtime.state.interaction_activity import InteractionActivityProjectionStore
+    from iris.runtime.state.interaction_policy_candidates import (
+        InteractionPolicyCandidateReviewStore,
+    )
     from iris.runtime.state.memory_candidates import MemoryCandidateReviewStore
     from iris.runtime.state.presence import PresenceStore
     from iris.runtime.state.safety_audit import SafetyAuditJournal
@@ -86,6 +92,7 @@ class RuntimeStateStores:
     safety_audit_journal: SafetyAuditJournal
     background_job_queue: BackgroundJobQueue
     memory_candidate_review_store: MemoryCandidateReviewStore
+    interaction_policy_candidate_review_store: InteractionPolicyCandidateReviewStore
     relationship_update_candidate_store: RelationshipUpdateCandidateStore
     learning_dispatch_store: InMemoryLearningDispatchStore
     conversation_history_store: InMemoryConversationHistoryStore
@@ -160,6 +167,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         safety_audit_journal=SQLiteSafetyAuditJournal(ctx),
         background_job_queue=sqlite_background_job_queue,
         memory_candidate_review_store=sqlite_candidate_review_store,
+        interaction_policy_candidate_review_store=InMemoryInteractionPolicyCandidateReviewStore(),
         relationship_update_candidate_store=InMemoryRelationshipUpdateCandidateStore(),
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),
@@ -208,6 +216,7 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
         safety_audit_journal=InMemorySafetyAuditJournal(),
         background_job_queue=InMemoryBackgroundJobQueue(),
         memory_candidate_review_store=InMemoryMemoryCandidateReviewStore(),
+        interaction_policy_candidate_review_store=InMemoryInteractionPolicyCandidateReviewStore(),
         relationship_update_candidate_store=InMemoryRelationshipUpdateCandidateStore(),
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),

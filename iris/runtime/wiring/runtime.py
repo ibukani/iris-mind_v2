@@ -30,6 +30,10 @@ from iris.runtime.learning.implicit_review_pipeline import (
     AccountAwareImplicitMemoryCandidateWorker,
     FilteringImplicitMemoryCandidateHook,
 )
+from iris.runtime.learning.interaction_policy_review import (
+    ApprovedInteractionPolicyPromoter,
+    InteractionPolicyCandidateReviewService,
+)
 from iris.runtime.learning.jobs import BackgroundJobKind
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
 from iris.runtime.learning.policy import (
@@ -205,6 +209,8 @@ class RuntimeComponents:
     inference_scheduler: LocalInferenceResourceScheduler | None
     memory_candidate_review_service: MemoryCandidateReviewService
     memory_candidate_promoter: ApprovedMemoryCandidatePromoter
+    interaction_policy_review_service: InteractionPolicyCandidateReviewService
+    interaction_policy_promoter: ApprovedInteractionPolicyPromoter
     transcript_read_service: TranscriptReadService
 
 
@@ -443,6 +449,12 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         memory_candidate_promoter=ApprovedMemoryCandidatePromoter(
             stores.memory_candidate_review_store,
             stores.memory_store,
+        ),
+        interaction_policy_review_service=InteractionPolicyCandidateReviewService(
+            stores.interaction_policy_candidate_review_store
+        ),
+        interaction_policy_promoter=ApprovedInteractionPolicyPromoter(
+            stores.interaction_policy_candidate_review_store
         ),
         transcript_read_service=TranscriptReadService(stores.transcript_store),
     )

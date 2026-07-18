@@ -7,6 +7,11 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from iris.contracts.interaction_policy import (
+    InteractionPolicyDecisionKind,
+    InteractionPolicyKind,
+    InteractionPolicySourceKind,
+)
 from iris.contracts.memory import MemoryKind
 from iris.contracts.memory_candidates import (
     MemoryCandidateSensitivity,
@@ -33,6 +38,7 @@ class ReviewCandidateType(StrEnum):
     RELATIONSHIP = "relationship"
     INTERNAL_STATE = "internal_state"
     CONSOLIDATION = "consolidation"
+    INTERACTION_POLICY = "interaction_policy"
 
 
 class ReviewCandidateStatus(StrEnum):
@@ -102,6 +108,55 @@ class ReviewMemoryCandidatePayload(BaseModel):
     space_id: SpaceId | None = None
     source_observation_id: ObservationId | None = None
     metadata: ImmutableMetadata = Field(default_factory=dict)
+
+
+class ReviewInteractionPolicyCandidatePayload(BaseModel):
+    """Interaction policy candidate review detail の typed payload。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    policy_kind: InteractionPolicyKind
+    value: str = Field(min_length=1, max_length=160)
+    account_id: AccountId
+    space_id: SpaceId | None = None
+    actor_id: ActorId | None = None
+    decision_kind: InteractionPolicyDecisionKind
+    source_kinds: tuple[InteractionPolicySourceKind, ...] = Field(min_length=1)
+    evidence_count: int = Field(ge=1)
+    source_event_ids: tuple[str, ...] = Field(min_length=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason: str = Field(min_length=1)
+    review_required: bool
+    high_risk: bool = False
+    model_metadata: ImmutableMetadata = Field(default_factory=dict)
+    metadata: ImmutableMetadata = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_candidate_contract(self) -> ReviewInteractionPolicyCandidatePayload:
+        """Review payload でも candidate の review-only boundary を検証する。
+
+        Returns:
+            検証済み review payload。
+
+        Raises:
+            ValueError: evidence または review-only boundary が不正な場合。
+        """
+        if not self.value.strip() or not self.reason.strip():
+            message = "interaction policy payload text fields must not be blank"
+            raise ValueError(message)
+        if self.evidence_count != len(self.source_event_ids):
+            message = "interaction policy payload evidence_count must match source_event_ids"
+            raise ValueError(message)
+        if any(not event_id.strip() for event_id in self.source_event_ids):
+            message = "interaction policy payload source_event_ids must not be blank"
+            raise ValueError(message)
+        if not self.review_required:
+            message = "interaction policy payload must remain review_required"
+            raise ValueError(message)
+        if self.decision_kind is InteractionPolicyDecisionKind.SUPPRESSED and not self.high_risk:
+            message = "suppressed interaction policy payload must be high_risk"
+            raise ValueError(message)
+        return self
 
 
 class ReviewSharedEpisodicMemoryCandidatePayload(BaseModel):
@@ -200,6 +255,7 @@ class ReviewCandidateDetail(BaseModel):
     source_observation_id: ObservationId | None = None
     memory_candidate: ReviewMemoryCandidatePayload | None = None
     shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None = None
+    interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None = None
     created_at: datetime
     updated_at: datetime
     reviewed_at: datetime | None = None
@@ -220,12 +276,14 @@ class ReviewCandidateDetail(BaseModel):
             _validate_memory_detail_payloads(
                 memory_candidate=self.memory_candidate,
                 shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+                interaction_policy_candidate=self.interaction_policy_candidate,
             )
             return self
         if self.candidate_type is ReviewCandidateType.SHARED_EPISODIC_MEMORY:
             shared_payload = _require_shared_episodic_detail_payload(
                 memory_candidate=self.memory_candidate,
                 shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+                interaction_policy_candidate=self.interaction_policy_candidate,
             )
             _validate_shared_episodic_scope(scope=self.scope, payload=shared_payload)
             _validate_shared_episodic_source_observation(
@@ -233,10 +291,19 @@ class ReviewCandidateDetail(BaseModel):
                 payload=shared_payload,
             )
             return self
+        if self.candidate_type is ReviewCandidateType.INTERACTION_POLICY:
+            _validate_interaction_policy_detail_payload(
+                scope=self.scope,
+                interaction_policy_candidate=self.interaction_policy_candidate,
+                memory_candidate=self.memory_candidate,
+                shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+            )
+            return self
         _validate_future_detail_has_no_known_payloads(
             candidate_type=self.candidate_type,
             memory_candidate=self.memory_candidate,
             shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+            interaction_policy_candidate=self.interaction_policy_candidate,
         )
         return self
 
@@ -245,6 +312,7 @@ def _validate_memory_detail_payloads(
     *,
     memory_candidate: ReviewMemoryCandidatePayload | None,
     shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
+    interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None,
 ) -> None:
     """Memory detail に memory payload だけが載ることを検証する。
 
@@ -257,12 +325,16 @@ def _validate_memory_detail_payloads(
     if shared_episodic_memory_candidate is not None:
         message = "memory candidate detail must not include shared episodic payload"
         raise ValueError(message)
+    if interaction_policy_candidate is not None:
+        message = "memory candidate detail must not include interaction policy payload"
+        raise ValueError(message)
 
 
 def _require_shared_episodic_detail_payload(
     *,
     memory_candidate: ReviewMemoryCandidatePayload | None,
     shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
+    interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None,
 ) -> ReviewSharedEpisodicMemoryCandidatePayload:
     """Shared episodic detail の typed payload を返す。
 
@@ -275,7 +347,7 @@ def _require_shared_episodic_detail_payload(
     if shared_episodic_memory_candidate is None:
         message = "shared episodic memory detail requires shared episodic payload"
         raise ValueError(message)
-    if memory_candidate is not None:
+    if memory_candidate is not None or interaction_policy_candidate is not None:
         message = "shared episodic memory detail must not include memory payload"
         raise ValueError(message)
     return shared_episodic_memory_candidate
@@ -286,6 +358,7 @@ def _validate_future_detail_has_no_known_payloads(
     candidate_type: ReviewCandidateType,
     memory_candidate: ReviewMemoryCandidatePayload | None,
     shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
+    interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None,
 ) -> None:
     """未実装 candidate type に既知 payload が混ざらないことを検証する。
 
@@ -297,6 +370,38 @@ def _validate_future_detail_has_no_known_payloads(
         raise ValueError(message)
     if shared_episodic_memory_candidate is not None:
         message = f"{candidate_type.value} detail must not include shared episodic payload"
+        raise ValueError(message)
+    if interaction_policy_candidate is not None:
+        message = f"{candidate_type.value} detail must not include interaction policy payload"
+        raise ValueError(message)
+
+
+def _validate_interaction_policy_detail_payload(
+    *,
+    scope: ReviewCandidateScope,
+    interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None,
+    memory_candidate: ReviewMemoryCandidatePayload | None,
+    shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
+) -> None:
+    """Interaction policy detail の typed payload と scope を検証する。
+
+    Raises:
+        ValueError: payload が不足または scope が一致しない場合。
+    """
+    if interaction_policy_candidate is None:
+        message = "interaction policy detail requires interaction policy payload"
+        raise ValueError(message)
+    if memory_candidate is not None or shared_episodic_memory_candidate is not None:
+        message = "interaction policy detail must not include another candidate payload"
+        raise ValueError(message)
+    if scope.account_id != interaction_policy_candidate.account_id:
+        message = "interaction policy scope account_id must match payload account_id"
+        raise ValueError(message)
+    if scope.space_id != interaction_policy_candidate.space_id:
+        message = "interaction policy scope space_id must match payload space_id"
+        raise ValueError(message)
+    if scope.actor_id != interaction_policy_candidate.actor_id:
+        message = "interaction policy scope actor_id must match payload actor_id"
         raise ValueError(message)
 
 
