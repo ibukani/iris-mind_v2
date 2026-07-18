@@ -37,9 +37,17 @@ from iris.runtime.learning.policy import (
     BackgroundJobKindPolicy,
     BackgroundJobQueuePolicy,
 )
+from iris.runtime.learning.relationship_worker import (
+    RelationshipUpdateCandidateEnqueueHook,
+    RelationshipUpdateCandidateWorker,
+)
 from iris.runtime.learning.review_promotion import ApprovedMemoryCandidatePromoter
 from iris.runtime.learning.review_service import MemoryCandidateReviewService
-from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunnerOptions
+from iris.runtime.learning.runner import (
+    BackgroundJobRunner,
+    BackgroundJobRunnerOptions,
+    BackgroundJobWorker,
+)
 from iris.runtime.memory_vector_rebuilder import MemoryVectorIndexRebuilder
 from iris.runtime.observability.events import LoggingRuntimeObservationObserver
 from iris.runtime.observability.ports import RuntimeLatencyBudget
@@ -97,7 +105,7 @@ if TYPE_CHECKING:
     from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.memory import VectorMemoryIndex
     from iris.contracts.retrieval import ContextRetriever
-    from iris.features.definition import EventReactionGenerator, LearningHook
+    from iris.features.definition import EventReactionGenerator, LearningHook, RuntimeLearningHook
     from iris.features.proactive_talk.generation import ProactiveTextGenerator
     from iris.runtime.app import IrisApp
     from iris.runtime.config import IrisRuntimeConfig
@@ -402,16 +410,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     gateway_components = _wire_runtime_gateway_components(config, stores, feature_catalog)
     background_job_runner = BackgroundJobRunner(
         stores.background_job_queue,
-        (
-            DeterministicMemoryConsolidationWorker(stores.memory_store),
-            AccountAwareImplicitMemoryCandidateWorker(
-                stores.memory_candidate_review_store,
-                policy=ImplicitCandidateAdmissionPolicy(
-                    min_confidence=config.learning.implicit_candidate_min_confidence,
-                    max_text_length=config.learning.implicit_candidate_max_text_length,
-                ),
-            ),
-        ),
+        _wire_background_workers(config, stores),
         options=BackgroundJobRunnerOptions(
             max_jobs_per_run=config.learning.max_jobs_per_run,
             queue_policy=_background_job_queue_policy_from_config(config),
@@ -447,6 +446,30 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         ),
         transcript_read_service=TranscriptReadService(stores.transcript_store),
     )
+
+
+def _wire_background_workers(
+    config: IrisRuntimeConfig,
+    stores: RuntimeStateStores,
+) -> tuple[BackgroundJobWorker, ...]:
+    """Built-in background worker を config で default-off 配線する。
+
+    Returns:
+        config に応じた worker 群。relationship worker は既定で含まれない。
+    """
+    workers: tuple[BackgroundJobWorker, ...] = (
+        DeterministicMemoryConsolidationWorker(stores.memory_store),
+        AccountAwareImplicitMemoryCandidateWorker(
+            stores.memory_candidate_review_store,
+            policy=ImplicitCandidateAdmissionPolicy(
+                min_confidence=config.learning.implicit_candidate_min_confidence,
+                max_text_length=config.learning.implicit_candidate_max_text_length,
+            ),
+        ),
+    )
+    if config.learning.relationship_update_candidates_enabled:
+        workers += (RelationshipUpdateCandidateWorker(stores.relationship_update_candidate_store),)
+    return workers
 
 
 def _wire_context_retriever(
@@ -860,7 +883,7 @@ def _wire_runtime_learning_hook_runner(
 def _wire_builtin_runtime_learning_hooks(
     config: IrisRuntimeConfig,
     stores: RuntimeStateStores | None,
-) -> tuple[FilteringImplicitMemoryCandidateHook, ...]:
+) -> tuple[RuntimeLearningHook, ...]:
     """Built-in runtime learning hooksを組み立てる。
 
     Returns:
@@ -868,20 +891,28 @@ def _wire_builtin_runtime_learning_hooks(
     """
     if stores is None:
         return ()
-    if (
-        not config.learning.background_jobs_enabled
-        or not config.learning.implicit_candidates_enabled
-    ):
+    if not config.learning.background_jobs_enabled:
         return ()
-    return (
-        FilteringImplicitMemoryCandidateHook(
-            stores.background_job_queue,
-            max_attempts=config.learning.max_attempts,
-            observation_observer=LoggingRuntimeObservationObserver(),
-            latency_budget=config.observability.latency_budget,
-            queue_policy=_background_job_queue_policy_from_config(config),
-        ),
-    )
+    hooks: list[RuntimeLearningHook] = []
+    if config.learning.implicit_candidates_enabled:
+        hooks.append(
+            FilteringImplicitMemoryCandidateHook(
+                stores.background_job_queue,
+                max_attempts=config.learning.max_attempts,
+                observation_observer=LoggingRuntimeObservationObserver(),
+                latency_budget=config.observability.latency_budget,
+                queue_policy=_background_job_queue_policy_from_config(config),
+            )
+        )
+    if config.learning.relationship_update_candidates_enabled:
+        hooks.append(
+            RelationshipUpdateCandidateEnqueueHook(
+                stores.background_job_queue,
+                max_attempts=config.learning.max_attempts,
+                queue_policy=_background_job_queue_policy_from_config(config),
+            )
+        )
+    return tuple(hooks)
 
 
 def _require_feature_catalog(

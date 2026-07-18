@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
 from iris.contracts.actions import PresentedOutput
+from iris.contracts.appraisal import AppraisalSignal, AppraisalSignalKind, AppraisalSourceSpan
+from iris.contracts.companion_affect import CompanionAffectStateKind, CompanionInteractionScope
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.learning import RuntimeLearningEvent, RuntimeLearningEventKind
 from iris.contracts.observations import ActorMessageObservation, ObservationContext, ObservationKind
@@ -19,6 +22,7 @@ from iris.runtime.learning.implicit_candidates import (
 )
 from iris.runtime.learning.policy import BackgroundJobKindPolicy, BackgroundJobQueuePolicy
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
+from iris.runtime.learning.relationship_worker import RelationshipUpdateCandidateEnqueueHook
 from iris.runtime.learning.runner import (
     BackgroundJobRunner,
     BackgroundJobRunnerOptions,
@@ -43,12 +47,29 @@ async def test_filtering_hook_skips_ordinary_actor_message() -> None:
 async def test_filtering_hook_enqueues_preference_actor_message() -> None:
     """Filtering hook enqueues candidate extraction for preference signals."""
     queue = InMemoryBackgroundJobQueue()
-
-    await FilteringImplicitMemoryCandidateHook(queue).after_runtime_event(
-        _event("please answer briefly from now on")
+    event = replace(
+        _event("please answer briefly from now on"),
+        appraisal_signals=(
+            AppraisalSignal(
+                kind=AppraisalSignalKind.ATTITUDE_TOWARD_IRIS,
+                label="positive-attitude",
+                polarity=0.8,
+                confidence=0.9,
+                reason="test signal",
+                source_span=AppraisalSourceSpan(start_index=0, end_index=5, text="thanks"),
+                state_boundary=CompanionAffectStateKind.ACTOR_RELATIONSHIP,
+                source_observation_id=ObservationId("obs-implicit-candidate-wiring"),
+            ),
+        ),
+        interaction_scope=CompanionInteractionScope.DIRECT_MESSAGE,
+        source_event_ids=("event-1",),
     )
 
-    assert len(await queue.lease_due(_NOW, 10, 30.0)) == 1
+    await FilteringImplicitMemoryCandidateHook(queue).after_runtime_event(event)
+    await RelationshipUpdateCandidateEnqueueHook(queue).after_runtime_event(event)
+
+    leased = await queue.lease_due(_NOW, 10, 30.0)
+    assert len(leased) == 2
 
 
 async def test_account_aware_worker_preserves_boundary_ids() -> None:

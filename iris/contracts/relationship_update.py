@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, NewType, Protocol
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from iris.contracts.appraisal import AppraisalSignalKind
 from iris.contracts.companion_affect import CompanionAffectStateKind, CompanionInteractionScope
 from iris.contracts.metadata import ImmutableMetadata
-from iris.core.ids import ObservationId
+from iris.core.ids import AccountId, ActorId, ObservationId, SpaceId
 from iris.core.metadata import immutable_metadata
 
 _ZERO_DELTA_EPSILON = 1e-12
+
+RelationshipUpdateCandidateId = NewType("RelationshipUpdateCandidateId", str)
 
 
 def _validate_source_event_ids(value: tuple[str, ...]) -> tuple[str, ...]:
@@ -317,6 +320,33 @@ class RelationshipUpdatePolicyResult(BaseModel):
         return tuple(
             candidate for candidate in self.candidates if candidate.decision_kind is decision_kind
         )
+
+
+class RelationshipUpdateCandidateRecord(BaseModel):
+    """Worker が durable state の手前で保持する candidate record。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    candidate_id: RelationshipUpdateCandidateId
+    candidate: RelationshipUpdateCandidate
+    interaction_scope: CompanionInteractionScope
+    actor_id: ActorId
+    account_id: AccountId | None = None
+    space_id: SpaceId | None = None
+    created_at: datetime
+    updated_at: datetime
+    idempotency_key: str = Field(min_length=1)
+
+
+class RelationshipUpdateCandidateStore(Protocol):
+    """Relationship candidate を durable state へ昇格する前の store。"""
+
+    def add_nowait(
+        self,
+        record: RelationshipUpdateCandidateRecord,
+    ) -> RelationshipUpdateCandidateRecord:
+        """Candidate を idempotent に追加する。"""
+        ...
 
 
 def _validate_delta_within_bounds(

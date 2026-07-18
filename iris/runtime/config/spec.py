@@ -753,6 +753,15 @@ def _learning_specs() -> tuple[ConfigFieldSpec, ...]:
             description="Runtime outcome から implicit memory candidate を候補化する。",
         ),
         ConfigFieldSpec(
+            path="learning.relationship_update_candidates_enabled",
+            value_type=ConfigValueType.BOOL,
+            default=False,
+            description=(
+                "Typed appraisal signal から relationship candidate worker を有効化する。"
+                " durable promotion は別の safety gate を通る。"
+            ),
+        ),
+        ConfigFieldSpec(
             "learning.implicit_candidate_min_confidence",
             ConfigValueType.FLOAT,
             0.35,

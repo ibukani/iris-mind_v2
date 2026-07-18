@@ -8,6 +8,11 @@ import pytest
 
 from iris.adapters.memory.in_memory import InMemoryMemoryStore
 from iris.contracts.actions import PresentedOutput
+from iris.contracts.appraisal import AppraisalSignal, AppraisalSignalKind, AppraisalSourceSpan
+from iris.contracts.companion_affect import (
+    CompanionAffectStateKind,
+    CompanionInteractionScope,
+)
 from iris.contracts.identity import ActorKind, Identity
 from iris.contracts.learning import RuntimeLearningEvent, RuntimeLearningEventKind
 from iris.contracts.memory import MemoryKind, MemoryQuery
@@ -30,14 +35,22 @@ from iris.runtime.learning.implicit_candidates import (
     ImplicitMemoryCandidateWorker,
     runtime_learning_event_to_payload,
 )
-from iris.runtime.learning.jobs import BackgroundJobKind, RuntimeLearningCandidateJobPayload
+from iris.runtime.learning.jobs import (
+    BackgroundJobId,
+    BackgroundJobKind,
+    BackgroundJobRecord,
+    RelationshipUpdateJobPayload,
+    RuntimeLearningCandidateJobPayload,
+)
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
+from iris.runtime.learning.relationship_worker import RelationshipUpdateCandidateWorker
 from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunnerRuntimeHooks
 from iris.runtime.state.memory_candidates import (
     InMemoryMemoryCandidateReviewStore,
     MemoryCandidateReviewStatus,
 )
+from iris.runtime.state.relationship_updates import InMemoryRelationshipUpdateCandidateStore
 
 pytestmark = pytest.mark.anyio
 
@@ -70,34 +83,74 @@ async def test_worker_stores_review_required_implicit_candidate() -> None:
     queue = InMemoryBackgroundJobQueue()
     review_store = InMemoryMemoryCandidateReviewStore()
     memory_store = InMemoryMemoryStore()
-    hook = EnqueueImplicitMemoryCandidateHook(queue)
+    relationship_store = InMemoryRelationshipUpdateCandidateStore()
     event = _feedback_event("次からもっと短く答えて")
-    await hook.after_runtime_event(event)
+    await EnqueueImplicitMemoryCandidateHook(queue).after_runtime_event(event)
+    relationship_job = BackgroundJobRecord(
+        job_id=BackgroundJobId("relationship-job-1"),
+        kind=BackgroundJobKind.RELATIONSHIP_UPDATE,
+        payload=RelationshipUpdateJobPayload(
+            signals=(
+                AppraisalSignal(
+                    kind=AppraisalSignalKind.ATTITUDE_TOWARD_IRIS,
+                    label="positive-attitude",
+                    polarity=0.8,
+                    confidence=0.9,
+                    reason="user thanked Iris",
+                    source_span=AppraisalSourceSpan(start_index=0, end_index=5, text="ありがとう"),
+                    state_boundary=CompanionAffectStateKind.ACTOR_RELATIONSHIP,
+                    source_observation_id=ObservationId("obs-relationship"),
+                ),
+            ),
+            interaction_scope=CompanionInteractionScope.DIRECT_MESSAGE,
+            actor_id=ActorId("actor-1"),
+            account_id=None,
+            source_observation_id=ObservationId("obs-relationship"),
+            source_event_ids=("event-relationship-1",),
+        ),
+        not_before=_NOW,
+        idempotency_key="relationship-job-key-1",
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+    await queue.enqueue(relationship_job)
 
+    relationship_worker = RelationshipUpdateCandidateWorker(relationship_store)
     runner = BackgroundJobRunner(
         queue,
         (
             DeterministicMemoryConsolidationWorker(memory_store),
             ImplicitMemoryCandidateWorker(review_store),
+            relationship_worker,
         ),
         runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: _NOW),
     )
 
-    assert await runner.run_once() == 1
+    assert await runner.run_once() == 2
     pending = await review_store.list_pending()
     assert len(pending) == 1
     record = pending[0]
     assert record.status is MemoryCandidateReviewStatus.PENDING_REVIEW
-    candidate = record.candidate
-    assert candidate.source is MemoryCandidateSource.IMPLICIT_CONVERSATION
-    assert candidate.retention_policy is MemoryRetentionPolicy.REVIEW_REQUIRED
-    assert candidate.review_required is True
-    assert candidate.reason
-    assert candidate.confidence >= 0.35
-    assert candidate.kind is MemoryKind.PREFERENCE
-    assert candidate.source_observation_id == event.source_observation_id
+    assert record.candidate.source is MemoryCandidateSource.IMPLICIT_CONVERSATION
+    assert record.candidate.retention_policy is MemoryRetentionPolicy.REVIEW_REQUIRED
+    assert record.candidate.review_required is True
+    assert record.candidate.reason
+    assert record.candidate.confidence >= 0.35
+    assert record.candidate.kind is MemoryKind.PREFERENCE
+    assert record.candidate.source_observation_id == event.source_observation_id
     assert record.metadata["source"] == MemoryCandidateSource.IMPLICIT_CONVERSATION.value
     assert memory_store.search(MemoryQuery(text="短く", limit=10)) == ()
+    relationship_worker.run(relationship_job)
+    relationship_worker.run(relationship_job)
+    assert len(relationship_store.list_records()) == 1
+    relationship_record = relationship_store.list_records()[0]
+    assert relationship_record.actor_id == ActorId("actor-1")
+    assert relationship_record.interaction_scope is CompanionInteractionScope.DIRECT_MESSAGE
+    assert relationship_record.candidate.decision_kind.value == "automatic_bounded"
+    assert relationship_record.candidate.source_event_ids == ("event-relationship-1",)
+    assert relationship_record.candidate.source_observation_ids == (
+        ObservationId("obs-relationship"),
+    )
 
 
 def test_actor_message_style_preference_becomes_review_candidate() -> None:

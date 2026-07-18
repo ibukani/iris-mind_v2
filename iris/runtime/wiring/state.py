@@ -35,6 +35,7 @@ from iris.runtime.state.interaction_activity import InMemoryInteractionActivityP
 from iris.runtime.state.memory_candidates import InMemoryMemoryCandidateReviewStore
 from iris.runtime.state.presence import InMemoryPresenceStore
 from iris.runtime.state.project_context import InMemoryProjectContextStore
+from iris.runtime.state.relationship_updates import InMemoryRelationshipUpdateCandidateStore
 from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
     from iris.contracts.affect import AffectStore
     from iris.contracts.memory import MutableMemoryStore
     from iris.contracts.relationship import RelationshipStore
+    from iris.contracts.relationship_update import RelationshipUpdateCandidateStore
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.state.activity_journal import ActivityJournal
@@ -84,6 +86,7 @@ class RuntimeStateStores:
     safety_audit_journal: SafetyAuditJournal
     background_job_queue: BackgroundJobQueue
     memory_candidate_review_store: MemoryCandidateReviewStore
+    relationship_update_candidate_store: RelationshipUpdateCandidateStore
     learning_dispatch_store: InMemoryLearningDispatchStore
     conversation_history_store: InMemoryConversationHistoryStore
     transcript_store: TranscriptStore
@@ -157,6 +160,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         safety_audit_journal=SQLiteSafetyAuditJournal(ctx),
         background_job_queue=sqlite_background_job_queue,
         memory_candidate_review_store=sqlite_candidate_review_store,
+        relationship_update_candidate_store=InMemoryRelationshipUpdateCandidateStore(),
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),
         transcript_store=sqlite_transcript_store or NullTranscriptStore(),
@@ -204,6 +208,7 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
         safety_audit_journal=InMemorySafetyAuditJournal(),
         background_job_queue=InMemoryBackgroundJobQueue(),
         memory_candidate_review_store=InMemoryMemoryCandidateReviewStore(),
+        relationship_update_candidate_store=InMemoryRelationshipUpdateCandidateStore(),
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),
         transcript_store=NullTranscriptStore(),

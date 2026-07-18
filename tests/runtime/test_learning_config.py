@@ -18,6 +18,7 @@ def test_toml_sets_implicit_learning_candidate_options(tmp_path: Path) -> None:
         """
         [learning]
         implicit_candidates_enabled = false
+        relationship_update_candidates_enabled = true
         implicit_candidate_min_confidence = 0.5
         implicit_candidate_max_text_length = 512
         """,
@@ -27,6 +28,7 @@ def test_toml_sets_implicit_learning_candidate_options(tmp_path: Path) -> None:
     config = load_runtime_config(config_path, env={})
 
     assert config.learning.implicit_candidates_enabled is False
+    assert config.learning.relationship_update_candidates_enabled is True
     assert config.learning.implicit_candidate_min_confidence == approx(0.5)
     assert config.learning.implicit_candidate_max_text_length == 512
 

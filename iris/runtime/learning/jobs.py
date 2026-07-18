@@ -8,6 +8,8 @@ from typing import NewType
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from iris.contracts.appraisal import AppraisalSignal
+from iris.contracts.companion_affect import CompanionInteractionScope
 from iris.contracts.learning import RuntimeLearningEventKind
 from iris.contracts.memory import MemoryKind
 from iris.contracts.memory_candidates import (
@@ -102,8 +104,25 @@ class DeferredLearningJobPayload(BaseModel):
     reason: str | None = None
 
 
+class RelationshipUpdateJobPayload(BaseModel):
+    """Typed appraisal signal を relationship candidate worker に渡す入力。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    signals: tuple[AppraisalSignal, ...] = Field(min_length=1)
+    interaction_scope: CompanionInteractionScope
+    actor_id: ActorId
+    account_id: AccountId | None = None
+    space_id: SpaceId | None = None
+    source_observation_id: ObservationId | None = None
+    source_event_ids: tuple[str, ...] = ()
+
+
 BackgroundJobPayload = (
-    MemoryBackgroundJobPayload | RuntimeLearningCandidateJobPayload | DeferredLearningJobPayload
+    MemoryBackgroundJobPayload
+    | RuntimeLearningCandidateJobPayload
+    | DeferredLearningJobPayload
+    | RelationshipUpdateJobPayload
 )
 
 
