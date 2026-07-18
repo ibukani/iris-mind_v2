@@ -774,6 +774,27 @@ def _learning_specs() -> tuple[ConfigFieldSpec, ...]:
             "Review store に入れる implicit candidate の最大文字数。",
         ),
         ConfigFieldSpec(
+            "learning.implicit_memory_extraction.enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description=(
+                "LLM 暗黙メモリ候補抽出を有効化する。provider bridge と review wiring が"
+                "別途有効な場合だけ使用する。"
+            ),
+        ),
+        ConfigFieldSpec(
+            "learning.implicit_memory_extraction.max_input_chars",
+            ConfigValueType.INT,
+            4000,
+            "LLM 暗黙メモリ抽出へ渡す入力の最大文字数。",
+        ),
+        ConfigFieldSpec(
+            "learning.implicit_memory_extraction.max_output_tokens",
+            ConfigValueType.INT,
+            512,
+            "LLM 暗黙メモリ抽出の response 上限 token 数。",
+        ),
+        ConfigFieldSpec(
             "learning.background_job_policy.enabled",
             ConfigValueType.BOOL,
             default=False,

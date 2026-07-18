@@ -108,6 +108,8 @@ class ReviewMemoryCandidatePayload(BaseModel):
     actor_id: ActorId | None = None
     space_id: SpaceId | None = None
     source_observation_id: ObservationId | None = None
+    source_event_ids: tuple[str, ...] = ()
+    model_metadata: ImmutableMetadata = Field(default_factory=dict)
     metadata: ImmutableMetadata = Field(default_factory=dict)
 
 

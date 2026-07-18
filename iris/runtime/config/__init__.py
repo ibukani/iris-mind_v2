@@ -19,7 +19,10 @@ from iris.runtime.config.diagnostics import (
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.inference_scheduler import RuntimeInferenceSchedulerConfig
 from iris.runtime.config.interaction_activity import RuntimeInteractionActivityConfig
-from iris.runtime.config.learning import RuntimeLearningConfig
+from iris.runtime.config.learning import (
+    RuntimeImplicitMemoryExtractionConfig,
+    RuntimeLearningConfig,
+)
 from iris.runtime.config.llm import (
     LLMProvider,
     ModelSlotName,
@@ -83,6 +86,7 @@ __all__ = [
     "RuntimeConversationConfig",
     "RuntimeDeliveryConfig",
     "RuntimeDiagnosticsConfig",
+    "RuntimeImplicitMemoryExtractionConfig",
     "RuntimeInferenceSchedulerConfig",
     "RuntimeInteractionActivityConfig",
     "RuntimeLearningConfig",

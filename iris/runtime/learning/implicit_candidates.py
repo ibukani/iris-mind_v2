@@ -19,6 +19,7 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.model_policy import ModelCallDescriptor, ModelCallKind, ModelCallSite
 from iris.contracts.observations import ObservationKind, UserFeedbackKind
 from iris.core.metadata import immutable_metadata
 from iris.runtime.learning.candidate_validation import (
@@ -97,12 +98,14 @@ class FilteringImplicitMemoryCandidateHook:
         observation_observer: RuntimeObservationObserver | None = None,
         latency_budget: RuntimeLatencyBudget | None = None,
         queue_policy: BackgroundJobQueuePolicy | None = None,
+        resource_profile: BackgroundJobResourceProfile | None = None,
     ) -> None:
         """キューと再試行上限を注入する。"""
         self._queue = queue
         self._max_attempts = max_attempts
         self._latency_recorder = RuntimeLatencyRecorder(observation_observer, latency_budget)
         self._queue_policy = queue_policy
+        self._resource_profile = resource_profile or BackgroundJobResourceProfile(uses_llm=False)
 
     async def after_runtime_event(self, event: RuntimeLearningEvent) -> None:
         """Candidate signal がある runtime event だけを冪等に enqueue する。"""
@@ -112,7 +115,13 @@ class FilteringImplicitMemoryCandidateHook:
         key = _job_key(payload)
         started_at = perf_counter()
         try:
-            job = _new_job(key, payload, event.occurred_at, self._max_attempts)
+            job = _new_job(
+                key,
+                payload,
+                event.occurred_at,
+                self._max_attempts,
+                resource_profile=self._resource_profile,
+            )
             if self._queue_policy is None:
                 await self._queue.enqueue(job)
             else:
@@ -131,6 +140,48 @@ class FilteringImplicitMemoryCandidateHook:
 
 class EnqueueImplicitMemoryCandidateHook(FilteringImplicitMemoryCandidateHook):
     """Backward-compatible name for the filtering implicit candidate hook."""
+
+
+class EnqueueLLMImplicitMemoryCandidateHook(FilteringImplicitMemoryCandidateHook):
+    """LLM extraction 用の low-priority / idle-only enqueue hook。
+
+    この hook は実行 worker を有効化しない。明示的な wiring 側が登録した場合だけ
+    uses_llm resource profile を queue に付与し、cheap admission は親 hook と共有する。
+    """
+
+    def __init__(
+        self,
+        queue: BackgroundJobQueue,
+        *,
+        model_descriptor: ModelCallDescriptor,
+        max_attempts: int = 3,
+        observation_observer: RuntimeObservationObserver | None = None,
+        latency_budget: RuntimeLatencyBudget | None = None,
+        queue_policy: BackgroundJobQueuePolicy | None = None,
+    ) -> None:
+        """LLM descriptor と既存 queue policy を注入する。
+
+        Raises:
+            ValueError: descriptor が background LLM memory extraction でない場合。
+        """
+        if model_descriptor.call_kind is not ModelCallKind.BACKGROUND_LLM:
+            message = "LLM implicit extraction requires a background_llm descriptor"
+            raise ValueError(message)
+        if model_descriptor.call_site is not ModelCallSite.MEMORY_EXTRACTION:
+            message = "LLM implicit extraction requires the memory_extraction call site"
+            raise ValueError(message)
+        super().__init__(
+            queue,
+            max_attempts=max_attempts,
+            observation_observer=observation_observer,
+            latency_budget=latency_budget,
+            queue_policy=queue_policy,
+            resource_profile=BackgroundJobResourceProfile(
+                uses_llm=True,
+                idle_only=True,
+                model_call_descriptor=model_descriptor,
+            ),
+        )
 
 
 class ConservativeImplicitMemoryCandidateExtractor:
@@ -500,6 +551,8 @@ def _new_job(
     payload: RuntimeLearningCandidateJobPayload,
     now: datetime,
     max_attempts: int,
+    *,
+    resource_profile: BackgroundJobResourceProfile | None = None,
 ) -> BackgroundJobRecord:
     return BackgroundJobRecord(
         job_id=BackgroundJobId(f"implicit-memory-{key[:24]}"),
@@ -507,7 +560,7 @@ def _new_job(
         payload=payload,
         max_attempts=max_attempts,
         not_before=now,
-        resource_profile=BackgroundJobResourceProfile(uses_llm=False),
+        resource_profile=resource_profile or BackgroundJobResourceProfile(uses_llm=False),
         idempotency_key=f"implicit-memory:{key}",
         created_at=now,
         updated_at=now,

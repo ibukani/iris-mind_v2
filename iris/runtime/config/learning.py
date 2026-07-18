@@ -63,6 +63,15 @@ class RuntimeBackgroundJobPolicyConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeImplicitMemoryExtractionConfig:
+    """LLM 暗黙メモリ候補抽出の default-off 設定。"""
+
+    enabled: bool = False
+    max_input_chars: int = 4000
+    max_output_tokens: int = 512
+
+
+@dataclass(frozen=True)
 class RuntimeLearningConfig:
     """学習 dispatch と background loop の設定。"""
 
@@ -75,6 +84,9 @@ class RuntimeLearningConfig:
     relationship_update_candidates_enabled: bool = False
     implicit_candidate_min_confidence: float = 0.35
     implicit_candidate_max_text_length: int = 1000
+    implicit_memory_extraction: RuntimeImplicitMemoryExtractionConfig = field(
+        default_factory=RuntimeImplicitMemoryExtractionConfig
+    )
     background_job_policy: RuntimeBackgroundJobPolicyConfig = field(
         default_factory=RuntimeBackgroundJobPolicyConfig
     )
@@ -127,6 +139,7 @@ def apply_learning_toml(
             ),
         )
     value = _apply_implicit_candidate_toml(value, table)
+    value = _apply_implicit_memory_extraction_toml(value, table)
     value = _apply_background_job_policy_toml(value, table)
     return validate_learning_config(value)
 
@@ -161,6 +174,45 @@ def _apply_implicit_candidate_toml(
             ),
         )
     return value
+
+
+def _apply_implicit_memory_extraction_toml(
+    config: RuntimeLearningConfig,
+    table: TomlTable,
+) -> RuntimeLearningConfig:
+    extraction_table = table_or_empty(
+        table,
+        "implicit_memory_extraction",
+        path="learning.implicit_memory_extraction",
+    )
+    if not extraction_table:
+        return config
+    current = config.implicit_memory_extraction
+    if "enabled" in extraction_table:
+        current = replace(
+            current,
+            enabled=parse_bool(
+                extraction_table["enabled"],
+                "learning.implicit_memory_extraction.enabled",
+            ),
+        )
+    if "max_input_chars" in extraction_table:
+        current = replace(
+            current,
+            max_input_chars=parse_int(
+                extraction_table["max_input_chars"],
+                "learning.implicit_memory_extraction.max_input_chars",
+            ),
+        )
+    if "max_output_tokens" in extraction_table:
+        current = replace(
+            current,
+            max_output_tokens=parse_int(
+                extraction_table["max_output_tokens"],
+                "learning.implicit_memory_extraction.max_output_tokens",
+            ),
+        )
+    return replace(config, implicit_memory_extraction=current)
 
 
 def _apply_background_job_policy_toml(
@@ -370,6 +422,17 @@ def validate_learning_config(config: RuntimeLearningConfig) -> RuntimeLearningCo
         implicit_candidate_max_text_length=require_greater_than_zero(
             config.implicit_candidate_max_text_length,
             "learning.implicit_candidate_max_text_length",
+        ),
+        implicit_memory_extraction=RuntimeImplicitMemoryExtractionConfig(
+            enabled=config.implicit_memory_extraction.enabled,
+            max_input_chars=require_greater_than_zero(
+                config.implicit_memory_extraction.max_input_chars,
+                "learning.implicit_memory_extraction.max_input_chars",
+            ),
+            max_output_tokens=require_greater_than_zero(
+                config.implicit_memory_extraction.max_output_tokens,
+                "learning.implicit_memory_extraction.max_output_tokens",
+            ),
         ),
         background_job_policy=validated_policy,
     )
