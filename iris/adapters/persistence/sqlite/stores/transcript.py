@@ -114,6 +114,13 @@ class SQLiteTranscriptStore:
                   AND (? IS NULL OR account_id = ?)
                   AND (? IS NULL OR space_id = ?)
                   AND (? IS NULL OR session_id = ?)
+                  AND (? IS NULL OR occurred_at >= ?)
+                  AND (? IS NULL OR occurred_at < ?)
+                  AND (
+                      ? IS NULL
+                      OR occurred_at > ?
+                      OR (occurred_at = ? AND transcript_id > ?)
+                  )
                 ORDER BY occurred_at, transcript_id
                 LIMIT ?
                 """,
@@ -147,6 +154,14 @@ def _query_params(query: TranscriptQuery) -> tuple[object, ...]:
         _optional_query_text(query.space_id),
         _optional_query_text(query.session_id),
         _optional_query_text(query.session_id),
+        _optional_query_datetime(query.occurred_after),
+        _optional_query_datetime(query.occurred_after),
+        _optional_query_datetime(query.occurred_before),
+        _optional_query_datetime(query.occurred_before),
+        _optional_query_datetime(query.after_occurred_at),
+        _optional_query_datetime(query.after_occurred_at),
+        _optional_query_datetime(query.after_occurred_at),
+        _optional_query_text(query.after_transcript_id),
     )
 
 
@@ -154,6 +169,12 @@ def _optional_query_text(value: object | None) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _optional_query_datetime(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return required_datetime_to_text(value)
 
 
 def _prune_key_overflow(

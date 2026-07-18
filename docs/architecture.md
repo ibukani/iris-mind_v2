@@ -71,6 +71,7 @@ iris/
 │   ├── identity.py
 │   ├── spaces.py
 │   ├── memory.py
+│   ├── transcript.py
 │   ├── policy.py
 │   ├── availability.py
 │   └── external_refs.py
@@ -86,6 +87,7 @@ iris/
 │   ├── scheduler/
 │   ├── delivery/
 │   ├── learning/
+│   ├── transcript/
 │   ├── lifecycle/
 │   └── observability/
 │
@@ -755,7 +757,12 @@ transcriptは actor / account / space のいずれかの scopeがない queryを
 source itemは各々 `external_context` sectionへ入り、prompt budgetのitem / char上限を通る。
 raw transcript、embedding vector、本文はdiagnosticsへ出さない。
 
-永続identity registry、account merging、DB永続化、認証/認可、長期memory consolidation jobはfuture work。
+Transcript read-only query / export は `TranscriptReadService` が担当する。
+要求には actor / account / space の owner scope と任意の date range が必要で、
+`transcript.read` authorization scope、stable opaque cursor、page / export cap を通す。
+管理 API の cleanup mutation、multi-client の競合解決は #74 完了後まで有効化しない。
+
+永続identity registry、account merging、外部管理 transport、長期memory consolidation jobはfuture work。
 
 ### `ActionPlan`
 

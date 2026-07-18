@@ -84,6 +84,11 @@ class RuntimeAuthorizationPolicy:
         self.require_delivery_report_scope(principal)
         self.require_delivery_report_provider(principal, delivery_provider)
 
+    def require_transcript_read(self, principal: ClientPrincipal) -> None:
+        """Transcript read API の scope を検査する。"""
+        self._validate_external_ingress_principal_profile(principal)
+        self._require_scope(principal, AuthScope.TRANSCRIPT_READ)
+
     @staticmethod
     def _require_delivery_principal(principal: ClientPrincipal) -> None:
         if principal.client_kind in {ClientKind.TRUSTED_ADAPTER, ClientKind.ADMIN}:

@@ -29,6 +29,7 @@ ALLOWED_RUNTIME_PACKAGE_DIRS: frozenset[str] = frozenset(
         "retrieval",
         "scheduler",
         "state",
+        "transcript",
         "wiring",
     },
 )

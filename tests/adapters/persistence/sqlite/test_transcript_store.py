@@ -5,17 +5,26 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
 import pytest
 
 from iris.adapters.persistence.sqlite.stores.transcript import SQLiteTranscriptStore
 from iris.contracts.transcript import (
+    TranscriptAccessScope,
+    TranscriptExportRequest,
+    TranscriptPageRequest,
     TranscriptQuery,
     TranscriptRecord,
     TranscriptRole,
     TranscriptSource,
     TranscriptSubjectKind,
+    TranscriptTimeRange,
 )
 from iris.core.ids import AccountId, ActorId, ObservationId, SessionId, SpaceId, TranscriptId
+from iris.runtime.auth.errors import RuntimePermissionDeniedError
+from iris.runtime.auth.principals import ClientKind, ClientPrincipal
+from iris.runtime.auth.scopes import AuthScope
+from iris.runtime.transcript import TranscriptReadService
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -52,6 +61,62 @@ def _record(
     )
 
 
+def _transcript_read_principal(*scopes: AuthScope) -> ClientPrincipal:
+    return ClientPrincipal(
+        client_id="transcript-reader",
+        client_kind=ClientKind.ADMIN,
+        provider=None,
+        allowed_providers=frozenset(),
+        scopes=frozenset(scopes),
+        observation_capabilities=frozenset(),
+        authenticated=True,
+    )
+
+
+async def _assert_read_service_behavior(store: SQLiteTranscriptStore) -> None:
+    service = TranscriptReadService(store)
+    principal = _transcript_read_principal(AuthScope.TRANSCRIPT_READ)
+    scope = TranscriptAccessScope(
+        actor_id=ActorId("actor-1"),
+        space_id=SpaceId("space-1"),
+    )
+    first_at = datetime(2026, 7, 1, tzinfo=UTC)
+
+    first_page = await service.query(
+        principal,
+        TranscriptPageRequest(
+            scope=scope,
+            time_range=TranscriptTimeRange(end=first_at + timedelta(seconds=2)),
+            limit=1,
+        ),
+    )
+    assert tuple(record.transcript_id for record in first_page.records) == (TranscriptId("tr-1"),)
+    assert first_page.next_cursor is not None
+
+    second_page = await service.query(
+        principal,
+        TranscriptPageRequest(scope=scope, limit=1, cursor=first_page.next_cursor),
+    )
+    assert tuple(record.transcript_id for record in second_page.records) == (TranscriptId("tr-4"),)
+    assert second_page.next_cursor is None
+
+    exported = await service.export(
+        principal,
+        TranscriptExportRequest(scope=scope, max_records=1),
+    )
+    assert tuple(record.transcript_id for record in exported.records) == (TranscriptId("tr-1"),)
+    assert exported.truncated is True
+    assert exported.next_cursor is not None
+
+    with pytest.raises(RuntimePermissionDeniedError):
+        await service.query(
+            _transcript_read_principal(),
+            TranscriptPageRequest(scope=scope),
+        )
+    with pytest.raises(ValidationError):
+        TranscriptAccessScope()
+
+
 async def test_sqlite_transcript_store_appends_and_queries_by_boundary(tmp_path: Path) -> None:
     """Actor/space境界で transcript を取得する。"""
     store = SQLiteTranscriptStore(tmp_path / "state.sqlite3")
@@ -59,6 +124,11 @@ async def test_sqlite_transcript_store_appends_and_queries_by_boundary(tmp_path:
         await store.append(
             (
                 _record("tr-1", "first"),
+                _record(
+                    "tr-4",
+                    "second",
+                    occurred_at=datetime(2026, 7, 1, 0, 0, 1, tzinfo=UTC),
+                ),
                 _record("tr-2", "other-space", space_id="space-2"),
                 _record("tr-3", "other-actor", actor_id="actor-2"),
             )
@@ -72,10 +142,20 @@ async def test_sqlite_transcript_store_appends_and_queries_by_boundary(tmp_path:
             )
         )
 
-        assert tuple(record.content for record in records) == ("first",)
-        assert records[0].metadata["kind"] == "test"
+        assert tuple(record.content for record in records) == ("first", "second")
+        after_cursor_records = await store.query(
+            TranscriptQuery(
+                actor_id=ActorId("actor-1"),
+                space_id=SpaceId("space-1"),
+                after_occurred_at=records[0].occurred_at,
+                after_transcript_id=records[0].transcript_id,
+            )
+        )
+        await _assert_read_service_behavior(store)
     finally:
         store.close()
+    assert records[0].metadata["kind"] == "test"
+    assert tuple(record.transcript_id for record in after_cursor_records) == (TranscriptId("tr-4"),)
 
 
 async def test_sqlite_transcript_store_ignores_duplicate_transcript_id(tmp_path: Path) -> None:
