@@ -21,7 +21,7 @@ from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdap
 from iris.runtime.scheduler.runner import SchedulerRunner
 from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal, SafetyAuditStage
 from iris.runtime.wiring.runtime import build_runtime_components
-from iris.safety.delivery_gate import StrictDeliverySafetyGate
+from iris.safety.delivery_gate import ProductionDeliverySafetyGate, StrictDeliverySafetyGate
 from iris.safety.policy_engine import DeliverySource
 
 if TYPE_CHECKING:
@@ -113,6 +113,17 @@ def test_build_runtime_components_uses_strict_scheduler_delivery_gate() -> None:
     components = build_runtime_components(config)
 
     assert isinstance(components.scheduler_runner.delivery_gate, StrictDeliverySafetyGate)
+
+    production_components = build_runtime_components(
+        replace(
+            default_runtime_config(),
+            safety=RuntimeSafetyConfig(mode="production"),
+        )
+    )
+    assert isinstance(
+        production_components.scheduler_runner.delivery_gate,
+        ProductionDeliverySafetyGate,
+    )
 
 
 @pytest.mark.parametrize(

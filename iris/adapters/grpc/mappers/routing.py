@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.adapters.grpc.mappers.common import raise_mapping_error
-from iris.contracts.delivery import DeliveryRouteHint
+from iris.contracts.delivery import DeliveryRouteHint, DeliverySurface
 from iris.core.ids import ExternalRef
+from iris.generated.iris.api.v1 import spaces_pb2
 
 if TYPE_CHECKING:
     from iris.generated.iris.api.v1 import observations_pb2
@@ -43,6 +44,7 @@ def delivery_route_hint_from_context(
         provider_subject=provider_subject,
         provider_space_ref=provider_space_ref,
         display_name=display_name,
+        surface=_surface_from_context(context),
     )
 
 
@@ -59,3 +61,21 @@ def _route_provider_from_context(
     if account_provider and space_provider and account_provider != space_provider:
         raise_mapping_error("account_ref.provider space_ref.provider mismatch")
     return account_provider or space_provider or None
+
+
+def _surface_from_context(context: observations_pb2.ObservationContext) -> DeliverySurface:
+    """External space kind を provider-neutral delivery surface へ写像する。
+
+    Returns:
+        DeliverySurface: provider-neutral な delivery surface。
+    """
+    if not context.HasField("space_ref"):
+        return DeliverySurface.UNKNOWN
+    return {
+        spaces_pb2.SPACE_KIND_DIRECT_MESSAGE: DeliverySurface.PRIVATE_DIRECT_MESSAGE,
+        spaces_pb2.SPACE_KIND_TEXT_CHANNEL: DeliverySurface.PUBLIC_CHANNEL,
+        spaces_pb2.SPACE_KIND_THREAD: DeliverySurface.PUBLIC_CHANNEL,
+        spaces_pb2.SPACE_KIND_ROOM: DeliverySurface.PUBLIC_CHANNEL,
+        spaces_pb2.SPACE_KIND_BROADCAST: DeliverySurface.PUBLIC_CHANNEL,
+        spaces_pb2.SPACE_KIND_VOICE_CHANNEL: DeliverySurface.VOICE,
+    }.get(context.space_ref.space_kind, DeliverySurface.UNKNOWN)

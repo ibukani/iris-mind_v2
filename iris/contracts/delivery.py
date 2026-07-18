@@ -41,6 +41,17 @@ TERMINAL_DELIVERY_STATUSES = frozenset(
 )
 
 
+class DeliverySurface(StrEnum):
+    """外部 delivery の surface。unknown は production で fail closed する。"""
+
+    PRIVATE_DIRECT_MESSAGE = "private_direct_message"
+    PUBLIC_CHANNEL = "public_channel"
+    VOICE = "voice"
+    AVATAR = "avatar"
+    NOTIFICATION = "notification"
+    UNKNOWN = "unknown"
+
+
 class DeliveryOutboxError(RuntimeError):
     """Delivery outbox state transition failed."""
 
@@ -54,6 +65,7 @@ class DeliveryRouteHint(BaseModel):
     provider_subject: ExternalRef | None
     provider_space_ref: ExternalRef | None
     display_name: str | None = None
+    surface: DeliverySurface = DeliverySurface.UNKNOWN
 
 
 class SchedulerTarget(BaseModel):
@@ -84,6 +96,7 @@ class DeliveryTarget(BaseModel):
     actor_id: ActorId | None = None
     account_id: AccountId | None = None
     space_id: SpaceId | None = None
+    surface: DeliverySurface = DeliverySurface.UNKNOWN
 
 
 class DeliveryEnvelope(BaseModel):

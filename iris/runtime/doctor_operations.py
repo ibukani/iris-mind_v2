@@ -241,8 +241,8 @@ def _delivery_safety_mode(
 ) -> str:
     if not wiring.delivery_safety_gate_wired:
         return "not_configured"
-    if config.safety.mode == "strict":
-        return "strict"
+    if config.safety.mode in {"strict", "production"}:
+        return config.safety.mode
     return "basic"
 
 
@@ -252,7 +252,7 @@ def _output_safety_mode(
 ) -> str:
     if not wiring.output_safety_gate_wired:
         return "not_configured"
-    if config.safety.mode in {"basic", "strict"}:
+    if config.safety.mode in {"basic", "strict", "production"}:
         return "basic_output_filter"
     return "allow_all"
 

@@ -692,6 +692,11 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         state=validated_state,
         conversation=validated_conversation,
     )
+    _validate_production_safety_prerequisites(
+        config=config,
+        state=validated_state,
+        auth=validated_auth,
+    )
     return replace(
         config,
         server=validated_server,
@@ -723,6 +728,36 @@ def _validate_transcript_backend(
     """
     if conversation.transcript.enabled and state.backend is not RuntimeStateBackend.SQLITE:
         message = "conversation.transcript.enabled=true requires state.backend='sqlite'"
+        raise ConfigError(message)
+
+
+def _validate_production_safety_prerequisites(
+    *,
+    config: IrisRuntimeConfig,
+    state: RuntimeStateConfig,
+    auth: RuntimeAuthConfig,
+) -> None:
+    """Production mode の fail-closed 起動依存関係を検証する。
+
+    Raises:
+        ConfigError: production mode の起動前提を満たさない場合。
+    """
+    if config.safety.mode != "production":
+        return
+    if state.backend is not RuntimeStateBackend.SQLITE:
+        message = "safety.mode='production' requires state.backend='sqlite'"
+        raise ConfigError(message)
+    if auth.mode.value != "required":
+        message = "safety.mode='production' requires auth.mode='required'"
+        raise ConfigError(message)
+    if config.diagnostics.mode.value != "strict":
+        message = "safety.mode='production' requires diagnostics.mode='strict'"
+        raise ConfigError(message)
+    if not config.delivery.enabled:
+        message = "safety.mode='production' requires delivery.enabled=true"
+        raise ConfigError(message)
+    if all_model_slots_are_fake(config):
+        message = "safety.mode='production' requires non-fake model slots"
         raise ConfigError(message)
 
 

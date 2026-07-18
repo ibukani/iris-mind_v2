@@ -9,6 +9,7 @@ from iris.runtime.delivery.broker import RuntimeAppActionBroker
 from iris.safety.delivery_gate import (
     BasicDeliverySafetyGate,
     DeliverySafetyGate,
+    ProductionDeliverySafetyGate,
     QuietHoursPolicy,
     StrictDeliverySafetyGate,
 )
@@ -58,6 +59,8 @@ def wire_delivery_safety_gate(
             timezone=config.quiet_hours.timezone,
         ),
     )
+    if safety_config is not None and safety_config.mode == "production":
+        return ProductionDeliverySafetyGate(strict=StrictDeliverySafetyGate(basic=basic))
     if safety_config is not None and safety_config.mode == "strict":
         return StrictDeliverySafetyGate(basic=basic)
     return basic
