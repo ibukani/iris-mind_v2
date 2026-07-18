@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from iris.contracts.actions import ActionResult, AppAction, PresentedOutput
+    from iris.contracts.appraisal import AppraisalSignal
+    from iris.contracts.companion_affect import CompanionInteractionScope
     from iris.contracts.delivery import DeliveryEnvelope, DeliveryTarget
     from iris.contracts.observations import Observation
     from iris.core.ids import ObservationId
@@ -33,6 +35,9 @@ class RuntimeLearningEvent:
     occurred_at: datetime
     route: str
     source_observation_id: ObservationId
+    appraisal_signals: tuple[AppraisalSignal, ...] = ()
+    interaction_scope: CompanionInteractionScope | None = None
+    source_event_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

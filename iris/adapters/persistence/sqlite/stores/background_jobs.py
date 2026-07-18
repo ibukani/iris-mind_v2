@@ -22,6 +22,7 @@ from iris.runtime.learning.jobs import (
     BackgroundJobStatus,
     DeferredLearningJobPayload,
     MemoryBackgroundJobPayload,
+    RelationshipUpdateJobPayload,
     RuntimeLearningCandidateJobPayload,
 )
 from iris.runtime.learning.queue import (
@@ -46,7 +47,10 @@ if TYPE_CHECKING:
 
 
 type _PayloadModel = (
-    MemoryBackgroundJobPayload | RuntimeLearningCandidateJobPayload | DeferredLearningJobPayload
+    MemoryBackgroundJobPayload
+    | RuntimeLearningCandidateJobPayload
+    | DeferredLearningJobPayload
+    | RelationshipUpdateJobPayload
 )
 
 
@@ -56,6 +60,7 @@ class _PayloadType(StrEnum):
     MEMORY_BACKGROUND = "memory_background"
     RUNTIME_LEARNING_CANDIDATE = "runtime_learning_candidate"
     DEFERRED_LEARNING = "deferred_learning"
+    RELATIONSHIP_UPDATE = "relationship_update"
 
 
 class SQLiteBackgroundJobQueue(ManagedSQLiteStore):
@@ -637,6 +642,8 @@ def _payload_type(payload: _PayloadModel) -> _PayloadType:
         return _PayloadType.MEMORY_BACKGROUND
     if isinstance(payload, RuntimeLearningCandidateJobPayload):
         return _PayloadType.RUNTIME_LEARNING_CANDIDATE
+    if isinstance(payload, RelationshipUpdateJobPayload):
+        return _PayloadType.RELATIONSHIP_UPDATE
     return _PayloadType.DEFERRED_LEARNING
 
 
@@ -649,4 +656,6 @@ def _payload_from_json(payload_type: _PayloadType, payload_json: str) -> _Payloa
         return MemoryBackgroundJobPayload.model_validate_json(payload_json)
     if payload_type is _PayloadType.RUNTIME_LEARNING_CANDIDATE:
         return RuntimeLearningCandidateJobPayload.model_validate_json(payload_json)
+    if payload_type is _PayloadType.RELATIONSHIP_UPDATE:
+        return RelationshipUpdateJobPayload.model_validate_json(payload_json)
     return DeferredLearningJobPayload.model_validate_json(payload_json)

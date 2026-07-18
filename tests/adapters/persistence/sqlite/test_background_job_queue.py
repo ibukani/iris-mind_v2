@@ -8,6 +8,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from iris.adapters.persistence.sqlite.stores.background_jobs import SQLiteBackgroundJobQueue
+from iris.contracts.appraisal import AppraisalSignal, AppraisalSignalKind, AppraisalSourceSpan
+from iris.contracts.companion_affect import (
+    CompanionAffectStateKind,
+    CompanionInteractionScope,
+)
 from iris.contracts.learning import RuntimeLearningEventKind
 from iris.contracts.memory import MemoryKind
 from iris.contracts.memory_candidates import (
@@ -26,6 +31,7 @@ from iris.runtime.learning.jobs import (
     BackgroundJobStatus,
     DeferredLearningJobPayload,
     MemoryBackgroundJobPayload,
+    RelationshipUpdateJobPayload,
     RuntimeLearningCandidateJobPayload,
 )
 from iris.runtime.learning.policy import (
@@ -42,6 +48,26 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.anyio
 _NOW = datetime(2026, 1, 1, tzinfo=UTC)
+_RELATIONSHIP_PAYLOAD = RelationshipUpdateJobPayload(
+    signals=(
+        AppraisalSignal(
+            kind=AppraisalSignalKind.ATTITUDE_TOWARD_IRIS,
+            label="positive-attitude",
+            polarity=0.8,
+            confidence=0.9,
+            reason="test",
+            source_span=AppraisalSourceSpan(start_index=0, end_index=2, text="好意"),
+            state_boundary=CompanionAffectStateKind.ACTOR_RELATIONSHIP,
+            source_observation_id=ObservationId("obs-1"),
+        ),
+    ),
+    interaction_scope=CompanionInteractionScope.DIRECT_MESSAGE,
+    actor_id=ActorId("actor-1"),
+    account_id=AccountId("account-1"),
+    space_id=SpaceId("space-1"),
+    source_observation_id=ObservationId("obs-1"),
+    source_event_ids=("event-1",),
+)
 
 
 def _queue(tmp_path: Path) -> SQLiteBackgroundJobQueue:
@@ -61,6 +87,7 @@ def _job(
             MemoryBackgroundJobPayload,
             RuntimeLearningCandidateJobPayload,
             DeferredLearningJobPayload,
+            RelationshipUpdateJobPayload,
         ),
     ):
         message = "test payload type is unsupported"
@@ -191,11 +218,10 @@ async def test_success_and_permanent_failure_are_terminal(tmp_path: Path) -> Non
 async def test_payload_round_trips(tmp_path: Path, payload: object) -> None:
     """対応 payload union を SQLite 経由で lossless に復元する。"""
     queue = _queue(tmp_path)
-    job = await queue.enqueue(_job("payload", payload=payload))
-
-    stored = await queue.get(job.job_id)
-
-    assert stored.payload == payload
+    for index, payload_to_store in enumerate((payload, _RELATIONSHIP_PAYLOAD)):
+        job = await queue.enqueue(_job(f"payload-{index}", payload=payload_to_store))
+        stored = await queue.get(job.job_id)
+        assert stored.payload == payload_to_store
     queue.close()
 
 

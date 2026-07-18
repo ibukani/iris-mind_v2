@@ -72,6 +72,7 @@ class RuntimeLearningConfig:
     max_jobs_per_run: int = 5
     max_attempts: int = 3
     implicit_candidates_enabled: bool = True
+    relationship_update_candidates_enabled: bool = False
     implicit_candidate_min_confidence: float = 0.35
     implicit_candidate_max_text_length: int = 1000
     background_job_policy: RuntimeBackgroundJobPolicyConfig = field(
@@ -116,6 +117,14 @@ def apply_learning_toml(
         value = replace(
             value,
             max_attempts=parse_int(table["max_attempts"], "learning.max_attempts"),
+        )
+    if "relationship_update_candidates_enabled" in table:
+        value = replace(
+            value,
+            relationship_update_candidates_enabled=parse_bool(
+                table["relationship_update_candidates_enabled"],
+                "learning.relationship_update_candidates_enabled",
+            ),
         )
     value = _apply_implicit_candidate_toml(value, table)
     value = _apply_background_job_policy_toml(value, table)
