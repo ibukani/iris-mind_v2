@@ -8,7 +8,7 @@ import pytest
 
 from iris.contracts.actions import PresentedOutput
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
-from iris.contracts.delivery import DeliveryTarget
+from iris.contracts.delivery import DeliverySurface, DeliveryTarget
 from iris.contracts.safety import (
     SafetyContext,
     SafetyContextCategory,
@@ -21,6 +21,7 @@ from iris.core.ids import ExternalRef, SessionId
 from iris.safety.delivery_gate import (
     BasicDeliverySafetyGate,
     DeliverySafetyDecision,
+    ProductionDeliverySafetyGate,
     QuietHoursPolicy,
     StrictDeliverySafetyGate,
 )
@@ -122,6 +123,26 @@ async def test_strict_gate_rejects_invalid_target_before_policy_engine() -> None
     assert decision.allowed is False
     assert decision.reason == "missing_route"
     assert decision.audit is None
+
+    unknown_surface = await ProductionDeliverySafetyGate().check(
+        target=_target(),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert unknown_surface.allowed is False
+    assert unknown_surface.reason == "unknown_delivery_surface"
+    assert unknown_surface.risk_level is SafetyRiskLevel.HIGH
+    assert unknown_surface.audit is not None
+    assert unknown_surface.audit.policy == "production_delivery"
+
+    known_surface = await ProductionDeliverySafetyGate().check(
+        target=_target().model_copy(update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE}),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert known_surface.allowed is True
 
 
 async def test_strict_gate_does_not_block_user_response_for_sensitive_context_alone() -> None:

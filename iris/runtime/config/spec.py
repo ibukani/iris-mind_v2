@@ -1346,7 +1346,7 @@ def _logging_safety_diagnostics_specs() -> tuple[ConfigFieldSpec, ...]:
             "development",
             "出力safety gateの動作モード。",
             env="IRIS_SAFETY_MODE",
-            allowed_values=("development", "basic", "strict"),
+            allowed_values=("development", "basic", "strict", "production"),
         ),
         ConfigFieldSpec(
             "safety.max_output_chars",

@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Protocol
 from zoneinfo import ZoneInfo
 
 from iris.contracts.availability import AvailabilityStatus
+from iris.contracts.delivery import DeliverySurface
+from iris.contracts.presentation_hints import PresentationModality
 from iris.safety.policy_engine import (
     DeliverySource,
     SafetyAuditMetadata,
@@ -220,6 +222,65 @@ class StrictDeliverySafetyGate:
         )
         decision = self.engine.evaluate_delivery(strict_context)
         return _delivery_decision(decision)
+
+
+@dataclass(frozen=True)
+class ProductionDeliverySafetyGate:
+    """Strict policyにsurface fail-closed検査を加えたproduction gate。"""
+
+    strict: StrictDeliverySafetyGate = field(default_factory=StrictDeliverySafetyGate)
+
+    async def check(
+        self,
+        *,
+        target: DeliveryTarget,
+        output: PresentedOutput,
+        availability: AvailabilitySnapshot | None,
+        now: datetime,
+        policy_context: SafetyPolicyContext | None = None,
+    ) -> DeliverySafetyDecision:
+        """未知 surface を配送 enqueue 前に拒否する。
+
+        Returns:
+            DeliverySafetyDecision: surface と strict policy に基づく配送判定。
+        """
+        surface = _resolved_surface(target.surface, output.presentation_hints.modality)
+        if surface is DeliverySurface.UNKNOWN:
+            source = (
+                policy_context.source
+                if policy_context is not None
+                else DeliverySource.USER_INITIATED
+            )
+            return DeliverySafetyDecision(
+                allowed=False,
+                reason="unknown_delivery_surface",
+                risk_level=SafetyRiskLevel.HIGH,
+                audit=SafetyAuditMetadata(
+                    policy="production_delivery",
+                    policy_version="1",
+                    source=source,
+                    target_key=_target_key(target),
+                ),
+            )
+        return await self.strict.check(
+            target=target,
+            output=output,
+            availability=availability,
+            now=now,
+            policy_context=policy_context,
+        )
+
+
+def _resolved_surface(
+    target_surface: DeliverySurface,
+    modality: PresentationModality,
+) -> DeliverySurface:
+    if target_surface is not DeliverySurface.UNKNOWN:
+        return target_surface
+    return {
+        PresentationModality.VOICE: DeliverySurface.VOICE,
+        PresentationModality.NOTIFICATION: DeliverySurface.NOTIFICATION,
+    }.get(modality, DeliverySurface.UNKNOWN)
 
 
 def _delivery_decision(decision: SafetyPolicyDecision) -> DeliverySafetyDecision:

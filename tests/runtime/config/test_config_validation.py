@@ -126,18 +126,34 @@ def test_safety_toml_is_applied(tmp_path: Path) -> None:
     config = load_runtime_config(
         _write(
             tmp_path,
-            "[safety]\nmode = 'basic'\nmax_output_chars = 1200\n",
+            """
+            [safety]
+            mode = 'production'
+            max_output_chars = 1200
+
+            [state]
+            backend = 'sqlite'
+
+            [auth]
+            mode = 'required'
+
+            [diagnostics]
+            mode = 'strict'
+
+            [models.default_chat]
+            provider = 'ollama'
+            """,
         ),
         env={},
     )
 
-    assert config.safety.mode == "basic"
+    assert config.safety.mode == "production"
     assert config.safety.max_output_chars == 1200
 
 
 def test_invalid_safety_mode_is_rejected(tmp_path: Path) -> None:
     """Safety modeはConfigSpecのallowed valuesに制限される。"""
-    with pytest.raises(ConfigError, match="Allowed values: development, basic"):
+    with pytest.raises(ConfigError, match="Allowed values: development, basic, strict, production"):
         load_runtime_config(
             _write(tmp_path, "[safety]\nmode = 'disabled'\n"),
             env={},

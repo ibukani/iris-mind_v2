@@ -132,6 +132,7 @@ class IdleTickSource(RuntimeScheduler):
                 actor_id=target.actor_id,
                 account_id=target.account_id,
                 space_id=target.space_id,
+                surface=target.route.surface,
             ),
         )
 

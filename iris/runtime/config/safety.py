@@ -21,7 +21,8 @@ class RuntimeSafetyConfig:
 
     mode が "development" の場合、すべての安全性ゲートはパススルーになる。
     mode が "basic" または "strict" の場合、BasicOutputSafetyGate が使用される。
-    strict は deterministic な proactive delivery policy も有効化する。
+    mode が "production" の場合、起動依存関係とdelivery surfaceをfail closedで検証する。
+    strict / production は deterministic な proactive delivery policy も有効化する。
     """
 
     mode: str = "development"
@@ -84,8 +85,10 @@ def apply_safety_env(
 
 
 def _validate_mode(value: str) -> str:
-    if value not in {"development", "basic", "strict"}:
-        message = f"Invalid safety.mode: {value}. Allowed values: development, basic, strict"
+    if value not in {"development", "basic", "strict", "production"}:
+        message = (
+            f"Invalid safety.mode: {value}. Allowed values: development, basic, strict, production"
+        )
         raise ConfigError(message)
     return value
 
