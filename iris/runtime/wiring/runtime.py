@@ -470,7 +470,7 @@ def _wire_background_workers(
         config に応じた worker 群。relationship worker は既定で含まれない。
     """
     workers: tuple[BackgroundJobWorker, ...] = (
-        DeterministicMemoryConsolidationWorker(stores.memory_store),
+        DeterministicMemoryConsolidationWorker(stores.memory_candidate_review_store),
         AccountAwareImplicitMemoryCandidateWorker(
             stores.memory_candidate_review_store,
             policy=ImplicitCandidateAdmissionPolicy(

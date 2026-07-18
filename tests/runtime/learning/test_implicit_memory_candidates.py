@@ -27,6 +27,10 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.memory_consolidation import (
+    MemoryConsolidationJobPayload,
+    MemoryConsolidationSourceCandidate,
+)
 from iris.contracts.observations import (
     ActorMessageObservation,
     ObservationContext,
@@ -63,6 +67,7 @@ from iris.runtime.learning.jobs import (
 from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidationWorker
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.learning.relationship_worker import RelationshipUpdateCandidateWorker
+from iris.runtime.learning.review_service import MemoryCandidateReviewService
 from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunnerRuntimeHooks
 from iris.runtime.persona.interaction_policy_prompt import build_interaction_policy_section
 from iris.runtime.state.interaction_policy_candidates import (
@@ -71,6 +76,7 @@ from iris.runtime.state.interaction_policy_candidates import (
 )
 from iris.runtime.state.memory_candidates import (
     InMemoryMemoryCandidateReviewStore,
+    MemoryCandidateReviewRecord,
     MemoryCandidateReviewStatus,
 )
 from iris.runtime.state.relationship_updates import InMemoryRelationshipUpdateCandidateStore
@@ -124,50 +130,29 @@ async def test_worker_stores_review_required_implicit_candidate() -> None:
     relationship_store = InMemoryRelationshipUpdateCandidateStore()
     event = _feedback_event("次からもっと短く答えて")
     await EnqueueImplicitMemoryCandidateHook(queue).after_runtime_event(event)
-    relationship_job = BackgroundJobRecord(
-        job_id=BackgroundJobId("relationship-job-1"),
-        kind=BackgroundJobKind.RELATIONSHIP_UPDATE,
-        payload=RelationshipUpdateJobPayload(
-            signals=(
-                AppraisalSignal(
-                    kind=AppraisalSignalKind.ATTITUDE_TOWARD_IRIS,
-                    label="positive-attitude",
-                    polarity=0.8,
-                    confidence=0.9,
-                    reason="user thanked Iris",
-                    source_span=AppraisalSourceSpan(start_index=0, end_index=5, text="ありがとう"),
-                    state_boundary=CompanionAffectStateKind.ACTOR_RELATIONSHIP,
-                    source_observation_id=ObservationId("obs-relationship"),
-                ),
-            ),
-            interaction_scope=CompanionInteractionScope.DIRECT_MESSAGE,
-            actor_id=ActorId("actor-1"),
-            account_id=None,
-            source_observation_id=ObservationId("obs-relationship"),
-            source_event_ids=("event-relationship-1",),
-        ),
-        not_before=_NOW,
-        idempotency_key="relationship-job-key-1",
-        created_at=_NOW,
-        updated_at=_NOW,
-    )
-    await queue.enqueue(relationship_job)
+    await queue.enqueue(_relationship_job())
+
+    await queue.enqueue(_consolidation_job())
 
     relationship_worker = RelationshipUpdateCandidateWorker(relationship_store)
     runner = BackgroundJobRunner(
         queue,
         (
-            DeterministicMemoryConsolidationWorker(memory_store),
+            DeterministicMemoryConsolidationWorker(review_store, now=lambda: _NOW),
             ImplicitMemoryCandidateWorker(review_store),
             relationship_worker,
         ),
         runtime_hooks=BackgroundJobRunnerRuntimeHooks(now=lambda: _NOW),
     )
 
-    assert await runner.run_once() == 2
+    assert await runner.run_once() == 3
     pending = await review_store.list_pending()
-    assert len(pending) == 1
-    record = pending[0]
+    assert len(pending) == 2
+    record = next(
+        candidate
+        for candidate in pending
+        if candidate.candidate.source is MemoryCandidateSource.IMPLICIT_CONVERSATION
+    )
     assert record.status is MemoryCandidateReviewStatus.PENDING_REVIEW
     assert record.candidate.source is MemoryCandidateSource.IMPLICIT_CONVERSATION
     assert record.candidate.retention_policy is MemoryRetentionPolicy.REVIEW_REQUIRED
@@ -178,8 +163,9 @@ async def test_worker_stores_review_required_implicit_candidate() -> None:
     assert record.candidate.source_observation_id == event.source_observation_id
     assert record.metadata["source"] == MemoryCandidateSource.IMPLICIT_CONVERSATION.value
     assert memory_store.search(MemoryQuery(text="短く", limit=10)) == ()
-    relationship_worker.run(relationship_job)
-    relationship_worker.run(relationship_job)
+    await _assert_consolidation_candidate(review_store, pending)
+    relationship_worker.run(_relationship_job())
+    relationship_worker.run(_relationship_job())
     assert len(relationship_store.list_records()) == 1
     relationship_record = relationship_store.list_records()[0]
     assert relationship_record.actor_id == ActorId("actor-1")
@@ -262,6 +248,113 @@ async def test_review_store_deduplicates_candidate_records() -> None:
     worker.run(job)
 
     assert len(await review_store.list_pending()) == 1
+
+
+async def _assert_consolidation_candidate(
+    review_store: InMemoryMemoryCandidateReviewStore,
+    pending: tuple[MemoryCandidateReviewRecord, ...],
+) -> None:
+    """Consolidation candidate の decision と detail DTO を検証する。"""
+    consolidation_record = next(
+        candidate
+        for candidate in pending
+        if candidate.candidate_type is ReviewCandidateType.CONSOLIDATION
+    )
+    assert consolidation_record.candidate.metadata["consolidation_decision"] == "duplicate"
+    assert consolidation_record.candidate.metadata["source_candidate_ids"] == "source-1|source-2"
+    consolidation_detail = await MemoryCandidateReviewService(review_store).read(
+        consolidation_record.candidate_id
+    )
+    assert consolidation_detail.consolidation_candidate is not None
+    assert consolidation_detail.consolidation_candidate.source_candidate_ids == (
+        "source-1",
+        "source-2",
+    )
+
+
+def _relationship_job() -> BackgroundJobRecord:
+    """Relationship candidate worker 用の job を作る。
+
+    Returns:
+        テスト対象の relationship update job。
+    """
+    return BackgroundJobRecord(
+        job_id=BackgroundJobId("relationship-job-1"),
+        kind=BackgroundJobKind.RELATIONSHIP_UPDATE,
+        payload=RelationshipUpdateJobPayload(
+            signals=(
+                AppraisalSignal(
+                    kind=AppraisalSignalKind.ATTITUDE_TOWARD_IRIS,
+                    label="positive-attitude",
+                    polarity=0.8,
+                    confidence=0.9,
+                    reason="user thanked Iris",
+                    source_span=AppraisalSourceSpan(
+                        start_index=0,
+                        end_index=5,
+                        text="ありがとう",
+                    ),
+                    state_boundary=CompanionAffectStateKind.ACTOR_RELATIONSHIP,
+                    source_observation_id=ObservationId("obs-relationship"),
+                ),
+            ),
+            interaction_scope=CompanionInteractionScope.DIRECT_MESSAGE,
+            actor_id=ActorId("actor-1"),
+            account_id=None,
+            source_observation_id=ObservationId("obs-relationship"),
+            source_event_ids=("event-relationship-1",),
+        ),
+        not_before=_NOW,
+        idempotency_key="relationship-job-key-1",
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+
+
+def _consolidation_job() -> BackgroundJobRecord:
+    """重複候補を含む deterministic consolidation job を作る。
+
+    Returns:
+        テスト対象の consolidation job。
+    """
+    return BackgroundJobRecord(
+        job_id=BackgroundJobId("consolidation-job-1"),
+        kind=BackgroundJobKind.MEMORY_CONSOLIDATION,
+        payload=MemoryConsolidationJobPayload(
+            candidates=(
+                MemoryConsolidationSourceCandidate(
+                    source_candidate_id="source-1",
+                    text="ユーザーは短い返答を好む。",
+                    kind=MemoryKind.PREFERENCE,
+                    salience=0.6,
+                    confidence=0.8,
+                    source=MemoryCandidateSource.IMPLICIT_CONVERSATION,
+                    reason="first observation",
+                    retention_policy=MemoryRetentionPolicy.REVIEW_REQUIRED,
+                    actor_id=ActorId("actor-1"),
+                    space_id=SpaceId("space-1"),
+                    created_at=_NOW,
+                ),
+                MemoryConsolidationSourceCandidate(
+                    source_candidate_id="source-2",
+                    text=" ユーザーは短い返答を好む! ",
+                    kind=MemoryKind.PREFERENCE,
+                    salience=0.6,
+                    confidence=0.7,
+                    source=MemoryCandidateSource.IMPLICIT_CONVERSATION,
+                    reason="repeat observation",
+                    retention_policy=MemoryRetentionPolicy.REVIEW_REQUIRED,
+                    actor_id=ActorId("actor-1"),
+                    space_id=SpaceId("space-1"),
+                    created_at=_NOW,
+                ),
+            )
+        ),
+        not_before=_NOW,
+        idempotency_key="consolidation-job-key-1",
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
 
 
 async def _assert_interaction_policy_review_flow() -> None:

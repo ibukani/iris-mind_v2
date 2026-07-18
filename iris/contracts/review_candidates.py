@@ -18,6 +18,7 @@ from iris.contracts.memory_candidates import (
     MemoryCandidateSource,
     MemoryRetentionPolicy,
 )
+from iris.contracts.memory_consolidation import MemoryConsolidationDecisionKind
 from iris.contracts.metadata import ImmutableMetadata
 from iris.contracts.shared_episodic_memory import (
     SharedEpisodicAdmissionPolicy,
@@ -159,6 +160,60 @@ class ReviewInteractionPolicyCandidatePayload(BaseModel):
         return self
 
 
+class ReviewConsolidationCandidatePayload(BaseModel):
+    """Memory consolidation candidate review detail の typed payload。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str = Field(min_length=1)
+    kind: MemoryKind
+    salience: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    source: MemoryCandidateSource
+    reason: str = Field(min_length=1)
+    retention_policy: MemoryRetentionPolicy
+    sensitivity: MemoryCandidateSensitivity
+    review_required: bool
+    decision_kind: MemoryConsolidationDecisionKind
+    source_candidate_ids: tuple[str, ...] = Field(min_length=1)
+    supersedes_candidate_ids: tuple[str, ...] = ()
+    actor_id: ActorId | None = None
+    account_id: AccountId | None = None
+    space_id: SpaceId | None = None
+    source_observation_id: ObservationId | None = None
+    metadata: ImmutableMetadata = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_review_only_contract(self) -> ReviewConsolidationCandidatePayload:
+        """Consolidation candidate を review-only に固定する。
+
+        Returns:
+            検証済みの consolidation review payload。
+
+        Raises:
+            ValueError: source、retention、review、supersession の整合性が不正な場合。
+        """
+        if self.source is not MemoryCandidateSource.CONSOLIDATION:
+            message = "consolidation review payload must use consolidation source"
+            raise ValueError(message)
+        if self.retention_policy is not MemoryRetentionPolicy.REVIEW_REQUIRED:
+            message = "consolidation review payload must require review"
+            raise ValueError(message)
+        if not self.review_required:
+            message = "consolidation review payload must remain review_required"
+            raise ValueError(message)
+        if any(not candidate_id.strip() for candidate_id in self.source_candidate_ids):
+            message = "source candidate ids must not be blank"
+            raise ValueError(message)
+        if any(not candidate_id.strip() for candidate_id in self.supersedes_candidate_ids):
+            message = "superseded candidate ids must not be blank"
+            raise ValueError(message)
+        if set(self.supersedes_candidate_ids) - set(self.source_candidate_ids):
+            message = "superseded candidate ids must reference source candidate ids"
+            raise ValueError(message)
+        return self
+
+
 class ReviewSharedEpisodicMemoryCandidatePayload(BaseModel):
     """Shared episodic memory candidate review detail の typed payload。"""
 
@@ -256,6 +311,7 @@ class ReviewCandidateDetail(BaseModel):
     memory_candidate: ReviewMemoryCandidatePayload | None = None
     shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None = None
     interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None = None
+    consolidation_candidate: ReviewConsolidationCandidatePayload | None = None
     created_at: datetime
     updated_at: datetime
     reviewed_at: datetime | None = None
@@ -277,34 +333,44 @@ class ReviewCandidateDetail(BaseModel):
                 memory_candidate=self.memory_candidate,
                 shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
                 interaction_policy_candidate=self.interaction_policy_candidate,
+                consolidation_candidate=self.consolidation_candidate,
             )
-            return self
-        if self.candidate_type is ReviewCandidateType.SHARED_EPISODIC_MEMORY:
+        elif self.candidate_type is ReviewCandidateType.SHARED_EPISODIC_MEMORY:
             shared_payload = _require_shared_episodic_detail_payload(
                 memory_candidate=self.memory_candidate,
                 shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
                 interaction_policy_candidate=self.interaction_policy_candidate,
+                consolidation_candidate=self.consolidation_candidate,
             )
             _validate_shared_episodic_scope(scope=self.scope, payload=shared_payload)
             _validate_shared_episodic_source_observation(
                 source_observation_id=self.source_observation_id,
                 payload=shared_payload,
             )
-            return self
-        if self.candidate_type is ReviewCandidateType.INTERACTION_POLICY:
+        elif self.candidate_type is ReviewCandidateType.INTERACTION_POLICY:
             _validate_interaction_policy_detail_payload(
                 scope=self.scope,
                 interaction_policy_candidate=self.interaction_policy_candidate,
                 memory_candidate=self.memory_candidate,
                 shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+                consolidation_candidate=self.consolidation_candidate,
             )
-            return self
-        _validate_future_detail_has_no_known_payloads(
-            candidate_type=self.candidate_type,
-            memory_candidate=self.memory_candidate,
-            shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
-            interaction_policy_candidate=self.interaction_policy_candidate,
-        )
+        elif self.candidate_type is ReviewCandidateType.CONSOLIDATION:
+            _validate_consolidation_detail_payload(
+                scope=self.scope,
+                consolidation_candidate=self.consolidation_candidate,
+                memory_candidate=self.memory_candidate,
+                shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+                interaction_policy_candidate=self.interaction_policy_candidate,
+            )
+        else:
+            _validate_future_detail_has_no_known_payloads(
+                candidate_type=self.candidate_type,
+                memory_candidate=self.memory_candidate,
+                shared_episodic_memory_candidate=self.shared_episodic_memory_candidate,
+                interaction_policy_candidate=self.interaction_policy_candidate,
+                consolidation_candidate=self.consolidation_candidate,
+            )
         return self
 
 
@@ -313,6 +379,7 @@ def _validate_memory_detail_payloads(
     memory_candidate: ReviewMemoryCandidatePayload | None,
     shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
     interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None,
+    consolidation_candidate: ReviewConsolidationCandidatePayload | None,
 ) -> None:
     """Memory detail に memory payload だけが載ることを検証する。
 
@@ -328,6 +395,9 @@ def _validate_memory_detail_payloads(
     if interaction_policy_candidate is not None:
         message = "memory candidate detail must not include interaction policy payload"
         raise ValueError(message)
+    if consolidation_candidate is not None:
+        message = "memory candidate detail must not include consolidation payload"
+        raise ValueError(message)
 
 
 def _require_shared_episodic_detail_payload(
@@ -335,6 +405,7 @@ def _require_shared_episodic_detail_payload(
     memory_candidate: ReviewMemoryCandidatePayload | None,
     shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
     interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None,
+    consolidation_candidate: ReviewConsolidationCandidatePayload | None,
 ) -> ReviewSharedEpisodicMemoryCandidatePayload:
     """Shared episodic detail の typed payload を返す。
 
@@ -347,7 +418,11 @@ def _require_shared_episodic_detail_payload(
     if shared_episodic_memory_candidate is None:
         message = "shared episodic memory detail requires shared episodic payload"
         raise ValueError(message)
-    if memory_candidate is not None or interaction_policy_candidate is not None:
+    if (
+        memory_candidate is not None
+        or interaction_policy_candidate is not None
+        or consolidation_candidate is not None
+    ):
         message = "shared episodic memory detail must not include memory payload"
         raise ValueError(message)
     return shared_episodic_memory_candidate
@@ -359,6 +434,7 @@ def _validate_future_detail_has_no_known_payloads(
     memory_candidate: ReviewMemoryCandidatePayload | None,
     shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
     interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None,
+    consolidation_candidate: ReviewConsolidationCandidatePayload | None,
 ) -> None:
     """未実装 candidate type に既知 payload が混ざらないことを検証する。
 
@@ -374,6 +450,9 @@ def _validate_future_detail_has_no_known_payloads(
     if interaction_policy_candidate is not None:
         message = f"{candidate_type.value} detail must not include interaction policy payload"
         raise ValueError(message)
+    if consolidation_candidate is not None:
+        message = f"{candidate_type.value} detail must not include consolidation payload"
+        raise ValueError(message)
 
 
 def _validate_interaction_policy_detail_payload(
@@ -382,6 +461,7 @@ def _validate_interaction_policy_detail_payload(
     interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None,
     memory_candidate: ReviewMemoryCandidatePayload | None,
     shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
+    consolidation_candidate: ReviewConsolidationCandidatePayload | None,
 ) -> None:
     """Interaction policy detail の typed payload と scope を検証する。
 
@@ -391,7 +471,11 @@ def _validate_interaction_policy_detail_payload(
     if interaction_policy_candidate is None:
         message = "interaction policy detail requires interaction policy payload"
         raise ValueError(message)
-    if memory_candidate is not None or shared_episodic_memory_candidate is not None:
+    if (
+        memory_candidate is not None
+        or shared_episodic_memory_candidate is not None
+        or consolidation_candidate is not None
+    ):
         message = "interaction policy detail must not include another candidate payload"
         raise ValueError(message)
     if scope.account_id != interaction_policy_candidate.account_id:
@@ -402,6 +486,40 @@ def _validate_interaction_policy_detail_payload(
         raise ValueError(message)
     if scope.actor_id != interaction_policy_candidate.actor_id:
         message = "interaction policy scope actor_id must match payload actor_id"
+        raise ValueError(message)
+
+
+def _validate_consolidation_detail_payload(
+    *,
+    scope: ReviewCandidateScope,
+    consolidation_candidate: ReviewConsolidationCandidatePayload | None,
+    memory_candidate: ReviewMemoryCandidatePayload | None,
+    shared_episodic_memory_candidate: ReviewSharedEpisodicMemoryCandidatePayload | None,
+    interaction_policy_candidate: ReviewInteractionPolicyCandidatePayload | None,
+) -> None:
+    """Consolidation detail の typed payload と scope を検証する。
+
+    Raises:
+        ValueError: payload が不足、混在、または scope と不一致の場合。
+    """
+    if consolidation_candidate is None:
+        message = "consolidation detail requires consolidation payload"
+        raise ValueError(message)
+    if (
+        memory_candidate is not None
+        or shared_episodic_memory_candidate is not None
+        or interaction_policy_candidate is not None
+    ):
+        message = "consolidation detail must not include another candidate payload"
+        raise ValueError(message)
+    if scope.actor_id != consolidation_candidate.actor_id:
+        message = "consolidation scope actor_id must match payload actor_id"
+        raise ValueError(message)
+    if scope.account_id != consolidation_candidate.account_id:
+        message = "consolidation scope account_id must match payload account_id"
+        raise ValueError(message)
+    if scope.space_id != consolidation_candidate.space_id:
+        message = "consolidation scope space_id must match payload space_id"
         raise ValueError(message)
 
 

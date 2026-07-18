@@ -389,6 +389,7 @@ def _job_uses_llm(job: BackgroundJobRecord, kind_policy: BackgroundJobKindPolicy
 def _call_site_for_job_kind(kind: BackgroundJobKind) -> ModelCallSite:
     call_sites = {
         BackgroundJobKind.MEMORY_EXTRACTION: ModelCallSite.MEMORY_EXTRACTION,
+        BackgroundJobKind.MEMORY_CONSOLIDATION: ModelCallSite.REFLECTION,
         BackgroundJobKind.REFLECTION: ModelCallSite.REFLECTION,
         BackgroundJobKind.RELATIONSHIP_UPDATE: ModelCallSite.RELATIONSHIP_UPDATE,
         BackgroundJobKind.INTERACTION_POLICY_CANDIDATE: ModelCallSite.INTERACTION_POLICY_CANDIDATE,
