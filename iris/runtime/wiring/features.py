@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from iris.features.basic_action.definition import define_basic_action_feature
+from iris.features.definition import FeatureKind
 from iris.features.event_reaction.definition import define_event_reaction_feature
 from iris.features.proactive_talk.definition import define_proactive_talk_feature
 from iris.runtime.wiring.cognitive import (
@@ -26,10 +27,10 @@ if TYPE_CHECKING:
     from iris.features.definition import (
         BackgroundLoopTask,
         FeatureDefinition,
-        FeatureKind,
         LearningHook,
         RuntimeLearningHook,
     )
+    from iris.features.proactive_talk.generation import ProactiveTextGenerator
     from iris.runtime.config import IrisRuntimeConfig
 
 
@@ -69,6 +70,7 @@ class RuntimeFeatureSelectionOptions:
     """feature selection に必要な既存 runtime mode の snapshot。"""
 
     safety_mode: str = "development"
+    proactive_talk_enabled: bool = False
 
     @classmethod
     def from_config(cls, config: IrisRuntimeConfig) -> RuntimeFeatureSelectionOptions:
@@ -77,11 +79,16 @@ class RuntimeFeatureSelectionOptions:
         Returns:
             feature selection 用の最小設定。
         """
-        return cls(safety_mode=config.safety.mode)
+        return cls(
+            safety_mode=config.safety.mode,
+            proactive_talk_enabled=config.companion_semantics.proactive_talk_generation_enabled,
+        )
 
 
 def wire_runtime_features(
     options: RuntimeFeatureSelectionOptions | IrisRuntimeConfig | None = None,
+    *,
+    proactive_generator: ProactiveTextGenerator | None = None,
 ) -> RuntimeFeatureCatalog:
     """標準ランタイムのフィーチャー集合を組み立てる。
 
@@ -97,22 +104,33 @@ def wire_runtime_features(
     """
     selection_options = _normalize_feature_selection_options(options)
     mode = _runtime_feature_mode(selection_options.safety_mode)
-    companion_features = (define_event_reaction_feature(),)
+    companion_features: list[FeatureDefinition] = [define_event_reaction_feature()]
+    if selection_options.proactive_talk_enabled and mode is RuntimeFeatureMode.DEVELOPMENT:
+        companion_features.append(define_proactive_talk_feature(generator=proactive_generator))
     diagnostic_feature = define_basic_action_feature()
     if mode is RuntimeFeatureMode.DEVELOPMENT:
         return RuntimeFeatureCatalog(
             features=(diagnostic_feature, *companion_features),
             mode=mode,
         )
-    return RuntimeFeatureCatalog(
-        features=companion_features,
-        disabled_features=(
-            DisabledRuntimeFeature(
-                name=diagnostic_feature.name,
-                kind=diagnostic_feature.kind,
-                reason=RuntimeFeatureDisabledReason.PRODUCTION_LIKE_MODE,
-            ),
+    disabled_features = [
+        DisabledRuntimeFeature(
+            name=diagnostic_feature.name,
+            kind=diagnostic_feature.kind,
+            reason=RuntimeFeatureDisabledReason.PRODUCTION_LIKE_MODE,
         ),
+    ]
+    if selection_options.proactive_talk_enabled:
+        disabled_features.append(
+            DisabledRuntimeFeature(
+                name="proactive_talk",
+                kind=FeatureKind.COMPANION,
+                reason=RuntimeFeatureDisabledReason.PRODUCTION_LIKE_MODE,
+            )
+        )
+    return RuntimeFeatureCatalog(
+        features=tuple(companion_features),
+        disabled_features=tuple(disabled_features),
         mode=mode,
     )
 

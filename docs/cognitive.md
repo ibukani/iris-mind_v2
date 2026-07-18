@@ -285,6 +285,8 @@ Scheduler (runtime)
 | `policy.py` | プロアクティブ発話のポリシー制約 |
 | `models.py` | プロアクティブ専用型 |
 | `definition.py` | FeatureDefinition 登録 |
+| `prompts.py` | IdleTick から bounded prompt context を構築 |
+| `generation.py` | runtime generator を注入する feature port |
 
 `IdleTickObservation` は基底 `Observation.context` に actor / account / device / space 情報を持つ。
 直接 `Observation.actor` / `Observation.space_id` は使わない。
@@ -298,10 +300,12 @@ Scheduler (runtime)
 - `DeliveryOutbox`: `state.backend = "sqlite"` では `SQLiteDeliveryOutbox` により lease / retry / idempotent report state を保持する。
 - `SafetyAuditJournal`: raw textを保存せず、output / delivery safety decision metadata と recent block count を保持する。
 - pull-based delivery API: `PollAppActions` / `ReportActionResult` で external client が送信結果を確定する。
+- config-gated proactive text generation: Salience 通過時だけ `proactive_short` と
+  `model_call_budget.proactive` を使い、生成不可時は no-send / defer とする。
 
 未実装または後続作業。
 
-- LLM-based proactive text generation refinement。
+- proactive text generation の provider/channel 別改善。
 - production safety policy / moderation policy の完成。
 - provider/channel 別の自律配送ポリシー。
 - Control Plane UI からの scheduler / delivery / transcript 管理。

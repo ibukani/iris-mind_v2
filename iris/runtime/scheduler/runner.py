@@ -10,6 +10,7 @@ from iris.contracts.actions import send_message_action_from_output
 from iris.contracts.delivery import DeliveryEnvelope, DeliveryStatus, DeliveryTarget
 from iris.core.ids import ActionId, CorrelationId, DeliveryId, ObservationId
 from iris.runtime.ingress.observation_ingress import ObservationCapability
+from iris.runtime.observability.logger import LoguruRuntimeLogger
 from iris.runtime.service import ObservationEnvelope, ObservationRuntimeService, RuntimeResponse
 from iris.runtime.state.safety_audit import SafetyAuditRecord, SafetyAuditStage
 from iris.safety.policy_engine import DeliverySource, SafetyPolicyContext, SafetyRiskLevel
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
 
     from iris.contracts.availability import AvailabilitySnapshot
     from iris.runtime.delivery.outbox import DeliveryOutbox
+    from iris.runtime.observability.ports import RuntimeLogger
     from iris.runtime.scheduler.models import ScheduledObservation
     from iris.runtime.scheduler.ports import DeliveryAvailabilityProvider, RuntimeScheduler
     from iris.runtime.state.safety_audit import SafetyAuditJournal
@@ -57,6 +59,7 @@ class SchedulerRunner:
     max_attempts: int = 3
     safety_audit_journal: SafetyAuditJournal | None = None
     recent_block_window_seconds: float = 1800.0
+    runtime_logger: RuntimeLogger | None = None
 
     async def run_once(self, now: datetime) -> SchedulerRunResult:
         """Dispatch due observations once without sleeping.
@@ -68,8 +71,20 @@ class SchedulerRunner:
         due_observations = await self.scheduler.due_observations(now)
         for scheduled in due_observations:
             result = await self._run_one(scheduled, now)
+            self._log_result(result)
             results.append(result)
         return SchedulerRunResult(started_at=now, finished_at=now, results=tuple(results))
+
+    def _log_result(self, result: ScheduledObservationResult) -> None:
+        """Scheduler の text-free proactive delivery outcome を記録する。"""
+        logger = self.runtime_logger or LoguruRuntimeLogger()
+        logger.info(
+            "runtime.proactive.delivery",
+            outcome=result.status,
+            reason=result.reason,
+            observation_id=str(result.observation_id),
+            delivery_id=str(result.delivery_id) if result.delivery_id is not None else None,
+        )
 
     async def _run_one(
         self,

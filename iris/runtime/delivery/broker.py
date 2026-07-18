@@ -11,6 +11,7 @@ from iris.adapters.app_gateway.ports import AppActionBroker, AppActionBrokerErro
 from iris.contracts.actions import ActionStatus
 from iris.contracts.learning import LearningEvent
 from iris.runtime.delivery.outbox import DeliveryOutboxError
+from iris.runtime.observability.logger import LoguruRuntimeLogger
 
 if TYPE_CHECKING:
     from iris.contracts.delivery import DeliveryEnvelope, DeliveryReport
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.learning.dispatch import LearningDispatchStore
     from iris.runtime.learning.hooks import LearningHookRunner
+    from iris.runtime.observability.ports import RuntimeLogger
 
 
 _TERMINAL_REPORT_STATUSES: frozenset[ActionStatus] = frozenset(
@@ -38,6 +40,7 @@ class RuntimeAppActionBroker(AppActionBroker):
     retry_backoff_seconds: float = 30.0
     learning_hook_runner: LearningHookRunner | None = None
     learning_dispatch_store: LearningDispatchStore | None = None
+    runtime_logger: RuntimeLogger | None = None
 
     @override
     async def poll_actions(
@@ -117,6 +120,19 @@ class RuntimeAppActionBroker(AppActionBroker):
                 )
         except DeliveryOutboxError as exc:
             raise AppActionBrokerError(str(exc)) from exc
+        if updated.source_observation_id is not None:
+            logger = self.runtime_logger or LoguruRuntimeLogger()
+            logger.info(
+                "runtime.proactive.delivery",
+                outcome=(
+                    "delivered"
+                    if report.result.status is ActionStatus.SUCCEEDED
+                    else report.result.status.value
+                ),
+                reason=report.result.error_reason,
+                observation_id=str(updated.source_observation_id),
+                delivery_id=str(updated.delivery_id),
+            )
         await self._dispatch_learning(report, updated)
         return updated
 

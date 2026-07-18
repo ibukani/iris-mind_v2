@@ -76,6 +76,10 @@ from iris.runtime.wiring.features import (
 )
 from iris.runtime.wiring.llm import LLMClientFactory
 from iris.runtime.wiring.presentation import wire_output_pipeline
+from iris.runtime.wiring.proactive_talk import (
+    ProactiveTextResponseGeneratorOptions,
+    wire_proactive_text_response_generator,
+)
 from iris.runtime.wiring.scheduler import (
     SchedulerSafetyDependencies,
     wire_runtime_scheduler,
@@ -91,6 +95,7 @@ if TYPE_CHECKING:
     from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.memory import VectorMemoryIndex
     from iris.features.definition import EventReactionGenerator, LearningHook
+    from iris.features.proactive_talk.generation import ProactiveTextGenerator
     from iris.runtime.app import IrisApp
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.config.learning import RuntimeBackgroundJobKindPolicyConfig
@@ -140,6 +145,8 @@ def describe_runtime_operational_wiring(
     feature_catalog = wire_runtime_features(config)
     event_reaction_configured = config.companion_semantics.event_reaction_generation_enabled
     event_reaction_allowed = event_reaction_configured and config.safety.mode == "development"
+    proactive_configured = config.companion_semantics.proactive_talk_generation_enabled
+    proactive_allowed = proactive_configured and config.safety.mode == "development"
     return RuntimeOperationalWiringDiagnostics(
         delivery_broker_wired=config.delivery.enabled,
         proactive_talk_enabled=_feature_enabled(feature_catalog, "proactive_talk"),
@@ -150,6 +157,13 @@ def describe_runtime_operational_wiring(
             else "blocked_production_like_mode"
             if event_reaction_configured
             else "disabled"
+        ),
+        proactive_generation_mode=(
+            "enabled"
+            if proactive_allowed
+            else "blocked_production_like_mode"
+            if proactive_configured
+            else "not_configured"
         ),
         inference_scheduler_enabled=config.inference_scheduler.enabled,
         runtime_feature_mode=feature_catalog.mode.value,
@@ -322,7 +336,10 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     vector_index, embedding = _wire_memory_vector(config, stores)
     inference_scheduler = _wire_inference_scheduler(config)
     event_reaction_generator = _wire_event_reaction_generator(config, inference_scheduler)
-    feature_catalog = wire_runtime_features(config)
+    feature_catalog = wire_runtime_features(
+        config,
+        proactive_generator=_wire_proactive_talk_generator(config, inference_scheduler),
+    )
     output_pipeline = wire_output_pipeline(
         safety_config=config.safety,
         extension_presenters=collect_action_plan_presenters(feature_catalog.features),
@@ -434,6 +451,37 @@ def _wire_event_reaction_generator(
     return wire_event_reaction_response_generator(
         client,
         options=EventReactionResponseGeneratorOptions(
+            model=factory.resolve_model(model_config, config),
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_output_tokens,
+            prompt_budget_config=config.prompt_budget,
+            model_call_budget=config.model_call_budget,
+            inference_scheduler=inference_scheduler,
+            system_prompt_builder=system_prompt_builder_for_config(config),
+        ),
+    )
+
+
+def _wire_proactive_talk_generator(
+    config: IrisRuntimeConfig,
+    inference_scheduler: LocalInferenceResourceScheduler | None,
+) -> ProactiveTextGenerator | None:
+    """Development mode で明示有効化された proactive generator を構築する。
+
+    Returns:
+        有効時の proactive generator。無効時は None。
+    """
+    if (
+        not config.companion_semantics.proactive_talk_generation_enabled
+        or config.safety.mode != "development"
+    ):
+        return None
+    model_config = config.models.default_chat
+    factory = LLMClientFactory()
+    client = factory.create_client(model_config, config)
+    return wire_proactive_text_response_generator(
+        client,
+        options=ProactiveTextResponseGeneratorOptions(
             model=factory.resolve_model(model_config, config),
             temperature=model_config.temperature,
             max_tokens=model_config.max_output_tokens,

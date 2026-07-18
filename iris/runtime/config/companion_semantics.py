@@ -15,6 +15,7 @@ class RuntimeCompanionSemanticsConfig:
     dependency_risk_hint_enabled: bool = True
     persona_prompt_enabled: bool = False
     event_reaction_generation_enabled: bool = False
+    proactive_talk_generation_enabled: bool = False
 
 
 def apply_companion_semantics_toml(
@@ -57,6 +58,14 @@ def apply_companion_semantics_toml(
             event_reaction_generation_enabled=parse_bool(
                 table["event_reaction_generation_enabled"],
                 "companion_semantics.event_reaction_generation_enabled",
+            ),
+        )
+    if "proactive_talk_generation_enabled" in table:
+        value = replace(
+            value,
+            proactive_talk_generation_enabled=parse_bool(
+                table["proactive_talk_generation_enabled"],
+                "companion_semantics.proactive_talk_generation_enabled",
             ),
         )
     return validate_companion_semantics_config(value)
