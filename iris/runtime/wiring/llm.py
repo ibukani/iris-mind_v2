@@ -44,6 +44,7 @@ from iris.runtime.prompting.observability import record_prompt_assembly_report
 if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
     from iris.adapters.llm.lifecycle import ModelLifecycleProbe
+    from iris.contracts.prompting import PromptProfileName
     from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
     from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig
     from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
@@ -64,6 +65,8 @@ class LLMResponseGeneratorOptions:
     prompt_assembler: RuntimePromptAssembler | None = None
     runtime_logger: RuntimeLogger | None = None
     inference_scheduler: LocalInferenceResourceScheduler | None = None
+    call_site: ModelCallSite = ModelCallSite.USER_RESPONSE_HOT_PATH
+    model_slot: str = "default_chat"
 
 
 @dataclass(frozen=True)
@@ -77,6 +80,9 @@ class ResponseGeneratorWiringOptions:
     runtime_logger: RuntimeLogger | None = None
     inference_scheduler: LocalInferenceResourceScheduler | None = None
     system_prompt_builder: SystemPromptBuilder | None = None
+    prompt_profile: PromptProfileName | None = None
+    call_site: ModelCallSite = ModelCallSite.USER_RESPONSE_HOT_PATH
+    model_slot: str = "default_chat"
 
 
 class LLMResponseGenerator(ResponseGenerator):
@@ -104,6 +110,8 @@ class LLMResponseGenerator(ResponseGenerator):
         self._prompt_assembler = resolved_options.prompt_assembler or RuntimePromptAssembler()
         self._logger = resolved_options.runtime_logger or LoguruRuntimeLogger()
         self._inference_scheduler = resolved_options.inference_scheduler
+        self._call_site = resolved_options.call_site
+        self._model_slot = resolved_options.model_slot
 
     @override
     async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
@@ -150,17 +158,17 @@ class LLMResponseGenerator(ResponseGenerator):
     async def _acquire_inference_lease(self) -> InferenceLeaseResult | None:
         if self._inference_scheduler is None:
             return None
-        call_site = current_model_call_site(ModelCallSite.USER_RESPONSE_HOT_PATH)
+        call_site = current_model_call_site(self._call_site)
         return await self._inference_scheduler.acquire(
             InferenceLeaseRequest(
                 slot_kind=InferenceSlotKind.LARGE_LLM,
                 priority=model_call_site_priority(call_site),
                 call_site=call_site,
-                model_slot="default_chat",
+                model_slot=self._model_slot,
                 model_name=self._model,
                 metadata=immutable_metadata(
                     {
-                        "model_slot": "default_chat",
+                        "model_slot": self._model_slot,
                         "model": self._model,
                         "call_kind": ModelCallKind.LARGE_LLM.value,
                         "call_site": call_site.value,
@@ -386,10 +394,13 @@ def wire_response_generator(
             max_tokens=resolved_options.max_tokens,
             prompt_assembler=RuntimePromptAssembler(
                 resolved_options.prompt_budget_config,
+                profile=resolved_options.prompt_profile,
                 system_prompt_builder=resolved_options.system_prompt_builder,
             ),
             runtime_logger=resolved_options.runtime_logger,
             inference_scheduler=resolved_options.inference_scheduler,
+            call_site=resolved_options.call_site,
+            model_slot=resolved_options.model_slot,
         ),
     )
 
@@ -400,6 +411,8 @@ def wire_budgeted_response_generator(
     *,
     model: str,
     model_slot: str,
+    default_call_site: ModelCallSite = ModelCallSite.USER_RESPONSE_HOT_PATH,
+    runtime_logger: RuntimeLogger | None = None,
 ) -> BudgetedResponseGenerator:
     """ResponseGenerator に model call budget gate を被せる。
 
@@ -411,6 +424,8 @@ def wire_budgeted_response_generator(
         ModelCallBudgetGate(config),
         model_name=model,
         model_slot=model_slot,
+        default_call_site=default_call_site,
+        runtime_logger=runtime_logger,
     )
 
 

@@ -49,6 +49,16 @@ class RuntimeModelCallBudgetConfig:
         high_risk_escalation_allowed=True,
         uncertain_escalation_allowed=True,
     )
+    event_reaction: RuntimeFeatureModelCallBudget = RuntimeFeatureModelCallBudget(
+        large_llm_max_calls=1,
+        small_classifier_max_calls=0,
+        embedding_max_calls=0,
+        reranker_max_calls=0,
+        background_llm_max_calls=0,
+        low_confidence_fallback=CascadeFallbackBehavior.DETERMINISTIC_BASELINE,
+        high_risk_escalation_allowed=False,
+        uncertain_escalation_allowed=False,
+    )
     proactive: RuntimeFeatureModelCallBudget = RuntimeFeatureModelCallBudget(
         large_llm_max_calls=1,
         small_classifier_max_calls=1,
@@ -117,6 +127,11 @@ def apply_model_call_budget_toml(
             table,
             ModelCallSite.USER_RESPONSE_HOT_PATH,
         ),
+        event_reaction=_apply_feature_budget_toml(
+            value.event_reaction,
+            table,
+            ModelCallSite.EVENT_REACTION,
+        ),
         proactive=_apply_feature_budget_toml(value.proactive, table, ModelCallSite.PROACTIVE),
         memory_extraction=_apply_feature_budget_toml(
             value.memory_extraction,
@@ -157,6 +172,10 @@ def validate_model_call_budget_config(
             config.user_response_hot_path,
             ModelCallSite.USER_RESPONSE_HOT_PATH,
         ),
+        event_reaction=_validate_feature_budget(
+            config.event_reaction,
+            ModelCallSite.EVENT_REACTION,
+        ),
         proactive=_validate_feature_budget(config.proactive, ModelCallSite.PROACTIVE),
         memory_extraction=_validate_feature_budget(
             config.memory_extraction,
@@ -189,6 +208,7 @@ def feature_budget_for_site(
     """
     budgets = {
         ModelCallSite.USER_RESPONSE_HOT_PATH: config.user_response_hot_path,
+        ModelCallSite.EVENT_REACTION: config.event_reaction,
         ModelCallSite.PROACTIVE: config.proactive,
         ModelCallSite.MEMORY_EXTRACTION: config.memory_extraction,
         ModelCallSite.REFLECTION: config.reflection,

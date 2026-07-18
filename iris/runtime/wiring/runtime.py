@@ -53,11 +53,19 @@ from iris.runtime.state.activity_integrator import ActivityIntegrator
 from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.state.scheduler_target_integrator import SchedulerTargetIntegrator
 from iris.runtime.state.space_occupancy_integrator import SpaceOccupancyIntegrator
-from iris.runtime.wiring.app import AppStateDependencies, build_app_from_config
+from iris.runtime.wiring.app import (
+    AppStateDependencies,
+    build_app_from_config,
+    system_prompt_builder_for_config,
+)
 from iris.runtime.wiring.availability import wire_availability_resolver
 from iris.runtime.wiring.context import wire_workspace_context_assembler
 from iris.runtime.wiring.delivery import wire_app_action_broker, wire_delivery_safety_gate
-from iris.runtime.wiring.event_reaction import wire_event_reaction_decision_pipeline
+from iris.runtime.wiring.event_reaction import (
+    EventReactionResponseGeneratorOptions,
+    wire_event_reaction_decision_pipeline,
+    wire_event_reaction_response_generator,
+)
 from iris.runtime.wiring.features import (
     DisabledRuntimeFeature,
     RuntimeFeatureCatalog,
@@ -66,6 +74,7 @@ from iris.runtime.wiring.features import (
     collect_runtime_learning_hooks,
     wire_runtime_features,
 )
+from iris.runtime.wiring.llm import LLMClientFactory
 from iris.runtime.wiring.presentation import wire_output_pipeline
 from iris.runtime.wiring.scheduler import (
     SchedulerSafetyDependencies,
@@ -81,7 +90,7 @@ if TYPE_CHECKING:
     from iris.adapters.app_gateway.ports import AppActionBroker
     from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.memory import VectorMemoryIndex
-    from iris.features.definition import LearningHook
+    from iris.features.definition import EventReactionGenerator, LearningHook
     from iris.runtime.app import IrisApp
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.config.learning import RuntimeBackgroundJobKindPolicyConfig
@@ -104,6 +113,8 @@ class RuntimeOperationalWiringDiagnostics:
     proactive_talk_enabled: bool = False
     proactive_generation_mode: str = "not_configured"
     proactive_threshold: str = "not_configured"
+    event_reaction_generation_enabled: bool = False
+    event_reaction_generation_mode: str = "disabled"
     inference_scheduler_enabled: bool = False
     runtime_feature_mode: str = "development"
     enabled_feature_names: tuple[str, ...] = ()
@@ -127,9 +138,19 @@ def describe_runtime_operational_wiring(
         doctor へ渡す read-only wiring snapshot。
     """
     feature_catalog = wire_runtime_features(config)
+    event_reaction_configured = config.companion_semantics.event_reaction_generation_enabled
+    event_reaction_allowed = event_reaction_configured and config.safety.mode == "development"
     return RuntimeOperationalWiringDiagnostics(
         delivery_broker_wired=config.delivery.enabled,
         proactive_talk_enabled=_feature_enabled(feature_catalog, "proactive_talk"),
+        event_reaction_generation_enabled=event_reaction_allowed,
+        event_reaction_generation_mode=(
+            "enabled"
+            if event_reaction_allowed
+            else "blocked_production_like_mode"
+            if event_reaction_configured
+            else "disabled"
+        ),
         inference_scheduler_enabled=config.inference_scheduler.enabled,
         runtime_feature_mode=feature_catalog.mode.value,
         enabled_feature_names=tuple(feature.name for feature in feature_catalog.features),
@@ -192,6 +213,7 @@ def build_runtime_service(
     feature_catalog: RuntimeFeatureCatalog,
     output_pipeline: RuntimeOutputPipeline,
     options: RuntimeServiceBuildOptions,
+    event_reaction_generator: EventReactionGenerator | None = None,
 ) -> IrisRuntimeService:
     """IrisApp とランタイムstateストアからサービス境界を組み立てる。
 
@@ -204,6 +226,7 @@ def build_runtime_service(
         feature_catalog: 有効なフィーチャー定義の集合。
         output_pipeline: presentation と safety を適用する共有出力境界。
         options: target stale policy、現在時刻、runtime hook runner。
+        event_reaction_generator: 任意のpersona-aware反応生成器。
 
     Returns:
         構成済みの IrisRuntimeService。
@@ -230,6 +253,7 @@ def build_runtime_service(
         trust_policy=trust_policy,
         feature_catalog=feature_catalog,
         output_pipeline=output_pipeline,
+        generator=event_reaction_generator,
     )
     observation_observer = LoggingRuntimeObservationObserver()
     return IrisRuntimeService(
@@ -297,6 +321,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     stores = wire_runtime_state(config)
     vector_index, embedding = _wire_memory_vector(config, stores)
     inference_scheduler = _wire_inference_scheduler(config)
+    event_reaction_generator = _wire_event_reaction_generator(config, inference_scheduler)
     feature_catalog = wire_runtime_features(config)
     output_pipeline = wire_output_pipeline(
         safety_config=config.safety,
@@ -337,7 +362,9 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
             interaction_activity_enabled=config.interaction_activity.enabled,
             interaction_activity_max_ttl_seconds=(config.interaction_activity.max_ttl_seconds),
         ),
+        event_reaction_generator=event_reaction_generator,
     )
+
     gateway_components = _wire_runtime_gateway_components(config, stores, feature_catalog)
     background_job_runner = BackgroundJobRunner(
         stores.background_job_queue,
@@ -383,6 +410,37 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
         memory_candidate_promoter=ApprovedMemoryCandidatePromoter(
             stores.memory_candidate_review_store,
             stores.memory_store,
+        ),
+    )
+
+
+def _wire_event_reaction_generator(
+    config: IrisRuntimeConfig,
+    inference_scheduler: LocalInferenceResourceScheduler | None,
+) -> EventReactionGenerator | None:
+    """Development modeで明示有効化されたevent reaction generatorを構築する。
+
+    Returns:
+        EventReactionGenerator: 有効時の生成器、無効時はNone。
+    """
+    if (
+        not config.companion_semantics.event_reaction_generation_enabled
+        or config.safety.mode != "development"
+    ):
+        return None
+    model_config = config.models.default_chat
+    factory = LLMClientFactory()
+    client = factory.create_client(model_config, config)
+    return wire_event_reaction_response_generator(
+        client,
+        options=EventReactionResponseGeneratorOptions(
+            model=factory.resolve_model(model_config, config),
+            temperature=model_config.temperature,
+            max_tokens=model_config.max_output_tokens,
+            prompt_budget_config=config.prompt_budget,
+            model_call_budget=config.model_call_budget,
+            inference_scheduler=inference_scheduler,
+            system_prompt_builder=system_prompt_builder_for_config(config),
         ),
     )
 
@@ -599,13 +657,17 @@ def _wire_activity_event_reaction_handler(
     trust_policy: ObservationTrustPolicy,
     feature_catalog: RuntimeFeatureCatalog,
     output_pipeline: RuntimeOutputPipeline,
+    generator: EventReactionGenerator | None = None,
 ) -> ActivityEventReactionHandler:
     """Event reaction handler を組み立てる。
 
     Returns:
         構成済みの ActivityEventReactionHandler。
     """
-    decision_pipeline = wire_event_reaction_decision_pipeline(feature_catalog.features)
+    decision_pipeline = wire_event_reaction_decision_pipeline(
+        feature_catalog.features,
+        generator=generator,
+    )
     return ActivityEventReactionHandler(
         trust_policy=trust_policy,
         decision_pipeline=decision_pipeline,

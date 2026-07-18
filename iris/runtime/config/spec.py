@@ -199,6 +199,19 @@ _MODEL_CALL_BUDGET_DEFAULTS: tuple[_ModelCallBudgetSpecDefaults, ...] = (
         enqueue_only=False,
     ),
     _ModelCallBudgetSpecDefaults(
+        site=ModelCallSite.EVENT_REACTION,
+        large_llm_max_calls=1,
+        small_classifier_max_calls=0,
+        embedding_max_calls=0,
+        reranker_max_calls=0,
+        background_llm_max_calls=0,
+        confidence_threshold=0.65,
+        low_confidence_fallback=CascadeFallbackBehavior.DETERMINISTIC_BASELINE.value,
+        high_risk_escalation_allowed=False,
+        uncertain_escalation_allowed=False,
+        enqueue_only=False,
+    ),
+    _ModelCallBudgetSpecDefaults(
         site=ModelCallSite.PROACTIVE,
         large_llm_max_calls=1,
         small_classifier_max_calls=1,
@@ -477,6 +490,12 @@ def _companion_semantics_specs() -> tuple[ConfigFieldSpec, ...]:
             ConfigValueType.BOOL,
             default=False,
             description="検証済み global persona section を prompt に組み込む。",
+        ),
+        ConfigFieldSpec(
+            "companion_semantics.event_reaction_generation_enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="Event reaction の persona-aware generation を明示的に有効化する。",
         ),
     )
 

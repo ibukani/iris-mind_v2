@@ -206,6 +206,6 @@ def model_call_site_priority(site: ModelCallSite) -> InferenceWorkPriority:
     """
     if site is ModelCallSite.USER_RESPONSE_HOT_PATH:
         return InferenceWorkPriority.USER_FACING_RESPONSE
-    if site is ModelCallSite.PROACTIVE:
+    if site in {ModelCallSite.PROACTIVE, ModelCallSite.EVENT_REACTION}:
         return InferenceWorkPriority.PROACTIVE
     return InferenceWorkPriority.BACKGROUND

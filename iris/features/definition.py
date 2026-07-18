@@ -4,16 +4,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from iris.cognitive.cycle.models import PipelineStepResult
     from iris.cognitive.cycle.pipeline import PipelineStep
     from iris.contracts.availability import AvailabilitySnapshot
-    from iris.contracts.event_reaction import EventReactionDecision
+    from iris.contracts.event_reaction import (
+        EventReactionDecision,
+        EventReactionGenerationResult,
+        EventReactionPrompt,
+    )
     from iris.contracts.learning import LearningEvent, RuntimeLearningEvent
     from iris.contracts.observations import ActivityEventObservation, Observation
     from iris.contracts.presentation import ActionPlanPresenter
+    from iris.contracts.workspace_context import SituationContextSnapshot
 
 
 class ObservationSource(Protocol):
@@ -56,6 +61,31 @@ class ActivityReactionPlanner(Protocol):
         availability: AvailabilitySnapshot | None,
     ) -> EventReactionDecision:
         """リアクションを計画する。"""
+        ...
+
+
+@runtime_checkable
+class ActivityReactionPromptProvider(Protocol):
+    """反応plannerに対応するbounded prompt入力の提供protocol。"""
+
+    def build_prompt(
+        self,
+        observation: ActivityEventObservation,
+        *,
+        situation_context: SituationContextSnapshot,
+    ) -> EventReactionPrompt | None:
+        """観測と状況からprompt入力を作る。"""
+        ...
+
+
+class EventReactionGenerator(Protocol):
+    """runtimeへ注入するイベント反応生成port。"""
+
+    async def generate(
+        self,
+        prompt: EventReactionPrompt,
+    ) -> EventReactionGenerationResult:
+        """Bounded promptから反応候補を生成する。"""
         ...
 
 
