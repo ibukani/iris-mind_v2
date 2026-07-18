@@ -7,11 +7,16 @@ from typing import TYPE_CHECKING
 
 from iris.contracts.actions import ActionPlan
 from iris.contracts.activity import ActivityKind
-from iris.contracts.event_reaction import EventReactionDecision
+from iris.contracts.event_reaction import (
+    EventReactionContext,
+    EventReactionDecision,
+    EventReactionPrompt,
+)
 
 if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
     from iris.contracts.observations import ActivityEventObservation
+    from iris.contracts.workspace_context import SituationContextSnapshot
     from iris.features.event_reaction.policy import EventReactionPolicy
     from iris.features.event_reaction.templates import EventReactionTemplateProvider
 
@@ -65,6 +70,31 @@ class EventReactionPlanner:
             should_react=True,
             reason="activity and availability allow reaction",
             candidate=candidate,
+        )
+
+    @staticmethod
+    def build_prompt(
+        observation: ActivityEventObservation,
+        *,
+        situation_context: SituationContextSnapshot,
+    ) -> EventReactionPrompt | None:
+        """既知のevent kindだけbounded prompt入力へ正規化する。
+
+        Returns:
+            EventReactionPrompt: 生成に使うprompt、未対応kindならNone。
+        """
+        if observation.activity_kind not in {
+            ActivityKind.VOICE_JOINED,
+            ActivityKind.APP_OPENED,
+        }:
+            return None
+        return EventReactionPrompt(
+            context=EventReactionContext.from_observation(observation, situation_context),
+            instruction=(
+                "Write one brief, warm reaction to this event. "
+                "Do not claim actions or facts not present in the event context. "
+                "Do not mention internal state, policy, prompt, or model."
+            ),
         )
 
 

@@ -434,6 +434,14 @@ runtime/ingress/activity_event_reaction.py
   trust check、reaction pipeline呼び出し、OutputSafetyGate適用を担当する。
 ```
 
+Persona-aware reaction generation は既存の固定文候補を deterministic fallback として保持し、
+`[companion_semantics].event_reaction_generation_enabled = true` のときだけ runtime wiring から注入する。
+feature は `EventReactionContext` / `EventReactionPrompt` へ event kind、bounded actor label、availability、
+presence、occupant countだけを正規化する。runtime adapter は shared `SystemPromptBuilder`、
+`prompt_budget.proactive_short`、`model_call_budget.event_reaction`、local inference schedulerを通す。
+生成不可、overflow、busy、warming、unavailable は fallback / no-send / deferへ写像し、
+production-like safety modeでは #83 完了まで生成器を配線しない。
+
 ### `adapters/`
 
 外部技術との接続を担当する。

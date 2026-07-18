@@ -24,6 +24,7 @@ class ModelCallSite(StrEnum):
     """モデル呼び出しが発生した runtime / feature の場所。"""
 
     USER_RESPONSE_HOT_PATH = "user_response_hot_path"
+    EVENT_REACTION = "event_reaction"
     PROACTIVE = "proactive"
     MEMORY_EXTRACTION = "memory_extraction"
     REFLECTION = "reflection"

@@ -14,6 +14,7 @@ class RuntimeCompanionSemanticsConfig:
     appraisal_signals_enabled: bool = False
     dependency_risk_hint_enabled: bool = True
     persona_prompt_enabled: bool = False
+    event_reaction_generation_enabled: bool = False
 
 
 def apply_companion_semantics_toml(
@@ -48,6 +49,14 @@ def apply_companion_semantics_toml(
             persona_prompt_enabled=parse_bool(
                 table["persona_prompt_enabled"],
                 "companion_semantics.persona_prompt_enabled",
+            ),
+        )
+    if "event_reaction_generation_enabled" in table:
+        value = replace(
+            value,
+            event_reaction_generation_enabled=parse_bool(
+                table["event_reaction_generation_enabled"],
+                "companion_semantics.event_reaction_generation_enabled",
             ),
         )
     return validate_companion_semantics_config(value)

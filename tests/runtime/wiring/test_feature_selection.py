@@ -81,3 +81,21 @@ def test_operational_wiring_reports_feature_selection_metadata() -> None:
     assert diagnostics.enabled_feature_names == ("event_reaction",)
     assert len(diagnostics.disabled_features) == 1
     assert diagnostics.disabled_features[0].name == "basic_action"
+
+
+def test_event_reaction_generation_is_fail_closed_outside_development() -> None:
+    """#83未完了のproduction-like modeでは生成器を有効化しない。"""
+    base = default_runtime_config()
+    config = replace(
+        base,
+        safety=replace(base.safety, mode="strict"),
+        companion_semantics=replace(
+            base.companion_semantics,
+            event_reaction_generation_enabled=True,
+        ),
+    )
+
+    diagnostics = describe_runtime_operational_wiring(config)
+
+    assert diagnostics.event_reaction_generation_enabled is False
+    assert diagnostics.event_reaction_generation_mode == "blocked_production_like_mode"

@@ -122,6 +122,7 @@ def build_app_from_config(
     factory = client_factory or LLMClientFactory()
     client = factory.create_client(model_config, config)
     model = factory.resolve_model(model_config, config)
+    resolved_system_prompt_builder = system_prompt_builder_for_config(config)
 
     memory_retriever: MemoryRetriever | None = None
     if isinstance(state.memory_store, SQLiteMemoryStore):
@@ -143,7 +144,7 @@ def build_app_from_config(
             model_call_budget=config.model_call_budget,
             prompt_budget=config.prompt_budget,
             inference_scheduler=inference_scheduler,
-            system_prompt_builder=_wire_system_prompt_builder(config),
+            system_prompt_builder=resolved_system_prompt_builder,
         ),
     )
     all_features = collect_feature_items((features, (chat_feature,)))
@@ -195,7 +196,7 @@ def _wire_chat_feature(
     return define_chat_feature(generator)
 
 
-def _wire_system_prompt_builder(config: IrisRuntimeConfig) -> SystemPromptBuilder | None:
+def system_prompt_builder_for_config(config: IrisRuntimeConfig) -> SystemPromptBuilder | None:
     """Config gate が有効な場合だけ起動時に global persona を読み込む。
 
     Returns:

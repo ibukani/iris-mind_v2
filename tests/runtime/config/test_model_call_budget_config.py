@@ -24,6 +24,7 @@ def test_default_model_call_budget_config_matches_issue_88_hot_path_policy() -> 
 
     assert config.enabled
     assert config.user_response_hot_path.large_llm_max_calls == 1
+    assert config.event_reaction.large_llm_max_calls == 1
     assert config.runtime_learning_hook.large_llm_max_calls == 0
     assert config.runtime_learning_hook.enqueue_only
     assert (
