@@ -8,6 +8,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from iris.contracts.metadata import ImmutableMetadata
+from iris.contracts.ordering import OrderingDecision
 from iris.core.ids import AccountId, ActorId, ObservationId, SessionId, SpaceId, TranscriptId
 
 
@@ -76,6 +77,7 @@ class TranscriptRecord(BaseModel):
     account_id: AccountId | None = None
     space_id: SpaceId | None = None
     retention_until: datetime | None = None
+    legal_hold_until: datetime | None = None
     metadata: ImmutableMetadata = Field(default_factory=dict)
 
 
@@ -121,6 +123,50 @@ class TranscriptAccessScope(BaseModel):
             message = "transcript access requires actor_id, account_id, or space_id"
             raise ValueError(message)
         return self
+
+
+class TranscriptCleanupExclusionReason(StrEnum):
+    """Cleanup対象から除外した理由。"""
+
+    LEGAL_HOLD = "legal_hold"
+    POLICY_DISABLED = "policy_disabled"
+
+
+class TranscriptCleanupExclusion(BaseModel):
+    """Cleanup対象から除外したrecord件数。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    reason: TranscriptCleanupExclusionReason
+    count: int = Field(ge=1)
+
+
+class TranscriptCleanupRequest(BaseModel):
+    """Transcript cleanup の scoped、idempotent な request。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    operation_id: str = Field(min_length=1, max_length=200)
+    scope: TranscriptAccessScope
+    cutoff: datetime
+    dry_run: bool = True
+    policy: TranscriptDeletionPolicy = Field(default_factory=TranscriptDeletionPolicy)
+
+
+class TranscriptCleanupResult(BaseModel):
+    """Transcript cleanup の dry-run / execution 結果。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    operation_id: str
+    dry_run: bool
+    target_count: int = Field(ge=0)
+    eligible_count: int = Field(ge=0)
+    deleted_count: int = Field(ge=0)
+    excluded_count: int = Field(ge=0)
+    exclusions: tuple[TranscriptCleanupExclusion, ...] = ()
+    already_applied: bool = False
+    decision: OrderingDecision
 
 
 class TranscriptTimeRange(BaseModel):

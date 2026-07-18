@@ -89,6 +89,13 @@ class RuntimeAuthorizationPolicy:
         self._validate_external_ingress_principal_profile(principal)
         self._require_scope(principal, AuthScope.TRANSCRIPT_READ)
 
+    def require_transcript_cleanup(self, principal: ClientPrincipal) -> None:
+        """Transcript cleanup をadmin principalだけに許可する。"""
+        self._validate_external_ingress_principal_profile(principal)
+        if principal.client_kind is not ClientKind.ADMIN:
+            _deny("transcript cleanup requires admin principal")
+        self._require_scope(principal, AuthScope.TRANSCRIPT_CLEANUP)
+
     @staticmethod
     def _require_delivery_principal(principal: ClientPrincipal) -> None:
         if principal.client_kind in {ClientKind.TRUSTED_ADAPTER, ClientKind.ADMIN}:

@@ -63,7 +63,7 @@ if TYPE_CHECKING:
     from iris.runtime.state.safety_audit import SafetyAuditJournal
     from iris.runtime.state.scheduler_targets import SchedulerTargetStore
     from iris.runtime.state.space_occupancy import SpaceOccupancyStore
-    from iris.runtime.state.transcript import TranscriptStore
+    from iris.runtime.state.transcript import TranscriptCleanupStore, TranscriptStore
 
 
 class SyncLifecycle(Protocol):
@@ -97,6 +97,7 @@ class RuntimeStateStores:
     learning_dispatch_store: InMemoryLearningDispatchStore
     conversation_history_store: InMemoryConversationHistoryStore
     transcript_store: TranscriptStore
+    transcript_cleanup_store: TranscriptCleanupStore
     project_context_store: InMemoryProjectContextStore
     sqlite_context: SQLitePersistenceContext | None = None
     sync_lifecycles: tuple[SyncLifecycle, ...] = ()
@@ -172,6 +173,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),
         transcript_store=sqlite_transcript_store or NullTranscriptStore(),
+        transcript_cleanup_store=sqlite_transcript_store or NullTranscriptStore(),
         project_context_store=InMemoryProjectContextStore(),
         sqlite_context=ctx,
         sync_lifecycles=tuple(
@@ -221,6 +223,7 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
         learning_dispatch_store=InMemoryLearningDispatchStore(),
         conversation_history_store=InMemoryConversationHistoryStore(),
         transcript_store=NullTranscriptStore(),
+        transcript_cleanup_store=NullTranscriptStore(),
         project_context_store=InMemoryProjectContextStore(),
         sqlite_context=None,
         sync_lifecycles=(),

@@ -311,6 +311,15 @@ def test_admin_runtime_scope_is_admin_only() -> None:
     )
     policy.require_poll_app_actions(principal, "cli")
     policy.require_report_action_result(principal, "cli")
+    policy.require_transcript_cleanup(principal)
+
+    with pytest.raises(RuntimePermissionDeniedError):
+        policy.require_transcript_cleanup(
+            _principal(
+                kind=ClientKind.EXTERNAL_CLIENT,
+                scopes=frozenset({AuthScope.TRANSCRIPT_CLEANUP}),
+            )
+        )
 
 
 def _principal(

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
-from iris.runtime.transcript.service import TranscriptQueryError, TranscriptReadService
+from iris.runtime.transcript.service import (
+    TranscriptCleanupService,
+    TranscriptQueryError,
+    TranscriptReadService,
+)
 
-__all__ = ["TranscriptQueryError", "TranscriptReadService"]
+__all__ = ["TranscriptCleanupService", "TranscriptQueryError", "TranscriptReadService"]

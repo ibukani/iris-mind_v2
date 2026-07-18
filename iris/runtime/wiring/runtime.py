@@ -66,7 +66,7 @@ from iris.runtime.state.activity_integrator import ActivityIntegrator
 from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.state.scheduler_target_integrator import SchedulerTargetIntegrator
 from iris.runtime.state.space_occupancy_integrator import SpaceOccupancyIntegrator
-from iris.runtime.transcript import TranscriptReadService
+from iris.runtime.transcript import TranscriptCleanupService, TranscriptReadService
 from iris.runtime.wiring.app import (
     AppStateDependencies,
     build_app_from_config,
@@ -212,6 +212,7 @@ class RuntimeComponents:
     interaction_policy_review_service: InteractionPolicyCandidateReviewService
     interaction_policy_promoter: ApprovedInteractionPolicyPromoter
     transcript_read_service: TranscriptReadService
+    transcript_cleanup_service: TranscriptCleanupService
 
 
 @dataclass(frozen=True)
@@ -457,6 +458,9 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
             stores.interaction_policy_candidate_review_store
         ),
         transcript_read_service=TranscriptReadService(stores.transcript_store),
+        transcript_cleanup_service=TranscriptCleanupService(
+            stores.transcript_cleanup_store,
+        ),
     )
 
 

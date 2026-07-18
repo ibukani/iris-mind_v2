@@ -105,6 +105,18 @@ SQLITE_SCHEMA_OWNERSHIP: tuple[SQLiteTableOwnership, ...] = (
         notes="implicit learning candidate review lifecycle の正本。",
     ),
     SQLiteTableOwnership(
+        table_name="conversation_transcripts",
+        owner="SQLiteTranscriptStore",
+        classification=SQLiteSchemaClassification.SOURCE_OF_TRUTH,
+        notes="opt-in confirmed transcript と retention / legal hold metadata の正本。",
+    ),
+    SQLiteTableOwnership(
+        table_name="transcript_cleanup_operations",
+        owner="SQLiteTranscriptStore",
+        classification=SQLiteSchemaClassification.SOURCE_OF_TRUTH,
+        notes="cleanup request fingerprint と idempotent result の正本。",
+    ),
+    SQLiteTableOwnership(
         table_name="memory_embeddings",
         owner="future vector index backend",
         classification=SQLiteSchemaClassification.DERIVED_INDEX,

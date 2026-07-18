@@ -19,6 +19,7 @@ EXTERNAL_CLIENT_FORBIDDEN_SCOPES = frozenset(
         AuthScope.OBSERVATION_SUBMIT_TRUSTED,
         AuthScope.DELIVERY_POLL,
         AuthScope.DELIVERY_REPORT,
+        AuthScope.TRANSCRIPT_CLEANUP,
         AuthScope.ADMIN_RUNTIME,
     }
 )

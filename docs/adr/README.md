@@ -37,6 +37,7 @@ Implementation anchors
 | [0020](0020-diagnostic-action-isolation.md) | Accepted | diagnostic echo action を development runtime に隔離し、production-like response path から除外する。 |
 | [0021](0021-relationship-update-policy-v2.md) | Accepted | Relationship update policy v2 は typed appraisal signal から bounded candidate / review-required / suppressed decision を返す。 |
 | [0022](0022-runtime-ordering-and-conflict-policy.md) | Accepted | Runtime-owned key ごとに ordering / idempotency / conflict を typed decision で扱い、global order を導入しない。 |
+| [0023](0023-transcript-management-boundary.md) | Accepted | Transcript cleanup は scoped dry-run、durable operation identity、legal hold、transcript-only deletion policy を持ち、#74 完了まで default-disabled とする。 |
 
 ## 現在の横断方針
 
@@ -51,3 +52,4 @@ Implementation anchors
 - ADR 0020 は #107 の diagnostic action isolation の source of truth であり、#83 production mode validation では `feature-selection` diagnostics を確認対象にする。
 - ADR 0021 は #102 の relationship update policy v2 を固定し、#72 worker が typed appraisal signal から bounded / review-required / suppressed candidate を参照できる境界を提供する。
 - ADR 0022 は #74 の runtime-owned ordering / conflict policy を固定し、activity projection、durable journal、delivery outbox が共通の typed decision vocabulary を参照する境界を提供する。
+- ADR 0023 は #73 の transcript management boundary を固定し、cleanup retry、legal hold、cross-store non-cascade、production gate を定義する。
