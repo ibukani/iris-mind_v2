@@ -20,5 +20,15 @@ CONVERSATION_TRANSCRIPT_REQUIRED_COLUMNS = frozenset(
         "recorded_at",
         "retention_until",
         "metadata_json",
+        "legal_hold_until",
+    }
+)
+
+TRANSCRIPT_CLEANUP_OPERATIONS_REQUIRED_COLUMNS = frozenset(
+    {
+        "operation_id",
+        "request_fingerprint",
+        "result_json",
+        "created_at",
     }
 )

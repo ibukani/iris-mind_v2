@@ -9,7 +9,17 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from iris.contracts.ordering import (
+    OrderingConflict,
+    OrderingConflictReason,
+    OrderingDecision,
+    OrderingDecisionKind,
+    RuntimeOrderingKey,
+    RuntimeOrderingKeyKind,
+)
 from iris.contracts.transcript import (
+    TranscriptCleanupRequest,
+    TranscriptCleanupResult,
     TranscriptExport,
     TranscriptExportRequest,
     TranscriptPage,
@@ -22,7 +32,7 @@ from iris.runtime.auth.policy import RuntimeAuthorizationPolicy
 
 if TYPE_CHECKING:
     from iris.runtime.auth.principals import ClientPrincipal
-    from iris.runtime.state.transcript import TranscriptStore
+    from iris.runtime.state.transcript import TranscriptCleanupStore, TranscriptStore
 
 
 class TranscriptQueryError(ValueError):
@@ -112,6 +122,37 @@ class TranscriptReadService:
         )
 
 
+class TranscriptCleanupService:
+    """Authorizationとfeature gateを通すtranscript cleanup service。"""
+
+    def __init__(
+        self,
+        store: TranscriptCleanupStore,
+        *,
+        authorization_policy: RuntimeAuthorizationPolicy | None = None,
+        enabled: bool = False,
+    ) -> None:
+        """Cleanup store と認可 policy を注入する。"""
+        self._store = store
+        self._authorization_policy = authorization_policy or RuntimeAuthorizationPolicy()
+        self._enabled = enabled
+
+    async def cleanup(
+        self,
+        principal: ClientPrincipal,
+        request: TranscriptCleanupRequest,
+    ) -> TranscriptCleanupResult:
+        """Scoped cleanupを実行し、gate無効時はdeferする。
+
+        Returns:
+            Cleanup result または feature-disabled defer decision。
+        """
+        self._authorization_policy.require_transcript_cleanup(principal)
+        if not self._enabled:
+            return _deferred_cleanup_result(request)
+        return await self._store.cleanup(request)
+
+
 def _cursor_for(record: TranscriptRecord) -> str:
     """Record の stable ordering key を opaque cursor に変換する。
 
@@ -140,3 +181,34 @@ def _decode_cursor(value: str) -> _TranscriptCursor:
     except (binascii.Error, UnicodeDecodeError, ValidationError, ValueError) as error:
         message = "invalid transcript cursor"
         raise TranscriptQueryError(message) from error
+
+
+def _deferred_cleanup_result(request: TranscriptCleanupRequest) -> TranscriptCleanupResult:
+    """Production-like cleanup gate が無効な result を返す。
+
+    Returns:
+        Cleanupが未有効であることを示すdefer result。
+    """
+    return TranscriptCleanupResult(
+        operation_id=request.operation_id,
+        dry_run=request.dry_run,
+        target_count=0,
+        eligible_count=0,
+        deleted_count=0,
+        excluded_count=0,
+        decision=OrderingDecision(
+            key=RuntimeOrderingKey(
+                kind=RuntimeOrderingKeyKind.TRANSCRIPT,
+                actor_id=request.scope.actor_id,
+                account_id=request.scope.account_id,
+                space_id=request.scope.space_id,
+                session_id=request.scope.session_id,
+            ),
+            decision=OrderingDecisionKind.DEFER,
+            conflict=OrderingConflict(
+                reason=OrderingConflictReason.BACKEND_UNAVAILABLE,
+                expected_version="cleanup_enabled",
+                observed_version="disabled",
+            ),
+        ),
+    )

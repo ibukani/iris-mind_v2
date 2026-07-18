@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from hashlib import sha256
 import json
 from typing import TYPE_CHECKING
 
@@ -16,7 +17,19 @@ from iris.adapters.persistence.sqlite.serialization import (
     required_datetime_to_text,
     text_to_datetime,
 )
+from iris.contracts.ordering import (
+    OrderingConflict,
+    OrderingConflictReason,
+    OrderingDecision,
+    OrderingDecisionKind,
+    RuntimeOrderingKey,
+    RuntimeOrderingKeyKind,
+)
 from iris.contracts.transcript import (
+    TranscriptCleanupExclusion,
+    TranscriptCleanupExclusionReason,
+    TranscriptCleanupRequest,
+    TranscriptCleanupResult,
     TranscriptPruneResult,
     TranscriptQuery,
     TranscriptRecord,
@@ -24,6 +37,7 @@ from iris.contracts.transcript import (
     TranscriptSource,
     TranscriptSubjectKind,
 )
+from iris.core.datetime_utils import now_utc
 from iris.core.ids import AccountId, ActorId, ObservationId, SessionId, SpaceId, TranscriptId
 
 if TYPE_CHECKING:
@@ -75,6 +89,14 @@ class SQLiteTranscriptStore:
         """
         return await asyncio.to_thread(self._prune_expired_sync, now)
 
+    async def cleanup(self, request: TranscriptCleanupRequest) -> TranscriptCleanupResult:
+        """Scoped cleanupをdry-runまたはidempotent executionで実行する。
+
+        Returns:
+            Cleanup対象、除外、削除件数とordering decision。
+        """
+        return await asyncio.to_thread(self._cleanup_sync, request)
+
     def _append_sync(self, records: tuple[TranscriptRecord, ...]) -> None:
         with self._db.transaction(immediate=True) as conn:
             for record in records:
@@ -84,8 +106,8 @@ class SQLiteTranscriptStore:
                         transcript_id, subject_kind, subject_id, space_id,
                         session_id, actor_id, account_id, observation_id, role,
                         source, content, occurred_at, recorded_at,
-                        retention_until, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        retention_until, legal_hold_until, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     _record_to_row(record),
                 )
@@ -133,11 +155,102 @@ class SQLiteTranscriptStore:
             cursor = conn.execute(
                 """
                 DELETE FROM conversation_transcripts
-                WHERE retention_until IS NOT NULL AND retention_until <= ?
+                WHERE retention_until IS NOT NULL
+                  AND retention_until <= ?
+                  AND (legal_hold_until IS NULL OR legal_hold_until <= ?)
                 """,
-                (required_datetime_to_text(now),),
+                (required_datetime_to_text(now), required_datetime_to_text(now)),
             )
             return TranscriptPruneResult(deleted_count=cursor.rowcount)
+
+    def _cleanup_sync(self, request: TranscriptCleanupRequest) -> TranscriptCleanupResult:
+        fingerprint = _cleanup_request_fingerprint(request)
+        key = _cleanup_ordering_key(request)
+        with self._db.transaction(immediate=True) as conn:
+            existing = conn.execute(
+                """
+                SELECT request_fingerprint, result_json
+                FROM transcript_cleanup_operations
+                WHERE operation_id = ?
+                """,
+                (request.operation_id,),
+            ).fetchone()
+            if existing is not None:
+                if str(existing["request_fingerprint"]) == fingerprint:
+                    result = TranscriptCleanupResult.model_validate_json(
+                        str(existing["result_json"])
+                    )
+                    return result.model_copy(update={"already_applied": True})
+                return _cleanup_operation_conflict(
+                    request,
+                    key,
+                    expected=str(existing["request_fingerprint"]),
+                    observed=fingerprint,
+                )
+
+            target_count = _cleanup_count(conn, request)
+            if _cleanup_policy_is_transcript_only(request):
+                eligible_count = _cleanup_eligible_count(conn, request)
+                excluded_count = target_count - eligible_count
+                exclusions = (
+                    (
+                        TranscriptCleanupExclusion(
+                            reason=TranscriptCleanupExclusionReason.LEGAL_HOLD,
+                            count=excluded_count,
+                        ),
+                    )
+                    if excluded_count > 0
+                    else ()
+                )
+            else:
+                eligible_count = 0
+                excluded_count = target_count
+                exclusions = (
+                    (
+                        TranscriptCleanupExclusion(
+                            reason=TranscriptCleanupExclusionReason.POLICY_DISABLED,
+                            count=excluded_count,
+                        ),
+                    )
+                    if excluded_count > 0
+                    else ()
+                )
+
+            deleted_count = 0
+            if (
+                not request.dry_run
+                and eligible_count > 0
+                and _cleanup_policy_is_transcript_only(request)
+            ):
+                cursor = conn.execute(
+                    _cleanup_delete_sql(),
+                    _cleanup_eligible_params(request),
+                )
+                deleted_count = cursor.rowcount
+            result = TranscriptCleanupResult(
+                operation_id=request.operation_id,
+                dry_run=request.dry_run,
+                target_count=target_count,
+                eligible_count=eligible_count,
+                deleted_count=deleted_count,
+                excluded_count=excluded_count,
+                exclusions=exclusions,
+                decision=OrderingDecision(key=key, decision=OrderingDecisionKind.ACCEPT),
+            )
+            conn.execute(
+                """
+                INSERT INTO transcript_cleanup_operations(
+                    operation_id, request_fingerprint, result_json, created_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (
+                    request.operation_id,
+                    fingerprint,
+                    result.model_dump_json(),
+                    now_utc().isoformat(),
+                ),
+            )
+            return result
 
 
 def _query_params(query: TranscriptQuery) -> tuple[object, ...]:
@@ -163,6 +276,124 @@ def _query_params(query: TranscriptQuery) -> tuple[object, ...]:
         _optional_query_datetime(query.after_occurred_at),
         _optional_query_text(query.after_transcript_id),
     )
+
+
+def _cleanup_ordering_key(request: TranscriptCleanupRequest) -> RuntimeOrderingKey:
+    return RuntimeOrderingKey(
+        kind=RuntimeOrderingKeyKind.TRANSCRIPT,
+        actor_id=request.scope.actor_id,
+        account_id=request.scope.account_id,
+        space_id=request.scope.space_id,
+        session_id=request.scope.session_id,
+    )
+
+
+def _cleanup_request_fingerprint(request: TranscriptCleanupRequest) -> str:
+    return sha256(request.model_dump_json().encode("utf-8")).hexdigest()
+
+
+def _cleanup_operation_conflict(
+    request: TranscriptCleanupRequest,
+    key: RuntimeOrderingKey,
+    *,
+    expected: str,
+    observed: str,
+) -> TranscriptCleanupResult:
+    return TranscriptCleanupResult(
+        operation_id=request.operation_id,
+        dry_run=request.dry_run,
+        target_count=0,
+        eligible_count=0,
+        deleted_count=0,
+        excluded_count=0,
+        decision=OrderingDecision(
+            key=key,
+            decision=OrderingDecisionKind.REJECT_CONFLICT,
+            conflict=OrderingConflict(
+                reason=OrderingConflictReason.VERSION_CONFLICT,
+                expected_version=expected,
+                observed_version=observed,
+            ),
+        ),
+    )
+
+
+def _cleanup_policy_is_transcript_only(request: TranscriptCleanupRequest) -> bool:
+    policy = request.policy
+    return (
+        policy.delete_transcript_records
+        and not policy.delete_canonical_memory
+        and not policy.delete_review_candidates
+        and not policy.delete_delivery_state
+    )
+
+
+def _cleanup_scope_params(request: TranscriptCleanupRequest) -> tuple[object, ...]:
+    scope = request.scope
+    return (
+        _optional_query_text(scope.actor_id),
+        _optional_query_text(scope.actor_id),
+        _optional_query_text(scope.account_id),
+        _optional_query_text(scope.account_id),
+        _optional_query_text(scope.space_id),
+        _optional_query_text(scope.space_id),
+        _optional_query_text(scope.session_id),
+        _optional_query_text(scope.session_id),
+        required_datetime_to_text(request.cutoff),
+    )
+
+
+def _cleanup_count(conn: sqlite3.Connection, request: TranscriptCleanupRequest) -> int:
+    row = conn.execute(
+        _cleanup_count_sql(),
+        _cleanup_scope_params(request),
+    ).fetchone()
+    return 0 if row is None else int(row["count"])
+
+
+def _cleanup_eligible_count(conn: sqlite3.Connection, request: TranscriptCleanupRequest) -> int:
+    row = conn.execute(
+        _cleanup_eligible_count_sql(),
+        (*_cleanup_scope_params(request), required_datetime_to_text(request.cutoff)),
+    ).fetchone()
+    return 0 if row is None else int(row["count"])
+
+
+def _cleanup_count_sql() -> str:
+    return """
+        SELECT COUNT(*) AS count
+        FROM conversation_transcripts
+        WHERE (? IS NULL OR actor_id = ?)
+          AND (? IS NULL OR account_id = ?)
+          AND (? IS NULL OR space_id = ?)
+          AND (? IS NULL OR session_id = ?)
+          AND occurred_at < ?
+    """
+
+
+def _cleanup_eligible_count_sql() -> str:
+    return (
+        _cleanup_count_sql()
+        + """
+          AND (legal_hold_until IS NULL OR legal_hold_until <= ?)
+    """
+    )
+
+
+def _cleanup_delete_sql() -> str:
+    return """
+        DELETE FROM conversation_transcripts
+        WHERE (? IS NULL OR actor_id = ?)
+          AND (? IS NULL OR account_id = ?)
+          AND (? IS NULL OR space_id = ?)
+          AND (? IS NULL OR session_id = ?)
+          AND occurred_at < ?
+          AND (legal_hold_until IS NULL OR legal_hold_until <= ?)
+    """
+
+
+def _cleanup_eligible_params(request: TranscriptCleanupRequest) -> tuple[object, ...]:
+    return (*_cleanup_scope_params(request), required_datetime_to_text(request.cutoff))
 
 
 def _optional_query_text(value: object | None) -> str | None:
@@ -191,6 +422,7 @@ def _prune_key_overflow(
             SELECT transcript_id
             FROM conversation_transcripts
             WHERE subject_kind = ? AND subject_id = ? AND space_id IS ?
+              AND (legal_hold_until IS NULL OR legal_hold_until <= ?)
             ORDER BY occurred_at DESC, transcript_id DESC
             LIMIT -1 OFFSET ?
         )
@@ -199,6 +431,7 @@ def _prune_key_overflow(
             str(record.subject_kind),
             record.subject_id,
             optional_text(record.space_id),
+            required_datetime_to_text(now_utc()),
             max_records_per_key,
         ),
     )
@@ -220,6 +453,7 @@ def _record_to_row(record: TranscriptRecord) -> tuple[object, ...]:
         required_datetime_to_text(record.occurred_at),
         required_datetime_to_text(record.recorded_at),
         datetime_to_text(record.retention_until),
+        datetime_to_text(record.legal_hold_until),
         json.dumps(dict(record.metadata)),
     )
 
@@ -240,5 +474,6 @@ def _row_to_record(row: sqlite3.Row) -> TranscriptRecord:
         account_id=optional_new_type(AccountId, row["account_id"]),
         space_id=optional_new_type(SpaceId, row["space_id"]),
         retention_until=optional_datetime(row["retention_until"]),
+        legal_hold_until=optional_datetime(row["legal_hold_until"]),
         metadata=json.loads(str(row["metadata_json"])),
     )

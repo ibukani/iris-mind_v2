@@ -760,7 +760,12 @@ raw transcript、embedding vector、本文はdiagnosticsへ出さない。
 Transcript read-only query / export は `TranscriptReadService` が担当する。
 要求には actor / account / space の owner scope と任意の date range が必要で、
 `transcript.read` authorization scope、stable opaque cursor、page / export cap を通す。
-管理 API の cleanup mutation、multi-client の競合解決は #74 完了後まで有効化しない。
+Cleanup backend は `TranscriptCleanupService` が担当する。
+`admin` principal と `transcript.cleanup` scope、owner scope、cutoff、operation identityを要求し、
+dry-run / execution、legal hold除外、SQLite restart後のoperation reuse、request fingerprint conflictを
+typed resultとして返す。Cleanupはtranscriptだけを削除し、memory、review candidate、
+background job、delivery outboxへ伝搬しない。Production-like cleanup mutationは
+#74完了後まで標準runtime wiringで有効化しない。
 
 永続identity registry、account merging、外部管理 transport、長期memory consolidation jobはfuture work。
 

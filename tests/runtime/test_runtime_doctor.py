@@ -479,8 +479,8 @@ async def test_runtime_doctor_reports_sqlite_schema_version(
 
     check = next(item for item in report.checks if item.name == "sqlite-state")
     assert check.status == "ok"
-    assert "schema_version=7" in check.summary
-    assert "latest_migration=presentation_hints" in check.summary
+    assert "schema_version=8" in check.summary
+    assert "latest_migration=transcript_cleanup" in check.summary
 
 
 @pytest.mark.anyio

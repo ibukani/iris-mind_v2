@@ -14,4 +14,5 @@ class AuthScope(StrEnum):
     DELIVERY_POLL = "delivery.poll"
     DELIVERY_REPORT = "delivery.report"
     TRANSCRIPT_READ = "transcript.read"
+    TRANSCRIPT_CLEANUP = "transcript.cleanup"
     ADMIN_RUNTIME = "admin.runtime"
