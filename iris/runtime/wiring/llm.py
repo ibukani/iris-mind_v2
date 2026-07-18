@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, override
 
 from iris.adapters.llm.fake import FakeLLMClient
@@ -22,6 +22,7 @@ from iris.contracts.model_policy import (
     ModelCallKind,
     ModelCallSite,
 )
+from iris.contracts.retrieval import RetrievalQuery
 from iris.core.metadata import immutable_metadata
 from iris.features.chat.definition import GeneratedResponse, ResponseGenerator, ResponsePrompt
 from iris.runtime.config import ConfigError, IrisRuntimeConfig, RuntimeModelConfig
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
     from iris.adapters.llm.diagnostics import LLMProviderDiagnostics
     from iris.adapters.llm.lifecycle import ModelLifecycleProbe
     from iris.contracts.prompting import PromptProfileName
+    from iris.contracts.retrieval import ContextRetriever, RetrievedContextItem
     from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
     from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig
     from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
@@ -67,6 +69,8 @@ class LLMResponseGeneratorOptions:
     inference_scheduler: LocalInferenceResourceScheduler | None = None
     call_site: ModelCallSite = ModelCallSite.USER_RESPONSE_HOT_PATH
     model_slot: str = "default_chat"
+    context_retriever: ContextRetriever | None = None
+    retrieval_profile: PromptProfileName | None = None
 
 
 @dataclass(frozen=True)
@@ -83,6 +87,8 @@ class ResponseGeneratorWiringOptions:
     prompt_profile: PromptProfileName | None = None
     call_site: ModelCallSite = ModelCallSite.USER_RESPONSE_HOT_PATH
     model_slot: str = "default_chat"
+    context_retriever: ContextRetriever | None = None
+    retrieval_profile: PromptProfileName | None = None
 
 
 class LLMResponseGenerator(ResponseGenerator):
@@ -112,6 +118,8 @@ class LLMResponseGenerator(ResponseGenerator):
         self._inference_scheduler = resolved_options.inference_scheduler
         self._call_site = resolved_options.call_site
         self._model_slot = resolved_options.model_slot
+        self._context_retriever = resolved_options.context_retriever
+        self._retrieval_profile = resolved_options.retrieval_profile
 
     @override
     async def generate_response(self, prompt: ResponsePrompt) -> GeneratedResponse:
@@ -123,7 +131,8 @@ class LLMResponseGenerator(ResponseGenerator):
         Returns:
             生成された応答テキストとモデルメタデータ。
         """
-        assembly = self._prompt_assembler.assemble(prompt)
+        prompt_for_assembly = await self._retrieve_context(prompt)
+        assembly = self._prompt_assembler.assemble(prompt_for_assembly)
         record_prompt_assembly_report(assembly.report, runtime_logger=self._logger)
         request = LLMRequest(
             model=self._model,
@@ -154,6 +163,34 @@ class LLMResponseGenerator(ResponseGenerator):
             ):
                 await inference_scheduler.release(lease_result.lease_id)
         return GeneratedResponse(text=response.text, model=response.model)
+
+    async def _retrieve_context(self, prompt: ResponsePrompt) -> ResponsePrompt:
+        retriever = self._context_retriever
+        query = prompt.retrieval_query
+        if retriever is None or query is None:
+            return prompt
+        try:
+            if self._retrieval_profile is not None:
+                query = RetrievalQuery(
+                    text=query.text,
+                    scope=query.scope,
+                    profile=self._retrieval_profile,
+                    max_total_items=query.max_total_items,
+                )
+            result = await retriever.retrieve(query)
+        except (OSError, RuntimeError, TimeoutError, ValueError) as error:
+            self._logger.info(
+                "runtime.retrieval.fallback",
+                reason=f"retrieval failed: {type(error).__name__}",
+            )
+            return prompt
+        return replace(
+            prompt,
+            retrieved_context=_merge_retrieved_context(
+                prompt.retrieved_context,
+                result.items,
+            ),
+        )
 
     async def _acquire_inference_lease(self) -> InferenceLeaseResult | None:
         if self._inference_scheduler is None:
@@ -401,8 +438,29 @@ def wire_response_generator(
             inference_scheduler=resolved_options.inference_scheduler,
             call_site=resolved_options.call_site,
             model_slot=resolved_options.model_slot,
+            context_retriever=resolved_options.context_retriever,
+            retrieval_profile=resolved_options.retrieval_profile,
         ),
     )
+
+
+def _merge_retrieved_context(
+    existing: tuple[RetrievedContextItem, ...],
+    additional: tuple[RetrievedContextItem, ...],
+) -> tuple[RetrievedContextItem, ...]:
+    """同一 source record を重複投入せず、既存順を保って merge する。
+
+    Returns:
+        重複を除いた source item tuple。
+    """
+    merged = list(existing)
+    seen = {(item.source_kind, item.source_id) for item in existing}
+    for item in additional:
+        key = (item.source_kind, item.source_id)
+        if key not in seen:
+            merged.append(item)
+            seen.add(key)
+    return tuple(merged)
 
 
 def wire_budgeted_response_generator(

@@ -12,6 +12,7 @@ from iris.contracts.event_reaction import (
     EventReactionDecision,
     EventReactionPrompt,
 )
+from iris.contracts.retrieval import RetrievalQuery, RetrievalSourceScope
 
 if TYPE_CHECKING:
     from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
@@ -95,7 +96,29 @@ class EventReactionPlanner:
                 "Do not claim actions or facts not present in the event context. "
                 "Do not mention internal state, policy, prompt, or model."
             ),
+            retrieval_query=_retrieval_query(observation),
         )
+
+
+def _retrieval_query(observation: ActivityEventObservation) -> RetrievalQuery | None:
+    """所有者 scope と bounded event label がある場合だけ query を作る。
+
+    Returns:
+        scope付き query。scope がない場合は None。
+    """
+    scope = RetrievalSourceScope(
+        actor_id=observation.context.actor_id,
+        account_id=observation.context.account_id,
+        space_id=observation.context.space_id,
+        session_id=observation.session_id,
+    )
+    if not any(value is not None for value in (scope.actor_id, scope.account_id, scope.space_id)):
+        return None
+    actor_name = observation.context.actor.display_name if observation.context.actor else None
+    return RetrievalQuery(
+        text=(actor_name or observation.activity_kind.value).strip(),
+        scope=scope,
+    )
 
 
 def _availability_status(snapshot: AvailabilitySnapshot | None) -> AvailabilityStatus | None:

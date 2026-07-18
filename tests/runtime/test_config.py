@@ -796,6 +796,7 @@ def test_config_package_exposes_stable_public_api() -> None:
         "RuntimeOllamaConfig",
         "RuntimeOpenAIConfig",
         "RuntimePromptBudgetConfig",
+        "RuntimeRetrievalConfig",
         "RuntimePromptProfileBudget",
         "RuntimePromptSectionBudget",
         "RuntimeDeliveryConfig",

@@ -26,6 +26,7 @@ from iris.runtime.wiring.llm import (
 
 if TYPE_CHECKING:
     from iris.adapters.llm.ports import LLMClient
+    from iris.contracts.retrieval import ContextRetriever
     from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
     from iris.runtime.config.prompt_budget import RuntimePromptBudgetConfig
     from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
@@ -47,6 +48,7 @@ class ProactiveTextResponseGeneratorOptions:
     model_call_budget: RuntimeModelCallBudgetConfig
     inference_scheduler: LocalInferenceResourceScheduler | None
     system_prompt_builder: SystemPromptBuilder | None
+    context_retriever: ContextRetriever | None = None
     runtime_logger: RuntimeLogger | None = None
 
 
@@ -72,6 +74,7 @@ class ProactiveTextResponseGenerator:
                     affect_context=prompt.context.affect_summary,
                     relationship_context=prompt.context.relationship_summary,
                     constraints=prompt.context.policy_instructions,
+                    retrieval_query=prompt.retrieval_query,
                 )
             )
         except (OSError, RuntimeError, TimeoutError, ValueError) as error:
@@ -151,6 +154,8 @@ def wire_proactive_text_response_generator(
             model_slot="proactive_talk",
             inference_scheduler=options.inference_scheduler,
             system_prompt_builder=options.system_prompt_builder,
+            context_retriever=options.context_retriever,
+            retrieval_profile=PromptProfileName.PROACTIVE_SHORT,
         ),
     )
     return ProactiveTextResponseGenerator(

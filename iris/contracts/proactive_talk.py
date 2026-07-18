@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from iris.contracts.availability import AvailabilityStatus
 from iris.contracts.presence import PresenceStatus
+from iris.contracts.retrieval import RetrievalQuery
 
 _MAX_CONTEXT_ITEM_CHARS = 240
 _ERR_CONTEXT_ITEM_TOO_LONG = "proactive context items must be at most 240 characters"
@@ -61,6 +62,7 @@ class ProactiveTalkPrompt(BaseModel):
 
     context: ProactiveTalkContext
     instruction: str = Field(min_length=1, max_length=400)
+    retrieval_query: RetrievalQuery | None = None
 
 
 class ProactiveGenerationResult(BaseModel):

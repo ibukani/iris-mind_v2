@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from iris.adapters.llm.ports import LLMClient
+    from iris.contracts.retrieval import ContextRetriever
     from iris.features.definition import (
         ActivityReactionPlanner,
         EventReactionGenerator,
@@ -52,6 +53,7 @@ class EventReactionResponseGeneratorOptions:
     model_call_budget: RuntimeModelCallBudgetConfig
     inference_scheduler: LocalInferenceResourceScheduler | None
     system_prompt_builder: SystemPromptBuilder | None
+    context_retriever: ContextRetriever | None = None
     runtime_logger: RuntimeLogger | None = None
 
 
@@ -104,6 +106,7 @@ class EventReactionResponseGenerator:
                 ResponsePrompt(
                     system_instruction=prompt.instruction,
                     actor_text=_render_event_context(prompt),
+                    retrieval_query=prompt.retrieval_query,
                 )
             )
         except (OSError, RuntimeError, TimeoutError, ValueError) as error:
@@ -175,6 +178,8 @@ def wire_event_reaction_response_generator(
             model_slot="event_reaction",
             inference_scheduler=options.inference_scheduler,
             system_prompt_builder=options.system_prompt_builder,
+            context_retriever=options.context_retriever,
+            retrieval_profile=PromptProfileName.PROACTIVE_SHORT,
         ),
     )
     return EventReactionResponseGenerator(

@@ -43,6 +43,7 @@ from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunne
 from iris.runtime.memory_vector_rebuilder import MemoryVectorIndexRebuilder
 from iris.runtime.observability.events import LoggingRuntimeObservationObserver
 from iris.runtime.observability.ports import RuntimeLatencyBudget
+from iris.runtime.retrieval.sources import RuntimeSourceRetrievalPipeline
 from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
 from iris.runtime.service import (
     IntegratingObservationPipeline,
@@ -94,6 +95,7 @@ if TYPE_CHECKING:
     from iris.adapters.app_gateway.ports import AppActionBroker
     from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.memory import VectorMemoryIndex
+    from iris.contracts.retrieval import ContextRetriever
     from iris.features.definition import EventReactionGenerator, LearningHook
     from iris.features.proactive_talk.generation import ProactiveTextGenerator
     from iris.runtime.app import IrisApp
@@ -118,6 +120,8 @@ class RuntimeOperationalWiringDiagnostics:
     proactive_talk_enabled: bool = False
     proactive_generation_mode: str = "not_configured"
     proactive_threshold: str = "not_configured"
+    retrieval_enabled: bool = False
+    retrieval_mode: str = "disabled"
     event_reaction_generation_enabled: bool = False
     event_reaction_generation_mode: str = "disabled"
     inference_scheduler_enabled: bool = False
@@ -165,6 +169,8 @@ def describe_runtime_operational_wiring(
             if proactive_configured
             else "not_configured"
         ),
+        retrieval_enabled=config.retrieval.enabled,
+        retrieval_mode="enabled" if config.retrieval.enabled else "disabled",
         inference_scheduler_enabled=config.inference_scheduler.enabled,
         runtime_feature_mode=feature_catalog.mode.value,
         enabled_feature_names=tuple(feature.name for feature in feature_catalog.features),
@@ -335,10 +341,14 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     stores = wire_runtime_state(config)
     vector_index, embedding = _wire_memory_vector(config, stores)
     inference_scheduler = _wire_inference_scheduler(config)
-    event_reaction_generator = _wire_event_reaction_generator(config, inference_scheduler)
+    context_retriever = _wire_context_retriever(config, stores)
     feature_catalog = wire_runtime_features(
         config,
-        proactive_generator=_wire_proactive_talk_generator(config, inference_scheduler),
+        proactive_generator=_wire_proactive_talk_generator(
+            config,
+            inference_scheduler,
+            context_retriever,
+        ),
     )
     output_pipeline = wire_output_pipeline(
         safety_config=config.safety,
@@ -352,6 +362,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
             affect_store=stores.affect_store,
             vector_index=vector_index,
             embedding=embedding,
+            context_retriever=context_retriever,
         ),
         output_pipeline=output_pipeline,
         features=feature_catalog.features,
@@ -379,7 +390,11 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
             interaction_activity_enabled=config.interaction_activity.enabled,
             interaction_activity_max_ttl_seconds=(config.interaction_activity.max_ttl_seconds),
         ),
-        event_reaction_generator=event_reaction_generator,
+        event_reaction_generator=_wire_event_reaction_generator(
+            config,
+            inference_scheduler,
+            context_retriever,
+        ),
     )
 
     gateway_components = _wire_runtime_gateway_components(config, stores, feature_catalog)
@@ -431,9 +446,29 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     )
 
 
+def _wire_context_retriever(
+    config: IrisRuntimeConfig,
+    stores: RuntimeStateStores,
+) -> ContextRetriever | None:
+    """明示有効時だけ project / transcript retrieval を組み立てる。
+
+    Returns:
+        有効時の retrieval provider。無効時は None。
+    """
+    if not config.retrieval.enabled:
+        return None
+    return RuntimeSourceRetrievalPipeline(
+        project_context_store=stores.project_context_store,
+        transcript_store=stores.transcript_store,
+        prompt_budget_config=config.prompt_budget,
+        max_total_items=config.retrieval.max_total_items,
+    )
+
+
 def _wire_event_reaction_generator(
     config: IrisRuntimeConfig,
     inference_scheduler: LocalInferenceResourceScheduler | None,
+    context_retriever: ContextRetriever | None,
 ) -> EventReactionGenerator | None:
     """Development modeで明示有効化されたevent reaction generatorを構築する。
 
@@ -458,6 +493,7 @@ def _wire_event_reaction_generator(
             model_call_budget=config.model_call_budget,
             inference_scheduler=inference_scheduler,
             system_prompt_builder=system_prompt_builder_for_config(config),
+            context_retriever=context_retriever,
         ),
     )
 
@@ -465,6 +501,7 @@ def _wire_event_reaction_generator(
 def _wire_proactive_talk_generator(
     config: IrisRuntimeConfig,
     inference_scheduler: LocalInferenceResourceScheduler | None,
+    context_retriever: ContextRetriever | None,
 ) -> ProactiveTextGenerator | None:
     """Development mode で明示有効化された proactive generator を構築する。
 
@@ -489,6 +526,7 @@ def _wire_proactive_talk_generator(
             model_call_budget=config.model_call_budget,
             inference_scheduler=inference_scheduler,
             system_prompt_builder=system_prompt_builder_for_config(config),
+            context_retriever=context_retriever,
         ),
     )
 

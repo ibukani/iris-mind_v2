@@ -11,6 +11,13 @@ from iris.cognitive.workspace.frame import WorkspaceFrame, interpreted_input_tex
 from iris.contracts.actions import ActionPlan
 from iris.contracts.model_policy import CascadeDecision
 from iris.contracts.observations import ActorMessageObservation
+from iris.contracts.prompting import PromptSectionKind
+from iris.contracts.retrieval import (
+    RetrievalQuery,
+    RetrievalSourceKind,
+    RetrievalSourceScope,
+    RetrievedContextItem,
+)
 from iris.features.definition import FeatureDefinition
 
 if TYPE_CHECKING:
@@ -32,6 +39,8 @@ class ResponsePrompt:
     constraints: tuple[str, ...] = ()
     conversation_history: tuple[ConversationRecord, ...] = ()
     conversation_summary: str | None = None
+    retrieved_context: tuple[RetrievedContextItem, ...] = ()
+    retrieval_query: RetrievalQuery | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +72,25 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
     if text is None:
         return None
 
+    scope = RetrievalSourceScope(
+        actor_id=(frame.actor_context.actor.actor_id if frame.actor_context.actor else None),
+        account_id=frame.actor_context.account_id,
+        space_id=frame.space_context.space_id,
+        session_id=frame.observation.session_id,
+    )
+    retrieved_context = tuple(
+        RetrievedContextItem(
+            source_id=str(result.record.id),
+            source_kind=RetrievalSourceKind.DURABLE_MEMORY,
+            prompt_section_kind=PromptSectionKind.USER_MEMORY,
+            text=result.record.text,
+            score=result.score,
+            reason="cognitive memory retrieval",
+            scope=scope,
+            metadata=result.record.metadata,
+        )
+        for result in frame.memory_summary.retrieved_memories
+    )
     return ResponsePrompt(
         system_instruction=(
             "Generate a concise text response for Iris. "
@@ -80,6 +108,14 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
         ),
         conversation_history=frame.conversation_history,
         conversation_summary=frame.conversation_summary,
+        retrieved_context=retrieved_context,
+        retrieval_query=(
+            RetrievalQuery(text=text, scope=scope)
+            if any(
+                value is not None for value in (scope.actor_id, scope.account_id, scope.space_id)
+            )
+            else None
+        ),
     )
 
 
