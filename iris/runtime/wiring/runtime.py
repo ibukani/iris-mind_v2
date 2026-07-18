@@ -54,6 +54,7 @@ from iris.runtime.state.activity_integrator import ActivityIntegrator
 from iris.runtime.state.presence_integrator import PresenceIntegrator
 from iris.runtime.state.scheduler_target_integrator import SchedulerTargetIntegrator
 from iris.runtime.state.space_occupancy_integrator import SpaceOccupancyIntegrator
+from iris.runtime.transcript import TranscriptReadService
 from iris.runtime.wiring.app import (
     AppStateDependencies,
     build_app_from_config,
@@ -196,6 +197,7 @@ class RuntimeComponents:
     inference_scheduler: LocalInferenceResourceScheduler | None
     memory_candidate_review_service: MemoryCandidateReviewService
     memory_candidate_promoter: ApprovedMemoryCandidatePromoter
+    transcript_read_service: TranscriptReadService
 
 
 @dataclass(frozen=True)
@@ -443,6 +445,7 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
             stores.memory_candidate_review_store,
             stores.memory_store,
         ),
+        transcript_read_service=TranscriptReadService(stores.transcript_store),
     )
 
 

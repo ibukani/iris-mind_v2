@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from iris.contracts.metadata import ImmutableMetadata
 from iris.core.ids import AccountId, ActorId, ObservationId, SessionId, SpaceId, TranscriptId
@@ -90,7 +90,101 @@ class TranscriptQuery(BaseModel):
     account_id: AccountId | None = None
     space_id: SpaceId | None = None
     session_id: SessionId | None = None
-    limit: int = 100
+    occurred_after: datetime | None = None
+    occurred_before: datetime | None = None
+    after_occurred_at: datetime | None = None
+    after_transcript_id: TranscriptId | None = None
+    limit: int = Field(default=100, ge=0, le=1001)
+
+
+class TranscriptAccessScope(BaseModel):
+    """Transcript read を owner scope 内へ閉じる typed boundary。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    actor_id: ActorId | None = None
+    account_id: AccountId | None = None
+    space_id: SpaceId | None = None
+    session_id: SessionId | None = None
+
+    @model_validator(mode="after")
+    def _require_owner_scope(self) -> TranscriptAccessScope:
+        """Actor / account / space のない broad query を拒否する。
+
+        Returns:
+            検証済みの access scope。
+
+        Raises:
+            ValueError: owner scope が一つもない場合。
+        """
+        if not any(value is not None for value in (self.actor_id, self.account_id, self.space_id)):
+            message = "transcript access requires actor_id, account_id, or space_id"
+            raise ValueError(message)
+        return self
+
+
+class TranscriptTimeRange(BaseModel):
+    """Transcript query の bounded date range。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    start: datetime | None = None
+    end: datetime | None = None
+
+    @model_validator(mode="after")
+    def _validate_order(self) -> TranscriptTimeRange:
+        """終了時刻が開始時刻より前にならないことを検証する。
+
+        Returns:
+            検証済みの time range。
+
+        Raises:
+            ValueError: end が start 以下の場合。
+        """
+        if self.start is not None and self.end is not None and self.end <= self.start:
+            message = "transcript time range end must be after start"
+            raise ValueError(message)
+        return self
+
+
+class TranscriptPageRequest(BaseModel):
+    """Transcript read-only query の bounded page request。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    scope: TranscriptAccessScope
+    time_range: TranscriptTimeRange = Field(default_factory=TranscriptTimeRange)
+    limit: int = Field(default=100, ge=1, le=100)
+    cursor: str | None = Field(default=None, min_length=1)
+
+
+class TranscriptPage(BaseModel):
+    """Transcript query の read-only page response。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    records: tuple[TranscriptRecord, ...]
+    next_cursor: str | None = None
+
+
+class TranscriptExportRequest(BaseModel):
+    """Transcript export の bounded request。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    scope: TranscriptAccessScope
+    time_range: TranscriptTimeRange = Field(default_factory=TranscriptTimeRange)
+    max_records: int = Field(default=1000, ge=1, le=1000)
+
+
+class TranscriptExport(BaseModel):
+    """Transcript export の bounded read-only response。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    records: tuple[TranscriptRecord, ...]
+    truncated: bool
+    next_cursor: str | None = None
 
 
 class TranscriptPruneResult(BaseModel):

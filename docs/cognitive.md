@@ -261,7 +261,7 @@ ActionPlan
 
 Conversation context は `ConversationHistoryPolicy` で bounded window にする。recent records は raw user/assistant turns として残し、古い records は deterministic summary として `ConversationWindow.summary` に畳む。Summary は prompt context 専用であり、durable memory へ自動保存しない。
 
-Transcript persistence は opt-in で、`conversation.transcript.enabled = true` かつ `state.backend = "sqlite"` のときだけ confirmed inline response / successful delivery を `TranscriptStore` に保存する。Blocked / failed / cancelled delivery は normal transcript として保存しない。Transcript deletion は既定で canonical memory、review candidate、delivery state へ伝搬しない。
+Transcript persistence は opt-in で、`conversation.transcript.enabled = true` かつ `state.backend = "sqlite"` のときだけ confirmed inline response / successful delivery を `TranscriptStore` に保存する。Blocked / failed / cancelled delivery は normal transcript として保存しない。`TranscriptReadService` の read-only query / export は owner scope、date range、stable cursor、bounded page / exportを強制する。Transcript deletion は既定で canonical memory、review candidate、delivery state へ伝搬せず、multi-client cleanup は #74 完了後まで有効化しない。
 
 ---
 
