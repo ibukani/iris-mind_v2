@@ -442,6 +442,14 @@ presence、occupant countだけを正規化する。runtime adapter は shared `
 生成不可、overflow、busy、warming、unavailable は fallback / no-send / deferへ写像し、
 production-like safety modeでは #83 完了まで生成器を配線しない。
 
+IdleTick の proactive text generation は、`[companion_semantics].proactive_talk_generation_enabled = true`
+のときだけ development runtime へ注入する。Salience denial では LLM を呼ばず、approved な
+IdleTick だけが bounded な `ProactiveTalkPrompt` と shared `SystemPromptBuilder`、
+`prompt_budget.proactive_short`、`model_call_budget.proactive`、local inference scheduler を通る。
+生成結果は既存の ActionSafetyGate、Presenter、OutputSafetyGate、DeliverySafetyGate、outbox を通り、
+busy / warming / unavailable、空文字、overflow、production-like mode は no-send / defer とする。
+会話 transcript、memory、relationship、affect state は生成処理から直接変更しない。
+
 ### `adapters/`
 
 外部技術との接続を担当する。

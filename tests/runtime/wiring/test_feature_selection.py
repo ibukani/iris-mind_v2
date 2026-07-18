@@ -99,3 +99,47 @@ def test_event_reaction_generation_is_fail_closed_outside_development() -> None:
 
     assert diagnostics.event_reaction_generation_enabled is False
     assert diagnostics.event_reaction_generation_mode == "blocked_production_like_mode"
+
+
+def test_proactive_generation_is_enabled_only_in_development() -> None:
+    """Proactive generation は development の明示設定だけで feature catalog に入る。"""
+    base = default_runtime_config()
+    config = replace(
+        base,
+        companion_semantics=replace(
+            base.companion_semantics,
+            proactive_talk_generation_enabled=True,
+        ),
+    )
+
+    diagnostics = describe_runtime_operational_wiring(config)
+
+    assert diagnostics.proactive_talk_enabled is True
+    assert diagnostics.proactive_generation_mode == "enabled"
+    assert diagnostics.enabled_feature_names == (
+        "basic_action",
+        "event_reaction",
+        "proactive_talk",
+    )
+
+
+def test_proactive_generation_is_fail_closed_outside_development() -> None:
+    """#83 完了前の production-like mode では proactive generation を除外する。"""
+    base = default_runtime_config()
+    config = replace(
+        base,
+        safety=replace(base.safety, mode="strict"),
+        companion_semantics=replace(
+            base.companion_semantics,
+            proactive_talk_generation_enabled=True,
+        ),
+    )
+
+    diagnostics = describe_runtime_operational_wiring(config)
+
+    assert diagnostics.proactive_talk_enabled is False
+    assert diagnostics.proactive_generation_mode == "blocked_production_like_mode"
+    assert tuple(item.name for item in diagnostics.disabled_features) == (
+        "basic_action",
+        "proactive_talk",
+    )

@@ -497,6 +497,12 @@ def _companion_semantics_specs() -> tuple[ConfigFieldSpec, ...]:
             default=False,
             description="Event reaction の persona-aware generation を明示的に有効化する。",
         ),
+        ConfigFieldSpec(
+            "companion_semantics.proactive_talk_generation_enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="IdleTick proactive text generation を明示的に有効化する。",
+        ),
     )
 
 

@@ -7,6 +7,7 @@ from iris.features.proactive_talk.definition import (
     ProactivePolicyStep,
     define_proactive_talk_feature,
 )
+from iris.features.proactive_talk.generation import ProactiveTextGenerator
 from iris.features.proactive_talk.goals import GoalProposer
 from iris.features.proactive_talk.models import ProactiveGoal, ProactiveSalience
 from iris.features.proactive_talk.scoring import SalienceScorer
@@ -17,6 +18,7 @@ __all__ = [
     "ProactiveGoal",
     "ProactivePolicyStep",
     "ProactiveSalience",
+    "ProactiveTextGenerator",
     "SalienceScorer",
     "define_proactive_talk_feature",
 ]

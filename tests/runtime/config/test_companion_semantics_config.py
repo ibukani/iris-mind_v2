@@ -20,6 +20,7 @@ def test_companion_semantics_is_config_gated_by_default(tmp_path: Path) -> None:
     assert config.companion_semantics.dependency_risk_hint_enabled is True
     assert config.companion_semantics.persona_prompt_enabled is False
     assert config.companion_semantics.event_reaction_generation_enabled is False
+    assert config.companion_semantics.proactive_talk_generation_enabled is False
 
 
 def test_companion_semantics_can_be_enabled_explicitly(tmp_path: Path) -> None:
@@ -70,6 +71,22 @@ def test_event_reaction_generation_can_be_enabled_explicitly(tmp_path: Path) -> 
     )
 
     assert config.companion_semantics.event_reaction_generation_enabled is True
+
+
+def test_proactive_talk_generation_can_be_enabled_explicitly(tmp_path: Path) -> None:
+    """IdleTick proactive generation は typed config の明示指定だけで有効になる。"""
+    config = load_runtime_config(
+        _write(
+            tmp_path,
+            """
+            [companion_semantics]
+            proactive_talk_generation_enabled = true
+            """,
+        ),
+        env={},
+    )
+
+    assert config.companion_semantics.proactive_talk_generation_enabled is True
 
 
 def test_unknown_companion_semantics_key_is_rejected(tmp_path: Path) -> None:

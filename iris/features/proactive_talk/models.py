@@ -9,6 +9,10 @@ if TYPE_CHECKING:
     from iris.contracts.memory import MemorySearchResult
     from iris.contracts.observations import Observation
     from iris.contracts.policy import ActionPreference, PolicyConstraint
+    from iris.contracts.workspace_context import (
+        ActorContextSnapshot,
+        SituationContextSnapshot,
+    )
 
 
 class ProactiveMemoryContext(Protocol):
@@ -33,6 +37,11 @@ class ProactiveAffectContext(Protocol):
         """現在の感情価を bounded スケールで返す。"""
         ...
 
+    @property
+    def affect_summary(self) -> str | None:
+        """Prompt 用の bounded affect summary を返す。"""
+        ...
+
 
 class ProactiveRelationshipContext(Protocol):
     """プロアクティブスコアリングに関係コンテキストを提供するプロトコル。"""
@@ -47,6 +56,11 @@ class ProactiveRelationshipContext(Protocol):
         """現在のアクターに対する familiarity を bounded スケールで返す。"""
         ...
 
+    @property
+    def relationship_summary(self) -> str | None:
+        """Prompt 用の bounded relationship summary を返す。"""
+        ...
+
 
 class ProactiveFrameContext(Protocol):
     """プロアクティブ発話パイプラインステップの完全なフレームプロトコル。"""
@@ -54,6 +68,16 @@ class ProactiveFrameContext(Protocol):
     @property
     def observation(self) -> Observation:
         """認知サイクルへ供給される現在の観測を返す。"""
+        ...
+
+    @property
+    def actor_context(self) -> ActorContextSnapshot:
+        """現在の actor identity snapshot を返す。"""
+        ...
+
+    @property
+    def situation_context(self) -> SituationContextSnapshot:
+        """Runtime が組み立てた bounded situation snapshot を返す。"""
         ...
 
     @property
