@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -14,6 +15,12 @@ from iris.contracts.companion_affect import (
     CompanionInteractionScope,
 )
 from iris.contracts.identity import ActorKind, Identity
+from iris.contracts.interaction_policy import (
+    InteractionPolicyDecisionKind,
+    InteractionPolicyKind,
+    InteractionPolicySignal,
+    InteractionPolicySourceKind,
+)
 from iris.contracts.learning import RuntimeLearningEvent, RuntimeLearningEventKind
 from iris.contracts.memory import MemoryKind, MemoryQuery
 from iris.contracts.memory_candidates import (
@@ -27,7 +34,9 @@ from iris.contracts.observations import (
     UserFeedbackKind,
     UserFeedbackObservation,
 )
-from iris.core.ids import ActorId, ExternalRef, ObservationId, SessionId, SpaceId
+from iris.contracts.prompting import PromptSectionKind, PromptTrustBoundary
+from iris.contracts.review_candidates import ReviewCandidateFilter, ReviewCandidateType
+from iris.core.ids import AccountId, ActorId, ExternalRef, ObservationId, SessionId, SpaceId
 from iris.runtime.learning.implicit_candidates import (
     ConservativeImplicitMemoryCandidateExtractor,
     EnqueueImplicitMemoryCandidateHook,
@@ -35,10 +44,19 @@ from iris.runtime.learning.implicit_candidates import (
     ImplicitMemoryCandidateWorker,
     runtime_learning_event_to_payload,
 )
+from iris.runtime.learning.interaction_policy import (
+    InteractionPolicyCandidateEnqueueHook,
+    InteractionPolicyCandidateWorker,
+)
+from iris.runtime.learning.interaction_policy_review import (
+    ApprovedInteractionPolicyPromoter,
+    InteractionPolicyCandidateReviewService,
+)
 from iris.runtime.learning.jobs import (
     BackgroundJobId,
     BackgroundJobKind,
     BackgroundJobRecord,
+    InteractionPolicyJobPayload,
     RelationshipUpdateJobPayload,
     RuntimeLearningCandidateJobPayload,
 )
@@ -46,6 +64,11 @@ from iris.runtime.learning.memory_worker import DeterministicMemoryConsolidation
 from iris.runtime.learning.queue import InMemoryBackgroundJobQueue
 from iris.runtime.learning.relationship_worker import RelationshipUpdateCandidateWorker
 from iris.runtime.learning.runner import BackgroundJobRunner, BackgroundJobRunnerRuntimeHooks
+from iris.runtime.persona.interaction_policy_prompt import build_interaction_policy_section
+from iris.runtime.state.interaction_policy_candidates import (
+    InMemoryInteractionPolicyCandidateReviewStore,
+    InteractionPolicyCandidateReviewId,
+)
 from iris.runtime.state.memory_candidates import (
     InMemoryMemoryCandidateReviewStore,
     MemoryCandidateReviewStatus,
@@ -76,6 +99,21 @@ async def test_runtime_hook_enqueues_implicit_candidate_job_idempotently() -> No
     assert job.resource_profile.model_call_descriptor is None
     assert job.payload.source_observation_id == event.source_observation_id
     assert job.payload.input_text == "次からもっと短く答えて"
+
+    policy_queue = InMemoryBackgroundJobQueue()
+    policy_hook = InteractionPolicyCandidateEnqueueHook(policy_queue)
+    policy_event = replace(
+        event,
+        observation=event.observation.model_copy(
+            update={"context": _context().model_copy(update={"account_id": AccountId("account-1")})}
+        ),
+    )
+    await policy_hook.after_runtime_event(policy_event)
+    policy_job = (await policy_queue.lease_due(_NOW, 1, 30.0))[0]
+    assert policy_job.kind is BackgroundJobKind.INTERACTION_POLICY_CANDIDATE
+    assert isinstance(policy_job.payload, InteractionPolicyJobPayload)
+    assert policy_job.payload.account_id == AccountId("account-1")
+    assert policy_job.resource_profile.uses_llm is False
 
 
 async def test_worker_stores_review_required_implicit_candidate() -> None:
@@ -152,6 +190,8 @@ async def test_worker_stores_review_required_implicit_candidate() -> None:
         ObservationId("obs-relationship"),
     )
 
+    await _assert_interaction_policy_review_flow()
+
 
 def test_actor_message_style_preference_becomes_review_candidate() -> None:
     """通常会話内の応答スタイル嗜好もreview-required候補として扱う。"""
@@ -222,6 +262,79 @@ async def test_review_store_deduplicates_candidate_records() -> None:
     worker.run(job)
 
     assert len(await review_store.list_pending()) == 1
+
+
+async def _assert_interaction_policy_review_flow() -> None:
+    policy_store = InMemoryInteractionPolicyCandidateReviewStore()
+    policy_worker = InteractionPolicyCandidateWorker(policy_store)
+    policy_job = _interaction_policy_job()
+
+    policy_worker.run(policy_job)
+    policy_worker.run(policy_job)
+    policy_records = await policy_store.list_by_filter(
+        ReviewCandidateFilter(candidate_type=ReviewCandidateType.INTERACTION_POLICY)
+    )
+    assert len(policy_records) == 1
+    policy_record = policy_records[0]
+    assert policy_record.candidate.evidence_count == 2
+    assert policy_record.candidate.review_required is True
+    assert policy_record.candidate.decision_kind is InteractionPolicyDecisionKind.REVIEW_REQUIRED
+    await _assert_approved_policy_prompt(policy_store, policy_record.candidate_id)
+
+
+def _interaction_policy_job() -> BackgroundJobRecord:
+    policy_signal = InteractionPolicySignal(
+        policy_kind=InteractionPolicyKind.VERBOSITY,
+        value="concise",
+        source=InteractionPolicySourceKind.IMPLICIT_REPEATED_SIGNAL,
+        source_event_id="policy-event-1",
+        confidence=0.8,
+        reason="repeated style signal",
+        occurred_at=_NOW,
+    )
+    second_signal = policy_signal.model_copy(update={"source_event_id": "policy-event-2"})
+    return BackgroundJobRecord(
+        job_id=BackgroundJobId("interaction-policy-job-1"),
+        kind=BackgroundJobKind.INTERACTION_POLICY_CANDIDATE,
+        payload=InteractionPolicyJobPayload(
+            signals=(policy_signal, second_signal),
+            account_id=AccountId("account-1"),
+            space_id=SpaceId("space-1"),
+            actor_id=ActorId("actor-1"),
+        ),
+        not_before=_NOW,
+        idempotency_key="interaction-policy-job-key-1",
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+
+
+async def _assert_approved_policy_prompt(
+    policy_store: InMemoryInteractionPolicyCandidateReviewStore,
+    candidate_id: InteractionPolicyCandidateReviewId,
+) -> None:
+    review_service = InteractionPolicyCandidateReviewService(policy_store, now=lambda: _NOW)
+    approved = await review_service.approve(candidate_id)
+    assert approved.candidate.interaction_policy_candidate is not None
+    promoted = await ApprovedInteractionPolicyPromoter(policy_store).promote(candidate_id)
+    assert promoted.promoted is True
+    assert promoted.policy is not None
+    section = build_interaction_policy_section(
+        (promoted.policy,),
+        account_id=AccountId("account-1"),
+        space_id=SpaceId("space-1"),
+    )
+    assert section is not None
+    assert section.kind is PromptSectionKind.INTERACTION_POLICY
+    assert section.trust_boundary is PromptTrustBoundary.INTERNAL_DERIVED
+    assert (
+        build_interaction_policy_section(
+            (promoted.policy,),
+            account_id=AccountId("other-account"),
+            space_id=SpaceId("space-1"),
+        )
+        is None
+    )
 
 
 def _feedback_event(

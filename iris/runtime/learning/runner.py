@@ -387,13 +387,13 @@ def _job_uses_llm(job: BackgroundJobRecord, kind_policy: BackgroundJobKindPolicy
 
 
 def _call_site_for_job_kind(kind: BackgroundJobKind) -> ModelCallSite:
-    if kind is BackgroundJobKind.MEMORY_EXTRACTION:
-        return ModelCallSite.MEMORY_EXTRACTION
-    if kind is BackgroundJobKind.REFLECTION:
-        return ModelCallSite.REFLECTION
-    if kind is BackgroundJobKind.RELATIONSHIP_UPDATE:
-        return ModelCallSite.RELATIONSHIP_UPDATE
-    return ModelCallSite.RUNTIME_LEARNING_HOOK
+    call_sites = {
+        BackgroundJobKind.MEMORY_EXTRACTION: ModelCallSite.MEMORY_EXTRACTION,
+        BackgroundJobKind.REFLECTION: ModelCallSite.REFLECTION,
+        BackgroundJobKind.RELATIONSHIP_UPDATE: ModelCallSite.RELATIONSHIP_UPDATE,
+        BackgroundJobKind.INTERACTION_POLICY_CANDIDATE: ModelCallSite.INTERACTION_POLICY_CANDIDATE,
+    }
+    return call_sites.get(kind, ModelCallSite.RUNTIME_LEARNING_HOOK)
 
 
 def _synthetic_acquired_lease(job: BackgroundJobRecord) -> InferenceLeaseResult:

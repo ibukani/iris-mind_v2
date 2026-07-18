@@ -21,6 +21,7 @@ from iris.runtime.learning.jobs import (
     BackgroundJobResourceProfile,
     BackgroundJobStatus,
     DeferredLearningJobPayload,
+    InteractionPolicyJobPayload,
     MemoryBackgroundJobPayload,
     RelationshipUpdateJobPayload,
     RuntimeLearningCandidateJobPayload,
@@ -51,6 +52,7 @@ type _PayloadModel = (
     | RuntimeLearningCandidateJobPayload
     | DeferredLearningJobPayload
     | RelationshipUpdateJobPayload
+    | InteractionPolicyJobPayload
 )
 
 
@@ -61,6 +63,7 @@ class _PayloadType(StrEnum):
     RUNTIME_LEARNING_CANDIDATE = "runtime_learning_candidate"
     DEFERRED_LEARNING = "deferred_learning"
     RELATIONSHIP_UPDATE = "relationship_update"
+    INTERACTION_POLICY = "interaction_policy"
 
 
 class SQLiteBackgroundJobQueue(ManagedSQLiteStore):
@@ -638,13 +641,14 @@ def _oldest_pending_age_seconds(
 
 
 def _payload_type(payload: _PayloadModel) -> _PayloadType:
-    if isinstance(payload, MemoryBackgroundJobPayload):
-        return _PayloadType.MEMORY_BACKGROUND
-    if isinstance(payload, RuntimeLearningCandidateJobPayload):
-        return _PayloadType.RUNTIME_LEARNING_CANDIDATE
-    if isinstance(payload, RelationshipUpdateJobPayload):
-        return _PayloadType.RELATIONSHIP_UPDATE
-    return _PayloadType.DEFERRED_LEARNING
+    payload_types = {
+        MemoryBackgroundJobPayload: _PayloadType.MEMORY_BACKGROUND,
+        RuntimeLearningCandidateJobPayload: _PayloadType.RUNTIME_LEARNING_CANDIDATE,
+        RelationshipUpdateJobPayload: _PayloadType.RELATIONSHIP_UPDATE,
+        InteractionPolicyJobPayload: _PayloadType.INTERACTION_POLICY,
+        DeferredLearningJobPayload: _PayloadType.DEFERRED_LEARNING,
+    }
+    return payload_types[type(payload)]
 
 
 def _payload_to_json(payload: _PayloadModel) -> str:
@@ -652,10 +656,16 @@ def _payload_to_json(payload: _PayloadModel) -> str:
 
 
 def _payload_from_json(payload_type: _PayloadType, payload_json: str) -> _PayloadModel:
-    if payload_type is _PayloadType.MEMORY_BACKGROUND:
-        return MemoryBackgroundJobPayload.model_validate_json(payload_json)
-    if payload_type is _PayloadType.RUNTIME_LEARNING_CANDIDATE:
-        return RuntimeLearningCandidateJobPayload.model_validate_json(payload_json)
-    if payload_type is _PayloadType.RELATIONSHIP_UPDATE:
-        return RelationshipUpdateJobPayload.model_validate_json(payload_json)
-    return DeferredLearningJobPayload.model_validate_json(payload_json)
+    payload: _PayloadModel = DeferredLearningJobPayload.model_validate_json(payload_json)
+    match payload_type:
+        case _PayloadType.MEMORY_BACKGROUND:
+            payload = MemoryBackgroundJobPayload.model_validate_json(payload_json)
+        case _PayloadType.RUNTIME_LEARNING_CANDIDATE:
+            payload = RuntimeLearningCandidateJobPayload.model_validate_json(payload_json)
+        case _PayloadType.RELATIONSHIP_UPDATE:
+            payload = RelationshipUpdateJobPayload.model_validate_json(payload_json)
+        case _PayloadType.INTERACTION_POLICY:
+            payload = InteractionPolicyJobPayload.model_validate_json(payload_json)
+        case _PayloadType.DEFERRED_LEARNING:
+            payload = DeferredLearningJobPayload.model_validate_json(payload_json)
+    return payload

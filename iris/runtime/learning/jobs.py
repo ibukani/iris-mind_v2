@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from iris.contracts.appraisal import AppraisalSignal
 from iris.contracts.companion_affect import CompanionInteractionScope
+from iris.contracts.interaction_policy import InteractionPolicySignal
 from iris.contracts.learning import RuntimeLearningEventKind
 from iris.contracts.memory import MemoryKind
 from iris.contracts.memory_candidates import (
@@ -41,6 +42,7 @@ class BackgroundJobKind(StrEnum):
     MEMORY_EXTRACTION = "memory_extraction"
     MEMORY_CONSOLIDATION = "memory_consolidation"
     RELATIONSHIP_UPDATE = "relationship_update"
+    INTERACTION_POLICY_CANDIDATE = "interaction_policy_candidate"
     PERSONA_PATCH_PROPOSAL = "persona_patch_proposal"
     EPISODIC_TO_SEMANTIC_PROMOTION = "episodic_to_semantic_promotion"
     REFLECTION = "reflection"
@@ -118,11 +120,23 @@ class RelationshipUpdateJobPayload(BaseModel):
     source_event_ids: tuple[str, ...] = ()
 
 
+class InteractionPolicyJobPayload(BaseModel):
+    """Interaction policy candidate worker へ渡す scoped signal。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    signals: tuple[InteractionPolicySignal, ...] = Field(min_length=1)
+    account_id: AccountId
+    space_id: SpaceId | None = None
+    actor_id: ActorId | None = None
+
+
 BackgroundJobPayload = (
     MemoryBackgroundJobPayload
     | RuntimeLearningCandidateJobPayload
     | DeferredLearningJobPayload
     | RelationshipUpdateJobPayload
+    | InteractionPolicyJobPayload
 )
 
 
