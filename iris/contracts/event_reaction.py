@@ -11,6 +11,7 @@ from iris.contracts.actions import ActionPlan
 from iris.contracts.activity import ActivityKind
 from iris.contracts.availability import AvailabilityStatus
 from iris.contracts.presence import PresenceStatus
+from iris.contracts.retrieval import RetrievalQuery
 
 if TYPE_CHECKING:
     from iris.contracts.observations import ActivityEventObservation
@@ -81,6 +82,7 @@ class EventReactionPrompt(BaseModel):
 
     context: EventReactionContext
     instruction: str = Field(max_length=400)
+    retrieval_query: RetrievalQuery | None = None
 
 
 class EventReactionGenerationResult(BaseModel):

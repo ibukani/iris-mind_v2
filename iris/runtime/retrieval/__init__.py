@@ -11,11 +11,13 @@ from iris.runtime.retrieval.overlap import (
     MemoryOverlapDetectionPolicy,
     detect_memory_overlaps,
 )
+from iris.runtime.retrieval.sources import RuntimeSourceRetrievalPipeline
 
 __all__ = [
     "MemoryOverlapDetectionPolicy",
     "MemoryRetrievalPipeline",
     "MemoryRetrievalPolicy",
+    "RuntimeSourceRetrievalPipeline",
     "detect_memory_overlaps",
     "memory_retrieval_policy_for_profile",
 ]

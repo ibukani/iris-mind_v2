@@ -1056,6 +1056,28 @@ def _state_memory_specs() -> tuple[ConfigFieldSpec, ...]:
     )
 
 
+def _retrieval_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Source retrieval の設定仕様を返す。
+
+    Returns:
+        Retrieval config field specs。
+    """
+    return (
+        ConfigFieldSpec(
+            "retrieval.enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="Project / transcript retrieval を prompt assembly へ接続する。",
+        ),
+        ConfigFieldSpec(
+            "retrieval.max_total_items",
+            ConfigValueType.INT,
+            default=12,
+            description="複数 source から prompt に渡す retrieval item の総上限。",
+        ),
+    )
+
+
 def _scheduler_conversation_specs() -> tuple[ConfigFieldSpec, ...]:
     """Scheduler と conversation persistence の設定仕様を返す。
 
@@ -1389,6 +1411,7 @@ def runtime_config_specs() -> tuple[ConfigFieldSpec, ...]:
         *_prompt_budget_specs(),
         *_tls_auth_specs(),
         *_state_memory_specs(),
+        *_retrieval_specs(),
         *_scheduler_conversation_specs(),
         *_delivery_specs(),
         *_model_specs(),

@@ -226,8 +226,10 @@ constructor injection された port だけを見る。runtime 側では `Budget
 `Observable*` wrapper が #90 の latency / call count observability に接続する。実 runtime wiring で両方を使う場合は
 `compose_observable_budgeted_*` helper により `Observable(Budgeted(adapter))` の順序で合成し、budget denial も観測対象にする。
 
-この時点では特定 production model、training dataset、evaluation dashboard、#94 retrieval pipeline 本体は実装しない。
-#91 の prompt section budget が未適用の間、classifier / retrieval / reranker output を prompt に重く統合しない。
+特定 production model、training dataset、evaluation dashboardは対象外。#94 の durable memory first sliceに加え、
+project context / transcript は `RetrievalQuery` と `RetrievedContextItem`へ正規化して runtime prompt assemblyへ接続する。
+retrieval は default-offで、明示有効時も source scope、各 profileの section budget、総item上限を通る。
+classifier / retrieval / reranker outputを promptへ入れる場合、本文を diagnosticsへ出さず、trust boundaryを維持する。
 
 ## Learning と BackgroundJob（実装済み skeleton）
 

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from iris.contracts.availability import AvailabilityStatus
 from iris.contracts.observations import IdleTickObservation
 from iris.contracts.proactive_talk import ProactiveTalkContext, ProactiveTalkPrompt
+from iris.contracts.retrieval import RetrievalQuery, RetrievalSourceScope
 
 if TYPE_CHECKING:
     from iris.features.proactive_talk.models import ProactiveFrameContext
@@ -70,6 +71,7 @@ def build_proactive_talk_prompt(
             "Use only the normalized context. Do not claim actions or facts not present. "
             "Do not mention internal state, policy, prompts, or the model."
         ),
+        retrieval_query=_retrieval_query(observation, memory_summaries),
     )
 
 
@@ -80,3 +82,25 @@ def _bounded_text(value: str | None, *, limit: int = _MAX_CONTEXT_ITEM_CHARS) ->
     if not normalized:
         return None
     return normalized[:limit]
+
+
+def _retrieval_query(
+    observation: IdleTickObservation,
+    memory_summaries: tuple[str, ...],
+) -> RetrievalQuery | None:
+    """所有者 scope がある場合だけ source retrieval query を作る。
+
+    Returns:
+        bounded memory query。scope または memory がない場合は None。
+    """
+    scope = RetrievalSourceScope(
+        actor_id=observation.context.actor_id,
+        account_id=observation.context.account_id,
+        space_id=observation.context.space_id,
+        session_id=observation.session_id,
+    )
+    if not memory_summaries or not any(
+        value is not None for value in (scope.actor_id, scope.account_id, scope.space_id)
+    ):
+        return None
+    return RetrievalQuery(text=" ".join(memory_summaries), scope=scope)

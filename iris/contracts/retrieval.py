@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Protocol
+from typing import TYPE_CHECKING, Annotated, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from iris.contracts.metadata import ImmutableMetadata
 from iris.contracts.model_invocation import ModelInvocationMetadata
-from iris.contracts.prompting import PromptSectionInput, PromptSectionKind
+from iris.contracts.prompting import PromptProfileName, PromptSectionInput, PromptSectionKind
+from iris.core.ids import AccountId, ActorId, SessionId, SpaceId
 from iris.core.metadata import immutable_metadata
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 CandidateId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 RerankReason = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -45,6 +50,71 @@ class RetrievalFallbackReason(StrEnum):
     LOW_SCORE = "low_score"
 
 
+class RetrievalSourceScope(BaseModel):
+    """検索結果を所有境界へ戻すための typed scope。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    actor_id: ActorId | None = None
+    account_id: AccountId | None = None
+    space_id: SpaceId | None = None
+    session_id: SessionId | None = None
+
+
+class RetrievalQuery(BaseModel):
+    """複数 source に共通する bounded retrieval query。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+    scope: RetrievalSourceScope = RetrievalSourceScope()
+    profile: PromptProfileName = PromptProfileName.LOCAL_BALANCED
+    max_total_items: int = Field(default=12, ge=0, le=50)
+
+
+class ProjectContextQuery(BaseModel):
+    """ProjectContextStore への scope 付き query。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+    actor_id: ActorId | None = None
+    account_id: AccountId | None = None
+    space_id: SpaceId | None = None
+    limit: int = Field(default=5, ge=0, le=50)
+
+
+class ProjectContextRecord(BaseModel):
+    """空間に属する bounded project context の正本 record。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    context_id: CandidateId
+    text: str
+    space_id: SpaceId
+    actor_id: ActorId | None = None
+    account_id: AccountId | None = None
+    created_at: datetime | None = None
+    expires_at: datetime | None = None
+    metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
+
+
+class ProjectContextStore(Protocol):
+    """ProjectContext の canonical source port。"""
+
+    def query(self, query: ProjectContextQuery) -> Sequence[ProjectContextRecord]:
+        """認可済み scope 内の project context を bounded に返す。"""
+        ...
+
+
+class ContextRetriever(Protocol):
+    """Response promptへ渡す共通 retrieval port。"""
+
+    async def retrieve(self, query: RetrievalQuery) -> RetrievalPipelineResult:
+        """Selected source context と text-free observability を返す。"""
+        ...
+
+
 class RetrievedContextItem(BaseModel):
     """Prompt context へ渡せる retrieval 済み item。"""
 
@@ -57,6 +127,7 @@ class RetrievedContextItem(BaseModel):
     score: float
     reason: RetrievalReason
     model_metadata: tuple[ModelInvocationMetadata, ...] = ()
+    scope: RetrievalSourceScope = Field(default_factory=RetrievalSourceScope)
     metadata: ImmutableMetadata = Field(default_factory=immutable_metadata)
 
 
@@ -87,6 +158,7 @@ class RetrievalObservability(BaseModel):
     reranking_latency_ms: float = Field(default=0.0, ge=0.0)
     embedding_cache_hit: bool = False
     fallback_reason: RetrievalFallbackReason | None = None
+    source_counts: tuple[tuple[RetrievalSourceKind, int], ...] = ()
 
 
 class RetrievalPipelineResult(BaseModel):

@@ -43,6 +43,7 @@ from iris.runtime.config.prompt_budget import (
     RuntimePromptProfileBudget,
     RuntimePromptSectionBudget,
 )
+from iris.runtime.config.retrieval import RuntimeRetrievalConfig
 from iris.runtime.config.root import (
     IrisRuntimeConfig,
     RuntimeConfigMetadata,
@@ -99,6 +100,7 @@ __all__ = [
     "RuntimePromptProfileBudget",
     "RuntimePromptSectionBudget",
     "RuntimeQuietHoursConfig",
+    "RuntimeRetrievalConfig",
     "RuntimeSafetyConfig",
     "RuntimeSchedulerConfig",
     "RuntimeServerConfig",

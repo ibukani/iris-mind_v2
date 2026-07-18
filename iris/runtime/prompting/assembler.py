@@ -15,6 +15,7 @@ from iris.contracts.prompting import (
     PromptSectionKind,
     PromptTrustBoundary,
 )
+from iris.contracts.retrieval import RetrievalSourceKind
 from iris.runtime.config.prompt_budget import (
     RuntimePromptBudgetConfig,
     RuntimePromptProfileBudget,
@@ -220,6 +221,7 @@ def _conversation_sections(prompt: ResponsePrompt) -> tuple[PromptSectionInput, 
 
 def _context_sections(prompt: ResponsePrompt) -> tuple[PromptSectionInput, ...]:
     sections: list[PromptSectionInput] = []
+    _append_retrieved_context_sections(sections, prompt)
     _append_memory_section(sections, prompt)
     _append_internal_state_section(sections, prompt)
     _append_policy_section(sections, prompt)
@@ -228,7 +230,10 @@ def _context_sections(prompt: ResponsePrompt) -> tuple[PromptSectionInput, ...]:
 
 
 def _append_memory_section(sections: list[PromptSectionInput], prompt: ResponsePrompt) -> None:
-    if prompt.memory_snippets:
+    has_memory_items = any(
+        item.source_kind is RetrievalSourceKind.DURABLE_MEMORY for item in prompt.retrieved_context
+    )
+    if prompt.memory_snippets and not has_memory_items:
         sections.append(
             PromptSectionInput(
                 kind=PromptSectionKind.USER_MEMORY,
@@ -237,6 +242,36 @@ def _append_memory_section(sections: list[PromptSectionInput], prompt: ResponseP
                 items=prompt.memory_snippets,
             )
         )
+
+
+def _append_retrieved_context_sections(
+    sections: list[PromptSectionInput],
+    prompt: ResponsePrompt,
+) -> None:
+    """共通 retrieval item を source ごとの untrusted section へ変換する。"""
+    for source_kind in RetrievalSourceKind:
+        items = tuple(item for item in prompt.retrieved_context if item.source_kind is source_kind)
+        if not items:
+            continue
+        section_kind = items[0].prompt_section_kind
+        sections.append(
+            PromptSectionInput(
+                kind=section_kind,
+                title=_retrieval_title(source_kind),
+                trust_boundary=PromptTrustBoundary.EXTERNAL_CONTEXT,
+                items=tuple(item.text for item in items),
+            )
+        )
+
+
+def _retrieval_title(source_kind: RetrievalSourceKind) -> str:
+    titles = {
+        RetrievalSourceKind.DURABLE_MEMORY: "Relevant memories",
+        RetrievalSourceKind.PROJECT_CONTEXT: "Relevant project context",
+        RetrievalSourceKind.TRANSCRIPT: "Relevant transcript context",
+        RetrievalSourceKind.REVIEW_CANDIDATE: "Review candidate context",
+    }
+    return titles[source_kind]
 
 
 def _append_internal_state_section(

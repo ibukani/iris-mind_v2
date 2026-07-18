@@ -38,7 +38,9 @@ if TYPE_CHECKING:
     from iris.contracts.affect import AffectStore
     from iris.contracts.embeddings import EmbeddingModel
     from iris.contracts.memory import MemoryStore, VectorMemoryIndex
+    from iris.contracts.prompting import PromptProfileName
     from iris.contracts.relationship import RelationshipStore
+    from iris.contracts.retrieval import ContextRetriever
     from iris.features.definition import FeatureDefinition
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.config.model_call_budget import RuntimeModelCallBudgetConfig
@@ -58,6 +60,8 @@ class ChatFeatureWiringOptions:
     prompt_budget: RuntimePromptBudgetConfig | None = None
     inference_scheduler: LocalInferenceResourceScheduler | None = None
     system_prompt_builder: SystemPromptBuilder | None = None
+    context_retriever: ContextRetriever | None = None
+    retrieval_profile: PromptProfileName | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +73,7 @@ class AppStateDependencies:
     affect_store: AffectStore
     vector_index: VectorMemoryIndex | None = None
     embedding: EmbeddingModel | None = None
+    context_retriever: ContextRetriever | None = None
 
 
 def wire_default_app(
@@ -145,6 +150,8 @@ def build_app_from_config(
             prompt_budget=config.prompt_budget,
             inference_scheduler=inference_scheduler,
             system_prompt_builder=resolved_system_prompt_builder,
+            context_retriever=state.context_retriever,
+            retrieval_profile=config.prompt_budget.chat_profile,
         ),
     )
     all_features = collect_feature_items((features, (chat_feature,)))
@@ -182,6 +189,8 @@ def _wire_chat_feature(
             prompt_budget_config=options.prompt_budget,
             inference_scheduler=options.inference_scheduler,
             system_prompt_builder=options.system_prompt_builder,
+            context_retriever=options.context_retriever,
+            retrieval_profile=options.retrieval_profile,
         ),
     )
     if options.model_call_budget is not None:

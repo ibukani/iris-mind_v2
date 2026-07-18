@@ -93,6 +93,11 @@ from iris.runtime.config.prompt_budget import (
     default_prompt_budget_config,
     validate_prompt_budget_config,
 )
+from iris.runtime.config.retrieval import (
+    RuntimeRetrievalConfig,
+    apply_retrieval_toml,
+    validate_retrieval_config,
+)
 from iris.runtime.config.safety import RuntimeSafetyConfig, apply_safety_env, apply_safety_toml
 from iris.runtime.config.scheduler import (
     RuntimeSchedulerConfig,
@@ -160,6 +165,7 @@ class IrisRuntimeConfig:
     conversation: RuntimeConversationConfig
     observability: RuntimeObservabilityConfig
     prompt_budget: RuntimePromptBudgetConfig
+    retrieval: RuntimeRetrievalConfig
     companion_semantics: RuntimeCompanionSemanticsConfig
     interaction_activity: RuntimeInteractionActivityConfig
 
@@ -216,6 +222,7 @@ def default_runtime_config() -> IrisRuntimeConfig:
         conversation=RuntimeConversationConfig(),
         observability=RuntimeObservabilityConfig(),
         prompt_budget=default_prompt_budget_config(),
+        retrieval=RuntimeRetrievalConfig(),
         companion_semantics=RuntimeCompanionSemanticsConfig(),
         interaction_activity=RuntimeInteractionActivityConfig(),
     )
@@ -505,6 +512,10 @@ def _apply_toml_sections(
             config.prompt_budget,
             table_or_empty(table, "prompt_budget"),
         ),
+        retrieval=apply_retrieval_toml(
+            config.retrieval,
+            table_or_empty(table, "retrieval"),
+        ),
         companion_semantics=apply_companion_semantics_toml(
             config.companion_semantics,
             table_or_empty(table, "companion_semantics"),
@@ -564,6 +575,7 @@ class _RuntimeConfigSections:
     diagnostics: RuntimeDiagnosticsConfig
     observability: RuntimeObservabilityConfig
     prompt_budget: RuntimePromptBudgetConfig
+    retrieval: RuntimeRetrievalConfig
     companion_semantics: RuntimeCompanionSemanticsConfig
     interaction_activity: RuntimeInteractionActivityConfig
     config_metadata: RuntimeConfigMetadata | None = None
@@ -597,6 +609,7 @@ def _apply_env_sections(
         conversation=config.conversation,
         observability=config.observability,
         prompt_budget=config.prompt_budget,
+        retrieval=config.retrieval,
         companion_semantics=config.companion_semantics,
         interaction_activity=config.interaction_activity,
         models=models,
@@ -637,6 +650,7 @@ def _compose_runtime_config(
         conversation=sections.conversation,
         observability=sections.observability,
         prompt_budget=sections.prompt_budget,
+        retrieval=sections.retrieval,
         companion_semantics=sections.companion_semantics,
         interaction_activity=sections.interaction_activity,
         models=sections.models,
@@ -691,6 +705,7 @@ def _validate_runtime_config(config: IrisRuntimeConfig) -> IrisRuntimeConfig:
         conversation=validated_conversation,
         observability=validated_observability,
         prompt_budget=validated_prompt_budget,
+        retrieval=validate_retrieval_config(config.retrieval),
         companion_semantics=validated_companion_semantics,
         interaction_activity=validate_interaction_activity_config(config.interaction_activity),
     )
