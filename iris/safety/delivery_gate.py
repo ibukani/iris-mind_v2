@@ -9,8 +9,11 @@ from zoneinfo import ZoneInfo
 
 from iris.contracts.availability import AvailabilityStatus
 from iris.contracts.delivery import DeliverySurface
-from iris.contracts.presentation_hints import PresentationModality
 from iris.contracts.surface_policy import DeliverySurfacePolicy
+from iris.contracts.verifier import (
+    DeliveryVerifierAvailabilityResolver,
+    VerifierStatus,
+)
 from iris.safety.policy_engine import (
     DeliverySource,
     SafetyAuditMetadata,
@@ -21,9 +24,12 @@ from iris.safety.policy_engine import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from iris.contracts.actions import PresentedOutput
     from iris.contracts.availability import AvailabilitySnapshot
     from iris.contracts.delivery import DeliveryTarget
+    from iris.contracts.user_control import DeliveryUserControlStore
 
 
 @dataclass(frozen=True)
@@ -231,6 +237,9 @@ class ProductionDeliverySafetyGate:
 
     strict: StrictDeliverySafetyGate = field(default_factory=StrictDeliverySafetyGate)
     surface_policy: DeliverySurfacePolicy = field(default_factory=DeliverySurfacePolicy)
+    user_control_store: DeliveryUserControlStore | None = None
+    final_verifier_enabled: bool = False
+    verifier_availability: DeliveryVerifierAvailabilityResolver | None = None
 
     async def check(
         self,
@@ -243,18 +252,16 @@ class ProductionDeliverySafetyGate:
     ) -> DeliverySafetyDecision:
         """未知 surface を配送 enqueue 前に拒否する。
 
+        Presentation hints は surface の判定に使わない。target.surface が UNKNOWN のままなら
+        fail closed し、hints による安全 policy の override を許さない。opt-out / mute /
+        block / interruption 済み target と final verifier 非可用も block する。
+
         Returns:
             DeliverySafetyDecision: surface と strict policy に基づく配送判定。
         """
-        surface = _resolved_surface(target.surface, output.presentation_hints.modality)
-        if surface is DeliverySurface.UNKNOWN:
-            return _blocked_production_decision(target, policy_context, "unknown_delivery_surface")
-        violation = self.surface_policy.surface_reason(
-            surface=surface,
-            provider=target.provider,
-        )
-        if violation is not None:
-            return _blocked_production_decision(target, policy_context, violation)
+        block_reason = await self._production_block_reason(target, output)
+        if block_reason is not None:
+            return _blocked_production_decision(target, policy_context, block_reason)
         return await self.strict.check(
             target=target,
             output=output,
@@ -263,17 +270,81 @@ class ProductionDeliverySafetyGate:
             policy_context=policy_context,
         )
 
+    async def _production_block_reason(
+        self,
+        target: DeliveryTarget,
+        output: PresentedOutput,
+    ) -> str | None:
+        """Production 追加検査の block 理由を順序付きで返す。
 
-def _resolved_surface(
-    target_surface: DeliverySurface,
-    modality: PresentationModality,
-) -> DeliverySurface:
-    if target_surface is not DeliverySurface.UNKNOWN:
-        return target_surface
-    return {
-        PresentationModality.VOICE: DeliverySurface.VOICE,
-        PresentationModality.NOTIFICATION: DeliverySurface.NOTIFICATION,
-    }.get(modality, DeliverySurface.UNKNOWN)
+        Returns:
+            最初に成立した block 理由。成立しなければ None。
+        """
+        if target.surface is DeliverySurface.UNKNOWN:
+            return "unknown_delivery_surface"
+        violation = self.surface_policy.surface_reason(
+            surface=target.surface,
+            provider=target.provider,
+        )
+        if violation is not None:
+            return violation
+        checks: tuple[Callable[[], Awaitable[str | None]], ...] = (
+            lambda: self._user_control_reason(target, output),
+            self._verifier_reason,
+        )
+        for check_reason in checks:
+            reason = await check_reason()
+            if reason is not None:
+                return reason
+        return None
+
+    async def _user_control_reason(
+        self,
+        target: DeliveryTarget,
+        output: PresentedOutput,
+    ) -> str | None:
+        """ユーザー制御状態による block 理由を返す。
+
+        Returns:
+            Block 理由または None。
+        """
+        if self.user_control_store is None:
+            return None
+        state = await self.user_control_store.get(_target_key(target))
+        if state is None:
+            return None
+        if state.opt_out:
+            reason = "user_opted_out"
+        elif state.muted:
+            reason = "user_muted"
+        elif state.blocked:
+            reason = "user_blocked"
+        elif output.presentation_hints.interruptible and not state.interruptions_allowed:
+            reason = "interruptions_disabled"
+        else:
+            return None
+        return reason
+
+    async def _verifier_reason(self) -> str | None:
+        """Final verifier 非可用による block 理由を返す。
+
+        Final verifier が有効なのに resolver が未構成の場合は fail-closed する。
+
+        Returns:
+            Block 理由または None。
+        """
+        if not self.final_verifier_enabled:
+            return None
+        if self.verifier_availability is None:
+            return "verifier_not_configured"
+        snapshot = await self.verifier_availability.availability()
+        if snapshot.status is VerifierStatus.AVAILABLE:
+            return None
+        return {
+            VerifierStatus.WARMING: "verifier_warming",
+            VerifierStatus.BUSY: "verifier_busy",
+            VerifierStatus.UNAVAILABLE: "verifier_unavailable",
+        }[snapshot.status]
 
 
 def _blocked_production_decision(

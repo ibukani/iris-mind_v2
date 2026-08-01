@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from iris.contracts.delivery import DeliverySurface
 from iris.runtime.config.auth import (
     RuntimeAuthConfig,
     apply_auth_env,
@@ -744,6 +745,24 @@ def _validate_production_safety_prerequisites(
     """
     if config.safety.mode != "production":
         return
+    _validate_production_base_prerequisites(state=state, auth=auth, config=config)
+    _validate_production_delivery_prerequisites(config)
+    if all_model_slots_are_fake(config):
+        message = "safety.mode='production' requires non-fake model slots"
+        raise ConfigError(message)
+
+
+def _validate_production_base_prerequisites(
+    *,
+    state: RuntimeStateConfig,
+    auth: RuntimeAuthConfig,
+    config: IrisRuntimeConfig,
+) -> None:
+    """Production mode の state / auth / diagnostics / delivery.enabled 前提を検証する。
+
+    Raises:
+        ConfigError: 前提を満たさない場合。
+    """
     if state.backend is not RuntimeStateBackend.SQLITE:
         message = "safety.mode='production' requires state.backend='sqlite'"
         raise ConfigError(message)
@@ -756,15 +775,37 @@ def _validate_production_safety_prerequisites(
     if not config.delivery.enabled:
         message = "safety.mode='production' requires delivery.enabled=true"
         raise ConfigError(message)
-    surface_policy = config.delivery.surface_policy
-    if not surface_policy.denied_surfaces and not surface_policy.allowed_surfaces:
+
+
+def _validate_production_delivery_prerequisites(config: IrisRuntimeConfig) -> None:
+    """Production mode の delivery safety 前提を検証する。
+
+    Raises:
+        ConfigError: user control / final verifier / surface policy 前提を満たさない場合。
+    """
+    delivery = config.delivery
+    if not delivery.user_control.enabled:
+        message = "safety.mode='production' requires delivery.user_control.enabled=true"
+        raise ConfigError(message)
+    if not delivery.final_verifier.enabled:
+        message = "safety.mode='production' requires delivery.final_verifier.enabled=true"
+        raise ConfigError(message)
+    if not config.inference_scheduler.enabled:
         message = (
-            "safety.mode='production' requires delivery.surface_policy "
-            "to explicitly restrict delivery surfaces"
+            "safety.mode='production' requires inference_scheduler.enabled=true "
+            "when delivery.final_verifier.enabled=true"
         )
         raise ConfigError(message)
-    if all_model_slots_are_fake(config):
-        message = "safety.mode='production' requires non-fake model slots"
+    surface_policy = delivery.surface_policy
+    public_channel_denied = DeliverySurface.PUBLIC_CHANNEL in surface_policy.denied_surfaces or (
+        bool(surface_policy.allowed_surfaces)
+        and DeliverySurface.PUBLIC_CHANNEL not in surface_policy.allowed_surfaces
+    )
+    if not public_channel_denied:
+        message = (
+            "safety.mode='production' requires delivery.surface_policy "
+            "to deny the public channel surface"
+        )
         raise ConfigError(message)
 
 

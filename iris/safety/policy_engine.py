@@ -38,6 +38,7 @@ class SafetyAuditMetadata:
     policy_version: str
     source: DeliverySource
     target_key: str
+    model_versions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

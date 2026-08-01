@@ -33,6 +33,20 @@ class RuntimeQuietHoursConfig:
 
 
 @dataclass(frozen=True)
+class RuntimeDeliveryUserControlConfig:
+    """配送先ユーザー制御 (opt-out / mute / block / interruption) 設定。"""
+
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
+class RuntimeDeliveryFinalVerifierConfig:
+    """配送前 final verifier 可用性チェック設定。"""
+
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
 class RuntimeDeliveryConfig:
     """配送 outbox のランタイム設定。"""
 
@@ -45,6 +59,12 @@ class RuntimeDeliveryConfig:
     quiet_hours: RuntimeQuietHoursConfig = field(default_factory=RuntimeQuietHoursConfig)
     surface_policy: RuntimeDeliverySurfacePolicyConfig = field(
         default_factory=RuntimeDeliverySurfacePolicyConfig,
+    )
+    user_control: RuntimeDeliveryUserControlConfig = field(
+        default_factory=RuntimeDeliveryUserControlConfig,
+    )
+    final_verifier: RuntimeDeliveryFinalVerifierConfig = field(
+        default_factory=RuntimeDeliveryFinalVerifierConfig,
     )
 
 
@@ -244,6 +264,8 @@ class _DeliveryConfigPatch:
     rate_limit_window_seconds: float | None = None
     quiet_hours: _QuietHoursPatch | None = None
     surface_policy: RuntimeDeliverySurfacePolicyConfig | None = None
+    user_control_enabled: bool | None = None
+    final_verifier_enabled: bool | None = None
 
     @classmethod
     def from_table(cls, table: TomlTable) -> _DeliveryConfigPatch:
@@ -306,6 +328,27 @@ class _DeliveryConfigPatch:
                 if "surface_policy" in table
                 else None
             ),
+            user_control_enabled=(
+                parse_bool(
+                    table_or_empty(table, "user_control", path="delivery.user_control")["enabled"],
+                    "delivery.user_control.enabled",
+                )
+                if "enabled" in table_or_empty(table, "user_control", path="delivery.user_control")
+                else None
+            ),
+            final_verifier_enabled=(
+                parse_bool(
+                    table_or_empty(
+                        table,
+                        "final_verifier",
+                        path="delivery.final_verifier",
+                    )["enabled"],
+                    "delivery.final_verifier.enabled",
+                )
+                if "enabled"
+                in table_or_empty(table, "final_verifier", path="delivery.final_verifier")
+                else None
+            ),
         )
 
     def apply(self, config: RuntimeDeliveryConfig) -> RuntimeDeliveryConfig:
@@ -319,6 +362,19 @@ class _DeliveryConfigPatch:
             value = replace(value, quiet_hours=self.quiet_hours.apply(value.quiet_hours))
         if self.surface_policy is not None:
             value = replace(value, surface_policy=self.surface_policy)
+        if self.user_control_enabled is not None:
+            value = replace(
+                value,
+                user_control=replace(value.user_control, enabled=self.user_control_enabled),
+            )
+        if self.final_verifier_enabled is not None:
+            value = replace(
+                value,
+                final_verifier=replace(
+                    value.final_verifier,
+                    enabled=self.final_verifier_enabled,
+                ),
+            )
         return validate_delivery_config(value)
 
     def _apply_numeric(self, config: RuntimeDeliveryConfig) -> RuntimeDeliveryConfig:

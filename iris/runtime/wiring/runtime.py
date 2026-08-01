@@ -22,6 +22,9 @@ from iris.runtime.conversation import (
     TranscriptWritePolicy,
 )
 from iris.runtime.inference.scheduler import LocalInferenceResourceScheduler
+from iris.runtime.inference.verifier_availability import (
+    LocalInferenceVerifierAvailabilityResolver,
+)
 from iris.runtime.ingress.activity_event_reaction import ActivityEventReactionHandler
 from iris.runtime.ingress.observation_trust import ObservationTrustPolicy
 from iris.runtime.learning.hooks import LearningHookRunner, RuntimeLearningHookRunner
@@ -427,7 +430,12 @@ def build_runtime_components(config: IrisRuntimeConfig) -> RuntimeComponents:
     scheduler_runner = wire_scheduler_runner(
         runtime_service=runtime_service,
         scheduler=wire_runtime_scheduler(stores.scheduler_target_store, config),
-        delivery_gate=wire_delivery_safety_gate(config.delivery, config.safety),
+        delivery_gate=wire_delivery_safety_gate(
+            config.delivery,
+            config.safety,
+            user_control_store=stores.user_control_store,
+            verifier_availability=_wire_verifier_availability(config, inference_scheduler),
+        ),
         outbox=stores.delivery_outbox,
         config=config,
         safety=SchedulerSafetyDependencies(
@@ -584,6 +592,20 @@ def _wire_inference_scheduler(
     if not config.inference_scheduler.enabled:
         return None
     return LocalInferenceResourceScheduler(policy=config.inference_scheduler.to_policy())
+
+
+def _wire_verifier_availability(
+    config: IrisRuntimeConfig,
+    inference_scheduler: LocalInferenceResourceScheduler | None,
+) -> LocalInferenceVerifierAvailabilityResolver | None:
+    """Final verifier availability resolver を構築する。
+
+    Returns:
+        final verifier 有効時に resolver。無効時は None。
+    """
+    if not config.delivery.final_verifier.enabled or inference_scheduler is None:
+        return None
+    return LocalInferenceVerifierAvailabilityResolver(inference_scheduler)
 
 
 def _background_job_queue_policy_from_config(config: IrisRuntimeConfig) -> BackgroundJobQueuePolicy:
