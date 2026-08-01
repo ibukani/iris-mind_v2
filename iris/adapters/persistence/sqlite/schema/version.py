@@ -2,4 +2,4 @@
 
 from __future__ import annotations
 
-CURRENT_SQLITE_SCHEMA_VERSION = 8
+CURRENT_SQLITE_SCHEMA_VERSION = 9

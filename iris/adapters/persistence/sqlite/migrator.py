@@ -21,6 +21,9 @@ from iris.adapters.persistence.sqlite.schema.transcript import (
     CONVERSATION_TRANSCRIPT_REQUIRED_COLUMNS,
     TRANSCRIPT_CLEANUP_OPERATIONS_REQUIRED_COLUMNS,
 )
+from iris.adapters.persistence.sqlite.schema.user_control import (
+    DELIVERY_USER_CONTROLS_REQUIRED_COLUMNS,
+)
 from iris.adapters.persistence.sqlite.schema.version import CURRENT_SQLITE_SCHEMA_VERSION
 from iris.core.datetime_utils import now_utc
 
@@ -223,6 +226,7 @@ _REQUIRED_COLUMNS: dict[str, frozenset[str]] = {
     "conversation_transcripts": CONVERSATION_TRANSCRIPT_REQUIRED_COLUMNS,
     "transcript_cleanup_operations": TRANSCRIPT_CLEANUP_OPERATIONS_REQUIRED_COLUMNS,
     "safety_audit_records": SAFETY_AUDIT_REQUIRED_COLUMNS,
+    "delivery_user_controls": DELIVERY_USER_CONTROLS_REQUIRED_COLUMNS,
 }
 
 _UNVERSIONED_ADOPTION_OPTIONAL_COLUMNS: dict[str, frozenset[str]] = {
