@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import time
 
 from iris.runtime.config.errors import ConfigError
@@ -13,6 +13,11 @@ from iris.runtime.config.parsing import (
     parse_int,
     parse_string,
     table_or_empty,
+)
+from iris.runtime.config.surface_policy import (
+    RuntimeDeliverySurfacePolicyConfig,
+    apply_surface_policy_toml,
+    validate_surface_policy_config,
 )
 from iris.runtime.config.validation import require_greater_than_zero, require_zero_or_greater
 
@@ -37,7 +42,10 @@ class RuntimeDeliveryConfig:
     max_attempts: int = 3
     retry_backoff_seconds: float = 30.0
     rate_limit_window_seconds: float = 1800.0
-    quiet_hours: RuntimeQuietHoursConfig = RuntimeQuietHoursConfig()
+    quiet_hours: RuntimeQuietHoursConfig = field(default_factory=RuntimeQuietHoursConfig)
+    surface_policy: RuntimeDeliverySurfacePolicyConfig = field(
+        default_factory=RuntimeDeliverySurfacePolicyConfig,
+    )
 
 
 def apply_delivery_toml(
@@ -104,6 +112,7 @@ def validate_delivery_config(config: RuntimeDeliveryConfig) -> RuntimeDeliveryCo
             "delivery.rate_limit_window_seconds",
         ),
         quiet_hours=_validate_quiet_hours(config.quiet_hours),
+        surface_policy=validate_surface_policy_config(config.surface_policy),
     )
 
 
@@ -234,6 +243,7 @@ class _DeliveryConfigPatch:
     retry_backoff_seconds: float | None = None
     rate_limit_window_seconds: float | None = None
     quiet_hours: _QuietHoursPatch | None = None
+    surface_policy: RuntimeDeliverySurfacePolicyConfig | None = None
 
     @classmethod
     def from_table(cls, table: TomlTable) -> _DeliveryConfigPatch:
@@ -287,6 +297,15 @@ class _DeliveryConfigPatch:
                     path="delivery.quiet_hours",
                 ),
             ),
+            surface_policy=(
+                apply_surface_policy_toml(
+                    RuntimeDeliverySurfacePolicyConfig(),
+                    table["surface_policy"],
+                    "delivery.surface_policy",
+                )
+                if "surface_policy" in table
+                else None
+            ),
         )
 
     def apply(self, config: RuntimeDeliveryConfig) -> RuntimeDeliveryConfig:
@@ -294,6 +313,19 @@ class _DeliveryConfigPatch:
 
         Returns:
             検証済みの delivery 設定。
+        """
+        value = self._apply_numeric(config)
+        if self.quiet_hours is not None:
+            value = replace(value, quiet_hours=self.quiet_hours.apply(value.quiet_hours))
+        if self.surface_policy is not None:
+            value = replace(value, surface_policy=self.surface_policy)
+        return validate_delivery_config(value)
+
+    def _apply_numeric(self, config: RuntimeDeliveryConfig) -> RuntimeDeliveryConfig:
+        """数値フィールド patch を適用する。
+
+        Returns:
+            更新後の delivery 設定。
         """
         value = config
         if self.enabled is not None:
@@ -311,9 +343,7 @@ class _DeliveryConfigPatch:
             value = replace(value, retry_backoff_seconds=self.retry_backoff_seconds)
         if self.rate_limit_window_seconds is not None:
             value = replace(value, rate_limit_window_seconds=self.rate_limit_window_seconds)
-        if self.quiet_hours is not None:
-            value = replace(value, quiet_hours=self.quiet_hours.apply(value.quiet_hours))
-        return validate_delivery_config(value)
+        return value
 
 
 def _apply_quiet_hours_patch(
