@@ -140,6 +140,9 @@ def test_safety_toml_is_applied(tmp_path: Path) -> None:
             [diagnostics]
             mode = 'strict'
 
+            [delivery.surface_policy]
+            denied_surfaces = ['public_channel', 'voice', 'avatar']
+
             [models.default_chat]
             provider = 'ollama'
             """,
@@ -149,6 +152,31 @@ def test_safety_toml_is_applied(tmp_path: Path) -> None:
 
     assert config.safety.mode == "production"
     assert config.safety.max_output_chars == 1200
+
+    # Production modeはsurface policyの明示的制限がないとfail closedする。
+    with pytest.raises(ConfigError, match=r"delivery\.surface_policy"):
+        load_runtime_config(
+            _write(
+                tmp_path,
+                """
+                [safety]
+                mode = 'production'
+
+                [state]
+                backend = 'sqlite'
+
+                [auth]
+                mode = 'required'
+
+                [diagnostics]
+                mode = 'strict'
+
+                [models.default_chat]
+                provider = 'ollama'
+                """,
+            ),
+            env={},
+        )
 
 
 def test_invalid_safety_mode_is_rejected(tmp_path: Path) -> None:
