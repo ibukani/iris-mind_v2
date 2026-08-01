@@ -37,7 +37,7 @@ def test_empty_db_initializes_to_current_schema(tmp_path: Path) -> None:
     assert result.status is SQLiteMigrationStatus.INITIALIZED
     assert result.previous_version == 0
     assert result.current_version == CURRENT_SQLITE_SCHEMA_VERSION
-    assert result.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8)
+    assert result.applied_versions == (1, 2, 3, 4, 5, 6, 7, 8, 9)
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         assert _user_version(conn) == CURRENT_SQLITE_SCHEMA_VERSION
         assert _table_exists(conn, "accounts")
@@ -49,8 +49,10 @@ def test_empty_db_initializes_to_current_schema(tmp_path: Path) -> None:
         assert _table_exists(conn, "conversation_transcripts")
         assert _table_exists(conn, "transcript_cleanup_operations")
         assert _table_exists(conn, "safety_audit_records")
-        assert _latest_migration(conn) == "transcript_cleanup"
+        assert _table_exists(conn, "delivery_user_controls")
+        assert _latest_migration(conn) == "delivery_user_controls_and_audit_model_versions"
         assert _column_exists(conn, "conversation_transcripts", "legal_hold_until")
+        assert _column_exists(conn, "safety_audit_records", "model_versions")
 
 
 def test_existing_unversioned_memory_db_upgrades_and_rebuilds_fts5(tmp_path: Path) -> None:
@@ -130,7 +132,7 @@ def test_existing_unversioned_sqlalchemy_db_upgrades_with_manual_memory_table(
 
 
 def test_existing_v1_db_upgrades_to_current_schema(tmp_path: Path) -> None:
-    """既存 v1 DB は v2〜v8 migration を追加適用する。"""
+    """既存 v1 DB は v2〜v9 migration を追加適用する。"""
     db_path = tmp_path / "v1.sqlite3"
     _create_v1_database(db_path)
 
@@ -138,7 +140,7 @@ def test_existing_v1_db_upgrades_to_current_schema(tmp_path: Path) -> None:
 
     assert result.status is SQLiteMigrationStatus.UPGRADED
     assert result.previous_version == 1
-    assert result.applied_versions == (2, 3, 4, 5, 6, 7, 8)
+    assert result.applied_versions == (2, 3, 4, 5, 6, 7, 8, 9)
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         assert _user_version(conn) == CURRENT_SQLITE_SCHEMA_VERSION
         assert _table_exists(conn, "background_jobs")
@@ -146,6 +148,7 @@ def test_existing_v1_db_upgrades_to_current_schema(tmp_path: Path) -> None:
         assert _table_exists(conn, "conversation_transcripts")
         assert _table_exists(conn, "transcript_cleanup_operations")
         assert _table_exists(conn, "safety_audit_records")
+        assert _table_exists(conn, "delivery_user_controls")
         assert _migration_names(conn) == (
             "baseline_runtime_state",
             "runtime_learning_state",
@@ -155,11 +158,13 @@ def test_existing_v1_db_upgrades_to_current_schema(tmp_path: Path) -> None:
             "background_job_pressure",
             "presentation_hints",
             "transcript_cleanup",
+            "delivery_user_controls_and_audit_model_versions",
         )
         assert _column_exists(conn, "conversation_transcripts", "legal_hold_until")
         assert _column_exists(conn, "memory_candidate_reviews", "candidate_type")
         assert _column_exists(conn, "background_jobs", "resource_profile_json")
         assert _column_exists(conn, "background_jobs", "defer_reason")
+        assert _column_exists(conn, "safety_audit_records", "model_versions")
 
 
 def test_already_current_db_does_not_reapply_migrations(tmp_path: Path) -> None:
@@ -175,7 +180,7 @@ def test_already_current_db_does_not_reapply_migrations(tmp_path: Path) -> None:
     with contextlib.closing(sqlite3.connect(db_path)) as conn:
         count = conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()
         assert count is not None
-        assert count[0] == 8
+        assert count[0] == 9
 
 
 def test_migration_order_is_stable() -> None:

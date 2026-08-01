@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 DEFAULT_SAFETY_AUDIT_RETENTION_DAYS = 90
+_MODEL_VERSIONS_SEPARATOR = "|"
 
 
 class SQLiteSafetyAuditJournal:
@@ -107,6 +108,7 @@ def _record_to_values(
         "policy": record.policy,
         "policy_version": record.policy_version,
         "retention_until": datetime_to_text(retention_until),
+        "model_versions": _MODEL_VERSIONS_SEPARATOR.join(record.model_versions),
     }
 
 
@@ -123,6 +125,7 @@ def _audit_id(record: SafetyAuditRecord) -> str:
             record.target_key,
             record.policy,
             record.policy_version,
+            _MODEL_VERSIONS_SEPARATOR.join(record.model_versions),
         )
     )
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()

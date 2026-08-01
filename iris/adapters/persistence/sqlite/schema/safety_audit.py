@@ -22,6 +22,7 @@ SAFETY_AUDIT_REQUIRED_COLUMNS = frozenset(
         "policy",
         "policy_version",
         "retention_until",
+        "model_versions",
     }
 )
 SAFETY_AUDIT_FORBIDDEN_RAW_CONTENT_COLUMNS = frozenset(
@@ -57,6 +58,7 @@ class SafetyAuditRecordModel(Base):
     policy: Mapped[str] = mapped_column(String, nullable=False)
     policy_version: Mapped[str] = mapped_column(String, nullable=False)
     retention_until: Mapped[str | None] = mapped_column(String, nullable=True)
+    model_versions: Mapped[str] = mapped_column(String, nullable=False, default="")
 
     __table_args__ = (
         Index(

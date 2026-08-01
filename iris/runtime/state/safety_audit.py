@@ -36,6 +36,7 @@ class SafetyAuditRecord:
     policy: str
     policy_version: str
     retention_until: datetime | None = None
+    model_versions: tuple[str, ...] = ()
 
 
 class SafetyAuditJournal(Protocol):

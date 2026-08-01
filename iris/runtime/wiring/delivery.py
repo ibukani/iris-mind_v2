@@ -16,6 +16,8 @@ from iris.safety.delivery_gate import (
 )
 
 if TYPE_CHECKING:
+    from iris.contracts.user_control import DeliveryUserControlStore
+    from iris.contracts.verifier import DeliveryVerifierAvailabilityResolver
     from iris.runtime.config.safety import RuntimeSafetyConfig
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.learning.dispatch import LearningDispatchStore
@@ -46,6 +48,9 @@ def wire_app_action_broker(
 def wire_delivery_safety_gate(
     config: RuntimeDeliveryConfig,
     safety_config: RuntimeSafetyConfig | None = None,
+    *,
+    user_control_store: DeliveryUserControlStore | None = None,
+    verifier_availability: DeliveryVerifierAvailabilityResolver | None = None,
 ) -> DeliverySafetyGate:
     """Runtime config から delivery safety gate を組み立てる。
 
@@ -67,6 +72,9 @@ def wire_delivery_safety_gate(
         return ProductionDeliverySafetyGate(
             strict=StrictDeliverySafetyGate(basic=basic),
             surface_policy=policy,
+            user_control_store=user_control_store,
+            final_verifier_enabled=config.final_verifier.enabled,
+            verifier_availability=verifier_availability,
         )
     if safety_config is not None and safety_config.mode == "strict":
         return StrictDeliverySafetyGate(basic=basic)

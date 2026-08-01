@@ -17,10 +17,11 @@ from scripts.test_targets import DEFAULT_TEST_TARGETS
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-# Budget intent: allow one net new default collected test for Issue #83 surface policy
-# config validation coverage on top of the existing main collection ceiling.
+# Budget intent: allow Issue #83 surface policy / production mode tests plus the
+# second slice (delivery user control store, final verifier availability resolver,
+# production gate fail-closed coverage) on top of the existing collection ceiling.
 MAX_DEFAULT_TEST_FILES = 305
-MAX_DEFAULT_TEST_ITEMS = 2152
+MAX_DEFAULT_TEST_ITEMS = 2160
 
 _SUMMARY_LINE = re.compile(r"^.+?: (?P<count>\d+)$")
 

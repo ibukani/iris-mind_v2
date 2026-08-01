@@ -20,6 +20,7 @@ from iris.adapters.persistence.sqlite.stores.relationship import SQLiteRelations
 from iris.adapters.persistence.sqlite.stores.safety_audit import SQLiteSafetyAuditJournal
 from iris.adapters.persistence.sqlite.stores.scheduler_targets import SQLiteSchedulerTargetStore
 from iris.adapters.persistence.sqlite.stores.transcript import SQLiteTranscriptStore
+from iris.adapters.persistence.sqlite.stores.user_control import SQLiteDeliveryUserControlStore
 from iris.runtime.config.errors import ConfigError
 from iris.runtime.config.state import RuntimeStateBackend
 from iris.runtime.delivery.in_memory import InMemoryDeliveryOutbox
@@ -43,6 +44,7 @@ from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal
 from iris.runtime.state.scheduler_targets import InMemorySchedulerTargetStore
 from iris.runtime.state.space_occupancy import InMemorySpaceOccupancyStore
 from iris.runtime.state.transcript import NullTranscriptStore
+from iris.runtime.state.user_control import InMemoryDeliveryUserControlStore
 
 if TYPE_CHECKING:
     from iris.contracts.accounts import AccountStore
@@ -50,6 +52,7 @@ if TYPE_CHECKING:
     from iris.contracts.memory import MutableMemoryStore
     from iris.contracts.relationship import RelationshipStore
     from iris.contracts.relationship_update import RelationshipUpdateCandidateStore
+    from iris.contracts.user_control import DeliveryUserControlStore
     from iris.runtime.config import IrisRuntimeConfig
     from iris.runtime.delivery.outbox import DeliveryOutbox
     from iris.runtime.state.activity_journal import ActivityJournal
@@ -90,6 +93,7 @@ class RuntimeStateStores:
     delivery_outbox: DeliveryOutbox
     scheduler_target_store: SchedulerTargetStore
     safety_audit_journal: SafetyAuditJournal
+    user_control_store: DeliveryUserControlStore
     background_job_queue: BackgroundJobQueue
     memory_candidate_review_store: MemoryCandidateReviewStore
     interaction_policy_candidate_review_store: InteractionPolicyCandidateReviewStore
@@ -166,6 +170,7 @@ def _wire_sqlite_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStores:
         ),
         scheduler_target_store=SQLiteSchedulerTargetStore(ctx),
         safety_audit_journal=SQLiteSafetyAuditJournal(ctx),
+        user_control_store=SQLiteDeliveryUserControlStore(ctx),
         background_job_queue=sqlite_background_job_queue,
         memory_candidate_review_store=sqlite_candidate_review_store,
         interaction_policy_candidate_review_store=InMemoryInteractionPolicyCandidateReviewStore(),
@@ -216,6 +221,7 @@ def _wire_in_memory_runtime_state(config: IrisRuntimeConfig) -> RuntimeStateStor
         ),
         scheduler_target_store=InMemorySchedulerTargetStore(),
         safety_audit_journal=InMemorySafetyAuditJournal(),
+        user_control_store=InMemoryDeliveryUserControlStore(),
         background_job_queue=InMemoryBackgroundJobQueue(),
         memory_candidate_review_store=InMemoryMemoryCandidateReviewStore(),
         interaction_policy_candidate_review_store=InMemoryInteractionPolicyCandidateReviewStore(),

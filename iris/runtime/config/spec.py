@@ -1264,6 +1264,18 @@ def _delivery_specs() -> tuple[ConfigFieldSpec, ...]:
             "Asia/Tokyo",
             "quiet hours 判定 timezone。",
         ),
+        ConfigFieldSpec(
+            "delivery.user_control.enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="配送先ユーザーの opt-out / mute / block / interruption 制御を有効化する。",
+        ),
+        ConfigFieldSpec(
+            "delivery.final_verifier.enabled",
+            ConfigValueType.BOOL,
+            default=False,
+            description="配送前 final verifier の可用性チェックを有効化する。",
+        ),
         *_delivery_surface_policy_specs(),
     )
 

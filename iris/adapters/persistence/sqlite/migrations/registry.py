@@ -24,6 +24,9 @@ from iris.adapters.persistence.sqlite.migrations.v0007_presentation_hints import
 from iris.adapters.persistence.sqlite.migrations.v0008_transcript_cleanup import (
     TRANSCRIPT_CLEANUP_V8,
 )
+from iris.adapters.persistence.sqlite.migrations.v0009_user_control_and_audit_versions import (
+    DELIVERY_USER_CONTROL_AND_AUDIT_VERSIONS_V9,
+)
 
 if TYPE_CHECKING:
     from iris.adapters.persistence.sqlite.migrator_types import SQLiteMigration
@@ -44,4 +47,5 @@ def available_migrations() -> tuple[SQLiteMigration, ...]:
         BACKGROUND_JOB_PRESSURE_V6,
         PRESENTATION_HINTS_V7,
         TRANSCRIPT_CLEANUP_V8,
+        DELIVERY_USER_CONTROL_AND_AUDIT_VERSIONS_V9,
     )
