@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from iris.contracts.delivery import DeliverySurface
 from iris.runtime.config import ConfigError, load_runtime_config
 
 if TYPE_CHECKING:
@@ -53,4 +54,24 @@ def test_invalid_quiet_hours_fail(tmp_path: Path) -> None:
     """Invalid quiet hours values fail."""
     path = _write(tmp_path, "[delivery.quiet_hours]\nstart = '25:00'\n")
     with pytest.raises(ConfigError, match=r"delivery\.quiet_hours\.start"):
+        load_runtime_config(path, env={})
+
+
+def test_surface_policy_denied_surfaces_parse(tmp_path: Path) -> None:
+    """Surface policy parses, and unknown surfaces fail closed at load."""
+    path = _write(
+        tmp_path,
+        "[delivery.surface_policy]\ndenied_surfaces = ['public_channel', 'voice']\n",
+    )
+    config = load_runtime_config(path, env={})
+    policy = config.delivery.surface_policy.to_policy()
+    assert policy.denied_surfaces == frozenset(
+        {DeliverySurface.PUBLIC_CHANNEL, DeliverySurface.VOICE},
+    )
+
+    path = _write(
+        tmp_path,
+        "[delivery.surface_policy]\ndenied_surfaces = ['telepathy']\n",
+    )
+    with pytest.raises(ConfigError, match=r"delivery\.surface_policy\.denied_surfaces"):
         load_runtime_config(path, env={})

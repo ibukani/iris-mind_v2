@@ -756,6 +756,13 @@ def _validate_production_safety_prerequisites(
     if not config.delivery.enabled:
         message = "safety.mode='production' requires delivery.enabled=true"
         raise ConfigError(message)
+    surface_policy = config.delivery.surface_policy
+    if not surface_policy.denied_surfaces and not surface_policy.allowed_surfaces:
+        message = (
+            "safety.mode='production' requires delivery.surface_policy "
+            "to explicitly restrict delivery surfaces"
+        )
+        raise ConfigError(message)
     if all_model_slots_are_fake(config):
         message = "safety.mode='production' requires non-fake model slots"
         raise ConfigError(message)

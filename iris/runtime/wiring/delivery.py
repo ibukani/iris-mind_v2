@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.runtime.config.delivery import RuntimeDeliveryConfig, quiet_time
+from iris.runtime.config.surface_policy import production_surface_policy
 from iris.runtime.delivery.broker import RuntimeAppActionBroker
 from iris.safety.delivery_gate import (
     BasicDeliverySafetyGate,
@@ -60,7 +61,13 @@ def wire_delivery_safety_gate(
         ),
     )
     if safety_config is not None and safety_config.mode == "production":
-        return ProductionDeliverySafetyGate(strict=StrictDeliverySafetyGate(basic=basic))
+        policy = config.surface_policy.to_policy()
+        if not policy.denied_surfaces and not policy.allowed_surfaces:
+            policy = production_surface_policy().to_policy()
+        return ProductionDeliverySafetyGate(
+            strict=StrictDeliverySafetyGate(basic=basic),
+            surface_policy=policy,
+        )
     if safety_config is not None and safety_config.mode == "strict":
         return StrictDeliverySafetyGate(basic=basic)
     return basic

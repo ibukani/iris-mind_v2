@@ -11,12 +11,13 @@ import pytest
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.contracts.actions import ActionPlan
-from iris.contracts.delivery import DeliveryRouteHint, SchedulerTarget
+from iris.contracts.delivery import DeliveryRouteHint, DeliverySurface, SchedulerTarget
 from iris.contracts.presence import PresenceSnapshot, PresenceStatus
 from iris.core.ids import AccountId, ActorId, ExternalRef, SessionId, SpaceId
 from iris.runtime.app import IrisApp
 from iris.runtime.config import IrisRuntimeConfig, RuntimeSafetyConfig, default_runtime_config
 from iris.runtime.config.delivery import RuntimeDeliveryConfig, RuntimeQuietHoursConfig
+from iris.runtime.config.surface_policy import RuntimeDeliverySurfacePolicyConfig
 from iris.runtime.scheduler.availability import DeliveryAvailabilityResolverAdapter
 from iris.runtime.scheduler.runner import SchedulerRunner
 from iris.runtime.state.safety_audit import InMemorySafetyAuditJournal, SafetyAuditStage
@@ -118,11 +119,23 @@ def test_build_runtime_components_uses_strict_scheduler_delivery_gate() -> None:
         replace(
             default_runtime_config(),
             safety=RuntimeSafetyConfig(mode="production"),
+            delivery=replace(
+                default_runtime_config().delivery,
+                surface_policy=RuntimeDeliverySurfacePolicyConfig(
+                    denied_surfaces="public_channel",
+                ),
+            ),
         )
     )
     assert isinstance(
         production_components.scheduler_runner.delivery_gate,
         ProductionDeliverySafetyGate,
+    )
+    # Production gate は設定済み surface policy を保持する。
+    production_gate = production_components.scheduler_runner.delivery_gate
+    assert isinstance(production_gate, ProductionDeliverySafetyGate)
+    assert production_gate.surface_policy.denied_surfaces == frozenset(
+        {DeliverySurface.PUBLIC_CHANNEL},
     )
 
 

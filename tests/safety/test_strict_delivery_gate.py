@@ -17,6 +17,7 @@ from iris.contracts.safety import (
     SafetyContextSource,
     SafetyResponseDirective,
 )
+from iris.contracts.surface_policy import DeliverySurfacePolicy
 from iris.core.ids import ExternalRef, SessionId
 from iris.safety.delivery_gate import (
     BasicDeliverySafetyGate,
@@ -143,6 +144,55 @@ async def test_strict_gate_rejects_invalid_target_before_policy_engine() -> None
         now=_NOW,
     )
     assert known_surface.allowed is True
+
+
+async def test_production_gate_applies_surface_policy() -> None:
+    """Production gate は surface policy の deny/allow matrix を強制する。"""
+    # deny list が public surface を拒否する。
+    deny_gate = ProductionDeliverySafetyGate(
+        surface_policy=DeliverySurfacePolicy(
+            denied_surfaces=frozenset({DeliverySurface.PUBLIC_CHANNEL}),
+        ),
+    )
+    public_target = _target().model_copy(
+        update={
+            "surface": DeliverySurface.PUBLIC_CHANNEL,
+            "provider_space_ref": ExternalRef("guild-1"),
+        },
+    )
+    denied = await deny_gate.check(
+        target=public_target,
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert denied.allowed is False
+    assert denied.reason == "surface_denied"
+    assert denied.risk_level is SafetyRiskLevel.HIGH
+
+    # allowlist に無い provider を拒否する。
+    provider_gate = ProductionDeliverySafetyGate(
+        surface_policy=DeliverySurfacePolicy(allowed_providers=frozenset({"discord"})),
+    )
+    denied_provider = await provider_gate.check(
+        target=public_target.model_copy(update={"provider": "slack"}),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert denied_provider.allowed is False
+    assert denied_provider.reason == "provider_not_allowed"
+
+    # policy が deny しない DM は許可する。
+    allowed = await deny_gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+        ),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert allowed.allowed is True
 
 
 async def test_strict_gate_does_not_block_user_response_for_sensitive_context_alone() -> None:

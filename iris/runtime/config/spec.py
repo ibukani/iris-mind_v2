@@ -1264,6 +1264,41 @@ def _delivery_specs() -> tuple[ConfigFieldSpec, ...]:
             "Asia/Tokyo",
             "quiet hours 判定 timezone。",
         ),
+        *_delivery_surface_policy_specs(),
+    )
+
+
+def _delivery_surface_policy_specs() -> tuple[ConfigFieldSpec, ...]:
+    """Delivery surface policy の設定仕様を返す。
+
+    Returns:
+        allow/deny list 固定用の設定仕様。
+    """
+    return (
+        ConfigFieldSpec(
+            "delivery.surface_policy.allowed_surfaces",
+            ConfigValueType.STR,
+            "",
+            "許可する delivery surface (カンマ区切り)。空は全許可。",
+        ),
+        ConfigFieldSpec(
+            "delivery.surface_policy.allowed_providers",
+            ConfigValueType.STR,
+            "",
+            "許可する provider 名 (カンマ区切り)。空は全許可。",
+        ),
+        ConfigFieldSpec(
+            "delivery.surface_policy.denied_surfaces",
+            ConfigValueType.STR,
+            "",
+            "拒否する delivery surface (カンマ区切り)。",
+        ),
+        ConfigFieldSpec(
+            "delivery.surface_policy.denied_providers",
+            ConfigValueType.STR,
+            "",
+            "拒否する provider 名 (カンマ区切り)。",
+        ),
     )
 
 

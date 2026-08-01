@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from iris.contracts.availability import AvailabilityStatus
 from iris.contracts.delivery import DeliverySurface
 from iris.contracts.presentation_hints import PresentationModality
+from iris.contracts.surface_policy import DeliverySurfacePolicy
 from iris.safety.policy_engine import (
     DeliverySource,
     SafetyAuditMetadata,
@@ -229,6 +230,7 @@ class ProductionDeliverySafetyGate:
     """Strict policyにsurface fail-closed検査を加えたproduction gate。"""
 
     strict: StrictDeliverySafetyGate = field(default_factory=StrictDeliverySafetyGate)
+    surface_policy: DeliverySurfacePolicy = field(default_factory=DeliverySurfacePolicy)
 
     async def check(
         self,
@@ -246,22 +248,13 @@ class ProductionDeliverySafetyGate:
         """
         surface = _resolved_surface(target.surface, output.presentation_hints.modality)
         if surface is DeliverySurface.UNKNOWN:
-            source = (
-                policy_context.source
-                if policy_context is not None
-                else DeliverySource.USER_INITIATED
-            )
-            return DeliverySafetyDecision(
-                allowed=False,
-                reason="unknown_delivery_surface",
-                risk_level=SafetyRiskLevel.HIGH,
-                audit=SafetyAuditMetadata(
-                    policy="production_delivery",
-                    policy_version="1",
-                    source=source,
-                    target_key=_target_key(target),
-                ),
-            )
+            return _blocked_production_decision(target, policy_context, "unknown_delivery_surface")
+        violation = self.surface_policy.surface_reason(
+            surface=surface,
+            provider=target.provider,
+        )
+        if violation is not None:
+            return _blocked_production_decision(target, policy_context, violation)
         return await self.strict.check(
             target=target,
             output=output,
@@ -281,6 +274,25 @@ def _resolved_surface(
         PresentationModality.VOICE: DeliverySurface.VOICE,
         PresentationModality.NOTIFICATION: DeliverySurface.NOTIFICATION,
     }.get(modality, DeliverySurface.UNKNOWN)
+
+
+def _blocked_production_decision(
+    target: DeliveryTarget,
+    policy_context: SafetyPolicyContext | None,
+    reason: str,
+) -> DeliverySafetyDecision:
+    source = policy_context.source if policy_context is not None else DeliverySource.USER_INITIATED
+    return DeliverySafetyDecision(
+        allowed=False,
+        reason=reason,
+        risk_level=SafetyRiskLevel.HIGH,
+        audit=SafetyAuditMetadata(
+            policy="production_delivery",
+            policy_version="2",
+            source=source,
+            target_key=_target_key(target),
+        ),
+    )
 
 
 def _delivery_decision(decision: SafetyPolicyDecision) -> DeliverySafetyDecision:
