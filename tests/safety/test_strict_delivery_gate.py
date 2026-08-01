@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, time
+from typing import override
 
 import pytest
 
 from iris.contracts.actions import PresentedOutput
 from iris.contracts.availability import AvailabilitySnapshot, AvailabilityStatus
 from iris.contracts.delivery import DeliverySurface, DeliveryTarget
+from iris.contracts.presentation_hints import PresentationHints, PresentationModality
 from iris.contracts.safety import (
     SafetyContext,
     SafetyContextCategory,
@@ -18,7 +20,14 @@ from iris.contracts.safety import (
     SafetyResponseDirective,
 )
 from iris.contracts.surface_policy import DeliverySurfacePolicy
+from iris.contracts.user_control import DeliveryUserControlStore, UserControlState
+from iris.contracts.verifier import (
+    DeliveryVerifierAvailabilityResolver,
+    VerifierAvailability,
+    VerifierStatus,
+)
 from iris.core.ids import ExternalRef, SessionId
+from iris.runtime.config.surface_policy import production_surface_policy
 from iris.safety.delivery_gate import (
     BasicDeliverySafetyGate,
     DeliverySafetyDecision,
@@ -30,6 +39,59 @@ from iris.safety.policy_engine import DeliverySource, SafetyPolicyContext, Safet
 
 pytestmark = pytest.mark.anyio
 _NOW = datetime(2026, 1, 1, 23, tzinfo=UTC)
+
+
+class _StubUserControlStore(DeliveryUserControlStore):
+    """テスト用の固定 user control store。"""
+
+    def __init__(self, state: UserControlState | None) -> None:
+        """固定状態を持つ stub を作成する。"""
+        self._state = state
+
+    @override
+    async def get(self, target_key: str) -> UserControlState | None:
+        """固定状態を返す。
+
+        Returns:
+            Stub に設定された制御状態。未設定なら None。
+        """
+        _ = target_key
+        return self._state
+
+    @override
+    async def set(self, target_key: str, state: UserControlState) -> None:
+        """固定状態を更新する。"""
+        _ = target_key
+        self._state = state
+
+
+class _StubVerifierResolver(DeliveryVerifierAvailabilityResolver):
+    """テスト用の固定 verifier availability resolver。"""
+
+    def __init__(self, availability: VerifierAvailability) -> None:
+        """固定 availability を持つ stub を作成する。"""
+        self._availability = availability
+
+    @override
+    async def availability(self) -> VerifierAvailability:
+        """固定 availability を返す。
+
+        Returns:
+            Stub に設定された VerifierAvailability。
+        """
+        return self._availability
+
+
+def _verifier(status: VerifierStatus) -> VerifierAvailability:
+    return VerifierAvailability(
+        status=status,
+        reason=status.value,
+        observed_at=_NOW,
+    )
+
+
+def _user_state(**updates: bool) -> UserControlState:
+    return UserControlState(updated_at=_NOW, **updates)
 
 
 def _high_risk_context() -> SafetyContext:
@@ -323,3 +385,230 @@ def _assert_strict_audit(
     assert decision.audit.policy_version == "1"
     assert decision.audit.source is source
     assert decision.audit.target_key == target_key
+
+
+async def test_production_gate_blocks_opt_out_user() -> None:
+    """Opt-out 済み target への proactive delivery を block する。"""
+    gate = ProductionDeliverySafetyGate(
+        user_control_store=_StubUserControlStore(_user_state(opt_out=True)),
+    )
+    decision = await gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+        ),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert decision.allowed is False
+    assert decision.reason == "user_opted_out"
+    assert decision.risk_level is SafetyRiskLevel.HIGH
+    assert decision.audit is not None
+    assert decision.audit.policy == "production_delivery"
+
+
+async def test_production_gate_blocks_muted_and_blocked_users() -> None:
+    """Mute / block 済み target への proactive delivery を block する。"""
+    for flag in ("muted", "blocked"):
+        gate = ProductionDeliverySafetyGate(
+            user_control_store=_StubUserControlStore(_user_state(**{flag: True})),
+        )
+        decision = await gate.check(
+            target=_target().model_copy(
+                update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+            ),
+            output=PresentedOutput(text="hello"),
+            availability=None,
+            now=_NOW,
+        )
+        assert decision.allowed is False
+        assert decision.reason == f"user_{flag}"
+
+
+async def test_production_gate_blocks_interrupting_output_when_disallowed() -> None:
+    """Interruption 拒否済み target への interruptible output を block する。"""
+    gate = ProductionDeliverySafetyGate(
+        user_control_store=_StubUserControlStore(
+            _user_state(interruptions_allowed=False),
+        ),
+    )
+    blocked = await gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+        ),
+        output=PresentedOutput(
+            text="hello",
+            presentation_hints=PresentationHints(interruptible=True),
+        ),
+        availability=None,
+        now=_NOW,
+    )
+    assert blocked.allowed is False
+    assert blocked.reason == "interruptions_disabled"
+
+    non_interruptible = await gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+        ),
+        output=PresentedOutput(
+            text="hello",
+            presentation_hints=PresentationHints(interruptible=False),
+        ),
+        availability=None,
+        now=_NOW,
+    )
+    assert non_interruptible.allowed is True
+
+
+async def test_production_gate_allows_user_without_control_state() -> None:
+    """制御状態が無い target は block しない。"""
+    gate = ProductionDeliverySafetyGate(
+        user_control_store=_StubUserControlStore(None),
+    )
+    decision = await gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+        ),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert decision.allowed is True
+
+
+@pytest.mark.parametrize(
+    ("status", "reason"),
+    [
+        (VerifierStatus.WARMING, "verifier_warming"),
+        (VerifierStatus.BUSY, "verifier_busy"),
+        (VerifierStatus.UNAVAILABLE, "verifier_unavailable"),
+    ],
+)
+async def test_production_gate_blocks_when_verifier_unavailable(
+    status: VerifierStatus,
+    reason: str,
+) -> None:
+    """Final verifier 非可用時は deterministic に block する。"""
+    gate = ProductionDeliverySafetyGate(
+        final_verifier_enabled=True,
+        verifier_availability=_StubVerifierResolver(_verifier(status)),
+    )
+    decision = await gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+        ),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert decision.allowed is False
+    assert decision.reason == reason
+    assert decision.risk_level is SafetyRiskLevel.HIGH
+
+
+async def test_production_gate_allows_when_verifier_available() -> None:
+    """Final verifier 可用時は block しない。"""
+    gate = ProductionDeliverySafetyGate(
+        final_verifier_enabled=True,
+        verifier_availability=_StubVerifierResolver(_verifier(VerifierStatus.AVAILABLE)),
+    )
+    decision = await gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+        ),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert decision.allowed is True
+
+
+async def test_production_gate_verifier_check_is_skipped_when_disabled() -> None:
+    """Final verifier 無効時は resolver を呼ばず通過する。"""
+    gate = ProductionDeliverySafetyGate(
+        final_verifier_enabled=False,
+        verifier_availability=_StubVerifierResolver(_verifier(VerifierStatus.UNAVAILABLE)),
+    )
+    decision = await gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+        ),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert decision.allowed is True
+
+
+async def test_production_gate_fails_closed_when_verifier_resolver_missing() -> None:
+    """Final verifier 有効で resolver 未構成なら fail closed する。"""
+    gate = ProductionDeliverySafetyGate(final_verifier_enabled=True)
+    decision = await gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.PRIVATE_DIRECT_MESSAGE},
+        ),
+        output=PresentedOutput(text="hello"),
+        availability=None,
+        now=_NOW,
+    )
+    assert decision.allowed is False
+    assert decision.reason == "verifier_not_configured"
+    assert decision.risk_level is SafetyRiskLevel.HIGH
+
+
+async def test_production_gate_unknown_surface_ignores_voice_modality_hint() -> None:
+    """Presentation hint の modality は UNKNOWN surface を昇格させない (AC9)。"""
+    for modality in (PresentationModality.VOICE, PresentationModality.NOTIFICATION):
+        gate = ProductionDeliverySafetyGate(
+            surface_policy=DeliverySurfacePolicy(
+                denied_surfaces=frozenset({DeliverySurface.PUBLIC_CHANNEL}),
+            ),
+        )
+        decision = await gate.check(
+            target=_target(),
+            output=PresentedOutput(
+                text="hello",
+                presentation_hints=PresentationHints(modality=modality),
+            ),
+            availability=None,
+            now=_NOW,
+        )
+        assert decision.allowed is False
+        assert decision.reason == "unknown_delivery_surface"
+
+
+async def test_production_gate_denies_voice_and_avatar_surfaces() -> None:
+    """Default production policy は voice / avatar surface を deny する。"""
+    gate = ProductionDeliverySafetyGate(surface_policy=production_surface_policy().to_policy())
+    for surface in (DeliverySurface.VOICE, DeliverySurface.AVATAR):
+        decision = await gate.check(
+            target=_target().model_copy(update={"surface": surface}),
+            output=PresentedOutput(text="hello"),
+            availability=None,
+            now=_NOW,
+        )
+        assert decision.allowed is False
+        assert decision.reason == "surface_denied"
+
+
+async def test_production_gate_blocks_user_control_even_for_notification_modality() -> None:
+    """User control block は surface 判定後・modality 非依存で適用される。"""
+    gate = ProductionDeliverySafetyGate(
+        surface_policy=DeliverySurfacePolicy(
+            denied_surfaces=frozenset({DeliverySurface.PUBLIC_CHANNEL}),
+        ),
+        user_control_store=_StubUserControlStore(_user_state(blocked=True)),
+    )
+    decision = await gate.check(
+        target=_target().model_copy(
+            update={"surface": DeliverySurface.NOTIFICATION},
+        ),
+        output=PresentedOutput(
+            text="hello",
+            presentation_hints=PresentationHints(modality=PresentationModality.NOTIFICATION),
+        ),
+        availability=None,
+        now=_NOW,
+    )
+    assert decision.allowed is False
+    assert decision.reason == "user_blocked"

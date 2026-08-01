@@ -140,8 +140,15 @@ def test_safety_toml_is_applied(tmp_path: Path) -> None:
             [diagnostics]
             mode = 'strict'
 
+            [delivery]
+            user_control = { enabled = true }
+            final_verifier = { enabled = true }
+
             [delivery.surface_policy]
             denied_surfaces = ['public_channel', 'voice', 'avatar']
+
+            [inference_scheduler]
+            enabled = true
 
             [models.default_chat]
             provider = 'ollama'
@@ -170,6 +177,107 @@ def test_safety_toml_is_applied(tmp_path: Path) -> None:
 
                 [diagnostics]
                 mode = 'strict'
+
+                [delivery]
+                user_control = { enabled = true }
+                final_verifier = { enabled = true }
+
+                [inference_scheduler]
+                enabled = true
+
+                [models.default_chat]
+                provider = 'ollama'
+                """,
+            ),
+            env={},
+        )
+
+    # Production modeはfinal verifier有効でもinference scheduler無効ならfail closedする。
+    with pytest.raises(ConfigError, match=r"inference_scheduler"):
+        load_runtime_config(
+            _write(
+                tmp_path,
+                """
+                [safety]
+                mode = 'production'
+
+                [state]
+                backend = 'sqlite'
+
+                [auth]
+                mode = 'required'
+
+                [diagnostics]
+                mode = 'strict'
+
+                [delivery]
+                user_control = { enabled = true }
+                final_verifier = { enabled = true }
+
+                [delivery.surface_policy]
+                denied_surfaces = ['public_channel']
+
+                [models.default_chat]
+                provider = 'ollama'
+                """,
+            ),
+            env={},
+        )
+
+    # Production modeはuser control無効でもfail closedする。
+    with pytest.raises(ConfigError, match=r"delivery\.user_control"):
+        load_runtime_config(
+            _write(
+                tmp_path,
+                """
+                [safety]
+                mode = 'production'
+
+                [state]
+                backend = 'sqlite'
+
+                [auth]
+                mode = 'required'
+
+                [diagnostics]
+                mode = 'strict'
+
+                [delivery.final_verifier]
+                enabled = true
+
+                [delivery.surface_policy]
+                denied_surfaces = ['public_channel']
+
+                [models.default_chat]
+                provider = 'ollama'
+                """,
+            ),
+            env={},
+        )
+
+    # Production modeはfinal verifier無効でもfail closedする。
+    with pytest.raises(ConfigError, match=r"delivery\.final_verifier"):
+        load_runtime_config(
+            _write(
+                tmp_path,
+                """
+                [safety]
+                mode = 'production'
+
+                [state]
+                backend = 'sqlite'
+
+                [auth]
+                mode = 'required'
+
+                [diagnostics]
+                mode = 'strict'
+
+                [delivery.user_control]
+                enabled = true
+
+                [delivery.surface_policy]
+                denied_surfaces = ['public_channel']
 
                 [models.default_chat]
                 provider = 'ollama'

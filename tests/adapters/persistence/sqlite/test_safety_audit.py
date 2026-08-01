@@ -159,6 +159,26 @@ def test_sqlite_safety_audit_rejects_non_positive_retention_days(tmp_path: Path)
         SQLiteSafetyAuditJournal(tmp_path / "state.sqlite3", retention_days=0)
 
 
+async def test_sqlite_safety_audit_persists_model_versions(tmp_path: Path) -> None:
+    """Model version は raw content なしで durable に保存される。"""
+    db_path = tmp_path / "state.sqlite3"
+    journal = SQLiteSafetyAuditJournal(db_path)
+    await journal.append(
+        _record(
+            stage=SafetyAuditStage.DELIVERY,
+            allowed=False,
+            reason="unknown_delivery_surface",
+            model_versions=("chat-model-v1", "classifier-v3"),
+        )
+    )
+    await journal.close()
+
+    with contextlib.closing(sqlite3.connect(db_path)) as conn:
+        rows = conn.execute("SELECT reason, model_versions FROM safety_audit_records").fetchall()
+
+    assert rows == [("unknown_delivery_surface", "chat-model-v1|classifier-v3")]
+
+
 def _record(
     *,
     stage: SafetyAuditStage,
@@ -166,6 +186,7 @@ def _record(
     reason: str,
     occurred_at: datetime = _NOW,
     target_key: str = _TARGET_KEY,
+    model_versions: tuple[str, ...] = (),
 ) -> SafetyAuditRecord:
     return SafetyAuditRecord(
         observation_id=ObservationId(f"obs-{stage.value}-{reason}"),
@@ -178,4 +199,5 @@ def _record(
         target_key=target_key,
         policy="strict_delivery",
         policy_version="1",
+        model_versions=model_versions,
     )
